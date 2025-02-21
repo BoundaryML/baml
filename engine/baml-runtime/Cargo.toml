@@ -170,6 +170,7 @@ rstest = "0.22.0"
 wasm-bindgen-test = "0.3.50"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
+serial_test = "3.2.0"
 
 [ benches ]
 name = "bench"

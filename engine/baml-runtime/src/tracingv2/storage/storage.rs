@@ -1,14 +1,16 @@
+//! A full implementation of a manually reference-counted trace storage system,
+//! including a global tracer, FunctionLog, Collector, and all related data types.
+//!
+//! This version ensures we don't allocate multiple copies of the same FunctionLogInner
+//! for a single FunctionId, even if multiple Collectors or FunctionLogs want it.
+//! It uses manual reference counting (`inc_ref` / `dec_ref`) to free memory for
+//! a FunctionId as soon as there are no more "owners."
+
 use indexmap::{IndexMap, IndexSet};
 use once_cell::sync::Lazy;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::sync::Mutex;
-use std::{
-    collections::HashMap,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use baml_types::tracing::events::{
@@ -24,318 +26,126 @@ use super::super::publisher::PUBLISHING_CHANNEL;
 pub static BAML_TRACER: Lazy<Mutex<TraceStorage>> =
     Lazy::new(|| Mutex::new(TraceStorage::default()));
 
-#[derive(Debug)]
-pub struct FunctionLog {
-    id: FunctionId,
-    inner: Option<Arc<Mutex<FunctionLogInner>>>, // Property to store the lazily evaluated function log
-    instance_id: String,
+/// Our main storage struct. Holds:
+/// 1) A map of FunctionId -> list of events (Vec<Arc<TraceEvent>>).
+/// 2) A map of FunctionId -> reference count (how many "owners" are tracking it).
+/// 3) A cache of FunctionId -> Arc<Mutex<FunctionLogInner>> to avoid rebuilding
+///    the same FunctionLogInner multiple times.
+#[derive(Default)]
+pub struct TraceStorage {
+    /// For each function (span), we keep a vector of TraceEvents.
+    /// This data is only kept while ref_count > 0.
+    span_map: HashMap<FunctionId, Vec<Arc<TraceEvent>>>,
+    /// Manual reference count for each function ID. If it hits 0, we remove that ID's data.
+    ref_counts: HashMap<FunctionId, usize>,
+
+    /// Cache of built FunctionLogInner objects, so multiple calls to build_function_log
+    /// for the same FunctionId share the same Arc. Because we may need to modify this
+    /// while holding only an &TraceStorage, we wrap it in a Mutex for interior mutability.
+    function_inners: Mutex<HashMap<FunctionId, Arc<Mutex<FunctionLogInner>>>>,
 }
 
-impl Clone for FunctionLog {
-    fn clone(&self) -> Self {
-        log::info!("Cloning function log: {}", self.id().0);
+impl TraceStorage {
+    /// Increase the reference count for the given FunctionId.
+    /// If there's no entry yet, create one (with an empty Vec of events).
+    pub fn inc_ref(&mut self, function_id: &FunctionId) {
+        let count = self.ref_counts.entry(function_id.clone()).or_insert(0);
+        *count += 1;
 
-        Self::new(self.id.clone())
-    }
-}
-impl Hash for FunctionLog {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.id.hash(state);
-    }
-}
-
-impl Eq for FunctionLog {}
-
-impl PartialEq for FunctionLog {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl FunctionLog {
-    pub fn new(id: FunctionId) -> Self {
-        log::info!("Creating new function log: {}", id.0);
-        BAML_TRACER.lock().unwrap().inc_function_id(&id);
-        let instance_id = Uuid::new_v4().to_string();
-        Self {
-            id,
-            inner: None,
-            instance_id,
-        }
+        // Ensure span_map has an entry for the ID; create if not present.
+        self.span_map
+            .entry(function_id.clone())
+            .or_insert_with(Vec::new);
     }
 
-    // Private helper to get or build the inner reference
-    fn get_inner(&mut self) -> &Arc<Mutex<FunctionLogInner>> {
-        if self.inner.is_none() {
-            self.inner = Some(
-                build_function_log(&BAML_TRACER.lock().unwrap(), &self.id)
-                    .expect("Function log expected to be present"),
-            );
-        }
-        self.inner.as_ref().unwrap()
-    }
+    /// Decrease the reference count for the given FunctionId,
+    /// and if it hits zero, remove from memory (both events and cached FunctionLogInner).
+    pub fn dec_ref(&mut self, function_id: &FunctionId) {
+        match self.ref_counts.get_mut(function_id) {
+            Some(rc) => {
+                if *rc == 0 {
+                    panic!(
+                        "Attempted to decrement ref below 0 for FunctionID {:?}",
+                        function_id
+                    );
+                }
+                *rc -= 1;
+                // If refcount hits 0, remove from both maps
+                if *rc == 0 {
+                    self.ref_counts.remove(function_id);
+                    self.span_map.remove(function_id);
 
-    pub fn id(&self) -> FunctionId {
-        self.id.clone()
-    }
-
-    // The methods below now clone the underlying data instead of returning references
-    // into the locked structures, which avoids invalid lifetimes:
-    pub fn function_name(&mut self) -> String {
-        self.get_inner().lock().unwrap().function_name.clone()
-    }
-
-    pub fn r#type(&mut self) -> String {
-        self.get_inner().lock().unwrap().r#type.clone()
-    }
-
-    pub fn timing(&mut self) -> Timing {
-        self.get_inner().lock().unwrap().timing.clone()
-    }
-
-    pub fn usage(&mut self) -> Usage {
-        self.get_inner().lock().unwrap().usage.clone()
-    }
-
-    pub fn calls(&mut self) -> Vec<LLMCallKind> {
-        self.get_inner().lock().unwrap().calls.clone()
-    }
-
-    pub fn raw_llm_response(&mut self) -> Option<String> {
-        self.get_inner().lock().unwrap().raw_llm_response.clone()
-    }
-
-    pub fn metadata(&mut self) -> HashMap<String, serde_json::Value> {
-        self.get_inner().lock().unwrap().metadata.clone()
-    }
-}
-
-///
-/// Represents a single function call's log. This implements the "FunctionLog" interface
-/// from the prompt's "API Reference."
-///
-#[derive(Debug, Clone)]
-pub struct FunctionLogInner {
-    // "id": The id of the request.
-    pub id: String,
-
-    // "function_name": The name of the function.
-    pub function_name: String,
-
-    // "type": "call" | "stream" (the manner in which the function was called).
-    pub r#type: String,
-
-    pub timing: Timing,
-
-    pub usage: Usage,
-    // A list of LLM calls (either LLMCall or LLMStreamCall).
-    pub calls: Vec<LLMCallKind>,
-    // "raw_llm_response": The final best guess textual output for this function, if any.
-    pub raw_llm_response: Option<String>,
-    // "metadata": Any user-provided metadata, from `TraceEvent.tags` or other sources.
-    pub metadata: HashMap<String, serde_json::Value>,
-}
-
-impl FunctionLogInner {
-    /// Return the "selected" call, or None if none was selected.
-    /// In a real system, you might rely on some additional marker to identify
-    /// which call was "selected" for parsing. Currently checks if any call is flagged.
-    pub fn selected_call(&self) -> Option<&LLMCallKind> {
-        self.calls.iter().find(|call| call.selected())
-    }
-}
-
-///
-/// A minimal "Usage" struct holding input and output tokens.
-///
-#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
-pub struct Usage {
-    pub input_tokens: i64,
-    pub output_tokens: i64,
-}
-
-///
-/// Basic timing data for a function or call record.
-///
-#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
-pub struct Timing {
-    pub start_time_utc_ms: i64,
-    pub duration_ms: i64,
-    pub time_to_first_parsed_ms: i64,
-}
-
-///
-/// Specialized timing for streaming calls.
-///
-#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
-pub struct StreamTiming {
-    pub start_time_utc_ms: i64,
-    pub duration_ms: i64,
-    pub time_to_first_parsed_ms: i64,
-    pub time_to_first_token_ms: i64,
-}
-
-#[derive(Debug, Clone)]
-pub enum LLMCallKind {
-    Basic(LLMCall),
-    Stream(LLMStreamCall),
-}
-
-impl LLMCallKind {
-    /// Returns whether this call is selected.
-    pub fn selected(&self) -> bool {
-        match self {
-            LLMCallKind::Basic(c) => c.selected,
-            LLMCallKind::Stream(c) => c.selected,
-        }
-    }
-}
-
-///
-/// Represents a single "LLM call" (non-streaming).
-///
-#[derive(Debug, Default, Clone)]
-pub struct LLMCall {
-    pub client_name: String,
-    pub provider: String,
-    pub timing: Timing,
-    pub request: Option<Arc<HTTPRequest>>,
-    pub response: Option<Arc<HTTPResponse>>,
-    pub usage: Option<Usage>,
-    pub selected: bool,
-}
-
-///
-/// Represents a single streaming LLM call.
-///
-#[derive(Debug, Default, Clone)]
-pub struct LLMStreamCall {
-    pub client_name: String,
-    pub provider: String,
-    pub timing: StreamTiming,
-    pub request: Option<Arc<HTTPRequest>>,
-    pub response: Option<Arc<HTTPResponse>>,
-    pub usage: Option<Usage>,
-    pub selected: bool,
-
-    /// Each chunk of data from the LLM (e.g. streaming tokens).
-    pub chunks: Vec<serde_json::Value>,
-}
-
-impl Drop for FunctionLog {
-    fn drop(&mut self) {
-        log::info!(
-            "Dropping function log: {}, instance_id: {}",
-            self.id().0,
-            self.instance_id
-        );
-        BAML_TRACER.lock().unwrap().dec_function_id(&self.id());
-    }
-}
-
-impl Clone for Collector {
-    fn clone(&self) -> Self {
-        // Create a new IndexSet for the cloned collector
-        let mut new_function_logs = IndexSet::new();
-
-        // Lock and iterate over the original collector's function logs
-        for function_log in self.function_logs.lock().unwrap().iter() {
-            // Manually increment the reference count for this function ID
-            BAML_TRACER
-                .lock()
-                .unwrap()
-                .inc_function_id(&function_log.id());
-
-            // Clone the Arc pointer (i.e., another pointer to the same FunctionLog)
-            new_function_logs.insert(Arc::clone(function_log));
-        }
-
-        Self {
-            id: self.id.clone(),
-            function_logs: Arc::new(Mutex::new(new_function_logs)),
-        }
-    }
-}
-
-pub struct Collector {
-    id: String,
-    function_logs: Arc<Mutex<IndexSet<Arc<FunctionLog>>>>,
-}
-
-impl Collector {
-    pub fn new(id: String) -> Self {
-        Self {
-            id,
-            function_logs: Arc::new(Mutex::new(IndexSet::new())),
-        }
-    }
-
-    pub fn id(&self) -> String {
-        self.id.clone()
-    }
-
-    pub fn events(&self) -> Vec<Arc<TraceEvent>> {
-        let mut all_events = Vec::new();
-
-        // Acquire the global tracer lock in a blocking manner.
-        let tracer = BAML_TRACER.lock().unwrap();
-
-        // For each subscribed span, grab its events under a blocking lock.
-        let function_logs_guard = self.function_logs.lock().unwrap();
-        for span_id in function_logs_guard.iter() {
-            if let Some(events) = tracer.get_events(&span_id.id) {
-                let guard = events.lock().unwrap();
-                all_events.extend(guard.clone());
+                    // Remove the cached FunctionLogInner
+                    let mut lock = self.function_inners.lock().unwrap();
+                    lock.remove(function_id);
+                }
+            }
+            None => {
+                panic!(
+                    "Attempted to decrement ref for FunctionID {:?} (not found)",
+                    function_id
+                );
             }
         }
-
-        all_events
     }
 
-    pub fn function_logs(&self) -> Vec<Arc<FunctionLog>> {
-        let function_logs_guard = self.function_logs.lock().unwrap();
-        function_logs_guard
-            .iter()
-            .map(|id| Arc::new(FunctionLog::new(id.id.clone())))
-            .collect()
-    }
-
-    // This will increment the ref count for the function log
-    pub fn track_function(&self, span_id: FunctionId) {
-        let mut function_logs_guard = self.function_logs.lock().unwrap();
-
-        // Create a temporary FunctionLog to use for searching
-        let search_log = Arc::new(FunctionLog::new(span_id.clone()));
-        if !function_logs_guard.contains(&search_log) {
-            function_logs_guard.insert(search_log);
+    /// Append a new event for the given function ID, but only if ref_count > 0.
+    pub fn put(&mut self, event: Arc<TraceEvent>) {
+        let Some(&count) = self.ref_counts.get(&event.span_id) else {
+            // If no references exist, skip or handle otherwise
+            return;
+        };
+        if count > 0 {
+            if let Some(events_vec) = self.span_map.get_mut(&event.span_id) {
+                events_vec.push(event);
+            }
         }
+    }
+
+    /// Retrieve events for a particular function (span).
+    /// Returns None if the function isn't being tracked (or was removed).
+    pub fn get_events(&self, function_id: &FunctionId) -> Option<&Vec<Arc<TraceEvent>>> {
+        self.span_map.get(function_id)
+    }
+
+    /// Returns how many references a given function currently has.
+    pub fn ref_count_for(&self, function_id: &FunctionId) -> usize {
+        self.ref_counts.get(function_id).copied().unwrap_or(0)
+    }
+
+    /// For debugging – return a copy of all events in memory.
+    pub fn events(&self) -> HashMap<FunctionId, Vec<Arc<TraceEvent>>> {
+        self.span_map.clone()
+    }
+
+    pub fn clear(&mut self) {
+        self.span_map.clear();
+        self.ref_counts.clear();
+        self.function_inners.lock().unwrap().clear();
     }
 }
 
-impl Drop for Collector {
-    fn drop(&mut self) {
-        log::info!("Dropping collector: {}", self.id);
-        // Lock the function_logs once to get all IDs we need to decrement
-        let function_logs_guard = self.function_logs.lock().unwrap();
-        for function_log in function_logs_guard.iter() {
-            BAML_TRACER
-                .lock()
-                .unwrap()
-                .dec_function_id(&function_log.id());
-        }
-    }
-}
-
-/// Build a single [FunctionLog] from all events corresponding to `function_id`.
 ///
-/// If there is no data for the given function ID (or function_start is missing),
-/// returns None.
+/// Build a single [FunctionLogInner] from all events corresponding to `function_id`, or
+/// return it from the cache. If there is no data for the given function ID
+/// (or FunctionStart is missing), returns None.
+///
 fn build_function_log(
     storage: &TraceStorage,
     function_id: &FunctionId,
 ) -> Option<Arc<Mutex<FunctionLogInner>>> {
+    // First, check if there's already a cached FunctionLogInner.
+    {
+        let lock = storage.function_inners.lock().unwrap();
+        if let Some(existing) = lock.get(function_id) {
+            // Already built, just return a clone
+            return Some(existing.clone());
+        }
+    }
+
+    // If no cached version, fetch events to build from scratch.
     let events = storage.get_events(function_id)?;
-    let guard = events.lock().unwrap();
+    let guard = events; // A reference to the vector.
 
     let mut function_start: Option<&FunctionStart> = None;
     let mut function_end: Option<&FunctionEnd> = None;
@@ -343,19 +153,14 @@ fn build_function_log(
     let mut function_start_time: Option<i64> = None;
     let mut function_end_time: Option<i64> = None;
 
-    // We will parse usage from LLM responses
     let mut usage = Usage::default();
-
     let mut combined_metadata = HashMap::new();
 
     // We must group requests by request_id for LLM calls.
-    // request_id -> (HTTPRequest optional, Vec<HTTPResponse>, LoggedLLMRequest?, LoggedLLMResponse?)
     let mut calls_map: HashMap<String, CallAccumulator> = HashMap::new();
 
-    // We'll parse each event in chronological order (they may not be strictly sorted by time, though).
-    // In a real system, you'd want to sort by event timestamp, but here we'll just iterate in stored order.
+    // In a real system, we might want to sort events by timestamp, but here we just iterate:
     for event in guard.iter() {
-        // We can parse the timestamp as ms since epoch from the event.
         let time_ms = system_time_to_utc_ms(&event.timestamp);
 
         // Merge event tags into metadata (if any).
@@ -372,14 +177,10 @@ fn build_function_log(
             TraceData::FunctionEnd(end) => {
                 function_end = Some(end);
                 function_end_time = Some(time_ms);
-
-                // If there's a usage dimension from the end result (not typical),
-                // you could parse it here from end.result.
             }
 
             // LLM adjacency
             TraceData::LLMRequest(llm_req) => {
-                // No request_id in LLMRequest itself. Could store a "virtual" request_id from the event_id if desired.
                 let rid = format!("llm_req_{}", event.event_id.0);
                 let entry = calls_map.entry(rid).or_default();
                 entry.llm_request = Some(llm_req.clone());
@@ -415,77 +216,32 @@ fn build_function_log(
             }
 
             // Possibly streaming or partial events
-            // "Parsed" is ignored for this structure (the user can parse if desired).
             TraceData::Parsed(_) => {}
-            TraceData::LogMessage { .. } => {} // We do not store "FunctionEnd(...) again" or other fields here.
+            TraceData::LogMessage { .. } => {}
         }
     }
 
-    // If we never found a FunctionStart, we skip building a log.
+    // If we never found a FunctionStart, skip building a log.
     let start_ev = function_start.as_ref()?;
     let fname = start_ev.name.clone();
 
-    // Build the top-level FunctionLog
     let start_ms = function_start_time.unwrap_or(0);
     let end_ms = function_end_time.unwrap_or(start_ms);
     let duration = end_ms.saturating_sub(start_ms);
 
-    // build each LLMCall or LLMStreamCall from calls_map.
+    // Build each LLMCall or LLMStreamCall
     let mut calls = Vec::new();
-    for (rid, call_acc) in calls_map {
+    for (_rid, call_acc) in calls_map {
         let (client, provider) = parse_llm_client_and_provider(call_acc.llm_request.as_ref());
         let start_t = call_acc.timestamp_first_seen.unwrap_or(start_ms);
         let end_t = call_acc.timestamp_last_seen.unwrap_or(start_t);
         let partial_duration = end_t.saturating_sub(start_t);
 
-        // If we suspect streaming, we might look at the presence of multiple HTTP responses or chunk data.
-        // For simplicity, let's call it streaming if there's more than one response or if it's a known streaming route.
         let is_stream = call_acc.http_responses.len() > 1;
 
-        // Merge local usage from the call:
-        let local_usage = call_acc.usage.unwrap_or_else(|| Usage {
-            input_tokens: 0,
-            output_tokens: 0,
-        });
+        let local_usage = call_acc.usage.unwrap_or_default();
         usage.input_tokens += local_usage.input_tokens;
         usage.output_tokens += local_usage.output_tokens;
-
-        // Build the request/response as JSON
-        // let request_json = if let Some(r) = &call_acc.http_request {
-        //     serde_json::json!({
-        //         "url": r.url,
-        //         "method": r.method,
-        //         "headers": r.headers,
-        //         "body": r.body,
-        //     })
-        // } else if let Some(llm_req) = &call_acc.llm_request {
-        //     // fallback to storing the LLMRequest as is
-        //     serde_json::to_value(llm_req).unwrap_or_else(|_| serde_json::json!({}))
-        // } else {
-        //     serde_json::json!({})
-        // };
-
-        // let response_json = if call_acc.http_responses.is_empty() {
-        //     // Maybe store the LLMResponse if no raw response was found
-        //     if let Some(resp) = &call_acc.llm_response {
-        //         serde_json::to_value(resp).ok()
-        //     } else {
-        //         None
-        //     }
-        // } else {
-        //     // for multiple responses, store them in an array
-        //     Some(serde_json::json!(call_acc
-        //         .http_responses
-        //         .iter()
-        //         .map(|r| {
-        //             serde_json::json!({
-        //                 "status": r.status,
-        //                 "headers": r.headers,
-        //                 "body": r.body,
-        //             })
-        //         })
-        //         .collect::<Vec<_>>()))
-        // };
 
         if !is_stream {
             // Basic LLMCall
@@ -495,12 +251,12 @@ fn build_function_log(
                 timing: Timing {
                     start_time_utc_ms: start_t,
                     duration_ms: partial_duration,
-                    time_to_first_parsed_ms: 0, // not computed
+                    time_to_first_parsed_ms: 0,
                 },
                 request: call_acc.http_request.clone(),
                 response: call_acc.http_responses.first().cloned(),
                 usage: Some(local_usage),
-                selected: false, // you could add logic to mark which one is selected
+                selected: false,
             }));
         } else {
             // Streaming call
@@ -510,22 +266,22 @@ fn build_function_log(
                 timing: StreamTiming {
                     start_time_utc_ms: start_t,
                     duration_ms: partial_duration,
-                    time_to_first_parsed_ms: 0, // not computed
-                    time_to_first_token_ms: 0,  // not computed
+                    time_to_first_parsed_ms: 0,
+                    time_to_first_token_ms: 0,
                 },
                 request: call_acc.http_request.clone(),
                 response: call_acc.http_responses.first().cloned(),
                 usage: Some(local_usage),
                 selected: false,
-                chunks: Vec::new(), // user could store partial chunk messages
+                chunks: Vec::new(),
             }));
         }
     }
 
-    // Possibly guess "call" vs "stream". We'll mark "stream" if there's at least one LLMStreamCall.
+    // If there's at least one streaming call, we mark the FunctionLogInner's type as "stream".
     let is_stream_fn = calls.iter().any(|c| matches!(c, LLMCallKind::Stream(_)));
 
-    let function_log = FunctionLogInner {
+    let function_log_inner = FunctionLogInner {
         id: function_id.0.clone(),
         function_name: fname,
         r#type: if is_stream_fn {
@@ -536,20 +292,23 @@ fn build_function_log(
         timing: Timing {
             start_time_utc_ms: start_ms,
             duration_ms: duration,
-            time_to_first_parsed_ms: 0, // not computed
+            time_to_first_parsed_ms: 0,
         },
         usage,
         calls,
-        raw_llm_response: None, // could store a best guess from LLMResponse
+        raw_llm_response: None,
         metadata: combined_metadata,
     };
 
-    Some(Arc::new(Mutex::new(function_log)))
-}
+    let new_arc = Arc::new(Mutex::new(function_log_inner));
+    {
+        // Insert into the cache
+        let mut lock = storage.function_inners.lock().unwrap();
+        lock.insert(function_id.clone(), new_arc.clone());
+    }
 
-// ─────────────────────────────────────────────────────────────────────────────
-//  Utility / Parsing / Accumulators
-// ─────────────────────────────────────────────────────────────────────────────
+    Some(new_arc)
+}
 
 /// A helper structure for building an LLM call from multiple events sharing the same request_id.
 #[derive(Default, Debug)]
@@ -563,6 +322,7 @@ struct CallAccumulator {
     pub timestamp_last_seen: Option<i64>,
 }
 
+/// Helper to parse out the client/provider from a LoggedLLMRequest.
 fn parse_llm_client_and_provider(req: Option<&Arc<LoggedLLMRequest>>) -> (String, String) {
     match req {
         Some(r) => match &r.client {
@@ -583,171 +343,264 @@ fn system_time_to_utc_ms(st: &web_time::SystemTime) -> i64 {
     dur.as_millis() as i64
 }
 
-/// Our main storage struct. Holds:
-/// 1) A map of FunctionId -> list of events (wrapped in an Arc<Mutex<Vec<Arc<TraceEvent>>>>).
-/// 2) A map of FunctionId -> reference count (how many "subscribers" are listening).
-#[derive(Default)]
-pub struct TraceStorage {
-    /// For each function (span), we keep an Arc<Mutex<Vec<Arc<TraceEvent>>>>>.
-    /// This lets us append events asynchronously from multiple tasks.
-    span_map: HashMap<FunctionId, Arc<Mutex<Vec<Arc<TraceEvent>>>>>,
-    /// For each function (span), how many "subscribers" currently have it referenced?
-    ref_counts: HashMap<FunctionId, Arc<AtomicUsize>>,
+///
+/// Represents a single function call's log.
+///
+#[derive(Debug)]
+pub struct FunctionLog {
+    id: FunctionId,
+    /// We store an optional Arc<Mutex<FunctionLogInner>> so that we only load it lazily.
+    inner: Option<Arc<Mutex<FunctionLogInner>>>,
+    instance_id: String,
 }
 
-impl TraceStorage {
-    pub fn new() -> Self {
+impl Clone for FunctionLog {
+    fn clone(&self) -> Self {
+        log::info!("Cloning function log: {}", self.id().0);
+        // Creating a new FunctionLog will inc_ref again:
+        Self::new(self.id.clone())
+    }
+}
+
+impl FunctionLog {
+    pub fn new(id: FunctionId) -> Self {
+        log::info!("Creating new function log: {}", id.0);
+        // Manually increment the global reference count
+        BAML_TRACER.lock().unwrap().inc_ref(&id);
+
+        let instance_id = Uuid::new_v4().to_string();
         Self {
-            span_map: HashMap::new(),
-            ref_counts: HashMap::new(),
+            id,
+            inner: None,
+            instance_id,
         }
     }
 
-    /// Retrieve events for a particular function (span).
-    /// Returns None if the function isn't being tracked (or was dropped).
-    pub fn get_events(&self, function_id: &FunctionId) -> Option<Arc<Mutex<Vec<Arc<TraceEvent>>>>> {
-        self.span_map.get(function_id).cloned()
-    }
-
-    /// Increments the reference count for the given function ID.
-    /// Also ensures the underlying events map entry exists.
-    pub fn inc_function_id(&mut self, function_id: &FunctionId) {
-        log::info!("Incrementing ref for FunctionID {}", function_id.0);
-        // Ensure we have an event vector for that function ID
-        self.span_map
-            .entry(function_id.clone())
-            .or_insert_with(|| Arc::new(Mutex::new(Vec::new())));
-
-        // Ensure we have a reference count, then increment it.
-        let arc_counter = self
-            .ref_counts
-            .entry(function_id.clone())
-            .or_insert_with(|| Arc::new(AtomicUsize::new(0)));
-        arc_counter.fetch_add(1, Ordering::SeqCst);
-
-        log::info!(
-            "FunctionID {} now has {} references",
-            function_id.0,
-            self.ref_count_for(function_id)
-        );
-    }
-
-    /// Decrements the reference count. If it hits zero, we remove the span's events from memory.
-    pub fn dec_function_id(&mut self, function_id: &FunctionId) {
-        log::info!(
-            "Decrementing ref for FunctionID {} (ref count: {})",
-            function_id.0,
-            self.ref_count_for(function_id)
-        );
-        if let Some(arc_counter) = self.ref_counts.get(function_id) {
-            let current = arc_counter.load(Ordering::SeqCst);
-            if current > 0 {
-                let new_val = arc_counter.fetch_sub(1, Ordering::SeqCst);
-                if new_val == 1 {
-                    // That means we just went from 1 to 0 – remove from memory.
-                    self.ref_counts.remove(function_id);
-                    self.span_map.remove(function_id);
-                }
-            } else {
-                // there's a memory leak here.
-                panic!(
-                    "Attempted to decrement ref below 0 for FunctionID {}",
-                    function_id.0
-                );
-            }
-        } else {
-            panic!(
-                "Attempted to decrement ref for FunctionID {} (not found)",
-                function_id.0
-            );
+    // Private helper to get or build the inner reference
+    fn get_inner(&mut self) -> &Arc<Mutex<FunctionLogInner>> {
+        if self.inner.is_none() {
+            // We attempt to build or retrieve from the global tracer
+            let maybe_arc = {
+                let tracer = BAML_TRACER.lock().unwrap();
+                build_function_log(&tracer, &self.id)
+                    .expect("Function log expected to be present (no FunctionStart event?)")
+            };
+            self.inner = Some(maybe_arc);
         }
-        log::info!(
-            "FunctionID  {} now has {} references",
-            function_id.0,
-            self.ref_count_for(function_id)
-        );
-        let event_count = self
-            .span_map
-            .values()
-            .map(|arc| arc.lock().unwrap().len())
-            .sum::<usize>();
-        let function_ids_left = self.span_map.len();
-        log::info!("Number of function IDs left: {}", function_ids_left);
-        log::info!("Number of events left: {}", event_count);
-        log::info!("Ref counts: {:?}", self.ref_counts);
+        self.inner.as_ref().unwrap()
     }
 
-    /// Insert / record a new event for the given function (span).
-    /// If the reference count is 0 (no subscribers), we skip storing it.
-    ///
-    /// Regardless, we also publish the event so that external systems can receive it.
-    pub fn put(&mut self, event: Arc<TraceEvent>) {
-        let span_id = event.span_id.clone();
-
-        // Check how many references are present for this span
-        let count = self
-            .ref_counts
-            .get(&span_id)
-            .map(|arc| arc.load(Ordering::SeqCst))
-            .unwrap_or(0);
-
-        // Always attempt to publish
-        if let Err(e) = PUBLISHING_CHANNEL.send(PublisherMessage::Trace(event.clone())) {
-            log::error!("Failed to send event to publisher: {:?}", e);
-        }
-
-        // If nobody's referencing this span, no need to store it locally
-        if count == 0 {
-            return;
-        }
-
-        // If count > 0, store the event locally in the span_map.
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            let event_clone = event.clone();
-            let span_map = self.span_map.get(&span_id).cloned();
-            tokio::spawn(async move {
-                if let Some(ev) = span_map {
-                    let mut guard = ev.lock().unwrap();
-                    guard.push(event_clone);
-                }
-            });
-        }
-
-        #[cfg(target_arch = "wasm32")]
-        {
-            let event_clone = event.clone();
-            let span_map = self.span_map.get(&span_id).cloned();
-            wasm_bindgen_futures::spawn_local(async move {
-                if let Some(ev) = span_map {
-                    let mut guard = ev.lock().unwrap();
-                    guard.push(event_clone);
-                }
-            });
-        }
+    pub fn id(&self) -> FunctionId {
+        self.id.clone()
     }
 
-    /// For testing or debugging – return the entire map of events.
-    /// (Use with caution in a real system, as it might be huge.)
-    pub fn events(&self) -> HashMap<FunctionId, Arc<Mutex<Vec<Arc<TraceEvent>>>>> {
-        self.span_map.clone()
+    // The methods below clone from the underlying data (no references).
+    pub fn function_name(&mut self) -> String {
+        self.get_inner().lock().unwrap().function_name.clone()
     }
 
-    /// For testing or debugging – return how many references a given function currently has.
-    pub fn ref_count_for(&self, function_id: &FunctionId) -> usize {
-        self.ref_counts
-            .get(function_id)
-            .map(|arc| arc.load(Ordering::SeqCst))
-            .unwrap_or(0)
+    pub fn r#type(&mut self) -> String {
+        self.get_inner().lock().unwrap().r#type.clone()
     }
 
-    pub fn clear(&mut self) {
-        self.span_map.clear();
-        self.ref_counts.clear();
+    pub fn timing(&mut self) -> Timing {
+        self.get_inner().lock().unwrap().timing.clone()
+    }
+
+    pub fn usage(&mut self) -> Usage {
+        self.get_inner().lock().unwrap().usage.clone()
+    }
+
+    pub fn calls(&mut self) -> Vec<LLMCallKind> {
+        self.get_inner().lock().unwrap().calls.clone()
+    }
+
+    pub fn raw_llm_response(&mut self) -> Option<String> {
+        self.get_inner().lock().unwrap().raw_llm_response.clone()
+    }
+
+    pub fn metadata(&mut self) -> HashMap<String, serde_json::Value> {
+        self.get_inner().lock().unwrap().metadata.clone()
     }
 }
 
-// ----------------- TESTS -----------------
+impl Drop for FunctionLog {
+    fn drop(&mut self) {
+        log::info!(
+            "Dropping function log: {}, instance_id: {}",
+            self.id.0,
+            self.instance_id
+        );
+        // Manually decrement the global ref count
+        BAML_TRACER.lock().unwrap().dec_ref(&self.id);
+    }
+}
+
+///
+/// Represents the "inner" data for a single function call
+/// (the real set of usage/calls/timing, etc.).
+///
+#[derive(Debug, Clone)]
+pub struct FunctionLogInner {
+    pub id: String,
+    pub function_name: String,
+    pub r#type: String,
+    pub timing: Timing,
+    pub usage: Usage,
+    pub calls: Vec<LLMCallKind>,
+    pub raw_llm_response: Option<String>,
+    pub metadata: HashMap<String, serde_json::Value>,
+}
+
+impl FunctionLogInner {
+    /// Return the "selected" call, or None if none was selected.
+    pub fn selected_call(&self) -> Option<&LLMCallKind> {
+        self.calls.iter().find(|call| call.selected())
+    }
+}
+
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
+pub struct Usage {
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+}
+
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
+pub struct Timing {
+    pub start_time_utc_ms: i64,
+    pub duration_ms: i64,
+    pub time_to_first_parsed_ms: i64,
+}
+
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
+pub struct StreamTiming {
+    pub start_time_utc_ms: i64,
+    pub duration_ms: i64,
+    pub time_to_first_parsed_ms: i64,
+    pub time_to_first_token_ms: i64,
+}
+
+#[derive(Debug, Clone)]
+pub enum LLMCallKind {
+    Basic(LLMCall),
+    Stream(LLMStreamCall),
+}
+
+impl LLMCallKind {
+    /// Returns whether this call is selected.
+    pub fn selected(&self) -> bool {
+        match self {
+            LLMCallKind::Basic(c) => c.selected,
+            LLMCallKind::Stream(c) => c.selected,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct LLMCall {
+    pub client_name: String,
+    pub provider: String,
+    pub timing: Timing,
+    pub request: Option<Arc<HTTPRequest>>,
+    pub response: Option<Arc<HTTPResponse>>,
+    pub usage: Option<Usage>,
+    pub selected: bool,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct LLMStreamCall {
+    pub client_name: String,
+    pub provider: String,
+    pub timing: StreamTiming,
+    pub request: Option<Arc<HTTPRequest>>,
+    pub response: Option<Arc<HTTPResponse>>,
+    pub usage: Option<Usage>,
+    pub selected: bool,
+    pub chunks: Vec<serde_json::Value>,
+}
+
+/// A Collector holds references to multiple FunctionIds. When dropped,
+/// it decrements the global ref counts for all tracked IDs.
+#[derive(Debug)]
+pub struct Collector {
+    collector_id: String,
+    // Now just a regular Mutex<HashSet> - no Arc needed since we want independent sets
+    tracked_ids: Mutex<HashSet<FunctionId>>,
+}
+
+impl Collector {
+    pub fn new(id: String) -> Self {
+        Self {
+            collector_id: id,
+            tracked_ids: Mutex::new(HashSet::new()),
+        }
+    }
+
+    pub fn track_function(&self, fid: FunctionId) {
+        // First increment the global ref count
+        BAML_TRACER.lock().unwrap().inc_ref(&fid);
+
+        // Then add to our set
+        let mut guard = self.tracked_ids.lock().unwrap();
+        guard.insert(fid);
+    }
+
+    pub fn untrack_function(&self, fid: &FunctionId) {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        if guard.remove(fid) {
+            BAML_TRACER.lock().unwrap().dec_ref(fid);
+        }
+    }
+
+    pub fn function_logs(&self) -> Vec<FunctionLog> {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        guard
+            .iter()
+            .map(|fid| FunctionLog::new(fid.clone()))
+            .collect()
+    }
+
+    pub fn function_log(&self, fid: &FunctionId) -> Option<FunctionLog> {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        guard
+            .iter()
+            .find(|fid| fid == fid)
+            .map(|fid| FunctionLog::new(fid.clone()))
+    }
+}
+
+impl Clone for Collector {
+    fn clone(&self) -> Self {
+        // Create a new collector with empty set
+        let new_collector = Self::new(format!("{}_clone", self.collector_id));
+
+        // Get all currently tracked IDs from the original
+        let tracked = self.tracked_ids.lock().unwrap();
+
+        // Track each ID in the new collector (this will inc_ref for each)
+        for fid in tracked.iter() {
+            new_collector.track_function(fid.clone());
+        }
+
+        new_collector
+    }
+}
+
+impl Drop for Collector {
+    fn drop(&mut self) {
+        // On drop, we untrack (and thus dec_ref) everything we were tracking
+        let mut tracer = BAML_TRACER.lock().unwrap();
+        let guard = self.tracked_ids.lock().unwrap();
+        for fid in guard.iter() {
+            tracer.dec_ref(fid);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -755,23 +608,37 @@ mod tests {
         ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent, TraceLevel,
     };
     use core::time::Duration;
+    use serial_test::serial;
     use tokio::runtime::Runtime;
 
     #[test]
+    #[serial]
     fn test_reference_count_lifecycle() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let mut storage = TraceStorage::new();
+            // Clear and check initial state
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.clear();
+            }
+
             let f_id = FunctionId("func_abc".to_string());
 
             // Initially, no references
-            assert_eq!(storage.ref_count_for(&f_id), 0);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+            }
 
-            // Increment reference count
-            storage.inc_function_id(&f_id);
-            assert_eq!(storage.ref_count_for(&f_id), 1);
+            // Create a collector to track the function ID
+            let collector = Collector::new("test_collector".to_string());
+            collector.track_function(f_id.clone());
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 1);
+            }
 
-            // Put an event – it should be stored in memory (since ref > 0)
+            // Put an event
             let event = Arc::new(TraceEvent {
                 span_id: f_id.clone(),
                 event_id: ContentId("event_abc".to_string()),
@@ -784,53 +651,220 @@ mod tests {
                 },
                 tags: Default::default(),
             });
-            storage.put(event.clone());
-
-            // Wait for the async insert to complete
-            tokio::time::sleep(Duration::from_millis(10)).await;
-
-            let maybe_events = storage.get_events(&f_id);
-            assert!(maybe_events.is_some());
-
-            // Store Arc<Mutex<Vec<Arc<TraceEvent>>>>> in a variable before locking
-            let arc_mutex = maybe_events.unwrap();
-            let event_list = arc_mutex.lock().unwrap();
-
-            assert_eq!(event_list.len(), 1);
-            match &event_list[0].content {
-                TraceData::LogMessage { msg } => assert_eq!(msg, "test_event1"),
-                _ => panic!("Expected a LogMessage content."),
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event.clone());
             }
 
-            // Decrement reference count => it should remove the events if count hits 0
-            storage.dec_function_id(&f_id);
-            assert_eq!(storage.ref_count_for(&f_id), 0);
+            // Wait a bit
+            tokio::time::sleep(Duration::from_millis(10)).await;
 
-            // That should also remove the events, so get_events should return None
-            assert!(storage.get_events(&f_id).is_none());
+            // Check events exist
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                let maybe_events = tracer.get_events(&f_id);
+                assert!(maybe_events.is_some());
+                assert_eq!(maybe_events.unwrap().len(), 1);
+            }
+
+            // Drop the collector => reference count goes to 0
+            drop(collector);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                assert!(tracer.get_events(&f_id).is_none());
+            }
         });
     }
 
-    //
-    // Tests for FunctionLog
-    //
-
     #[test]
-    fn test_function_log_basic() {
-        // This test ensures that a FunctionLog correctly loads FunctionStart/End
-        // and associated metadata from the global BAML_TRACER.
-
+    #[serial]
+    fn test_collector_clone_reference_counts() {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let f_id = FunctionId("test_function_log_basic".to_string());
-
-            // Ensure a clean slate for our global tracer reference counting.
+            let f_id = FunctionId("func_abc".to_string());
+            // Clear global state
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
                 tracer.clear();
             }
 
-            // Create a FunctionStart event
+            // Create original collector and track function
+            let collector1 = Collector::new("test_collector1".to_string());
+            collector1.track_function(f_id.clone());
+
+            // Check initial reference count is 1
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 1);
+            }
+
+            // Clone collector and verify ref count increases
+            let collector2 = collector1.clone();
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 2);
+            }
+
+            // Put an event
+            let event = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("event_abc".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "test_event".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LogMessage {
+                    msg: "test_event1".into(),
+                },
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event.clone());
+            }
+
+            // Verify events exist
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                let maybe_events = tracer.get_events(&f_id);
+                assert!(maybe_events.is_some());
+                assert_eq!(maybe_events.unwrap().len(), 1);
+            }
+
+            // Drop first collector, verify ref count decreases but events remain
+            drop(collector1);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 1);
+                assert!(tracer.get_events(&f_id).is_some());
+            }
+
+            // Drop second collector, verify everything is cleaned up
+            drop(collector2);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                assert!(tracer.get_events(&f_id).is_none());
+            }
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_collector_and_function_log_clone_reference_counts() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let f_id = FunctionId("func_abc".to_string());
+            // Clear global state
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.clear();
+            }
+
+            // Create original collector and track function
+            let collector1 = Collector::new("test_collector1".to_string());
+            collector1.track_function(f_id.clone());
+
+            // Check initial reference count is 1
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 1);
+            }
+
+            // Clone collector and verify ref count increases
+            let collector2 = collector1.clone();
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 2);
+            }
+
+            // Create a function log and clone it
+            let func_log1 = collector1.function_log(&f_id).unwrap();
+            let func_log2 = func_log1.clone();
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 4);
+            }
+
+            // Put an event
+            let event = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("event_abc".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "test_event".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LogMessage {
+                    msg: "test_event1".into(),
+                },
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event.clone());
+            }
+
+            // Verify events exist
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                let maybe_events = tracer.get_events(&f_id);
+                assert!(maybe_events.is_some());
+                assert_eq!(maybe_events.unwrap().len(), 1);
+            }
+
+            // Drop first function log, verify ref count decreases but events remain
+            drop(func_log1);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 3);
+                assert!(tracer.get_events(&f_id).is_some());
+            }
+
+            // Drop second function log
+            drop(func_log2);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 2);
+                assert!(tracer.get_events(&f_id).is_some());
+            }
+
+            // Drop first collector, verify ref count decreases but events remain
+            drop(collector1);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 1);
+                assert!(tracer.get_events(&f_id).is_some());
+            }
+
+            // Drop second collector, verify everything is cleaned up
+            drop(collector2);
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                assert!(tracer.get_events(&f_id).is_none());
+            }
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_function_log_basic() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let f_id = FunctionId("test_function_log_basic".to_string());
+
+            // Clear global state
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.clear();
+            }
+
+            // Create a collector to track the function ID
+            let collector = Collector::new("test_collector".to_string());
+            collector.track_function(f_id.clone());
+
+            // Create and insert start event
             let start_event = Arc::new(TraceEvent {
                 span_id: f_id.clone(),
                 event_id: ContentId("start_event".to_string()),
@@ -848,8 +882,12 @@ mod tests {
                 }),
                 tags: Default::default(),
             });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(start_event.clone());
+            }
 
-            // Create a FunctionEnd event
+            // Create and insert end event
             let end_event = Arc::new(TraceEvent {
                 span_id: f_id.clone(),
                 event_id: ContentId("end_event".to_string()),
@@ -862,58 +900,55 @@ mod tests {
                 }),
                 tags: Default::default(),
             });
-
-            // Insert them into the global tracer
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(start_event.clone());
                 tracer.put(end_event.clone());
             }
 
-            // Wait a bit for async insertion
             tokio::time::sleep(Duration::from_millis(50)).await;
 
-            // Create a new FunctionLog, which should load the data from the tracer
             let mut func_log = FunctionLog::new(f_id.clone());
             assert_eq!(func_log.id(), f_id);
 
-            // These fields are pulled from the events we added
             assert_eq!(func_log.function_name(), "test_function");
-            assert!(func_log.r#type() == "call" || func_log.r#type() == "stream");
+            let tpe = func_log.r#type();
+            assert!(tpe == "call" || tpe == "stream");
 
-            // By default, usage is zero unless an LLM was triggered
             assert_eq!(func_log.usage().input_tokens, 0);
             assert_eq!(func_log.usage().output_tokens, 0);
-
-            // Double-check that there are no LLM calls
             assert_eq!(func_log.calls().len(), 0);
-
-            // We didn't provide a raw_llm_response, so it should be None
             assert!(func_log.raw_llm_response().is_none());
-
-            // We have no additional metadata in tags, so it should be empty
             assert!(func_log.metadata().is_empty());
 
-            // Cleanup reference count
+            // Clean up by dropping both the collector and function_log
+            drop(collector);
+            drop(func_log);
+
+            // Verify everything is cleaned up
             {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.dec_function_id(&f_id);
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                assert!(tracer.get_events(&f_id).is_none());
             }
         });
     }
 
     #[test]
+    #[serial]
     fn test_function_log_with_metadata() {
-        // Tests that metadata from the Event tags is merged properly.
-
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let f_id = FunctionId("test_function_log_with_metadata".to_string());
 
+            // Clear global state
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.inc_function_id(&f_id);
+                tracer.clear();
             }
+
+            // Create a collector to track the function ID
+            let collector = Collector::new("test_collector".to_string());
+            collector.track_function(f_id.clone());
 
             let mut tags = serde_json::Map::new();
             tags.insert(
@@ -942,221 +977,27 @@ mod tests {
                 }),
                 tags,
             });
-
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
                 tracer.put(start_event.clone());
             }
 
-            // Wait a bit for async insertion
             tokio::time::sleep(Duration::from_millis(50)).await;
 
-            // Create a new FunctionLog and check that metadata is there
             let mut func_log = FunctionLog::new(f_id.clone());
             let meta = func_log.metadata();
             assert_eq!(meta.get("foo").unwrap(), "bar");
             assert_eq!(meta.get("some_number").unwrap(), 42);
 
-            // Cleanup reference count
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.dec_function_id(&f_id);
-            }
-        });
-    }
+            // Clean up by dropping both the collector and function_log
+            drop(collector);
+            drop(func_log);
 
-    #[test]
-    fn test_collector_clone_reference_counts() {
-        // Initialize the logger
-        env_logger::init();
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async {
-            // Prepare a function ID
-            let f_id = FunctionId("test_collector_clone_reference_counts".to_string());
-
-            // Ensure a clean environment for our static BAML_TRACER
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                // Make sure we don't have a reference from a prior test run
-                tracer.clear();
-            }
-
-            // Create a new collector and track the function
-            let collector1 = Collector::new("collector_1".to_string());
-            collector1.track_function(f_id.clone());
-
-            // Check the reference count in the global tracer
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                assert_eq!(tracer.ref_count_for(&f_id), 1);
-            }
-
-            // Clone the collector
-            let collector2 = collector1.clone();
-
-            log::info!("Cloned collector");
-            // Ensure the function logs are still tracked but now there are two collectors
-            // with separate references to the same functionid (all function logs are cloned)
-            // so the ref count should be 2
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                assert_eq!(tracer.ref_count_for(&f_id), 2);
-            }
-
-            log::info!("Tracking function again");
-            // Now, if we call track_function again on the clone, that should increment
-            collector2.track_function(f_id.clone());
-
-            {
-                log::info!("Checking ref count");
-                let tracer = BAML_TRACER.lock().unwrap();
-                assert_eq!(tracer.ref_count_for(&f_id), 2);
-            }
-
-            // Inserting a new event to ensure the function is being tracked
-            let test_event = Arc::new(TraceEvent {
-                span_id: f_id.clone(),
-                event_id: ContentId("test_event".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "test_event".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LogMessage {
-                    msg: "cloning reference tests".into(),
-                },
-                tags: Default::default(),
-            });
-
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(test_event);
-            }
-
-            // Wait for async insertion in case it needs time
-            tokio::time::sleep(Duration::from_millis(50)).await;
-
-            // Drop the first collector
-            drop(collector1);
-
-            // Now the function's reference count should still be 1 (held by collector2)
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                assert_eq!(tracer.ref_count_for(&f_id), 1);
-            }
-
-            // Drop the second collector
-            log::info!("Dropping second collector");
-            drop(collector2);
-
-            // Reference count should return to 0
+            // Verify everything is cleaned up
             {
                 let tracer = BAML_TRACER.lock().unwrap();
                 assert_eq!(tracer.ref_count_for(&f_id), 0);
-                // Also check that the events for this function are removed
                 assert!(tracer.get_events(&f_id).is_none());
-            }
-        });
-    }
-
-    #[test]
-    fn test_collector_multiple_functions() {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async {
-            let f_id1 = FunctionId("test_collector_multiple_functions_1".to_string());
-            let f_id2 = FunctionId("test_collector_multiple_functions_2".to_string());
-
-            // Clean up any existing references from prior tests
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.clear();
-            }
-
-            // Create a collector and track two functions
-            let collector_a = Collector::new("collector_a".to_string());
-            collector_a.track_function(f_id1.clone());
-            collector_a.track_function(f_id2.clone());
-
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                assert_eq!(tracer.ref_count_for(&f_id1), 1);
-                assert_eq!(tracer.ref_count_for(&f_id2), 1);
-            }
-
-            // Insert some events for both functions
-            let event1 = Arc::new(TraceEvent {
-                span_id: f_id1.clone(),
-                event_id: ContentId("event_1".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "test_event".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LogMessage {
-                    msg: "function1 test event".into(),
-                },
-                tags: Default::default(),
-            });
-
-            let event2 = Arc::new(TraceEvent {
-                span_id: f_id2.clone(),
-                event_id: ContentId("event_2".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "test_event".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LogMessage {
-                    msg: "function2 test event".into(),
-                },
-                tags: Default::default(),
-            });
-
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(event1);
-                tracer.put(event2);
-            }
-
-            // Clone the collector
-            let collector_b = collector_a.clone();
-
-            // Cloning doesn't directly track new functions, so reference counts remain 1
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                assert_eq!(tracer.ref_count_for(&f_id1), 1);
-                assert_eq!(tracer.ref_count_for(&f_id2), 1);
-            }
-
-            // Track second function again from the cloned collector
-            collector_b.track_function(f_id2.clone());
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                // Function 1 is still only tracked by the first collector
-                assert_eq!(tracer.ref_count_for(&f_id1), 1);
-                // Function 2 is now tracked both by the original and the clone
-                assert_eq!(tracer.ref_count_for(&f_id2), 2);
-            }
-
-            // Drop the original collector
-            drop(collector_a);
-
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                // Function 1 is no longer referenced, so should drop to 0
-                // The events are removed from memory as well
-                assert_eq!(tracer.ref_count_for(&f_id1), 0);
-                assert!(tracer.get_events(&f_id1).is_none());
-
-                // Function 2 is still tracked by collector_b
-                assert_eq!(tracer.ref_count_for(&f_id2), 1);
-                assert!(tracer.get_events(&f_id2).is_some());
-            }
-
-            // Finally, drop collector_b; references should be fully cleaned
-            drop(collector_b);
-
-            {
-                let tracer = BAML_TRACER.lock().unwrap();
-                assert_eq!(tracer.ref_count_for(&f_id2), 0);
-                assert!(tracer.get_events(&f_id2).is_none());
             }
         });
     }
