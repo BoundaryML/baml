@@ -1,10 +1,9 @@
-use std::{cell::RefCell, collections::BTreeMap, iter, time::Duration};
+use std::{cell::RefCell, collections::{BTreeMap, BTreeSet}, iter, time::Duration};
 
 use colored::Colorize;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 use crate::TestStatus;
-
 use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusMap};
 use std::io::Write;
 
@@ -14,21 +13,20 @@ pub(super) struct PrettyTestExecutionStatusRenderer {
     test_bars: RefCell<BTreeMap<(String, String), ProgressBar>>,
     // A summary bar for overall status counts.
     summary_bar: ProgressBar,
+    // Track tests already printed (to avoid duplicate output)
+    printed_tests: RefCell<BTreeSet<(String, String)>>,
 }
 
-fn write_indented(
+fn write_indented_string(
     s: &str,
     indent: usize,
     modifier: impl Fn(&str) -> colored::ColoredString,
-    trailing_newline: bool,
-) {
-    let mut f = std::io::stdout();
+) -> String {
+    let mut output = String::new();
     for line in s.lines() {
-        let _ = writeln!(&mut f, "{:indent$}{}", "", modifier(line));
+        output.push_str(&format!("{:indent$}{}\n", "", modifier(line)));
     }
-    if trailing_newline {
-        let _ = writeln!(&mut f);
-    }
+    output
 }
 
 #[derive(Default)]
@@ -72,7 +70,6 @@ impl TestCounts {
     }
 
     fn progress_summary(&self) -> String {
-        // uses emoji to indicate progress
         if self.total() > 0 {
             let mut summary = format!("{}/{} tests - ", self.done(), self.total());
             if self.needs_eval > 0 {
@@ -90,12 +87,6 @@ impl TestCounts {
             if self.skipped > 0 {
                 summary.push_str(&format!("{} ⏩, ", self.skipped));
             }
-            // if self.running > 0 {
-            //     summary.push_str(&format!("{} ▶️, ", self.running));
-            // }
-            // if self.pending > 0 {
-            //     summary.push_str(&format!("{} ⏸️, ", self.pending));
-            // }
             summary.pop();
             summary.pop();
             summary
@@ -135,7 +126,6 @@ impl TestCounts {
                     summary.push_str(&format!("{} ⏸️, ", self.pending));
                 }
             }
-            // Remove the trailing comma and space.
             summary.pop();
             summary.pop();
             summary.push_str(")");
@@ -179,6 +169,76 @@ impl PrettyTestExecutionStatusRenderer {
             multi_progress,
             test_bars: RefCell::new(BTreeMap::new()),
             summary_bar,
+            printed_tests: RefCell::new(BTreeSet::new()),
+        }
+    }
+
+    fn print_test_result(
+        &self,
+        func: &str,
+        test: &str,
+        status: &TestExecutionStatus,
+        file_name: Option<&String>,
+        indent: usize,
+    ) -> Option<String> {
+        let file_name_string = file_name.map(|name| write_indented_string(&format!(" {}", name), 4, |s| s.dimmed()));
+        let target = format!("  {}::{}", func, test);
+        let mut output = String::new();
+
+        match status {
+            TestExecutionStatus::Finished(Ok(response), duration) => {
+                let time_str = format_duration(duration);
+                match response.status() {
+                    TestStatus::Pass => {
+                        output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}\n", "PASSED".green(), target), indent, |s| s.into()));
+                        if let Some(file_name_str) = &file_name_string {
+                            output.push_str(file_name_str);
+                        }
+                    }
+                    TestStatus::Fail(details) => {
+                        output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}", "FAILED".red(), target), indent, |s| s.into()));
+                        if let Some(file_name_str) = &file_name_string {
+                            output.push_str(file_name_str);
+                        }
+                        output.push_str(&write_indented_string(&details.to_string(), indent + 2, |s| s.red().dimmed()));
+                    }
+                    TestStatus::NeedsHumanEval(details) => {
+                        output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}", "NEEDS EVAL".yellow(), target), indent, |s| s.into()));
+                        if let Some(file_name_str) = &file_name_string {
+                            output.push_str(file_name_str);
+                        }
+                        for d in details {
+                            output.push_str(&write_indented_string(&d, 4, |s| s.dimmed()));
+                        }
+                    }
+                }
+            }
+            TestExecutionStatus::Finished(Err(details), duration) => {
+                let time_str = format_duration(duration);
+                output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}", "ERROR".bright_red(), target), indent, |s| s.into()));
+                if let Some(file_name_str) = &file_name_string {
+                    output.push_str(file_name_str);
+                }
+                output.push_str(&write_indented_string(&details.to_string(), indent + 2, |s| s.red().dimmed()));
+            }
+            TestExecutionStatus::Pending => {
+                output.push_str(&write_indented_string(&format!("{:<10} {}", "CANCELLED".bright_cyan(), target), indent, |s| s.dimmed()));
+            }
+            TestExecutionStatus::Running => {
+                output.push_str(&write_indented_string(&format!("{:<10} {}", "CANCELLED".bright_cyan(), target), indent, |s| s.dimmed()));
+                if let Some(file_name_str) = &file_name_string {
+                    output.push_str(file_name_str);
+                }
+            }
+            TestExecutionStatus::Excluded => {
+                output.push_str(&write_indented_string(&format!("{:<10} {}", "SKIPPED".bright_yellow(), target), indent, |s| s.dimmed()));
+            }
+        }
+
+        if output.is_empty() {
+            None
+        } else {
+            Some(output)
         }
     }
 
@@ -187,12 +247,10 @@ impl PrettyTestExecutionStatusRenderer {
         test_status_map: &TestExecutionStatusMap,
         test_file_map: &BTreeMap<(String, String), String>,
     ) {
-        // Print header.
         println!();
         println!("INFO: Test results:");
         println!("---------------------------------------------------------");
 
-        // Group tests by function.
         let mut grouped: BTreeMap<&str, Vec<(&str, &TestExecutionStatus)>> = BTreeMap::new();
         for ((func, test), status) in test_status_map {
             grouped
@@ -202,9 +260,7 @@ impl PrettyTestExecutionStatusRenderer {
         }
         let mut total_counts = TestCounts::default();
 
-        // Iterate through each function group.
         for (func, tests) in grouped {
-            // Use TestCounts for this group.
             let counts = count_tests(tests.iter().map(|(_, status)| *status));
             if counts.total() == counts.cancelled() {
                 println!("{}", format!("{} {} ({} cancelled)", "function".blue(), func.blue(), counts.cancelled()).dimmed());
@@ -220,62 +276,14 @@ impl PrettyTestExecutionStatusRenderer {
             total_counts.add(&counts);
 
             for (test, status) in tests {
-                // If available, get the file name for this test.
-                let file_name = test_file_map.get(&(func.to_string(), test.to_string())).map(|s| format!(" {}", s));
-                let file_name = || {
-                    if let Some(file_name) = file_name {
-                        write_indented(&file_name, 4, |s| s.dimmed(), false);
-                    }
-                };
-                // Create the test identifier string.
-                let target = format!("  {}::{}", func, test);
-
-                match status {
-                    TestExecutionStatus::Finished(Ok(response), duration) => {
-                        let time_str = format_duration(duration);
-                        match response.status() {
-                            TestStatus::Pass => {
-                                write_indented(&format!("{time_str} {} {}", "PASSED".green(), target), 2, |s| s.into(), false);
-                                file_name();
-                                println!("");
-                            }
-                            TestStatus::Fail(details) => {
-                                write_indented(&format!("{time_str} {:<20} {}\n", "FAILED".red(), target), 2, |s| s.into(), false);
-                                file_name();
-                                write_indented(&details.to_string(), 4, |s| s.red().dimmed(), true);
-                            }
-                            TestStatus::NeedsHumanEval(details) => {
-                                write_indented(&format!("{time_str} {} {}", "NEEDS EVAL".yellow(), target), 2, |s| s.into(), false);
-                                file_name();
-                                for d in details {
-                                    write_indented(&d, 4, |s| s.dimmed(), true);
-                                }
-                            }
-                        }
-                    }
-                    TestExecutionStatus::Finished(Err(details), duration) => {
-                        let time_str = format_duration(duration);
-                        write_indented(&format!("{time_str} {} {}", "ERROR".bright_red(), target), 2, |s| s.into(), false);
-                        file_name();
-                        write_indented(&details.to_string(), 4, |s| s.red().dimmed(), true);
-                    }
-                    TestExecutionStatus::Pending => {
-                        write_indented(&format!("{} {:<50}", "CANCELLED".bright_cyan(), target), 2, |s| s.dimmed(), false);
-                    }
-                    TestExecutionStatus::Running => {
-                        write_indented(&format!("{} {:<50}", "CANCELLED".bright_cyan(), target), 2, |s| s.dimmed(), false);
-                        file_name();
-                    }
-                    TestExecutionStatus::Excluded => {
-                        write_indented(&format!("{} {:<50}", "SKIPPED".bright_yellow(), target), 2, |s| s.dimmed(), true);
-                    }
+                let file_name = test_file_map.get(&(func.to_string(), test.to_string()));
+                if let Some(output) = self.print_test_result(func, test, status, file_name, 2) {
+                    print!("{}", output); // Use print! instead of println! to avoid extra newline
                 }
             }
         }
 
         println!("---------------------------------------------------------");
-
-        // Summary: total tests, passed, failed, needs eval, not run.
         println!(
             "INFO: Test run completed, {}",
             total_counts.short_summary(true)
@@ -284,7 +292,7 @@ impl PrettyTestExecutionStatusRenderer {
     }
 }
 
-/// Helper to format a Duration as a string (e.g. "(in 0.32s)").
+/// Helper to format a Duration as a string (e.g. "0.32s").
 fn format_duration(duration: &Duration) -> String {
     let secs = duration.as_secs_f64();
     format!("{:.2}s", secs)
@@ -311,20 +319,17 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
 
         // Use TestCounts to aggregate all statuses.
         let counts = count_tests(test_status_map.values());
-        // Compute finished tests as those that are either passed, failed, needs eval, or aborted.
 
-        // Update the dedicated summary bar (always at the top).
+        // Update the dedicated summary bar.
         self.summary_bar
             .set_message(format!("Summary: {}", counts.progress_summary(),));
 
         // Update individual test progress bars.
         if running_keys.len() > 5 {
-            // Show only the first 4 individually.
             let individual_keys: Vec<(String, String)> =
                 running_keys.iter().take(4).cloned().collect();
             {
                 let mut bars = self.test_bars.borrow_mut();
-                // Create or update progress bars for the first 4 tests.
                 for key in &individual_keys {
                     if !bars.contains_key(key) {
                         let pb = self.multi_progress.add(ProgressBar::new_spinner());
@@ -350,9 +355,8 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
                     pb.set_style(spinner_style.clone());
                     pb.enable_steady_tick(Duration::from_millis(100));
                     bars.insert(summary_key.clone(), pb);
-                };
+                }
                 bars.get_mut(&summary_key).unwrap().set_message(summary_str);
-
 
                 // Remove any individual bars not among the first 4.
                 let keys_to_remove: Vec<(String, String)> = bars
@@ -367,7 +371,6 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
                 }
             }
         } else {
-            // If 5 or fewer running tests, show them all individually.
             {
                 let mut bars = self.test_bars.borrow_mut();
                 for key in &running_keys {
@@ -381,7 +384,6 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
                         pb.set_message(format!("Running {}::{}", key.0, key.1));
                     }
                 }
-                // Remove any bars not in the current running set.
                 let keys_to_remove: Vec<(String, String)> = bars
                     .keys()
                     .filter(|k| !running_keys.contains(k))
@@ -392,6 +394,38 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
                         pb.finish_and_clear();
                     }
                 }
+            }
+        }
+
+        // --- New code: Immediately print outputs for tests that have finished with errors, failures, or need human evaluation ---
+        for ((func, test), status) in test_status_map {
+            // Only print if not already printed.
+            if self.printed_tests.borrow().contains(&(func.clone(), test.clone())) {
+                continue;
+            }
+
+            match status {
+                TestExecutionStatus::Finished(Ok(response), _) => {
+                    match response.status() {
+                        TestStatus::Pass => {}, // Do not print passes immediately in progress
+                        TestStatus::Fail(_) | TestStatus::NeedsHumanEval(_) => {
+                            let file_name_option = None; // File name not available here during progress.
+                            if let Some(output) = self.print_test_result(func, test, status, file_name_option, 0) {
+                                self.multi_progress.println(&output).unwrap();
+                            }
+                        }
+                    }
+                }
+                TestExecutionStatus::Finished(Err(_), _) => {
+                    let file_name_option = None; // File name not available here during progress.
+                    if let Some(output) = self.print_test_result(func, test, status, file_name_option, 0) {
+                        self.multi_progress.println(&output).unwrap();
+                    }
+                }
+                _ => {}
+            }
+            if matches!(status, TestExecutionStatus::Finished(_, _)) {
+                self.printed_tests.borrow_mut().insert((func.clone(), test.clone()));
             }
         }
     }
