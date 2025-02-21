@@ -60,6 +60,7 @@ impl TestArgs {
         let from = BamlRuntime::parse_baml_src_path(&self.from)?;
 
         let runtime = BamlRuntime::from_directory(&from, std::env::vars().collect())?;
+        let runtime = std::sync::Arc::new(runtime);
 
         let test_execution_args = TestFilter::from(self.include.iter().map(|s| s.as_str()), self.exclude.iter().map(|s| s.as_str()));
 

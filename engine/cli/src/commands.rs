@@ -11,7 +11,7 @@ use baml_runtime::BamlRuntime;
 pub(crate) struct RuntimeCli {
     /// Specifies a subcommand to run.
     #[command(subcommand)]
-    command: Commands,
+    pub(crate) command: Commands,
 }
 
 #[derive(Subcommand, Debug)]

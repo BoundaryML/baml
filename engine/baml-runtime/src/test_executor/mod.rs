@@ -23,7 +23,7 @@ use crate::{BamlRuntime, TestResponse, TestStatus};
 #[allow(async_fn_in_trait)]
 pub trait TestExecutor {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()>;
-    async fn cli_run_tests(&self, args: &TestFilter) -> Result<()>;
+    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter) -> Result<()>;
 }
 
 /// Test status.
@@ -40,12 +40,22 @@ pub enum TestExecutionStatus {
     Excluded,
 }
 
-type TestExecutionStatusMap<'a, 'b> = BTreeMap<(&'a str, &'b str), TestExecutionStatus>;
+type TestExecutionStatusMap = BTreeMap<(String, String), TestExecutionStatus>;
 
 pub(super) trait RenderTestExecutionStatus {
     fn render_progress(&self, test_status_map: &TestExecutionStatusMap);
 
-    fn render_final(&self, test_status_map: &TestExecutionStatusMap);
+    fn render_final(&self, test_status_map: &TestExecutionStatusMap, selected_tests: &BTreeMap<(String, String), String>);
+}
+
+async fn file_reader(path: String) -> Result<Vec<u8>> {
+    let file_path = async_std::path::PathBuf::from(&path);
+    let file_content = async_std::fs::read(file_path).await?;
+    Ok(file_content)
+}
+
+fn file_reader_pinned(path: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
+    Box::pin(file_reader(path.to_string()))
 }
 
 impl TestExecutor for BamlRuntime {
@@ -71,99 +81,126 @@ impl TestExecutor for BamlRuntime {
         Ok(())
     }
 
-    async fn cli_run_tests(&self, args: &TestFilter) -> Result<()> {
+    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter) -> Result<()> {
         let output_renderer = output_pretty::PrettyTestExecutionStatusRenderer::new();
-        let max_concurrency = 10;
-        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
-
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-        let (futs, test_status_map): (Vec<_>, BTreeMap<_, _>) = self
+        let selected_tests = self
             .inner
             .ir
             .walk_tests()
             .filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
-                    Some((function_name, test_name))
+                    node_pair.span().map(|s| ((function_name.to_string(), test_name.to_string()), format!("{}:{}", s.file.path(), s.line_and_column().0.0 + 1)))
                 } else {
                     None
                 }
             })
-            .map(|(function_name, test_name)| {
+            .collect::<BTreeMap<_, _>>();
+
+        if selected_tests.is_empty() {
+            println!("No tests selected");
+            return Ok(());
+        }
+
+        let max_concurrency = 10;
+        let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(max_concurrency));
+
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        // Build futures and initial test status map.
+        let (futs, test_status_map): (Vec<_>, BTreeMap<_, _>) = selected_tests.iter()
+            .map(|((fn_name, tt_name), _)| {
                 let semaphore = semaphore.clone();
                 let tx = tx.clone();
-                (
-                    async move {
-                        let permit = semaphore.acquire().await.unwrap();
-                        let ctx_manager =
-                            self.create_ctx_manager(BamlValue::String("cli".to_string()), None);
+                // Clone the Arc pointer for self here.
+                let runtime = self.clone();
+                let function_name = fn_name.clone();
+                let test_name = tt_name.clone();
+                let fut = tokio::spawn(async move {
+                    let _permit = semaphore.acquire().await.unwrap();
+                    let ctx_manager = runtime.create_ctx_manager(
+                        BamlValue::String("cli".to_string()),
+                        Some(Box::new(file_reader_pinned)),
+                    );
 
-                        let start_instant = Instant::now();
-                        let _ = tx.send((function_name, test_name, TestExecutionStatus::Running));
-                        let (result, _) = self
-                            .run_test(function_name, test_name, &ctx_manager, Some(|_| {}))
-                            .await;
-                        let duration = start_instant.elapsed();
-                        let _ = tx.send((
-                            function_name,
-                            test_name,
-                            TestExecutionStatus::Finished(result, duration),
-                        ));
-                    },
-                    ((function_name, test_name), TestExecutionStatus::Pending),
+                    let start_instant = Instant::now();
+                    let _ = tx.send((function_name.clone(), test_name.clone(), TestExecutionStatus::Running));
+                    let (result, _) = runtime
+                        .run_test(function_name.as_str(), test_name.as_str(), &ctx_manager, Some(|_| {}))
+                        .await;
+                    let duration = start_instant.elapsed();
+                    let _ = tx.send((
+                        function_name.clone(),
+                        test_name.clone(),
+                        TestExecutionStatus::Finished(result, duration),
+                    ));
+                });
+                (
+                    fut,
+                    ((fn_name.to_string(), tt_name.to_string()), TestExecutionStatus::Pending),
                 )
             })
             .unzip();
 
         let test_status_locked = Mutex::new(test_status_map);
 
-        join!(
-            join_all(futs.into_iter()),
-            async {
-                while let Some((function_name, test_name, status)) = rx.recv().await {
-                    let mut test_status_map = test_status_locked.lock().await;
+        let tests_future = async {
+            join!(
+                join_all(futs.into_iter()),
+                async {
+                    while let Some((function_name, test_name, status)) = rx.recv().await {
+                        let mut status_map = test_status_locked.lock().await;
+                        status_map.insert((function_name.to_string(), test_name.to_string()), status);
+                        output_renderer.render_progress(status_map.deref());
 
-                    test_status_map.insert((function_name, test_name), status);
-                    output_renderer.render_progress(test_status_map.deref());
-
-                    let total_count = test_status_map.len();
-                    let finished_count = test_status_map
-                        .values()
-                        .filter(|status| matches!(status, TestExecutionStatus::Finished(_, _)))
-                        .count();
-
-                    if finished_count == total_count {
-                        break;
-                    }
-                }
-            },
-            async {
-                loop {
-                    {
-                        let test_status_map = test_status_locked.lock().await;
-                        let finished_count = test_status_map
+                        let total_count = status_map.len();
+                        let finished_count = status_map
                             .values()
                             .filter(|status| matches!(status, TestExecutionStatus::Finished(_, _)))
                             .count();
-                        let total_count = test_status_map.len();
 
                         if finished_count == total_count {
                             break;
                         }
-
-                        output_renderer.render_progress(test_status_map.deref());
                     }
-                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                },
+                async {
+                    loop {
+                        {
+                            let status_map = test_status_locked.lock().await;
+                            let finished_count = status_map
+                                .values()
+                                .filter(|status| matches!(status, TestExecutionStatus::Finished(_, _)))
+                                .count();
+                            let total_count = status_map.len();
+
+                            if finished_count == total_count {
+                                break;
+                            }
+                            output_renderer.render_progress(status_map.deref());
+                        }
+                        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    }
                 }
-            }
-        );
+            );
+        };
 
-        let test_status_map = test_status_locked.into_inner();
+        let ctrl_c_future = async {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("Failed to listen for Ctrl+C");
+            println!("\nCtrl+C received. Cancelling remaining tests...");
+            let status_map = test_status_locked.lock().await;
+            output_renderer.render_final(&status_map, &selected_tests);
+            Ok::<(), anyhow::Error>(())
+        };
 
-        output_renderer.render_final(&test_status_map);
-        println!("done");
+        tokio::select! {
+            _ = tests_future => {},
+            res = ctrl_c_future => { res?; return Ok(()); },
+        }
 
+        let final_status = test_status_locked.into_inner();
+        output_renderer.render_final(&final_status, &selected_tests);
         Ok(())
     }
 }
