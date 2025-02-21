@@ -179,13 +179,17 @@ impl BamlRuntime {
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
 
-        let (result, _event_id) = self.inner.call_function_sync(
-            function_name,
-            &args_map,
-            &ctx_mng,
-            tb.as_ref(),
-            cb.as_ref(),
-        );
+        let (result, _event_id) = Python::with_gil(|py| {
+            py.allow_threads(|| {
+                self.inner.call_function_sync(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                )
+            })
+        });
 
         result
             .map(FunctionResult::from)
