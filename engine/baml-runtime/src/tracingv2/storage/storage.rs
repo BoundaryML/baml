@@ -24,12 +24,20 @@ use super::super::publisher::PUBLISHING_CHANNEL;
 pub static BAML_TRACER: Lazy<Mutex<TraceStorage>> =
     Lazy::new(|| Mutex::new(TraceStorage::default()));
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct FunctionLog {
     id: FunctionId,
-    inner: Option<FunctionLogInner>, // Property to store the lazily evaluated function log
+    inner: Option<Arc<Mutex<FunctionLogInner>>>, // Property to store the lazily evaluated function log
+    instance_id: String,
 }
 
+impl Clone for FunctionLog {
+    fn clone(&self) -> Self {
+        log::info!("Cloning function log: {}", self.id().0);
+
+        Self::new(self.id.clone())
+    }
+}
 impl Hash for FunctionLog {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);
@@ -46,12 +54,18 @@ impl PartialEq for FunctionLog {
 
 impl FunctionLog {
     pub fn new(id: FunctionId) -> Self {
+        log::info!("Creating new function log: {}", id.0);
         BAML_TRACER.lock().unwrap().inc_function_id(&id);
-        Self { id, inner: None }
+        let instance_id = Uuid::new_v4().to_string();
+        Self {
+            id,
+            inner: None,
+            instance_id,
+        }
     }
 
-    // Private helper to get inner reference, building if needed
-    fn get_inner(&mut self) -> &FunctionLogInner {
+    // Private helper to get or build the inner reference
+    fn get_inner(&mut self) -> &Arc<Mutex<FunctionLogInner>> {
         if self.inner.is_none() {
             self.inner = Some(
                 build_function_log(&BAML_TRACER.lock().unwrap(), &self.id)
@@ -65,32 +79,34 @@ impl FunctionLog {
         self.id.clone()
     }
 
-    pub fn function_name(&mut self) -> &str {
-        &self.get_inner().function_name
+    // The methods below now clone the underlying data instead of returning references
+    // into the locked structures, which avoids invalid lifetimes:
+    pub fn function_name(&mut self) -> String {
+        self.get_inner().lock().unwrap().function_name.clone()
     }
 
-    pub fn r#type(&mut self) -> &str {
-        &self.get_inner().r#type
+    pub fn r#type(&mut self) -> String {
+        self.get_inner().lock().unwrap().r#type.clone()
     }
 
-    pub fn timing(&mut self) -> &Timing {
-        &self.get_inner().timing
+    pub fn timing(&mut self) -> Timing {
+        self.get_inner().lock().unwrap().timing.clone()
     }
 
-    pub fn usage(&mut self) -> &Usage {
-        &self.get_inner().usage
+    pub fn usage(&mut self) -> Usage {
+        self.get_inner().lock().unwrap().usage.clone()
     }
 
-    pub fn calls(&mut self) -> &[LLMCallKind] {
-        &self.get_inner().calls
+    pub fn calls(&mut self) -> Vec<LLMCallKind> {
+        self.get_inner().lock().unwrap().calls.clone()
     }
 
-    pub fn raw_llm_response(&mut self) -> Option<&str> {
-        self.get_inner().raw_llm_response.as_deref()
+    pub fn raw_llm_response(&mut self) -> Option<String> {
+        self.get_inner().lock().unwrap().raw_llm_response.clone()
     }
 
-    pub fn metadata(&mut self) -> &HashMap<String, serde_json::Value> {
-        &self.get_inner().metadata
+    pub fn metadata(&mut self) -> HashMap<String, serde_json::Value> {
+        self.get_inner().lock().unwrap().metadata.clone()
     }
 }
 
@@ -208,18 +224,35 @@ pub struct LLMStreamCall {
 
 impl Drop for FunctionLog {
     fn drop(&mut self) {
-        log::info!("Dropping function log: {}", self.id().0);
+        log::info!(
+            "Dropping function log: {}, instance_id: {}",
+            self.id().0,
+            self.instance_id
+        );
         BAML_TRACER.lock().unwrap().dec_function_id(&self.id());
     }
 }
 
 impl Clone for Collector {
     fn clone(&self) -> Self {
-        // Increment the function reference count for the function logs
-        let function_logs_clone = self.function_logs.clone();
+        // Create a new IndexSet for the cloned collector
+        let mut new_function_logs = IndexSet::new();
+
+        // Lock and iterate over the original collector's function logs
+        for function_log in self.function_logs.lock().unwrap().iter() {
+            // Manually increment the reference count for this function ID
+            BAML_TRACER
+                .lock()
+                .unwrap()
+                .inc_function_id(&function_log.id());
+
+            // Clone the Arc pointer (i.e., another pointer to the same FunctionLog)
+            new_function_logs.insert(Arc::clone(function_log));
+        }
+
         Self {
             id: self.id.clone(),
-            function_logs: function_logs_clone,
+            function_logs: Arc::new(Mutex::new(new_function_logs)),
         }
     }
 }
@@ -267,22 +300,28 @@ impl Collector {
             .collect()
     }
 
+    // This will increment the ref count for the function log
     pub fn track_function(&self, span_id: FunctionId) {
-        let function_log = FunctionLog::new(span_id);
         let mut function_logs_guard = self.function_logs.lock().unwrap();
-        function_logs_guard.insert(Arc::new(function_log));
+
+        // Create a temporary FunctionLog to use for searching
+        let search_log = Arc::new(FunctionLog::new(span_id.clone()));
+        if !function_logs_guard.contains(&search_log) {
+            function_logs_guard.insert(search_log);
+        }
     }
 }
 
 impl Drop for Collector {
     fn drop(&mut self) {
         log::info!("Dropping collector: {}", self.id);
+        // Lock the function_logs once to get all IDs we need to decrement
         let function_logs_guard = self.function_logs.lock().unwrap();
         for function_log in function_logs_guard.iter() {
             BAML_TRACER
                 .lock()
                 .unwrap()
-                .dec_function_id(&function_log.id);
+                .dec_function_id(&function_log.id());
         }
     }
 }
@@ -294,7 +333,7 @@ impl Drop for Collector {
 fn build_function_log(
     storage: &TraceStorage,
     function_id: &FunctionId,
-) -> Option<FunctionLogInner> {
+) -> Option<Arc<Mutex<FunctionLogInner>>> {
     let events = storage.get_events(function_id)?;
     let guard = events.lock().unwrap();
 
@@ -505,7 +544,7 @@ fn build_function_log(
         metadata: combined_metadata,
     };
 
-    Some(function_log)
+    Some(Arc::new(Mutex::new(function_log)))
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -573,6 +612,7 @@ impl TraceStorage {
     /// Increments the reference count for the given function ID.
     /// Also ensures the underlying events map entry exists.
     pub fn inc_function_id(&mut self, function_id: &FunctionId) {
+        log::info!("Incrementing ref for FunctionID {}", function_id.0);
         // Ensure we have an event vector for that function ID
         self.span_map
             .entry(function_id.clone())
@@ -584,18 +624,48 @@ impl TraceStorage {
             .entry(function_id.clone())
             .or_insert_with(|| Arc::new(AtomicUsize::new(0)));
         arc_counter.fetch_add(1, Ordering::SeqCst);
+
+        log::info!(
+            "FunctionID {} now has {} references",
+            function_id.0,
+            self.ref_count_for(function_id)
+        );
     }
 
     /// Decrements the reference count. If it hits zero, we remove the span's events from memory.
     pub fn dec_function_id(&mut self, function_id: &FunctionId) {
+        log::info!(
+            "Decrementing ref for FunctionID {} (ref count: {})",
+            function_id.0,
+            self.ref_count_for(function_id)
+        );
         if let Some(arc_counter) = self.ref_counts.get(function_id) {
-            let new_val = arc_counter.fetch_sub(1, Ordering::SeqCst);
-            if new_val == 1 {
-                // That means we just went from 1 to 0 – remove from memory.
-                self.ref_counts.remove(function_id);
-                self.span_map.remove(function_id);
+            let current = arc_counter.load(Ordering::SeqCst);
+            if current > 0 {
+                let new_val = arc_counter.fetch_sub(1, Ordering::SeqCst);
+                if new_val == 1 {
+                    // That means we just went from 1 to 0 – remove from memory.
+                    self.ref_counts.remove(function_id);
+                    self.span_map.remove(function_id);
+                }
+            } else {
+                // there's a memory leak here.
+                panic!(
+                    "Attempted to decrement ref below 0 for FunctionID {}",
+                    function_id.0
+                );
             }
+        } else {
+            panic!(
+                "Attempted to decrement ref for FunctionID {} (not found)",
+                function_id.0
+            );
         }
+        log::info!(
+            "FunctionID  {} now has {} references",
+            function_id.0,
+            self.ref_count_for(function_id)
+        );
         let event_count = self
             .span_map
             .values()
@@ -604,6 +674,7 @@ impl TraceStorage {
         let function_ids_left = self.span_map.len();
         log::info!("Number of function IDs left: {}", function_ids_left);
         log::info!("Number of events left: {}", event_count);
+        log::info!("Ref counts: {:?}", self.ref_counts);
     }
 
     /// Insert / record a new event for the given function (span).
@@ -668,6 +739,11 @@ impl TraceStorage {
             .get(function_id)
             .map(|arc| arc.load(Ordering::SeqCst))
             .unwrap_or(0)
+    }
+
+    pub fn clear(&mut self) {
+        self.span_map.clear();
+        self.ref_counts.clear();
     }
 }
 
@@ -751,7 +827,7 @@ mod tests {
             // Ensure a clean slate for our global tracer reference counting.
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.inc_function_id(&f_id);
+                tracer.clear();
             }
 
             // Create a FunctionStart event
@@ -885,6 +961,202 @@ mod tests {
             {
                 let mut tracer = BAML_TRACER.lock().unwrap();
                 tracer.dec_function_id(&f_id);
+            }
+        });
+    }
+
+    #[test]
+    fn test_collector_clone_reference_counts() {
+        // Initialize the logger
+        env_logger::init();
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            // Prepare a function ID
+            let f_id = FunctionId("test_collector_clone_reference_counts".to_string());
+
+            // Ensure a clean environment for our static BAML_TRACER
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                // Make sure we don't have a reference from a prior test run
+                tracer.clear();
+            }
+
+            // Create a new collector and track the function
+            let collector1 = Collector::new("collector_1".to_string());
+            collector1.track_function(f_id.clone());
+
+            // Check the reference count in the global tracer
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 1);
+            }
+
+            // Clone the collector
+            let collector2 = collector1.clone();
+
+            log::info!("Cloned collector");
+            // Ensure the function logs are still tracked but now there are two collectors
+            // with separate references to the same functionid (all function logs are cloned)
+            // so the ref count should be 2
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 2);
+            }
+
+            log::info!("Tracking function again");
+            // Now, if we call track_function again on the clone, that should increment
+            collector2.track_function(f_id.clone());
+
+            {
+                log::info!("Checking ref count");
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 2);
+            }
+
+            // Inserting a new event to ensure the function is being tracked
+            let test_event = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("test_event".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "test_event".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LogMessage {
+                    msg: "cloning reference tests".into(),
+                },
+                tags: Default::default(),
+            });
+
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(test_event);
+            }
+
+            // Wait for async insertion in case it needs time
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            // Drop the first collector
+            drop(collector1);
+
+            // Now the function's reference count should still be 1 (held by collector2)
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 1);
+            }
+
+            // Drop the second collector
+            log::info!("Dropping second collector");
+            drop(collector2);
+
+            // Reference count should return to 0
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                // Also check that the events for this function are removed
+                assert!(tracer.get_events(&f_id).is_none());
+            }
+        });
+    }
+
+    #[test]
+    fn test_collector_multiple_functions() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let f_id1 = FunctionId("test_collector_multiple_functions_1".to_string());
+            let f_id2 = FunctionId("test_collector_multiple_functions_2".to_string());
+
+            // Clean up any existing references from prior tests
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.clear();
+            }
+
+            // Create a collector and track two functions
+            let collector_a = Collector::new("collector_a".to_string());
+            collector_a.track_function(f_id1.clone());
+            collector_a.track_function(f_id2.clone());
+
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id1), 1);
+                assert_eq!(tracer.ref_count_for(&f_id2), 1);
+            }
+
+            // Insert some events for both functions
+            let event1 = Arc::new(TraceEvent {
+                span_id: f_id1.clone(),
+                event_id: ContentId("event_1".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "test_event".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LogMessage {
+                    msg: "function1 test event".into(),
+                },
+                tags: Default::default(),
+            });
+
+            let event2 = Arc::new(TraceEvent {
+                span_id: f_id2.clone(),
+                event_id: ContentId("event_2".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "test_event".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LogMessage {
+                    msg: "function2 test event".into(),
+                },
+                tags: Default::default(),
+            });
+
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event1);
+                tracer.put(event2);
+            }
+
+            // Clone the collector
+            let collector_b = collector_a.clone();
+
+            // Cloning doesn't directly track new functions, so reference counts remain 1
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id1), 1);
+                assert_eq!(tracer.ref_count_for(&f_id2), 1);
+            }
+
+            // Track second function again from the cloned collector
+            collector_b.track_function(f_id2.clone());
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                // Function 1 is still only tracked by the first collector
+                assert_eq!(tracer.ref_count_for(&f_id1), 1);
+                // Function 2 is now tracked both by the original and the clone
+                assert_eq!(tracer.ref_count_for(&f_id2), 2);
+            }
+
+            // Drop the original collector
+            drop(collector_a);
+
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                // Function 1 is no longer referenced, so should drop to 0
+                // The events are removed from memory as well
+                assert_eq!(tracer.ref_count_for(&f_id1), 0);
+                assert!(tracer.get_events(&f_id1).is_none());
+
+                // Function 2 is still tracked by collector_b
+                assert_eq!(tracer.ref_count_for(&f_id2), 1);
+                assert!(tracer.get_events(&f_id2).is_some());
+            }
+
+            // Finally, drop collector_b; references should be fully cleaned
+            drop(collector_b);
+
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id2), 0);
+                assert!(tracer.get_events(&f_id2).is_none());
             }
         });
     }
