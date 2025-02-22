@@ -2176,10 +2176,10 @@ mod render_tests {
     }
 
     #[test]
-    fn render_with_ne_null() {
+    fn render_with_ne_none() {
         let result = render_minijinja(
             r#"
-            {% if inp != Null %}
+            {% if inp != None %}
             {{ inp.name }}
             {% endif %}
             "#,

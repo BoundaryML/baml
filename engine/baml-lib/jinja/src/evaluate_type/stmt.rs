@@ -1,4 +1,4 @@
-use minijinja::machinery::ast::{self, Spanned, Stmt, UnaryOpKind, Var};
+use minijinja::machinery::ast::{self, Spanned, Stmt, UnaryOpKind};
 
 use crate::evaluate_type::types::Type;
 
@@ -201,8 +201,8 @@ pub fn predicate_implications<'a>(
 
             ast::BinOpKind::Ne => {
                 let maybe_non_null_variable = match (&binary_op.left, &binary_op.right) {
-                    (Var { .. }, Var(n)) if fuzzy_null(&n) => Some(&binary_op.left),
-                    (Var(n), Var { .. }) if fuzzy_null(&n) => Some(&binary_op.right),
+                    (Var { .. }, Const(n)) if fuzzy_null(&n) => Some(&binary_op.left),
+                    (Const(n), Var { .. }) if fuzzy_null(&n) => Some(&binary_op.right),
                     _ => None,
                 };
                 if let Some(non_null_variable) = maybe_non_null_variable {
@@ -217,9 +217,9 @@ pub fn predicate_implications<'a>(
     }
 }
 
-/// Whether an identifier is `Null` or `null`.
-fn fuzzy_null(t: &Spanned<Var>) -> bool {
-    t.id.eq_ignore_ascii_case("null")
+/// Whether an identifier is `None` or `none`.
+fn fuzzy_null(t: &Spanned<ast::Const>) -> bool {
+    t.value.to_string().as_str().to_lowercase() == "none"
 }
 
 /// Type-narrowing by truthiness. The truthy version of a value's

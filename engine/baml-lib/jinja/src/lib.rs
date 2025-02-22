@@ -144,12 +144,12 @@ mod tests {
     }
 
     #[test]
-    fn test_type_narrowing_ne_null() {
+    fn test_type_narrowing_ne_none() {
         let mut types = mk_params();
         validate_template(
             "test",
             r#"
-            {% if foo!=null %}
+            {% if foo!=none %}
               {{ foo.name }}
             {% endif %}
             "#,
