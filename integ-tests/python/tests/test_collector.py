@@ -7,6 +7,7 @@ import pytest
 from assertpy import assert_that
 from dotenv import load_dotenv
 from .base64_test_data import image_b64, audio_b64
+from openai import ChatCompletion
 
 load_dotenv()
 import baml_py
@@ -59,9 +60,28 @@ async def collector_test1():
     print("### event size2", len(events2), file=sys.stderr)
 
 
+# @pytest.mark.asyncio
+# async def test_collector():
+#     await collector_test1()
+#     print("### function_span_count", Collector.__function_span_count())
+#     # garbage collected!
+#     assert Collector.__function_span_count() == 0
+
+
 @pytest.mark.asyncio
-async def test_collector():
-    await collector_test1()
+async def test_collector_events_present():
     print("### function_span_count", Collector.__function_span_count())
     # garbage collected!
     assert Collector.__function_span_count() == 0
+
+    collector = Collector(id="my-collector")
+    events = collector.events()
+    assert len(events) == 0
+
+    await b.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector})
+
+    events = collector.events()
+    assert len(events) == 1
+    
+    # one call was made
+    events

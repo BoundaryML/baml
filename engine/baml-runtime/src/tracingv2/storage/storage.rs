@@ -406,7 +406,7 @@ impl FunctionLog {
         self.get_inner().lock().unwrap().function_name.clone()
     }
 
-    pub fn r#type(&mut self) -> String {
+    pub fn log_type(&mut self) -> String {
         self.get_inner().lock().unwrap().r#type.clone()
     }
 
@@ -571,7 +571,12 @@ impl Collector {
             .collect()
     }
 
-    pub fn function_log(&self, fid: &FunctionId) -> Option<FunctionLog> {
+    pub fn last_function_log(&self) -> Option<FunctionLog> {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        guard.iter().last().map(|id| FunctionLog::new(id.clone()))
+    }
+
+    pub fn function_log_by_id(&self, fid: &FunctionId) -> Option<FunctionLog> {
         let mut guard = self.tracked_ids.lock().unwrap();
         guard
             .iter()
@@ -792,7 +797,7 @@ mod tests {
             }
 
             // Create a function log and clone it
-            let func_log1 = collector1.function_log(&f_id).unwrap();
+            let func_log1 = collector1.function_log_by_id(&f_id).unwrap();
             let func_log2 = func_log1.clone();
             {
                 let tracer = BAML_TRACER.lock().unwrap();
@@ -923,7 +928,7 @@ mod tests {
             assert_eq!(func_log.id(), f_id);
 
             assert_eq!(func_log.function_name(), "test_function");
-            let tpe = func_log.r#type();
+            let tpe = func_log.log_type();
             assert!(tpe == "call" || tpe == "stream");
 
             assert_eq!(func_log.usage().input_tokens, 0);

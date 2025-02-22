@@ -8,6 +8,7 @@ readme = "README.md"
 dependencies = [
     "assertpy",
     "maturin",
+    "openai>=1.63.2",
     "psutil",
     "pydantic",
     "pytest",

@@ -4,7 +4,7 @@ use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
 // use baml_types::tracing::events::{FunctionId, TraceEvent};
 use pyo3::{prelude::*};
 // use baml_types::tracing::events::TraceEvent;
-
+use either::Either;
 // Suppose we have a "LastRequestInfo" Python-exposed struct:
 // #[pyo3::prelude::pyclass(module = "baml_py.baml_py")]
 // #[derive(Clone)]
@@ -49,7 +49,7 @@ impl Collector {
         )
     }
 
-    pub fn events(&self) -> Vec<FunctionLog> {
+    pub fn logs(&self) -> Vec<FunctionLog> {
         self.inner
             .function_logs()
             .iter()
@@ -57,6 +57,18 @@ impl Collector {
                 inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
             .collect()
+    }
+
+    pub fn last(&self) -> Option<FunctionLog> {
+        self.inner.last_function_log().map(|inner_function_log| FunctionLog {
+            inner: Arc::new(Mutex::new(inner_function_log.clone())),
+        })
+    }
+
+    pub fn id(&self, function_log_id: String) -> Option<FunctionLog> {
+        self.inner.function_log_by_id(&baml_types::tracing::events::FunctionId(function_log_id)).map(|inner_function_log| FunctionLog {
+            inner: Arc::new(Mutex::new(inner_function_log.clone())),
+        })
     }
 
     #[staticmethod]
@@ -120,30 +132,45 @@ impl FunctionLog {
         format!("<FunctionLog id={}>", self.inner.lock().unwrap().id().0)
     }
 
+    #[getter]
+    pub fn id(&self) -> String {
+        self.inner.lock().unwrap().id().0
+    }
+
     // pub fn test_data(&self) -> String {
     //     self.inner.test_data()
     // }
     #[getter]
     pub fn function_name(&self) -> String {
-        self.inner.lock().unwrap().function_name().to_string()
+        self.inner.lock().unwrap().function_name()
     }
 
-    pub fn calls(&self) -> Vec<LLMCall> {
-        self.inner
-            .lock()
-            .unwrap()
-            .calls()
-            .into_iter()
-            .map(|inner| match inner {
-                baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => LLMCall {
-                    inner: inner.clone(),
-                },
-                baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(_inner) => {
-                    LLMCall { inner: todo!() }
-                }
-            })
-            .collect()
+    #[getter]
+    pub fn log_type(&self) -> String {
+        self.inner.lock().unwrap().log_type().to_string()
     }
+
+    #[getter]
+    pub fn timing(&self) -> Timing {
+        Timing { inner: self.inner.lock().unwrap().timing() }
+    }
+
+    #[getter]
+    pub fn usage(&self) -> Usage {
+        Usage { inner: self.inner.lock().unwrap().usage() }
+    }
+
+
+    #[getter]
+    pub fn calls(&self) -> PyResult<Vec<Either<LLMCall, LLMStreamCall>>> {
+        self.inner.lock().unwrap().calls().into_iter().map(|inner| match inner {
+            baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => Either::Left(LLMCall { inner: inner.clone() }),
+            baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => Either::Right(LLMStreamCall { inner: inner.clone() }),
+        }).collect()
+    }
+    
+
+   
 }
 
 crate::lang_wrapper!(Timing, baml_runtime::tracingv2::storage::storage::Timing);
@@ -156,6 +183,8 @@ crate::lang_wrapper!(Usage, baml_runtime::tracingv2::storage::storage::Usage);
 // );
 
 crate::lang_wrapper!(LLMCall, baml_runtime::tracingv2::storage::storage::LLMCall);
+
+crate::lang_wrapper!(LLMStreamCall, baml_runtime::tracingv2::storage::storage::LLMStreamCall);
 
 // TODO: remove unwraps
 #[pymethods]

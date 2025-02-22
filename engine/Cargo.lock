@@ -920,6 +920,7 @@ dependencies = [
  "baml-runtime",
  "baml-types",
  "ctrlc",
+ "either",
  "env_logger",
  "futures",
  "indexmap 2.2.6",
@@ -4029,6 +4030,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e484fd2c8b4cb67ab05a318f1fd6fa8f199fcc30819f08f07d200809dba26c15"
 dependencies = [
  "cfg-if",
+ "either",
  "indoc",
  "libc",
  "memoffset",
