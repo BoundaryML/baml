@@ -1,4 +1,4 @@
-use minijinja::machinery::ast::{self, Stmt, UnaryOpKind};
+use minijinja::machinery::ast::{self, Spanned, Stmt, UnaryOpKind, Var};
 
 use crate::evaluate_type::types::Type;
 
@@ -189,21 +189,37 @@ pub fn predicate_implications<'a>(
                 UnaryOpKind::Neg => branch,
             };
             predicate_implications(&unary_op.expr, context, next_branch)
-        },
-        BinOp(binary_op) => {
-            match binary_op.op {
-                ast::BinOpKind::ScAnd => {
-                    let mut left_implications = predicate_implications(&binary_op.left, context, branch);
-                    let right_implications = predicate_implications(&binary_op.right, context, branch);
-                    left_implications.extend(right_implications);
-                    left_implications
-                },
-                _ => vec![]
-                    
-            }
         }
-        _ => vec![]
+        BinOp(binary_op) => match binary_op.op {
+            ast::BinOpKind::ScAnd => {
+                let mut left_implications =
+                    predicate_implications(&binary_op.left, context, branch);
+                let right_implications = predicate_implications(&binary_op.right, context, branch);
+                left_implications.extend(right_implications);
+                left_implications
+            }
+
+            ast::BinOpKind::Ne => {
+                let maybe_non_null_variable = match (&binary_op.left, &binary_op.right) {
+                    (Var { .. }, Var(n)) if fuzzy_null(&n) => Some(&binary_op.left),
+                    (Var(n), Var { .. }) if fuzzy_null(&n) => Some(&binary_op.right),
+                    _ => None,
+                };
+                if let Some(non_null_variable) = maybe_non_null_variable {
+                    predicate_implications(non_null_variable, context, branch)
+                } else {
+                    vec![]
+                }
+            }
+            _ => vec![],
+        },
+        _ => vec![],
     }
+}
+
+/// Whether an identifier is `Null` or `null`.
+fn fuzzy_null(t: &Spanned<Var>) -> bool {
+    t.id.eq_ignore_ascii_case("null")
 }
 
 /// Type-narrowing by truthiness. The truthy version of a value's
@@ -275,15 +291,22 @@ mod tests {
     }
 
     #[test]
+    fn truthy_union_2() {
+        let input = Type::Union(vec![Type::Undefined, Type::ClassRef("Foo".to_string())]);
+        let expected = Type::ClassRef("Foo".to_string());
+        assert_eq!(truthy(&input).unwrap(), expected);
+    }
+
+    #[test]
     fn implication_from_nullable() {
         let mut context = PredefinedTypes::default(JinjaContext::Prompt);
         context.add_variable("a", Type::Union(vec![Type::Int, Type::None]));
-        let expr = Expr::Var(Spanned::new(Var{ id: "a"}, Span::default()));
+        let expr = Expr::Var(Spanned::new(Var { id: "a" }, Span::default()));
         let new_vars = predicate_implications(&expr, &mut context, true);
         match new_vars.as_slice() {
             [(name, Type::Int)] => {
                 assert_eq!(name.as_str(), "a");
-            },
+            }
             _ => panic!("Expected singleton list with Type::Int"),
         }
     }

@@ -71,3 +71,90 @@ pub fn validate_template(
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn mk_params() -> PredefinedTypes {
+        let mut types = PredefinedTypes::default(JinjaContext::Prompt);
+        types.add_class("Foo", HashMap::from([("name".to_string(), Type::String)]));
+        types.add_variable(
+            "foo",
+            Type::Union(vec![Type::None, Type::ClassRef("Foo".to_string())]),
+        );
+        types.add_variable(
+            "foo2",
+            Type::Union(vec![Type::None, Type::ClassRef("Foo".to_string())]),
+        );
+        types
+    }
+
+    #[test]
+    fn test_type_narrowing_not_narrowed() {
+        let mut types = mk_params();
+        let err_unnarrowed = validate_template(
+            "test",
+            r#"
+            {{ foo.name }}
+            "#,
+            &mut types,
+        )
+        .expect_err("Should fail")
+        .errors
+        .into_iter()
+        .next()
+        .unwrap();
+        assert_eq!(
+            err_unnarrowed.message(),
+            "'foo' is a (none | class Foo), expected class"
+        );
+    }
+
+    #[test]
+    fn test_type_narrowing_truthy() {
+        let mut types = mk_params();
+        validate_template(
+            "test",
+            r#"
+            {% if foo %}
+              {{ foo.name }}
+            {% endif %}
+            "#,
+            &mut types,
+        )
+        .expect("Should succeed");
+    }
+
+    #[test]
+    fn test_type_narrowing_truthy_and() {
+        let mut types = mk_params();
+        validate_template(
+            "test",
+            r#"
+            {% if (foo and foo2) %}
+              {{ foo.name }}
+              {{ foo2.name }}
+            {% endif %}
+            "#,
+            &mut types,
+        )
+        .expect("Should succeed");
+    }
+
+    #[test]
+    fn test_type_narrowing_ne_null() {
+        let mut types = mk_params();
+        validate_template(
+            "test",
+            r#"
+            {% if foo!=null %}
+              {{ foo.name }}
+            {% endif %}
+            "#,
+            &mut types,
+        )
+        .expect("Should succeed");
+    }
+}

@@ -60,7 +60,8 @@
         toolchain = with fenix.packages.${system}; combine [
           minimal.cargo
           minimal.rustc
-          latest.rust-std
+          minimal.rust-std
+          targets.wasm32-unknown-unknown.latest.rust-std
         ];
 
         version = (builtins.fromTOML (builtins.readFile ./engine/Cargo.toml)).workspace.package.version;
@@ -88,6 +89,7 @@
           nodePackages.nodejs
           toolchain
           uv
+          wasm-pack
         ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
         nativeBuildInputs = [
           pkgs.openssl
