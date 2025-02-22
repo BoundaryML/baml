@@ -17,6 +17,52 @@ use std::sync::Arc;
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
 
+pub struct Prompt {
+    chat: serde_json::Map<String, serde_json::Value>,
+}
+
+crate::lang_wrapper!(PyPrompt, Prompt);
+
+#[pymethods]
+impl PyPrompt {
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyDict>> {
+        use pyo3::types::{PyDict, PyDictMethods};
+        let dict = PyDict::new(py);
+        for (key, value) in &self.inner.chat {
+            dict.set_item(key, serde_value_to_py_any(value, py)?)?;
+        }
+
+        Ok(dict)
+    }
+}
+
+fn serde_value_to_py_any<'py>(
+    v: &serde_json::Value,
+    py: Python<'py>,
+) -> PyResult<pyo3::Py<pyo3::PyAny>> {
+    use pyo3::types::{PyDict, PyDictMethods, PyListMethods};
+    match v {
+        serde_json::Value::Null => Ok(py.None()),
+        serde_json::Value::Bool(b) => b.into_py_any(py),
+        serde_json::Value::Number(_n) => todo!(),
+        serde_json::Value::String(s) => s.into_py_any(py),
+        serde_json::Value::Array(a) => {
+            let list = pyo3::types::PyList::empty(py);
+            for item in a {
+                list.append(serde_value_to_py_any(item, py)?)?;
+            }
+            Ok(list.into())
+        }
+        serde_json::Value::Object(o) => {
+            let dict = PyDict::new(py);
+            for (key, value) in o {
+                dict.set_item(key, serde_value_to_py_any(value, py)?)?;
+            }
+            Ok(dict.into())
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[pyclass]
 pub struct BamlLogEvent {
@@ -142,7 +188,6 @@ impl BamlRuntime {
         let cb = cb.map(|cb| cb.inner.clone());
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let ctx_mng = ctx_mng;
             let (result, _) = baml_runtime
                 .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
                 .await;
@@ -151,7 +196,7 @@ impl BamlRuntime {
                 .map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })
-        .map(|f| f.into())
+        .map(pyo3::Bound::into)
     }
 
     #[pyo3(signature = (function_name, args, ctx, tb, cb))]
@@ -272,6 +317,59 @@ impl BamlRuntime {
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
         ))
+    }
+
+    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    fn render_prompt(
+        &self,
+        py: Python<'_>,
+        function_name: String,
+        args: PyObject,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> PyResult<PyObject> {
+        let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args, perhaps you used a non-serializable type?",
+            ));
+        };
+        let Some(args_map) = args.as_map_owned() else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args. Expect kwargs",
+            ));
+        };
+
+        let baml_runtime = self.inner.clone();
+        let context_manager = ctx.inner.clone();
+        let type_builder = tb.map(|tb| tb.inner.clone());
+        let client_registry = cb.map(|cb| cb.inner.clone());
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let ctx = context_manager
+                .create_ctx(type_builder.as_ref(), client_registry.as_ref())
+                .map_err(BamlError::from_anyhow)?;
+
+            let provider = baml_runtime
+                .llm_provider_from_function(&function_name, &ctx)
+                .map_err(BamlError::from_anyhow)?;
+
+            let prompt = baml_runtime
+                .render_prompt(&function_name, &ctx, &args_map, None)
+                .await
+                .map(|(prompt, ..)| prompt)
+                .map_err(BamlError::from_anyhow)?;
+
+            match prompt {
+                baml_runtime::RenderedPrompt::Chat(chat) => Ok(PyPrompt::from(Prompt {
+                    chat: provider
+                        .chat_to_message(&chat)
+                        .map_err(BamlError::from_anyhow)?,
+                })),
+                baml_runtime::RenderedPrompt::Completion(_completion) => todo!(),
+            }
+        })
+        .map(pyo3::Bound::into)
     }
 
     #[pyo3()]

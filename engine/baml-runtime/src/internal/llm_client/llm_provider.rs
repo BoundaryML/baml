@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
+use internal_baml_jinja::RenderedChatMessage;
 
 use crate::{
     client_registry::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
@@ -27,6 +28,18 @@ impl std::fmt::Debug for LLMProvider {
         match self {
             LLMProvider::Primitive(provider) => write!(f, "Primitive({})", provider),
             LLMProvider::Strategy(provider) => write!(f, "Strategy({})", provider),
+        }
+    }
+}
+
+impl LLMProvider {
+    pub fn chat_to_message(
+        &self,
+        chat: &[RenderedChatMessage],
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        match self {
+            LLMProvider::Primitive(provider) => provider.chat_to_message(chat),
+            LLMProvider::Strategy(provider) => todo!("Strategy provider"),
         }
     }
 }

@@ -1911,3 +1911,22 @@ async def test_client_response_type():
     cr.set_primary("temp_client")
     with pytest.raises(errors.BamlClientError):
         _ = await b.TestOpenAI("test", baml_options={ "client_registry": cr })
+
+
+@pytest.mark.asyncio
+async def test_expose_prompt():
+    prompt = await b.prompt.ExtractReceiptInfo("test@email.com", "curiosity")
+
+    assert prompt == {
+        'messages': [
+            {
+                'role': 'system',
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': 'Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: "barisa" or "ox_burger",\n}'
+                    }
+                ]
+            }
+        ]
+    }

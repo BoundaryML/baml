@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
+use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
 
 use crate::{
@@ -21,8 +22,8 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl, WithRetryPolicy,
-        WithSingleCallable, WithStreamable,
+        ToProviderMessage, WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl,
+        WithRetryPolicy, WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
@@ -32,8 +33,8 @@ mod aws;
 mod google;
 mod openai;
 pub(super) mod request;
-mod vertex;
 mod stream_request;
+mod vertex;
 
 // use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
 // use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
@@ -193,6 +194,25 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
                 unimplemented!(
                     "Strategy client providers are not supported yet in LLMPrimitiveProvider"
                 )
+            }
+        }
+    }
+}
+
+impl LLMPrimitiveProvider {
+    pub fn chat_to_message(
+        &self,
+        chat: &[RenderedChatMessage],
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        use super::traits::ToProviderMessageExt;
+
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Anthropic(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Google(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Vertex(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Aws(client) => {
+                todo!("AWS client does not implement ToProviderMessageExt::chat_to_message")
             }
         }
     }

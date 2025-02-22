@@ -307,7 +307,7 @@ impl std::fmt::Display for RenderedPrompt {
                         message
                             .parts
                             .iter()
-                            .map(|p| p.to_string())
+                            .map(ChatMessagePart::to_string)
                             .collect::<Vec<String>>()
                             .join("")
                     )?;
@@ -499,7 +499,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -548,7 +548,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -619,7 +619,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -675,7 +675,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -761,7 +761,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -817,7 +817,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -857,7 +857,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -897,7 +897,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -937,7 +937,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -980,7 +980,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -1046,7 +1046,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -1118,7 +1118,6 @@ mod render_tests {
         Ok(())
     }
 
-
     #[test]
     fn render_with_kwargs_default_role() -> anyhow::Result<()> {
         setup_logging();
@@ -1131,7 +1130,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -1215,7 +1214,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -1276,7 +1275,7 @@ mod render_tests {
         let ir = make_test_ir(
             "
             class C {
-                
+
             }
             ",
         )?;
@@ -1846,7 +1845,7 @@ mod render_tests {
         let ir = make_test_ir(
             r#"
             class A {
-                a_prop1 string 
+                a_prop1 string
                 a_prop2 B[] @alias("alias_a_prop2")
             }
 

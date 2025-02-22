@@ -23,16 +23,21 @@ class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
+    __prompt_renderer: "PromptRenderer"
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
+      self.__prompt_renderer = PromptRenderer(self.__runtime, self.__ctx_manager)
 
     @property
     def stream(self):
       return self.__stream_client
 
+    @property
+    def prompt(self):
+      return self.__prompt_renderer
 
     {% for fn in funcs %}
     async def {{ fn.name }}(
@@ -107,6 +112,46 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     {% endfor %}
+
+
+class PromptRenderer:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+
+    {% for fn in funcs %}
+    async def {{ fn.name }}(
+        self,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[str, Any]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.render_prompt(
+        "{{fn.name}}",
+        {
+          {%- for (name, _) in fn.args %}
+          "{{name}}": {{name}},
+          {%- endfor %}
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    {% endfor %}
+
 
 b = BamlAsyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
 

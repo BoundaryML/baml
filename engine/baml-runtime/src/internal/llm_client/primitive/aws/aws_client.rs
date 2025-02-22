@@ -176,7 +176,11 @@ impl AwsClient {
                     // Exposing the secret key here is relatively safe. First, we expose it only
                     // to check if it starts with $. If so, the remainer should be an env
                     // var name, which is also safe to expose.
-                    if aws_secret_access_key.api_key.expose_secret().starts_with("$") {
+                    if aws_secret_access_key
+                        .api_key
+                        .expose_secret()
+                        .starts_with("$")
+                    {
                         return Err(anyhow::anyhow!(
                             "AWS secret access key expected, please set: env.{}",
                             &aws_secret_access_key.api_key.expose_secret()[1..]

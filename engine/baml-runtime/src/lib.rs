@@ -8,11 +8,11 @@ pub(crate) mod internal;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
 pub mod client_registry;
-pub mod test_constraints;
 pub mod errors;
 pub mod request;
 mod runtime;
 pub mod runtime_interface;
+pub mod test_constraints;
 pub mod tracing;
 pub mod type_builder;
 mod types;
@@ -30,12 +30,19 @@ use baml_types::Constraint;
 use cfg_if::cfg_if;
 use client_registry::ClientRegistry;
 use indexmap::IndexMap;
+use internal::llm_client::llm_provider::LLMProvider;
+use internal::llm_client::orchestrator::OrchestrationScope;
+use internal::prompt_renderer::PromptRenderer;
 use internal_baml_core::configuration::CloudProject;
 use internal_baml_core::configuration::CodegenGenerator;
 use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
+use internal_baml_core::ir::FunctionWalker;
+use internal_llm_client::AllowedRoleMetadata;
+use internal_llm_client::ClientSpec;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
+use runtime_interface::InternalClientLookup;
 use std::sync::OnceLock;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -64,8 +71,8 @@ pub use internal_baml_core::internal_baml_diagnostics;
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
 pub use internal_baml_core::ir::{scope_diagnostics, FieldType, IRHelper, TypeValue};
 
-use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 use crate::internal::llm_client::LLMResponse;
+use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
@@ -184,6 +191,32 @@ impl BamlRuntime {
 }
 
 impl BamlRuntime {
+    pub async fn render_prompt(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
+        node_index: Option<usize>,
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedRoleMetadata)> {
+        self.inner
+            .render_prompt(function_name, ctx, params, node_index)
+            .await
+    }
+
+    pub fn llm_provider_from_function(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<Arc<LLMProvider>> {
+        let renderer = PromptRenderer::from_function(
+            &self.inner.get_function(&function_name, &ctx)?,
+            self.inner.ir(),
+            &ctx,
+        )?;
+
+        self.inner.get_llm_provider(renderer.client_spec(), ctx)
+    }
+
     pub fn get_test_params_and_constraints(
         &self,
         function_name: &str,
@@ -267,8 +300,14 @@ impl BamlRuntime {
             } else {
                 match val {
                     Some(Ok(value)) => {
-                        let value_with_constraints = value.0.map_meta(|(_,constraints,_)| constraints.clone());
-                        evaluate_test_constraints(&params, &value_with_constraints, complete_resp, constraints)
+                        let value_with_constraints =
+                            value.0.map_meta(|(_, constraints, _)| constraints.clone());
+                        evaluate_test_constraints(
+                            &params,
+                            &value_with_constraints,
+                            complete_resp,
+                            constraints,
+                        )
                     }
                     _ => TestConstraintsResult::empty(),
                 }
