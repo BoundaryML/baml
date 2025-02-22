@@ -469,6 +469,21 @@ impl RuntimeInterface for InternalBamlRuntime {
             })
             .await;
 
+        let end_time = web_time::SystemTime::now();
+        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+            span_id: FunctionId(ctx.span_id.to_string()),
+            event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+            span_chain: vec![],
+            timestamp: end_time,
+            callsite: function_name.clone(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::FunctionEnd(FunctionEnd {
+                // TODO: add the result here
+                result: Ok(baml_types::BamlValue::Null),
+            }),
+            tags: Default::default(),
+        }));
+
         FunctionResult::new_chain(history)
     }
 

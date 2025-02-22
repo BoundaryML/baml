@@ -166,7 +166,7 @@ fn build_function_log(
     // We must group requests by request_id for LLM calls.
     let mut calls_map: HashMap<String, CallAccumulator> = HashMap::new();
 
-    // In a real system, we might want to sort events by timestamp, but here we just iterate:
+    // TODO sort events by timestamp:
     for event in guard.iter() {
         let time_ms = system_time_to_utc_ms(&event.timestamp);
 
@@ -202,8 +202,8 @@ fn build_function_log(
                 // Attempt usage from here:
                 if let Some(usage_info) = &llm_res.usage {
                     entry.usage = Some(Usage {
-                        input_tokens: usage_info.input_tokens.unwrap_or(0) as i64,
-                        output_tokens: usage_info.output_tokens.unwrap_or(0) as i64,
+                        input_tokens: usage_info.input_tokens.map(|t| t as i64),
+                        output_tokens: usage_info.output_tokens.map(|t| t as i64),
                     });
                 }
             }
@@ -233,8 +233,8 @@ fn build_function_log(
     let fname = start_ev.name.clone();
 
     let start_ms = function_start_time.unwrap_or(0);
-    let end_ms = function_end_time.unwrap_or(start_ms);
-    let duration = end_ms.saturating_sub(start_ms);
+    let end_ms = function_end_time;
+    let duration = end_ms.map(|end| end.saturating_sub(start_ms));
 
     // Build each LLMCall or LLMStreamCall
     let mut calls = Vec::new();
@@ -247,8 +247,18 @@ fn build_function_log(
         let is_stream = call_acc.http_responses.len() > 1;
 
         let local_usage = call_acc.usage.unwrap_or_default();
-        usage.input_tokens += local_usage.input_tokens;
-        usage.output_tokens += local_usage.output_tokens;
+        usage.input_tokens = match (usage.input_tokens, local_usage.input_tokens) {
+            (Some(i), Some(j)) => Some(i + j),
+            (None, None) => None,
+            (Some(i), None) => Some(i),
+            (None, Some(j)) => Some(j),
+        };
+        usage.output_tokens = match (usage.output_tokens, local_usage.output_tokens) {
+            (Some(i), Some(j)) => Some(i + j),
+            (None, None) => None,
+            (Some(i), None) => Some(i),
+            (None, Some(j)) => Some(j),
+        };
 
         if !is_stream {
             // Basic LLMCall
@@ -257,8 +267,8 @@ fn build_function_log(
                 provider,
                 timing: Timing {
                     start_time_utc_ms: start_t,
-                    duration_ms: partial_duration,
-                    time_to_first_parsed_ms: 0,
+                    duration_ms: Some(partial_duration),
+                    time_to_first_parsed_ms: None,
                 },
                 request: call_acc.http_request.clone(),
                 response: call_acc.http_responses.first().cloned(),
@@ -272,9 +282,9 @@ fn build_function_log(
                 provider,
                 timing: StreamTiming {
                     start_time_utc_ms: start_t,
-                    duration_ms: partial_duration,
-                    time_to_first_parsed_ms: 0,
-                    time_to_first_token_ms: 0,
+                    duration_ms: Some(partial_duration),
+                    time_to_first_parsed_ms: None,
+                    time_to_first_token_ms: None,
                 },
                 request: call_acc.http_request.clone(),
                 response: call_acc.http_responses.first().cloned(),
@@ -299,7 +309,7 @@ fn build_function_log(
         timing: Timing {
             start_time_utc_ms: start_ms,
             duration_ms: duration,
-            time_to_first_parsed_ms: 0,
+            time_to_first_parsed_ms: None,
         },
         usage,
         calls,
@@ -390,7 +400,7 @@ impl FunctionLog {
             let maybe_arc = {
                 let tracer = BAML_TRACER.lock().unwrap();
                 build_function_log(&tracer, &self.id)
-                    .expect("Function log expected to be present (no FunctionStart event?)")
+                    .expect("Function log expected to be present (no FunctionStart event?). Did you forget to track_function()?")
             };
             self.inner = Some(maybe_arc);
         }
@@ -468,23 +478,23 @@ impl FunctionLogInner {
 
 #[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
 pub struct Usage {
-    pub input_tokens: i64,
-    pub output_tokens: i64,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
 }
 
 #[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
 pub struct Timing {
     pub start_time_utc_ms: i64,
-    pub duration_ms: i64,
-    pub time_to_first_parsed_ms: i64,
+    pub duration_ms: Option<i64>,
+    pub time_to_first_parsed_ms: Option<i64>,
 }
 
 #[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
 pub struct StreamTiming {
     pub start_time_utc_ms: i64,
-    pub duration_ms: i64,
-    pub time_to_first_parsed_ms: i64,
-    pub time_to_first_token_ms: i64,
+    pub duration_ms: Option<i64>,
+    pub time_to_first_parsed_ms: Option<i64>,
+    pub time_to_first_token_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -617,7 +627,7 @@ impl Drop for Collector {
 //  Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-// watch out when running all cargo tests in the project -- as they could mess with the global tracer state.
+// watch out when running all cargo tests in the project -- as they could mess with the global tracer state. Perhaps we need #[tokio::test]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -931,8 +941,8 @@ mod tests {
             let tpe = func_log.log_type();
             assert!(tpe == "call" || tpe == "stream");
 
-            assert_eq!(func_log.usage().input_tokens, 0);
-            assert_eq!(func_log.usage().output_tokens, 0);
+            assert_eq!(func_log.usage().input_tokens, None);
+            assert_eq!(func_log.usage().output_tokens, None);
             assert_eq!(func_log.calls().len(), 0);
             assert!(func_log.raw_llm_response().is_none());
             assert!(func_log.metadata().is_empty());
@@ -1011,6 +1021,280 @@ mod tests {
             drop(func_log);
 
             // Verify everything is cleaned up
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                assert!(tracer.get_events(&f_id).is_none());
+            }
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_timing_calculations() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let f_id = FunctionId("test_timing".to_string());
+            let collector = Collector::new("test_collector".to_string());
+            collector.track_function(f_id.clone());
+            let start_time = web_time::SystemTime::now();
+            // Create start event
+            let start_event = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("start_event".to_string()),
+                span_chain: vec![],
+                timestamp: start_time,
+                callsite: "unit_test_start".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionStart(FunctionStart {
+                    name: "test_function_timing".into(),
+                    args: vec![],
+                    options: baml_types::tracing::events::BamlOptions {
+                        type_builder: None,
+                        client_registry: None,
+                    },
+                }),
+                tags: Default::default(),
+            });
+
+            // Add start event
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(start_event.clone());
+            }
+
+            // Sleep to create measurable duration
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let end_time = web_time::SystemTime::now();
+
+            // Create end event
+            let end_event = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("end_event".to_string()),
+                span_chain: vec![],
+                timestamp: end_time,
+                callsite: "unit_test_end".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionEnd(FunctionEnd {
+                    result: Ok(baml_types::BamlValue::Null),
+                }),
+                tags: Default::default(),
+            });
+
+            // Add end event
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(end_event.clone());
+            }
+
+            let mut func_log = FunctionLog::new(f_id.clone());
+            let timing = func_log.timing();
+            let duration = end_time.duration_since(start_time).unwrap();
+
+            assert!(
+                duration.as_millis() == func_log.timing().duration_ms.unwrap().try_into().unwrap()
+            );
+
+            // Start time should be valid (non-zero)
+            assert!(timing.start_time_utc_ms > 0);
+
+            // Clean up
+            drop(collector);
+            drop(func_log);
+
+            {
+                let tracer = BAML_TRACER.lock().unwrap();
+                assert_eq!(tracer.ref_count_for(&f_id), 0);
+                assert!(tracer.get_events(&f_id).is_none());
+            }
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_usage_accumulation() {
+        use baml_types::tracing::events::{
+            ContentId, FunctionEnd, FunctionId, FunctionStart, LLMClient, LLMUsage,
+            LoggedLLMRequest, LoggedLLMResponse, TraceData, TraceEvent, TraceLevel,
+        };
+        use std::time::Duration;
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            // We'll add a new function ID
+            let f_id = FunctionId("test_usage_accumulation".to_string());
+
+            // Clear out the global tracer first
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.clear();
+            }
+
+            // Create a collector and track our function
+            let collector = Collector::new("test_usage_collector".to_string());
+            collector.track_function(f_id.clone());
+
+            // Insert a FunctionStart event
+            let start_event = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("start_id".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "usage_test_start".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionStart(FunctionStart {
+                    name: "test_usage_func".into(),
+                    args: vec![],
+                    options: baml_types::tracing::events::BamlOptions {
+                        type_builder: None,
+                        client_registry: None,
+                    },
+                }),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(start_event);
+            }
+
+            // Insert first LLMRequest / LLMResponse with usage
+            let req_1 = Arc::new(LoggedLLMRequest {
+                client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
+                params: serde_json::json!({ "temperature": 0.7 }),
+                prompt: serde_json::json!(["Hello world"]),
+            });
+            let resp_1 = Arc::new(LoggedLLMResponse {
+                request_id: ContentId("req_1".to_string()),
+                model: Some("test-model-v1".into()),
+                finish_reason: Some("stop".into()),
+                usage: Some(LLMUsage {
+                    input_tokens: Some(12),
+                    output_tokens: Some(8),
+                    total_tokens: Some(20),
+                }),
+                raw_text_output: Some("Hello back".into()),
+                error_message: None,
+            });
+
+            // Put the request
+            let event_req_1 = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("request_1".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "llm_request_1".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LLMRequest(req_1),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event_req_1);
+            }
+
+            // Put the response
+            let event_resp_1 = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("response_1".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "llm_response_1".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LLMResponse(resp_1),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event_resp_1);
+            }
+
+            // Insert second LLMRequest / LLMResponse with usage
+            let req_2 = Arc::new(LoggedLLMRequest {
+                client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
+                params: serde_json::json!({ "temperature": 0.9 }),
+                prompt: serde_json::json!(["Next message"]),
+            });
+            let resp_2 = Arc::new(LoggedLLMResponse {
+                request_id: ContentId("req_2".to_string()),
+                model: Some("test-model-v2".into()),
+                finish_reason: Some("length".into()),
+                usage: Some(LLMUsage {
+                    input_tokens: Some(10),
+                    output_tokens: Some(30),
+                    total_tokens: Some(40),
+                }),
+                raw_text_output: Some("Super long response".into()),
+                error_message: None,
+            });
+
+            // Put the request
+            let event_req_2 = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("request_2".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "llm_request_2".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LLMRequest(req_2),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event_req_2);
+            }
+
+            // Put the response
+            let event_resp_2 = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("response_2".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "llm_response_2".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LLMResponse(resp_2),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event_resp_2);
+            }
+
+            // Insert the function end event
+            let end_event = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId("end_event".to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "usage_test_end".into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionEnd(FunctionEnd {
+                    result: Ok(baml_types::BamlValue::Null),
+                }),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(end_event);
+            }
+
+            // Give some brief time for the tracer to gather events
+            tokio::time::sleep(Duration::from_millis(50)).await;
+
+            // Now create a FunctionLog and check the usage
+            let mut func_log = FunctionLog::new(f_id.clone());
+            let usage = func_log.usage();
+            assert_eq!(usage.input_tokens, Some(12 + 10));
+            assert_eq!(usage.output_tokens, Some(8 + 30));
+
+            // Verify the calls
+            let calls = func_log.calls();
+            assert_eq!(calls.len(), 2);
+
+            // Clean up
+            drop(func_log);
+            drop(collector);
+
+            // Ensure everything is cleaned
             {
                 let tracer = BAML_TRACER.lock().unwrap();
                 assert_eq!(tracer.ref_count_for(&f_id), 0);
