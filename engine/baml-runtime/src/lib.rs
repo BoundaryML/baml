@@ -262,6 +262,8 @@ impl BamlRuntime {
                 rctx_stream,
                 #[cfg(not(target_arch = "wasm32"))]
                 self.async_runtime.clone(),
+                // TODO: collectors here?
+                vec![],
             )?;
             let (response_res, span_uuid) = stream.run(on_event, ctx, None, None).await;
             log::info!("response_res: {:#?}", response_res);
@@ -335,9 +337,9 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-        logger: Option<Arc<Collector>>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let fut = self.call_function(function_name, params, ctx, tb, cb, logger);
+        let fut = self.call_function(function_name, params, ctx, tb, cb, collectors);
         self.async_runtime.block_on(fut)
     }
 
@@ -348,13 +350,15 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-        logger: Option<Arc<Collector>>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
         if let Some(span) = span.clone() {
-            if let Some(logger) = logger {
-                logger.track_function(FunctionId(span.clone().span_id.to_string()));
+            if let Some(collectors) = collectors {
+                for collector in collectors.iter() {
+                    collector.track_function(FunctionId(span.clone().span_id.to_string()));
+                }
             }
         }
 
@@ -391,6 +395,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,
@@ -399,6 +404,7 @@ impl BamlRuntime {
             ctx.create_ctx(tb, cb)?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
+            collectors.unwrap_or_else(|| vec![]),
         )
     }
 

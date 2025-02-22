@@ -15,7 +15,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     tracing::BamlTracer,
-    tracingv2::storage::storage::BAML_TRACER,
+    tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
     FunctionResult, RuntimeContextManager,
 };
@@ -34,6 +34,7 @@ pub struct FunctionResultStream {
     pub(crate) tracer: Arc<BamlTracer>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
+    pub(crate) collectors: Vec<Arc<Collector>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -95,6 +96,11 @@ impl FunctionResultStream {
         let span = self
             .tracer
             .start_span(&self.function_name, ctx, &local_params);
+        if let Some(span) = span.clone() {
+            for collector in self.collectors.iter() {
+                collector.track_function(FunctionId(span.clone().span_id.to_string()));
+            }
+        }
 
         let trace_event = TraceEvent {
             span_id: FunctionId(span.as_ref().unwrap().span_id.to_string()),

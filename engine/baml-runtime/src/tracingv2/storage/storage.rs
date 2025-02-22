@@ -87,6 +87,9 @@ impl TraceStorage {
                 );
             }
         }
+        // log::info!("Decremented ref count for FunctionID {:?}", function_id);
+        log::info!("Ref counts: {:?}", self.ref_counts);
+        log::info!("Total events: {:?}", self.events().values().len());
     }
 
     /// Append a new event for the given function ID, but only if ref_count > 0.
@@ -111,6 +114,10 @@ impl TraceStorage {
     /// Returns how many references a given function currently has.
     pub fn ref_count_for(&self, function_id: &FunctionId) -> usize {
         self.ref_counts.get(function_id).copied().unwrap_or(0)
+    }
+
+    pub fn function_span_count(&self) -> usize {
+        self.span_map.len()
     }
 
     /// For debugging – return a copy of all events in memory.
@@ -536,6 +543,10 @@ impl Collector {
         }
     }
 
+    pub fn id(&self) -> String {
+        self.collector_id.clone()
+    }
+
     pub fn track_function(&self, fid: FunctionId) {
         // First increment the global ref count
         BAML_TRACER.lock().unwrap().inc_ref(&fid);
@@ -601,6 +612,7 @@ impl Drop for Collector {
 //  Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
+// watch out when running all cargo tests in the project -- as they could mess with the global tracer state.
 #[cfg(test)]
 mod tests {
     use super::*;

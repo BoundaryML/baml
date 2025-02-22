@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
 use crate::internal::llm_client::LLMResponse;
-use crate::tracingv2::storage::storage::BAML_TRACER;
+use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
 use crate::type_builder::TypeBuilder;
 use crate::RuntimeContextManager;
 use crate::{
@@ -482,6 +482,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
+        collectors: Vec<Arc<Collector>>,
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
@@ -509,6 +510,7 @@ impl RuntimeInterface for InternalBamlRuntime {
             renderer,
             #[cfg(not(target_arch = "wasm32"))]
             tokio_runtime,
+            collectors,
         })
     }
 }

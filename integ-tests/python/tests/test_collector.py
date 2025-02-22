@@ -19,8 +19,8 @@ import gc
 import sys
 
 
-@pytest.mark.asyncio
-async def test_collector():
+async def collector_test1():
+
     # Test that the collector can be initialized
     collector = Collector(id="my-collector")
 
@@ -41,6 +41,9 @@ async def test_collector():
         print("###### error ######", file=sys.stderr)
         print(e, file=sys.stderr)
     finally:
+        print("### function_span_count", Collector.__function_span_count())
+        assert Collector.__function_span_count() == 2  # two functions were called
+
         print("###### collector ######", file=sys.stderr)
         events = collector.events()
         print("### event size", len(events), file=sys.stderr)
@@ -55,13 +58,10 @@ async def test_collector():
     events2 = collector.events()
     print("### event size2", len(events2), file=sys.stderr)
 
-    # TODO: expose a helper to access global log storage
 
-
-# @trace(require_id=True)
-# def function():
-#     print("hi")
-
-# def root():
-#     id, content = function()
-#     # no way to get id
+@pytest.mark.asyncio
+async def test_collector():
+    await collector_test1()
+    print("### function_span_count", Collector.__function_span_count())
+    # garbage collected!
+    assert Collector.__function_span_count() == 0

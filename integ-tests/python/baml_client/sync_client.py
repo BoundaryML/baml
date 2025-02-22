@@ -31,7 +31,7 @@ OutputType = TypeVar('OutputType')
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    collector: NotRequired[baml_py.baml_py.Collector]
+    collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
 
 class BamlSyncClient:
     __runtime: baml_py.BamlRuntime
@@ -59,6 +59,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AaaSamOutputFormat",
@@ -68,6 +70,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Recipe, raw.cast_to(types, types, partial_types, False))
     
@@ -82,6 +85,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AliasThatPointsToRecursiveType",
@@ -91,6 +96,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.LinkedListAliasNode, raw.cast_to(types, types, partial_types, False))
     
@@ -105,6 +111,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AliasWithMultipleAttrs",
@@ -114,6 +122,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Checked[int,types.Literal["gt_ten"]], raw.cast_to(types, types, partial_types, False))
     
@@ -128,6 +137,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AliasedInputClass",
@@ -137,6 +148,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -151,6 +163,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AliasedInputClass2",
@@ -160,6 +174,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -174,6 +189,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AliasedInputClassNested",
@@ -183,6 +200,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -197,6 +215,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AliasedInputEnum",
@@ -206,6 +226,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -220,6 +241,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AliasedInputList",
@@ -229,6 +252,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -243,6 +267,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AllowedOptionals",
@@ -252,6 +278,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.OptionalListAndMap, raw.cast_to(types, types, partial_types, False))
     
@@ -266,6 +293,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AssertFn",
@@ -275,6 +304,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -289,6 +319,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "AudioInput",
@@ -298,6 +330,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -312,6 +345,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "BuildLinkedList",
@@ -321,6 +356,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.LinkedList, raw.cast_to(types, types, partial_types, False))
     
@@ -335,6 +371,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "BuildTree",
@@ -344,6 +382,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Tree, raw.cast_to(types, types, partial_types, False))
     
@@ -358,6 +397,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -367,6 +408,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.ClassToRecAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -381,6 +423,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ClassifyDynEnumTwo",
@@ -390,6 +434,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Union[types.DynEnumTwo, str], raw.cast_to(types, types, partial_types, False))
     
@@ -404,6 +449,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ClassifyMessage",
@@ -413,6 +460,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -427,6 +475,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ClassifyMessage2",
@@ -436,6 +486,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -450,6 +501,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ClassifyMessage3",
@@ -459,6 +512,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -473,6 +527,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "Completion",
@@ -482,6 +538,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -496,6 +553,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "CustomTask",
@@ -505,6 +564,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], raw.cast_to(types, types, partial_types, False))
     
@@ -519,6 +579,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DescribeImage",
@@ -528,6 +590,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -542,6 +605,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DescribeImage2",
@@ -551,6 +616,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -565,6 +631,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DescribeImage3",
@@ -574,6 +642,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -588,6 +657,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DescribeImage4",
@@ -597,6 +668,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -611,6 +683,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DifferentiateUnions",
@@ -620,6 +694,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Union[types.OriginalA, types.OriginalB], raw.cast_to(types, types, partial_types, False))
     
@@ -634,6 +709,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DummyOutputFunction",
@@ -643,6 +720,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.DummyOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -657,6 +735,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DynamicFunc",
@@ -666,6 +746,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.DynamicClassTwo, raw.cast_to(types, types, partial_types, False))
     
@@ -680,6 +761,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DynamicInputOutput",
@@ -689,6 +772,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.DynInputOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -703,6 +787,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "DynamicListInputOutput",
@@ -712,6 +798,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[types.DynInputOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -726,6 +813,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExpectFailure",
@@ -735,6 +824,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -749,6 +839,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExtractContactInfo",
@@ -758,6 +850,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.ContactInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -772,6 +865,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExtractHobby",
@@ -781,6 +876,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[Union[types.Hobby, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -795,6 +891,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExtractNames",
@@ -804,6 +902,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -818,6 +917,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExtractPeople",
@@ -827,6 +928,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[types.Person], raw.cast_to(types, types, partial_types, False))
     
@@ -841,6 +943,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExtractReceiptInfo",
@@ -850,6 +954,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.ReceiptInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -864,6 +969,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExtractResume",
@@ -873,6 +980,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
@@ -887,6 +995,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ExtractResume2",
@@ -896,6 +1006,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
@@ -910,6 +1021,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnClassOptionalOutput",
@@ -919,6 +1032,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Optional[types.ClassOptionalOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -933,6 +1047,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnClassOptionalOutput2",
@@ -942,6 +1058,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Optional[types.ClassOptionalOutput2], raw.cast_to(types, types, partial_types, False))
     
@@ -956,6 +1073,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnEnumListOutput",
@@ -965,6 +1084,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[types.EnumOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -979,6 +1099,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnEnumOutput",
@@ -988,6 +1110,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.EnumOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -1002,6 +1125,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnLiteralClassInputOutput",
@@ -1011,6 +1136,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.LiteralClassHello, raw.cast_to(types, types, partial_types, False))
     
@@ -1025,6 +1151,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnLiteralUnionClassInputOutput",
@@ -1034,6 +1162,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Union[types.LiteralClassOne, types.LiteralClassTwo], raw.cast_to(types, types, partial_types, False))
     
@@ -1048,6 +1177,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnNamedArgsSingleStringOptional",
@@ -1057,6 +1188,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1071,6 +1203,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputBool",
@@ -1080,6 +1214,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(bool, raw.cast_to(types, types, partial_types, False))
     
@@ -1094,6 +1229,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputClass",
@@ -1103,6 +1240,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.TestOutputClass, raw.cast_to(types, types, partial_types, False))
     
@@ -1117,6 +1255,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputClassList",
@@ -1126,6 +1266,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[types.TestOutputClass], raw.cast_to(types, types, partial_types, False))
     
@@ -1140,6 +1281,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputClassNested",
@@ -1149,6 +1292,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.TestClassNested, raw.cast_to(types, types, partial_types, False))
     
@@ -1163,6 +1307,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputClassWithEnum",
@@ -1172,6 +1318,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.TestClassWithEnum, raw.cast_to(types, types, partial_types, False))
     
@@ -1186,6 +1333,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputInt",
@@ -1195,6 +1344,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -1209,6 +1359,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputLiteralBool",
@@ -1218,6 +1370,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Literal[False], raw.cast_to(types, types, partial_types, False))
     
@@ -1232,6 +1385,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputLiteralInt",
@@ -1241,6 +1396,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Literal[5], raw.cast_to(types, types, partial_types, False))
     
@@ -1255,6 +1411,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputLiteralString",
@@ -1264,6 +1422,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Literal["example output"], raw.cast_to(types, types, partial_types, False))
     
@@ -1278,6 +1437,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnOutputStringList",
@@ -1287,6 +1448,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -1301,6 +1463,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnTestAliasedEnumOutput",
@@ -1310,6 +1474,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.TestEnum, raw.cast_to(types, types, partial_types, False))
     
@@ -1324,6 +1489,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnTestClassAlias",
@@ -1333,6 +1500,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.TestClassAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -1347,6 +1515,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "FnTestNamedArgsSingleEnum",
@@ -1356,6 +1526,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1370,6 +1541,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "GetDataType",
@@ -1379,6 +1552,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.RaysData, raw.cast_to(types, types, partial_types, False))
     
@@ -1393,6 +1567,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "GetOrderInfo",
@@ -1402,6 +1578,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.OrderInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -1416,6 +1593,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "GetQuery",
@@ -1425,6 +1604,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.SearchParams, raw.cast_to(types, types, partial_types, False))
     
@@ -1439,6 +1619,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "InOutEnumMapKey",
@@ -1448,6 +1630,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Dict[types.MapKey, str], raw.cast_to(types, types, partial_types, False))
     
@@ -1462,6 +1645,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "InOutLiteralStringUnionMapKey",
@@ -1471,6 +1656,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str], raw.cast_to(types, types, partial_types, False))
     
@@ -1485,6 +1671,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "InOutSingleLiteralStringMapKey",
@@ -1494,6 +1682,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Dict[Literal["key"], str], raw.cast_to(types, types, partial_types, False))
     
@@ -1508,6 +1697,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "JsonTypeAliasCycle",
@@ -1517,6 +1708,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.JsonValue, raw.cast_to(types, types, partial_types, False))
     
@@ -1531,6 +1723,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "LiteralUnionsTest",
@@ -1540,6 +1734,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Union[Literal[1], Literal[True], Literal["string output"]], raw.cast_to(types, types, partial_types, False))
     
@@ -1554,6 +1749,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "MakeBlockConstraint",
@@ -1563,6 +1760,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Checked[types.BlockConstraint,types.Literal["cross_field"]], raw.cast_to(types, types, partial_types, False))
     
@@ -1577,6 +1775,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "MakeNestedBlockConstraint",
@@ -1586,6 +1786,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.NestedBlockConstraint, raw.cast_to(types, types, partial_types, False))
     
@@ -1600,6 +1801,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "MakeSemanticContainer",
@@ -1609,6 +1812,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.SemanticContainer, raw.cast_to(types, types, partial_types, False))
     
@@ -1623,6 +1827,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "MapAlias",
@@ -1632,6 +1838,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Dict[str, List[str]], raw.cast_to(types, types, partial_types, False))
     
@@ -1646,6 +1853,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "MergeAliasAttributes",
@@ -1655,6 +1864,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.MergeAttrs, raw.cast_to(types, types, partial_types, False))
     
@@ -1669,6 +1879,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "MyFunc",
@@ -1678,6 +1890,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.DynamicOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -1692,6 +1905,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "NestedAlias",
@@ -1701,6 +1916,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]], raw.cast_to(types, types, partial_types, False))
     
@@ -1715,6 +1931,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "NullLiteralClassHello",
@@ -1724,6 +1942,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.ClassForNullLiteral, raw.cast_to(types, types, partial_types, False))
     
@@ -1738,6 +1957,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "OptionalTest_Function",
@@ -1747,6 +1968,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[Optional[types.OptionalTest_ReturnType]], raw.cast_to(types, types, partial_types, False))
     
@@ -1761,6 +1983,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PredictAge",
@@ -1770,6 +1994,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.FooAny, raw.cast_to(types, types, partial_types, False))
     
@@ -1784,6 +2009,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PredictAgeBare",
@@ -1793,6 +2020,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Checked[int,types.Literal["too_big"]], raw.cast_to(types, types, partial_types, False))
     
@@ -1807,6 +2035,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PrimitiveAlias",
@@ -1816,6 +2046,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Union[int, str, bool, float], raw.cast_to(types, types, partial_types, False))
     
@@ -1830,6 +2061,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PromptTestClaude",
@@ -1839,6 +2072,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1853,6 +2087,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PromptTestClaudeChat",
@@ -1862,6 +2098,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1876,6 +2113,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PromptTestClaudeChatNoSystem",
@@ -1885,6 +2124,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1899,6 +2139,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PromptTestOpenAI",
@@ -1908,6 +2150,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1922,6 +2165,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PromptTestOpenAIChat",
@@ -1931,6 +2176,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1945,6 +2191,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PromptTestOpenAIChatNoSystem",
@@ -1954,6 +2202,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1968,6 +2217,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "PromptTestStreaming",
@@ -1977,6 +2228,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1991,6 +2243,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "RecursiveAliasCycle",
@@ -2000,6 +2254,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.RecAliasOne, raw.cast_to(types, types, partial_types, False))
     
@@ -2014,6 +2269,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "RecursiveClassWithAliasIndirection",
@@ -2023,6 +2280,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.NodeWithAliasIndirection, raw.cast_to(types, types, partial_types, False))
     
@@ -2037,6 +2295,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ReturnAliasWithMergedAttributes",
@@ -2046,6 +2306,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Checked[int,types.Literal["gt_ten"]], raw.cast_to(types, types, partial_types, False))
     
@@ -2060,6 +2321,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ReturnFailingAssert",
@@ -2069,6 +2332,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -2083,6 +2347,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ReturnJsonEntry",
@@ -2092,6 +2358,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.JsonTemplate, raw.cast_to(types, types, partial_types, False))
     
@@ -2106,6 +2373,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "ReturnMalformedConstraints",
@@ -2115,6 +2384,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.MalformedConstraints, raw.cast_to(types, types, partial_types, False))
     
@@ -2129,6 +2399,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "SchemaDescriptions",
@@ -2138,6 +2410,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.Schema, raw.cast_to(types, types, partial_types, False))
     
@@ -2152,6 +2425,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "SimpleRecursiveListAlias",
@@ -2161,6 +2436,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.RecursiveListAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -2175,6 +2451,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "SimpleRecursiveMapAlias",
@@ -2184,6 +2462,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.RecursiveMapAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -2198,6 +2477,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "StreamBigNumbers",
@@ -2207,6 +2488,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.BigNumbers, raw.cast_to(types, types, partial_types, False))
     
@@ -2221,6 +2503,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "StreamFailingAssertion",
@@ -2230,6 +2514,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.TwoStoriesOneTitle, raw.cast_to(types, types, partial_types, False))
     
@@ -2244,6 +2529,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "StreamOneBigNumber",
@@ -2253,6 +2540,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -2267,6 +2555,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "StreamUnionIntegers",
@@ -2276,6 +2566,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(List[Union[int, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -2290,6 +2581,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "StreamingCompoundNumbers",
@@ -2299,6 +2592,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.CompoundBigNumbers, raw.cast_to(types, types, partial_types, False))
     
@@ -2313,6 +2607,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TakeRecAliasDep",
@@ -2322,6 +2618,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.RecursiveAliasDependency, raw.cast_to(types, types, partial_types, False))
     
@@ -2336,6 +2633,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAnthropic",
@@ -2345,6 +2644,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2359,6 +2659,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAnthropicShorthand",
@@ -2368,6 +2670,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2382,6 +2685,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAws",
@@ -2391,6 +2696,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2405,6 +2711,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidAccessKey",
@@ -2414,6 +2722,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2428,6 +2737,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidProfile",
@@ -2437,6 +2748,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2451,6 +2763,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidRegion",
@@ -2460,6 +2774,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2474,6 +2789,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidSessionToken",
@@ -2483,6 +2800,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2497,6 +2815,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzure",
@@ -2506,6 +2826,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2520,6 +2841,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzureFailure",
@@ -2529,6 +2852,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2543,6 +2867,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzureO1NoMaxTokens",
@@ -2552,6 +2878,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2566,6 +2893,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzureO1WithMaxCompletionTokens",
@@ -2575,6 +2904,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2589,6 +2919,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzureO1WithMaxTokens",
@@ -2598,6 +2930,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2612,6 +2945,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzureO3NoMaxTokens",
@@ -2621,6 +2956,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2635,6 +2971,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzureO3WithMaxCompletionTokens",
@@ -2644,6 +2982,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2658,6 +2997,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestAzureWithMaxTokens",
@@ -2667,6 +3008,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2681,6 +3023,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestCaching",
@@ -2690,6 +3034,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2704,6 +3049,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFallbackClient",
@@ -2713,6 +3060,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2727,6 +3075,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFallbackToShorthand",
@@ -2736,6 +3086,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2750,6 +3101,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleBool",
@@ -2759,6 +3112,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2773,6 +3127,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleClass",
@@ -2782,6 +3138,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2796,6 +3153,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleEnumList",
@@ -2805,6 +3164,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2819,6 +3179,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleFloat",
@@ -2828,6 +3190,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2842,6 +3205,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleInt",
@@ -2851,6 +3216,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2865,6 +3231,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -2874,6 +3242,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Dict[str, types.StringToClassEntry], raw.cast_to(types, types, partial_types, False))
     
@@ -2888,6 +3257,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -2897,6 +3268,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Dict[str, Dict[str, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -2911,6 +3283,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleMapStringToString",
@@ -2920,6 +3294,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(Dict[str, str], raw.cast_to(types, types, partial_types, False))
     
@@ -2934,6 +3309,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleString",
@@ -2943,6 +3320,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2957,6 +3335,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleStringArray",
@@ -2966,6 +3346,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2980,6 +3361,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleStringList",
@@ -2989,6 +3372,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3003,6 +3387,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestGemini",
@@ -3012,6 +3398,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3026,6 +3413,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestGeminiOpenAiGeneric",
@@ -3035,6 +3424,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3049,6 +3439,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestGeminiSystem",
@@ -3058,6 +3450,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3072,6 +3465,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestGeminiSystemAsChat",
@@ -3081,6 +3476,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3095,6 +3491,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestImageInput",
@@ -3104,6 +3502,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3118,6 +3517,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestImageInputAnthropic",
@@ -3127,6 +3528,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3141,6 +3543,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestImageListInput",
@@ -3150,6 +3554,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3164,6 +3569,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestMemory",
@@ -3173,6 +3580,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.TestMemoryOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -3187,6 +3595,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestMulticlassNamedArgs",
@@ -3196,6 +3606,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3210,6 +3621,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestNamedArgsLiteralBool",
@@ -3219,6 +3632,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3233,6 +3647,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestNamedArgsLiteralInt",
@@ -3242,6 +3658,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3256,6 +3673,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestNamedArgsLiteralString",
@@ -3265,6 +3684,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3279,6 +3699,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOllama",
@@ -3288,6 +3710,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3302,6 +3725,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAI",
@@ -3311,6 +3736,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3325,6 +3751,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAIGPT4oMini",
@@ -3334,6 +3762,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3348,6 +3777,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAILegacyProvider",
@@ -3357,6 +3788,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3371,6 +3803,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAIO1NoMaxTokens",
@@ -3380,6 +3814,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3394,6 +3829,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -3403,6 +3840,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3417,6 +3855,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAIO1WithMaxTokens",
@@ -3426,6 +3866,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3440,6 +3881,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAIShorthand",
@@ -3449,6 +3892,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3463,6 +3907,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAIWithMaxTokens",
@@ -3472,6 +3918,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3486,6 +3933,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestOpenAIWithNullMaxTokens",
@@ -3495,6 +3944,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3509,6 +3959,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestRetryConstant",
@@ -3518,6 +3970,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3532,6 +3985,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestRetryExponential",
@@ -3541,6 +3996,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3555,6 +4011,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestSingleFallbackClient",
@@ -3564,6 +4022,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3578,6 +4037,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestVertex",
@@ -3587,6 +4048,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3601,6 +4063,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "TestVertexWithSystemInstructions",
@@ -3610,6 +4074,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3624,6 +4089,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "UnionTest_Function",
@@ -3633,6 +4100,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.UnionTest_ReturnType, raw.cast_to(types, types, partial_types, False))
     
@@ -3647,6 +4115,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "UseBlockConstraint",
@@ -3656,6 +4126,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -3670,6 +4141,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "UseMalformedConstraints",
@@ -3679,6 +4152,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -3693,6 +4167,8 @@ class BamlSyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
         "UseNestedBlockConstraint",
@@ -3702,6 +4178,7 @@ class BamlSyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -3728,6 +4205,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AaaSamOutputFormat",
@@ -3738,6 +4217,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.Recipe, types.Recipe](
@@ -3758,6 +4238,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AliasThatPointsToRecursiveType",
@@ -3768,6 +4250,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.LinkedListAliasNode, types.LinkedListAliasNode](
@@ -3788,6 +4271,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AliasWithMultipleAttrs",
@@ -3798,6 +4283,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]](
@@ -3818,6 +4304,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AliasedInputClass",
@@ -3828,6 +4316,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -3848,6 +4337,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AliasedInputClass2",
@@ -3858,6 +4349,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -3878,6 +4370,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AliasedInputClassNested",
@@ -3888,6 +4382,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -3908,6 +4403,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AliasedInputEnum",
@@ -3918,6 +4415,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -3938,6 +4436,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AliasedInputList",
@@ -3948,6 +4448,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -3968,6 +4469,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AllowedOptionals",
@@ -3978,6 +4481,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.OptionalListAndMap, types.OptionalListAndMap](
@@ -3998,6 +4502,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AssertFn",
@@ -4008,6 +4514,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[int], int](
@@ -4028,6 +4535,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "AudioInput",
@@ -4038,6 +4547,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -4058,6 +4568,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "BuildLinkedList",
@@ -4068,6 +4580,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.LinkedList, types.LinkedList](
@@ -4088,6 +4601,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "BuildTree",
@@ -4098,6 +4613,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.Tree, types.Tree](
@@ -4118,6 +4634,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -4128,6 +4646,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.ClassToRecAlias, types.ClassToRecAlias](
@@ -4148,6 +4667,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ClassifyDynEnumTwo",
@@ -4158,6 +4679,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]](
@@ -4178,6 +4700,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ClassifyMessage",
@@ -4188,6 +4712,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[types.Category], types.Category](
@@ -4208,6 +4733,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ClassifyMessage2",
@@ -4218,6 +4745,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[types.Category], types.Category](
@@ -4238,6 +4766,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ClassifyMessage3",
@@ -4248,6 +4778,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[types.Category], types.Category](
@@ -4268,6 +4799,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "Completion",
@@ -4280,6 +4813,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -4300,6 +4834,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "CustomTask",
@@ -4310,6 +4846,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]](
@@ -4330,6 +4867,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DescribeImage",
@@ -4340,6 +4879,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -4360,6 +4900,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DescribeImage2",
@@ -4371,6 +4913,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -4391,6 +4934,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DescribeImage3",
@@ -4402,6 +4947,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -4422,6 +4968,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DescribeImage4",
@@ -4433,6 +4981,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -4453,6 +5002,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DifferentiateUnions",
@@ -4462,6 +5013,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]](
@@ -4482,6 +5034,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DummyOutputFunction",
@@ -4492,6 +5046,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.DummyOutput, types.DummyOutput](
@@ -4512,6 +5067,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DynamicFunc",
@@ -4522,6 +5079,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.DynamicClassTwo, types.DynamicClassTwo](
@@ -4542,6 +5100,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DynamicInputOutput",
@@ -4552,6 +5112,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.DynInputOutput, types.DynInputOutput](
@@ -4572,6 +5133,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "DynamicListInputOutput",
@@ -4582,6 +5145,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]](
@@ -4602,6 +5166,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExpectFailure",
@@ -4611,6 +5177,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -4631,6 +5198,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExtractContactInfo",
@@ -4641,6 +5210,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.ContactInfo, types.ContactInfo](
@@ -4661,6 +5231,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExtractHobby",
@@ -4671,6 +5243,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[Optional[Union[types.Hobby, str]]], List[Union[types.Hobby, str]]](
@@ -4691,6 +5264,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExtractNames",
@@ -4701,6 +5276,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[Optional[str]], List[str]](
@@ -4721,6 +5297,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExtractPeople",
@@ -4731,6 +5309,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[partial_types.Person], List[types.Person]](
@@ -4751,6 +5330,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExtractReceiptInfo",
@@ -4762,6 +5343,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.ReceiptInfo, types.ReceiptInfo](
@@ -4782,6 +5364,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExtractResume",
@@ -4793,6 +5377,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.Resume, types.Resume](
@@ -4813,6 +5398,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ExtractResume2",
@@ -4823,6 +5410,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.Resume, types.Resume](
@@ -4843,6 +5431,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnClassOptionalOutput",
@@ -4853,6 +5443,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]](
@@ -4873,6 +5464,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnClassOptionalOutput2",
@@ -4883,6 +5476,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]](
@@ -4903,6 +5497,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnEnumListOutput",
@@ -4913,6 +5509,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]](
@@ -4933,6 +5530,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnEnumOutput",
@@ -4943,6 +5542,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[types.EnumOutput], types.EnumOutput](
@@ -4963,6 +5563,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnLiteralClassInputOutput",
@@ -4973,6 +5575,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.LiteralClassHello, types.LiteralClassHello](
@@ -4993,6 +5596,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnLiteralUnionClassInputOutput",
@@ -5003,6 +5608,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]](
@@ -5023,6 +5629,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnNamedArgsSingleStringOptional",
@@ -5033,6 +5641,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -5053,6 +5662,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputBool",
@@ -5063,6 +5674,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[bool], bool](
@@ -5083,6 +5695,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputClass",
@@ -5093,6 +5707,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.TestOutputClass, types.TestOutputClass](
@@ -5113,6 +5728,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputClassList",
@@ -5123,6 +5740,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
@@ -5143,6 +5761,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputClassNested",
@@ -5153,6 +5773,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.TestClassNested, types.TestClassNested](
@@ -5173,6 +5794,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputClassWithEnum",
@@ -5183,6 +5806,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.TestClassWithEnum, types.TestClassWithEnum](
@@ -5203,6 +5827,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputInt",
@@ -5213,6 +5839,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[int], int](
@@ -5233,6 +5860,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputLiteralBool",
@@ -5243,6 +5872,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Literal[False]], Literal[False]](
@@ -5263,6 +5893,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputLiteralInt",
@@ -5273,6 +5905,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Literal[5]], Literal[5]](
@@ -5293,6 +5926,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputLiteralString",
@@ -5303,6 +5938,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Literal["example output"]], Literal["example output"]](
@@ -5323,6 +5959,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnOutputStringList",
@@ -5333,6 +5971,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[Optional[str]], List[str]](
@@ -5353,6 +5992,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnTestAliasedEnumOutput",
@@ -5363,6 +6004,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[types.TestEnum], types.TestEnum](
@@ -5383,6 +6025,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnTestClassAlias",
@@ -5393,6 +6037,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.TestClassAlias, types.TestClassAlias](
@@ -5413,6 +6058,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "FnTestNamedArgsSingleEnum",
@@ -5423,6 +6070,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -5443,6 +6091,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "GetDataType",
@@ -5453,6 +6103,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.RaysData, types.RaysData](
@@ -5473,6 +6124,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "GetOrderInfo",
@@ -5483,6 +6136,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.OrderInfo, types.OrderInfo](
@@ -5503,6 +6157,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "GetQuery",
@@ -5513,6 +6169,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.SearchParams, types.SearchParams](
@@ -5533,6 +6190,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "InOutEnumMapKey",
@@ -5544,6 +6203,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Dict[types.MapKey, Optional[str]], Dict[types.MapKey, str]](
@@ -5564,6 +6224,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "InOutLiteralStringUnionMapKey",
@@ -5575,6 +6237,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]](
@@ -5595,6 +6258,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "InOutSingleLiteralStringMapKey",
@@ -5605,6 +6270,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Dict[Literal["key"], Optional[str]], Dict[Literal["key"], str]](
@@ -5625,6 +6291,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "JsonTypeAliasCycle",
@@ -5635,6 +6303,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[types.JsonValue, types.JsonValue](
@@ -5655,6 +6324,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "LiteralUnionsTest",
@@ -5665,6 +6336,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]](
@@ -5685,6 +6357,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "MakeBlockConstraint",
@@ -5694,6 +6368,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint,types.Literal["cross_field"]], Checked[types.BlockConstraint,types.Literal["cross_field"]]](
@@ -5714,6 +6389,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "MakeNestedBlockConstraint",
@@ -5723,6 +6400,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.NestedBlockConstraint, types.NestedBlockConstraint](
@@ -5743,6 +6421,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "MakeSemanticContainer",
@@ -5752,6 +6432,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.SemanticContainer, types.SemanticContainer](
@@ -5772,6 +6453,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "MapAlias",
@@ -5782,6 +6465,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Dict[str, List[Optional[str]]], Dict[str, List[str]]](
@@ -5802,6 +6486,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "MergeAliasAttributes",
@@ -5812,6 +6498,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.MergeAttrs, types.MergeAttrs](
@@ -5832,6 +6519,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "MyFunc",
@@ -5842,6 +6531,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.DynamicOutput, types.DynamicOutput](
@@ -5862,6 +6552,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "NestedAlias",
@@ -5872,6 +6564,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]](
@@ -5892,6 +6585,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "NullLiteralClassHello",
@@ -5902,6 +6597,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.ClassForNullLiteral, types.ClassForNullLiteral](
@@ -5922,6 +6618,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "OptionalTest_Function",
@@ -5932,6 +6630,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]](
@@ -5952,6 +6651,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PredictAge",
@@ -5962,6 +6663,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.FooAny, types.FooAny](
@@ -5982,6 +6684,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PredictAgeBare",
@@ -5992,6 +6696,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["too_big"]], Checked[int,types.Literal["too_big"]]](
@@ -6012,6 +6717,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PrimitiveAlias",
@@ -6022,6 +6729,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], Union[int, str, bool, float]](
@@ -6042,6 +6750,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PromptTestClaude",
@@ -6052,6 +6762,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6072,6 +6783,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PromptTestClaudeChat",
@@ -6082,6 +6795,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6102,6 +6816,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PromptTestClaudeChatNoSystem",
@@ -6112,6 +6828,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6132,6 +6849,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PromptTestOpenAI",
@@ -6142,6 +6861,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6162,6 +6882,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PromptTestOpenAIChat",
@@ -6172,6 +6894,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6192,6 +6915,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PromptTestOpenAIChatNoSystem",
@@ -6202,6 +6927,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6222,6 +6948,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "PromptTestStreaming",
@@ -6232,6 +6960,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6252,6 +6981,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "RecursiveAliasCycle",
@@ -6262,6 +6993,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[types.RecAliasOne, types.RecAliasOne](
@@ -6282,6 +7014,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "RecursiveClassWithAliasIndirection",
@@ -6292,6 +7026,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection](
@@ -6312,6 +7047,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ReturnAliasWithMergedAttributes",
@@ -6322,6 +7059,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]](
@@ -6342,6 +7080,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ReturnFailingAssert",
@@ -6352,6 +7092,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[int], int](
@@ -6372,6 +7113,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ReturnJsonEntry",
@@ -6382,6 +7125,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[types.JsonTemplate, types.JsonTemplate](
@@ -6402,6 +7146,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "ReturnMalformedConstraints",
@@ -6412,6 +7158,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.MalformedConstraints, types.MalformedConstraints](
@@ -6432,6 +7179,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "SchemaDescriptions",
@@ -6442,6 +7191,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.Schema, types.Schema](
@@ -6462,6 +7212,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "SimpleRecursiveListAlias",
@@ -6472,6 +7224,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[types.RecursiveListAlias, types.RecursiveListAlias](
@@ -6492,6 +7245,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "SimpleRecursiveMapAlias",
@@ -6502,6 +7257,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[types.RecursiveMapAlias, types.RecursiveMapAlias](
@@ -6522,6 +7278,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "StreamBigNumbers",
@@ -6532,6 +7290,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.BigNumbers, types.BigNumbers](
@@ -6552,6 +7311,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "StreamFailingAssertion",
@@ -6563,6 +7324,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle](
@@ -6583,6 +7345,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "StreamOneBigNumber",
@@ -6593,6 +7357,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[int], int](
@@ -6613,6 +7378,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "StreamUnionIntegers",
@@ -6623,6 +7390,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[List[Optional[Union[Optional[int], Optional[str]]]], List[Union[int, str]]](
@@ -6643,6 +7411,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "StreamingCompoundNumbers",
@@ -6654,6 +7424,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.CompoundBigNumbers, types.CompoundBigNumbers](
@@ -6674,6 +7445,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TakeRecAliasDep",
@@ -6684,6 +7457,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.RecursiveAliasDependency, types.RecursiveAliasDependency](
@@ -6704,6 +7478,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAnthropic",
@@ -6714,6 +7490,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6734,6 +7511,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAnthropicShorthand",
@@ -6744,6 +7523,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6764,6 +7544,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAws",
@@ -6774,6 +7556,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6794,6 +7577,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidAccessKey",
@@ -6804,6 +7589,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6824,6 +7610,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidProfile",
@@ -6834,6 +7622,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6854,6 +7643,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidRegion",
@@ -6864,6 +7655,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6884,6 +7676,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidSessionToken",
@@ -6894,6 +7688,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6914,6 +7709,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzure",
@@ -6924,6 +7721,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6944,6 +7742,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzureFailure",
@@ -6954,6 +7754,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -6974,6 +7775,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzureO1NoMaxTokens",
@@ -6984,6 +7787,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7004,6 +7808,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzureO1WithMaxCompletionTokens",
@@ -7014,6 +7820,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7034,6 +7841,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzureO1WithMaxTokens",
@@ -7044,6 +7853,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7064,6 +7874,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzureO3NoMaxTokens",
@@ -7074,6 +7886,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7094,6 +7907,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzureO3WithMaxCompletionTokens",
@@ -7104,6 +7919,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7124,6 +7940,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestAzureWithMaxTokens",
@@ -7134,6 +7952,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7154,6 +7973,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestCaching",
@@ -7165,6 +7986,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7185,6 +8007,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFallbackClient",
@@ -7194,6 +8018,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7214,6 +8039,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFallbackToShorthand",
@@ -7224,6 +8051,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7244,6 +8072,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleBool",
@@ -7254,6 +8084,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7274,6 +8105,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleClass",
@@ -7284,6 +8117,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7304,6 +8138,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleEnumList",
@@ -7314,6 +8150,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7334,6 +8171,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleFloat",
@@ -7344,6 +8183,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7364,6 +8204,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleInt",
@@ -7374,6 +8216,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7394,6 +8237,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -7404,6 +8249,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]](
@@ -7424,6 +8270,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -7434,6 +8282,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]](
@@ -7454,6 +8303,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleMapStringToString",
@@ -7464,6 +8315,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Dict[str, Optional[str]], Dict[str, str]](
@@ -7484,6 +8336,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleString",
@@ -7494,6 +8348,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7514,6 +8369,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleStringArray",
@@ -7524,6 +8381,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7544,6 +8402,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleStringList",
@@ -7554,6 +8414,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7574,6 +8435,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestGemini",
@@ -7584,6 +8447,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7604,6 +8468,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestGeminiOpenAiGeneric",
@@ -7613,6 +8479,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7633,6 +8500,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestGeminiSystem",
@@ -7643,6 +8512,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7663,6 +8533,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestGeminiSystemAsChat",
@@ -7673,6 +8545,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7693,6 +8566,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestImageInput",
@@ -7703,6 +8578,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7723,6 +8599,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestImageInputAnthropic",
@@ -7733,6 +8611,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7753,6 +8632,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestImageListInput",
@@ -7763,6 +8644,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7783,6 +8665,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestMemory",
@@ -7793,6 +8677,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.TestMemoryOutput, types.TestMemoryOutput](
@@ -7813,6 +8698,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestMulticlassNamedArgs",
@@ -7824,6 +8711,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7844,6 +8732,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestNamedArgsLiteralBool",
@@ -7854,6 +8744,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7874,6 +8765,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestNamedArgsLiteralInt",
@@ -7884,6 +8777,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7904,6 +8798,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestNamedArgsLiteralString",
@@ -7914,6 +8810,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7934,6 +8831,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOllama",
@@ -7944,6 +8843,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7964,6 +8864,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAI",
@@ -7974,6 +8876,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -7994,6 +8897,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIGPT4oMini",
@@ -8004,6 +8909,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8024,6 +8930,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAILegacyProvider",
@@ -8034,6 +8942,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8054,6 +8963,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIO1NoMaxTokens",
@@ -8064,6 +8975,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8084,6 +8996,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -8094,6 +9008,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8114,6 +9029,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIO1WithMaxTokens",
@@ -8124,6 +9041,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8144,6 +9062,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIShorthand",
@@ -8154,6 +9074,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8174,6 +9095,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIWithMaxTokens",
@@ -8184,6 +9107,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8204,6 +9128,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIWithNullMaxTokens",
@@ -8214,6 +9140,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8234,6 +9161,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestRetryConstant",
@@ -8243,6 +9172,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8263,6 +9193,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestRetryExponential",
@@ -8272,6 +9204,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8292,6 +9225,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestSingleFallbackClient",
@@ -8301,6 +9236,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8321,6 +9257,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestVertex",
@@ -8331,6 +9269,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8351,6 +9290,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "TestVertexWithSystemInstructions",
@@ -8360,6 +9301,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[str], str](
@@ -8380,6 +9322,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "UnionTest_Function",
@@ -8390,6 +9334,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType](
@@ -8410,6 +9355,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "UseBlockConstraint",
@@ -8420,6 +9367,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[int], int](
@@ -8440,6 +9388,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "UseMalformedConstraints",
@@ -8450,6 +9400,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[int], int](
@@ -8470,6 +9421,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
         "UseNestedBlockConstraint",
@@ -8480,6 +9433,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlSyncStream[Optional[int], int](

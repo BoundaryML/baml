@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
 // use baml_types::tracing::events::{FunctionId, TraceEvent};
 use pyo3::{prelude::*};
 // use baml_types::tracing::events::TraceEvent;
@@ -28,13 +29,11 @@ crate::lang_wrapper!(
     baml_runtime::tracingv2::storage::storage::Collector,
     clone_safe);
 
-// TODO: next up -- pass the collector thru baml options.
 #[pymethods]
 impl Collector {
     #[new]
     pub fn new(id: String) -> Self {
         let collector = baml_runtime::tracingv2::storage::storage::Collector::new(id);
-        // BAML_TRACER.blocking_lock().register_collector(collector);
         Self {
             // id,
             inner: Arc::new(collector),
@@ -50,16 +49,19 @@ impl Collector {
         )
     }
 
-    // TODO: just get event ids
     pub fn events(&self) -> Vec<FunctionLog> {
         self.inner
             .function_logs()
             .iter()
-            // TODO: try not to clone.
             .map(|inner_function_log| FunctionLog {
-                inner: Arc::new(Mutex::new(inner_function_log.as_ref().clone())),
+                inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
             .collect()
+    }
+
+    #[staticmethod]
+    pub fn __function_span_count() -> usize {
+        BAML_TRACER.lock().unwrap().function_span_count()
     }
 }
 
@@ -68,6 +70,20 @@ crate::lang_wrapper!(
     baml_runtime::tracingv2::storage::storage::FunctionLog,
     sync_thread_safe
 );
+
+#[pyclass]
+pub struct CollectorList {
+    pub inner: Arc<Vec<Collector>>,
+}
+
+
+
+#[pymethods]
+impl CollectorList {
+    pub fn __repr__(&self) -> String {
+        format!("<CollectorList: {} collectors>", self.inner.len())
+    }
+}
 
 #[pymethods]
 impl FunctionLog {

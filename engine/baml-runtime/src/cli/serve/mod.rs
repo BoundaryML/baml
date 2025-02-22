@@ -455,6 +455,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 &ctx_mgr,
                 None,
                 client_registry.as_ref(),
+                Some(vec![]),
             );
 
             match result_stream {
