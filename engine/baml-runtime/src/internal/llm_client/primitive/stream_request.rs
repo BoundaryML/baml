@@ -7,13 +7,17 @@ use crate::internal::llm_client::{
 use anyhow::{Context, Result};
 use baml_types::BamlMap;
 use eventsource_stream::Eventsource;
-use futures::StreamExt;
+use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
 use reqwest::Response;
 use serde::de::DeserializeOwned;
 
 use super::{
-    anthropic::response_handler::scan_anthropic_response_stream, google::response_handler::scan_google_response_stream, openai::response_handler::scan_openai_response_stream, request::{make_request, to_prompt, RequestBuilder, ResponseType}, vertex::response_handler::scan_vertex_response_stream
+    anthropic::response_handler::scan_anthropic_response_stream,
+    google::response_handler::scan_google_response_stream,
+    openai::response_handler::scan_openai_response_stream,
+    request::{make_request, to_prompt, RequestBuilder, ResponseType},
+    vertex::response_handler::scan_vertex_response_stream,
 };
 
 pub async fn make_stream_request(

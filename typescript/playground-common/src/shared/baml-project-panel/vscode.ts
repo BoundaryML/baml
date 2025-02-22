@@ -8,6 +8,7 @@ import {
   GetWebviewUriResponse,
   InitializedResponse,
   InitializedRequest,
+  SetProxySettingsRequest,
 } from './vscode-rpc'
 import type { WebviewApi } from 'vscode-webview'
 
@@ -97,18 +98,18 @@ class VSCodeAPIWrapper {
     return resp.uri
   }
 
-  public async getIsProxyEnabled() {
-    const resp = await this.rpc<GetVSCodeSettingsRequest, GetVSCodeSettingsResponse>({
-      vscodeCommand: 'GET_VSCODE_SETTINGS',
-    })
-    return resp.enablePlaygroundProxy ?? true
-  }
-
   public async getPlaygroundPort() {
     const resp = await this.rpc<GetPlaygroundPortRequest, GetPlaygroundPortResponse>({
       vscodeCommand: 'GET_PLAYGROUND_PORT',
     })
     return resp.port
+  }
+
+  public async setProxySettings(proxyEnabled: boolean) {
+    await this.rpc<SetProxySettingsRequest, void>({
+      vscodeCommand: 'SET_PROXY_SETTINGS',
+      proxyEnabled,
+    })
   }
 
   public async markInitialized() {

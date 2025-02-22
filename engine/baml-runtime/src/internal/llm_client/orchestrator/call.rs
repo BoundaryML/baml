@@ -7,7 +7,9 @@ use web_time::Duration;
 use crate::{
     internal::{
         llm_client::{
-            parsed_value_to_response, traits::{WithClientProperties, WithPrompt, WithSingleCallable}, LLMErrorResponse, LLMResponse
+            parsed_value_to_response,
+            traits::{WithClientProperties, WithPrompt, WithSingleCallable},
+            LLMErrorResponse, LLMResponse,
         },
         prompt_renderer::PromptRenderer,
     },
@@ -53,38 +55,41 @@ pub async fn orchestrate(
                     .finish_reason_filter()
                     .is_allowed(s.metadata.finish_reason.as_ref())
                 {
-                    Some(Err(anyhow::anyhow!(crate::errors::ExposedError::FinishReasonError {
-                        prompt: prompt.to_string(),
-                        raw_output: s.content.clone(),
-                        message: "Finish reason not allowed".to_string(),
-                        finish_reason: s.metadata.finish_reason.clone(),
-                    })))
+                    Some(Err(anyhow::anyhow!(
+                        crate::errors::ExposedError::FinishReasonError {
+                            prompt: prompt.to_string(),
+                            raw_output: s.content.clone(),
+                            message: "Finish reason not allowed".to_string(),
+                            finish_reason: s.metadata.finish_reason.clone(),
+                        }
+                    )))
                 } else {
                     Some(parse_fn(&s.content))
                 }
-            },
-            LLMResponse::LLMFailure(LLMErrorResponse { code, client, message, .. }) => {
+            }
+            LLMResponse::LLMFailure(LLMErrorResponse {
+                code,
+                client,
+                message,
+                ..
+            }) => {
                 match code {
                     // This is some internal BAML error, so handle it like any other error
                     crate::internal::llm_client::ErrorCode::Other(2) => None,
-                    _ => {
-                        Some(Err(anyhow::anyhow!(crate::errors::ExposedError::ClientHttpError {
+                    _ => Some(Err(anyhow::anyhow!(
+                        crate::errors::ExposedError::ClientHttpError {
                             client_name: client.clone(),
                             message: message.clone(),
                             status_code: code.clone(),
-                        })))
-                    }
+                        }
+                    ))),
                 }
             }
             _ => None,
         };
 
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((
-            node.scope,
-            response,
-            parsed_response,
-        ));
+        results.push((node.scope, response, parsed_response));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results

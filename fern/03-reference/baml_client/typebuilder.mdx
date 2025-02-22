@@ -39,7 +39,7 @@ tb.Category.add_value('GREEN')
 tb.Category.add_value('YELLOW')
 
 # Pass the typebuilder when calling the function
-result = await b.Categorize("The sun is bright", {"tb": tb})
+result = b.Categorize("The sun is bright", {"tb": tb})
 # result can now be RED, BLUE, GREEN, or YELLOW
 ```
 ```typescript TypeScript

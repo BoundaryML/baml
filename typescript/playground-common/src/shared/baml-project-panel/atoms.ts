@@ -6,6 +6,7 @@ import { type ICodeBlock } from './types'
 import { vscodeLocalStorageStore } from './Jotai'
 import { orchIndexAtom } from './playground-panel/atoms-orch-graph'
 import { vscode } from './vscode'
+import { bamlConfig } from '../../baml_wasm_web/bamlConfig'
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
@@ -157,21 +158,12 @@ export const generatedFilesByLangAtom = atomFamily((lang: ICodeBlock['language']
 
 export const isPanelVisibleAtom = atom(false)
 
-const vscodeSettingsAtom = unwrap(
-  atom(async () => {
-    try {
-      const res = await vscode.getIsProxyEnabled()
-      return {
-        enablePlaygroundProxy: res,
-      }
-    } catch (e) {
-      console.error(`Error occurred while getting vscode settings:\n${JSON.stringify(e)}`)
-      return {
-        enablePlaygroundProxy: true,
-      }
-    }
-  }),
-)
+const vscodeSettingsAtom = atom<{ enablePlaygroundProxy: boolean }>((get) => {
+  const config = get(bamlConfig)
+  return {
+    enablePlaygroundProxy: config.config?.enablePlaygroundProxy ?? true,
+  }
+})
 
 const playgroundPortAtom = unwrap(
   atom(async () => {
@@ -184,6 +176,17 @@ const playgroundPortAtom = unwrap(
     }
   }),
 )
+
+export const proxyUrlAtom = atom((get) => {
+  const vscodeSettings = get(vscodeSettingsAtom)
+  const port = get(playgroundPortAtom)
+  const proxyUrl = port && port !== 0 ? `http://localhost:${port}` : undefined
+  const proxyEnabled = !!vscodeSettings?.enablePlaygroundProxy
+  return {
+    proxyEnabled,
+    proxyUrl,
+  }
+})
 
 export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
   set(envKeyValueStorage, [])
@@ -233,23 +236,24 @@ export const envVarsAtom = atom(
       // NextJS environment doesnt have vscode settings, and proxy is always enabled
       return Object.fromEntries(defaultEnvKeyValues.map(([k, v]) => [k, v]))
     } else {
-      const vscodeSettings = get(vscodeSettingsAtom)
-      console.log('vscodeSettings', vscodeSettings)
-      if (vscodeSettings?.enablePlaygroundProxy !== undefined && !vscodeSettings?.enablePlaygroundProxy) {
+      const { proxyEnabled, proxyUrl } = get(proxyUrlAtom)
+      if (!proxyEnabled) {
         // filter it out
         const envKeyValues = get(envKeyValuesAtom)
         return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
       }
 
       const envKeyValues = get(envKeyValuesAtom)
-      const port = get(playgroundPortAtom)
+      if (proxyUrl === undefined) {
+        return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
+      }
       const entries = envKeyValues.map(([k, v]) => {
-        if (k === 'BOUNDARY_PROXY_URL' && port !== 0) {
-          return [k, `http://localhost:${port}`]
+        if (k === 'BOUNDARY_PROXY_URL') {
+          return [k, proxyUrl]
         }
         return [k, v]
       })
-      return Object.fromEntries(entries)
+      return Object.fromEntries(entries.filter((e) => e !== undefined))
     }
   },
   (get, set, newEnvVars: Record<string, string>) => {

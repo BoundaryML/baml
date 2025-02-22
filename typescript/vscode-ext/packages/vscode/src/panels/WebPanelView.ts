@@ -114,6 +114,7 @@ export class WebPanelView {
 
   public postMessage<T>(command: string, content: T) {
     this._panel.webview.postMessage({ command: command, content })
+    console.log('postMessage', command, content)
     this.reporter?.sendTelemetryEvent({
       event: `baml.webview.${command}`,
       properties: {},
@@ -209,6 +210,7 @@ export class WebPanelView {
         function_name: openPlaygroundConfig.lastOpenedFunction,
       })
       this.postMessage('baml_cli_version', bamlConfig.cliVersion)
+      this.postMessage('baml_settings_updated', bamlConfig)
     }
 
     webview.onDidReceiveMessage(
@@ -282,6 +284,11 @@ export class WebPanelView {
             // also respond with rpc id
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: echoresp })
             return
+          case 'SET_PROXY_SETTINGS':
+            const { proxyEnabled } = vscodeMessage
+            const config = vscode.workspace.getConfiguration()
+            config.update('baml.enablePlaygroundProxy', proxyEnabled, vscode.ConfigurationTarget.Workspace)
+            return
           case 'GET_WEBVIEW_URI':
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,
             // relpath will be 'baml_src://path/to-image.png'
@@ -312,12 +319,6 @@ export class WebPanelView {
               }
             }
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
-            return
-          case 'GET_VSCODE_SETTINGS':
-            const responseData: GetVSCodeSettingsResponse = {
-              enablePlaygroundProxy: bamlConfig.config?.enablePlaygroundProxy ?? true,
-            }
-            this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: responseData })
             return
           case 'GET_PLAYGROUND_PORT':
             const response: GetPlaygroundPortResponse = {

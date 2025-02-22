@@ -1,5 +1,6 @@
-// COPIED FROM ./vscode-ext/packages/vscode/src/plugins/language-server/bamlConfig.ts
+// COPIED FROM ./vscode-ext/packages/language-server/src/bamlConfig.ts
 
+import { workspace } from 'vscode'
 import { z } from 'zod'
 export const bamlConfigSchema = z
   .object({
@@ -20,4 +21,19 @@ type BamlConfig = z.infer<typeof bamlConfigSchema>
 export const bamlConfig: { config: BamlConfig | null; cliVersion: string | null } = {
   config: null,
   cliVersion: null,
+}
+
+export const getConfig = () => {
+  try {
+    console.log('getting config')
+    const configResponse = workspace.getConfiguration('baml')
+    console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
+    bamlConfig.config = bamlConfigSchema.parse(configResponse)
+  } catch (e: any) {
+    if (e instanceof Error) {
+      console.log('Error getting config' + e.message + ' ' + e.stack)
+    } else {
+      console.log('Error getting config' + e)
+    }
+  }
 }

@@ -281,7 +281,7 @@ export function startServer(options?: LSOptions): void {
     return languageExtension
   }
 
-  connection.onDidChangeWatchedFiles(async (params) => {
+  connection.onDidChangeWatchedFiles((params) => {
     // let deleted_files = params.changes.filter((change) =>
     //   change.type == FileChangeType.Deleted
     // ).map((change) => change.uri);
@@ -300,20 +300,27 @@ export function startServer(options?: LSOptions): void {
     if (hasChanges) {
       // TODO: @hellovai we should technically get all possible root paths
       // (someone could delete mutliple baml_src dirs at once)
-      await bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri))
+      bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri)).catch((e) => {
+        console.error('Error reloading project files: ' + e)
+      })
     }
   })
 
   connection.onDidChangeConfiguration((_change) => {
     getConfig()
-    if (hasConfigurationCapability) {
-      // Reset all cached document settings
-      documentSettings.clear()
-    } else {
-      // globalSettings = <LSSettings>(change.settings.prisma || defaultSettings) // eslint-disable-line @typescript-eslint/no-unsafe-member-access
-    }
-
-    // documents.all().forEach(debouncedValidateTextDocument) // eslint-disable-line @typescript-eslint/no-misused-promises
+      .then(() => {
+        console.log('baml_settings_updated', bamlConfig.config)
+        connection.sendRequest('baml_settings_updated', bamlConfig)
+        if (hasConfigurationCapability) {
+          // Reset all cached document settings
+          documentSettings.clear()
+        } else {
+          // globalSettings = <LSSettings>(change.settings.prisma || defaultSettings) // eslint-disable-line @typescript-eslint/no-unsafe-member-access
+        }
+      })
+      .catch((e) => {
+        console.error('Error getting config: ' + e)
+      })
   })
 
   documents.onDidOpen(async (e) => {
@@ -412,7 +419,9 @@ export function startServer(options?: LSOptions): void {
               restartTSServer()
             }
           },
-          onError: (message: string) => connection.sendNotification('baml/message', { type: 'error', message }),
+          onError: (message: string) => {
+            connection.sendNotification('baml/message', { type: 'error', message })
+          },
         })
       }
     } catch (e) {

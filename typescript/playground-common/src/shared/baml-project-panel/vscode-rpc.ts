@@ -72,6 +72,11 @@ export interface EchoResponse {
   message: string
 }
 
+export interface SetProxySettingsRequest {
+  vscodeCommand: 'SET_PROXY_SETTINGS'
+  proxyEnabled: boolean
+}
+
 export interface GetBamlSrcRequest {
   vscodeCommand: 'GET_BAML_SRC'
   path: string
@@ -121,6 +126,7 @@ export interface InitializedResponse {
 type ApiPairs = [
   // Echo is included here as an example of what a request/response pair looks like
   [EchoRequest, EchoResponse],
+  [SetProxySettingsRequest, void],
   [GetBamlSrcRequest, GetBamlSrcResponse],
   [GetWebviewUriRequest, GetWebviewUriResponse],
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],
