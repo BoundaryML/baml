@@ -120,6 +120,7 @@ pub enum LLMClient {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMRequest {
+    pub request_id: ContentId,
     pub client: LLMClient,
     pub params: serde_json::Value,
     pub prompt: Prompt,

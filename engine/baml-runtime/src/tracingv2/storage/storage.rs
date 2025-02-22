@@ -188,7 +188,8 @@ fn build_function_log(
 
             // LLM adjacency
             TraceData::LLMRequest(llm_req) => {
-                let rid = format!("llm_req_{}", event.event_id.0);
+                // TODO: request_id must match
+                let rid = llm_req.request_id.0.clone();
                 let entry = calls_map.entry(rid).or_default();
                 entry.llm_request = Some(llm_req.clone());
                 entry.timestamp_first_seen = Some(time_ms);
@@ -238,6 +239,7 @@ fn build_function_log(
 
     // Build each LLMCall or LLMStreamCall
     let mut calls = Vec::new();
+    println!("calls_map: {:#?}", calls_map);
     for (_rid, call_acc) in calls_map {
         let (client, provider) = parse_llm_client_and_provider(call_acc.llm_request.as_ref());
         let start_t = call_acc.timestamp_first_seen.unwrap_or(start_ms);
@@ -1109,10 +1111,110 @@ mod tests {
             }
         });
     }
+    /// Helper function to inject a sequence of events for testing
+    async fn inject_test_events(
+        f_id: &FunctionId,
+        function_name: &str,
+        llm_calls: Vec<(LoggedLLMRequest, LoggedLLMResponse)>,
+    ) -> Collector {
+        // Clear out the global tracer first
+        {
+            let mut tracer = BAML_TRACER.lock().unwrap();
+            tracer.clear();
+        }
+
+        // Create a collector and track our function
+        let collector = Collector::new("test_collector".to_string());
+        collector.track_function(f_id.clone());
+
+        // Insert a FunctionStart event
+        let start_event = Arc::new(TraceEvent {
+            span_id: f_id.clone(),
+            event_id: ContentId("start_id".to_string()),
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: "test_start".into(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::FunctionStart(FunctionStart {
+                name: function_name.into(),
+                args: vec![],
+                options: baml_types::tracing::events::BamlOptions {
+                    type_builder: None,
+                    client_registry: None,
+                },
+            }),
+            tags: Default::default(),
+        });
+        {
+            let mut tracer = BAML_TRACER.lock().unwrap();
+            tracer.put(start_event);
+        }
+
+        // Insert LLM requests and responses
+        for (i, (req, resp)) in llm_calls.into_iter().enumerate() {
+            let req = Arc::new(req);
+            let resp = Arc::new(resp);
+
+            // Put the request
+            let event_req = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId(format!("request_{}", i)),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: format!("llm_request_{}", i).into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LLMRequest(req),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event_req);
+            }
+
+            // Put the response
+            let event_resp = Arc::new(TraceEvent {
+                span_id: f_id.clone(),
+                event_id: ContentId(format!("response_{}", i)),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: format!("llm_response_{}", i).into(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::LLMResponse(resp),
+                tags: Default::default(),
+            });
+            {
+                let mut tracer = BAML_TRACER.lock().unwrap();
+                tracer.put(event_resp);
+            }
+        }
+
+        // Insert the function end event
+        let end_event = Arc::new(TraceEvent {
+            span_id: f_id.clone(),
+            event_id: ContentId("end_event".to_string()),
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: "test_end".into(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::FunctionEnd(FunctionEnd {
+                result: Ok(baml_types::BamlValue::Null),
+            }),
+            tags: Default::default(),
+        });
+        {
+            let mut tracer = BAML_TRACER.lock().unwrap();
+            tracer.put(end_event);
+        }
+
+        // Give some brief time for the tracer to gather events
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        collector
+    }
 
     #[test]
     #[serial]
-    fn test_usage_accumulation() {
+    fn test_usage_accumulation_within_function_log_retries() {
         use baml_types::tracing::events::{
             ContentId, FunctionEnd, FunctionId, FunctionStart, LLMClient, LLMUsage,
             LoggedLLMRequest, LoggedLLMResponse, TraceData, TraceEvent, TraceLevel,
@@ -1121,164 +1223,50 @@ mod tests {
 
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(async {
-            // We'll add a new function ID
             let f_id = FunctionId("test_usage_accumulation".to_string());
 
-            // Clear out the global tracer first
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.clear();
-            }
-
-            // Create a collector and track our function
-            let collector = Collector::new("test_usage_collector".to_string());
-            collector.track_function(f_id.clone());
-
-            // Insert a FunctionStart event
-            let start_event = Arc::new(TraceEvent {
-                span_id: f_id.clone(),
-                event_id: ContentId("start_id".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "usage_test_start".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::FunctionStart(FunctionStart {
-                    name: "test_usage_func".into(),
-                    args: vec![],
-                    options: baml_types::tracing::events::BamlOptions {
-                        type_builder: None,
-                        client_registry: None,
+            let llm_calls = vec![
+                (
+                    LoggedLLMRequest {
+                        client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
+                        params: serde_json::json!({ "temperature": 0.7 }),
+                        prompt: serde_json::json!(["Hello world"]),
                     },
-                }),
-                tags: Default::default(),
-            });
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(start_event);
-            }
+                    LoggedLLMResponse {
+                        request_id: ContentId("req_1".to_string()),
+                        model: Some("test-model-v1".into()),
+                        finish_reason: Some("stop".into()),
+                        usage: Some(LLMUsage {
+                            input_tokens: Some(12),
+                            output_tokens: Some(8),
+                            total_tokens: Some(20),
+                        }),
+                        raw_text_output: Some("Hello back".into()),
+                        error_message: None,
+                    },
+                ),
+                (
+                    LoggedLLMRequest {
+                        client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
+                        params: serde_json::json!({ "temperature": 0.9 }),
+                        prompt: serde_json::json!(["Next message"]),
+                    },
+                    LoggedLLMResponse {
+                        request_id: ContentId("req_2".to_string()),
+                        model: Some("test-model-v2".into()),
+                        finish_reason: Some("length".into()),
+                        usage: Some(LLMUsage {
+                            input_tokens: Some(10),
+                            output_tokens: Some(30),
+                            total_tokens: Some(40),
+                        }),
+                        raw_text_output: Some("Super long response".into()),
+                        error_message: None,
+                    },
+                ),
+            ];
 
-            // Insert first LLMRequest / LLMResponse with usage
-            let req_1 = Arc::new(LoggedLLMRequest {
-                client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
-                params: serde_json::json!({ "temperature": 0.7 }),
-                prompt: serde_json::json!(["Hello world"]),
-            });
-            let resp_1 = Arc::new(LoggedLLMResponse {
-                request_id: ContentId("req_1".to_string()),
-                model: Some("test-model-v1".into()),
-                finish_reason: Some("stop".into()),
-                usage: Some(LLMUsage {
-                    input_tokens: Some(12),
-                    output_tokens: Some(8),
-                    total_tokens: Some(20),
-                }),
-                raw_text_output: Some("Hello back".into()),
-                error_message: None,
-            });
-
-            // Put the request
-            let event_req_1 = Arc::new(TraceEvent {
-                span_id: f_id.clone(),
-                event_id: ContentId("request_1".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "llm_request_1".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LLMRequest(req_1),
-                tags: Default::default(),
-            });
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(event_req_1);
-            }
-
-            // Put the response
-            let event_resp_1 = Arc::new(TraceEvent {
-                span_id: f_id.clone(),
-                event_id: ContentId("response_1".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "llm_response_1".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LLMResponse(resp_1),
-                tags: Default::default(),
-            });
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(event_resp_1);
-            }
-
-            // Insert second LLMRequest / LLMResponse with usage
-            let req_2 = Arc::new(LoggedLLMRequest {
-                client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
-                params: serde_json::json!({ "temperature": 0.9 }),
-                prompt: serde_json::json!(["Next message"]),
-            });
-            let resp_2 = Arc::new(LoggedLLMResponse {
-                request_id: ContentId("req_2".to_string()),
-                model: Some("test-model-v2".into()),
-                finish_reason: Some("length".into()),
-                usage: Some(LLMUsage {
-                    input_tokens: Some(10),
-                    output_tokens: Some(30),
-                    total_tokens: Some(40),
-                }),
-                raw_text_output: Some("Super long response".into()),
-                error_message: None,
-            });
-
-            // Put the request
-            let event_req_2 = Arc::new(TraceEvent {
-                span_id: f_id.clone(),
-                event_id: ContentId("request_2".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "llm_request_2".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LLMRequest(req_2),
-                tags: Default::default(),
-            });
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(event_req_2);
-            }
-
-            // Put the response
-            let event_resp_2 = Arc::new(TraceEvent {
-                span_id: f_id.clone(),
-                event_id: ContentId("response_2".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "llm_response_2".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LLMResponse(resp_2),
-                tags: Default::default(),
-            });
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(event_resp_2);
-            }
-
-            // Insert the function end event
-            let end_event = Arc::new(TraceEvent {
-                span_id: f_id.clone(),
-                event_id: ContentId("end_event".to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "usage_test_end".into(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::FunctionEnd(FunctionEnd {
-                    result: Ok(baml_types::BamlValue::Null),
-                }),
-                tags: Default::default(),
-            });
-            {
-                let mut tracer = BAML_TRACER.lock().unwrap();
-                tracer.put(end_event);
-            }
-
-            // Give some brief time for the tracer to gather events
-            tokio::time::sleep(Duration::from_millis(50)).await;
+            let collector = inject_test_events(&f_id, "test_usage_func", llm_calls).await;
 
             // Now create a FunctionLog and check the usage
             let mut func_log = FunctionLog::new(f_id.clone());
@@ -1287,6 +1275,7 @@ mod tests {
             assert_eq!(usage.output_tokens, Some(8 + 30));
 
             // Verify the calls
+            println!("calls: {:#?}", func_log.calls());
             let calls = func_log.calls();
             assert_eq!(calls.len(), 2);
 
