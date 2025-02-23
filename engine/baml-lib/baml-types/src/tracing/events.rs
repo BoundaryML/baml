@@ -13,6 +13,9 @@ pub struct FunctionId(pub SpanId);
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct ContentId(pub SpanId);
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
+pub struct HttpRequestId(pub SpanId);
+
 pub type TraceTags = serde_json::Map<String, serde_json::Value>;
 
 // THESE ARE NOT CLONEABLE!!
@@ -120,7 +123,7 @@ pub enum LLMClient {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMRequest {
-    pub request_id: ContentId,
+    pub request_id: HttpRequestId,
     pub client: LLMClient,
     pub params: serde_json::Value,
     pub prompt: Prompt,
@@ -129,7 +132,7 @@ pub struct LoggedLLMRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPRequest {
     // since LLM requests could be made in parallel, we need to match the response to the request
-    pub request_id: ContentId,
+    pub request_id: HttpRequestId,
     pub url: String,
     pub method: String,
     pub headers: serde_json::Value,
@@ -139,7 +142,7 @@ pub struct HTTPRequest {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPResponse {
     // since LLM requests could be made in parallel, we need to match the response to the request
-    pub request_id: ContentId,
+    pub request_id: HttpRequestId,
     pub status: u16,
     pub headers: serde_json::Value,
     pub body: serde_json::Value,
@@ -148,7 +151,7 @@ pub struct HTTPResponse {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMResponse {
     /// Since LLM requests could be made in parallel, we need to match the response to the request.
-    pub request_id: ContentId,
+    pub request_id: HttpRequestId,
 
     /// If available, fully qualified model name. None in failure cases or unknown state.
     #[serde(skip_serializing_if = "Option::is_none")]

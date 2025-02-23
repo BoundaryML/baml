@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlValue};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
 
@@ -32,8 +32,8 @@ mod aws;
 mod google;
 mod openai;
 pub(super) mod request;
-mod vertex;
 mod stream_request;
+mod vertex;
 
 // use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
 // use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
@@ -226,8 +226,9 @@ impl WithSingleCallable for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
+        http_request_id: HttpRequestId,
     ) -> LLMResponse {
-        match_llm_provider!(self, single_call, async, ctx, prompt)
+        match_llm_provider!(self, single_call, async, ctx, prompt, http_request_id)
     }
 }
 
@@ -236,8 +237,9 @@ impl WithStreamable for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
+        http_request_id: HttpRequestId,
     ) -> super::traits::StreamResponse {
-        match_llm_provider!(self, stream, async, ctx, prompt)
+        match_llm_provider!(self, stream, async, ctx, prompt, http_request_id)
     }
 }
 

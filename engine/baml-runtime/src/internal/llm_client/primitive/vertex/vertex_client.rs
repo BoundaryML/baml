@@ -24,6 +24,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
+use baml_types::tracing::events::HttpRequestId;
 // use btrace::WithTraceContext;
 use chrono::{Duration, Utc};
 use futures::StreamExt;
@@ -117,6 +118,7 @@ impl WithStreamChat for VertexClient {
         &self,
         ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         //incomplete, streaming response object is returned
         make_stream_request(
@@ -125,6 +127,7 @@ impl WithStreamChat for VertexClient {
             Some(self.properties.model.clone()),
             ResponseType::Vertex,
             ctx,
+            http_request_id,
         )
         .await
     }
@@ -260,7 +263,12 @@ impl RequestBuilder for VertexClient {
 }
 
 impl WithChat for VertexClient {
-    async fn chat(&self, ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
         let model_name = self.properties.model.clone();
         //non-streaming, complete response is returned
         make_parsed_request(
@@ -270,6 +278,7 @@ impl WithChat for VertexClient {
             false,
             ResponseType::Vertex,
             ctx,
+            http_request_id,
         )
         .await
     }

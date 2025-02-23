@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use baml_types::tracing::events::{
     BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse,
-    TraceData, TraceEvent, TraceLevel,
+    HttpRequestId, TraceData, TraceEvent, TraceLevel,
 };
 use baml_types::BamlMap;
 use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
@@ -104,7 +104,7 @@ fn json_body(body: Option<&reqwest::Body>) -> Result<serde_json::Value> {
 async fn log_http_response(
     runtime_context: &RuntimeContext,
     trace_level: TraceLevel,
-    request_id: ContentId,
+    http_request_id: HttpRequestId,
     status: u16,
     headers: serde_json::Value,
     body: serde_json::Value,
@@ -117,7 +117,7 @@ async fn log_http_response(
         callsite: "".to_string(),
         verbosity: trace_level,
         content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
-            request_id,
+            request_id: http_request_id,
             status,
             headers,
             body,
@@ -132,9 +132,10 @@ pub(crate) async fn build_and_log_outbound_request(
     allow_proxy: bool,
     stream: bool,
     runtime_context: &RuntimeContext,
+    http_request_id: HttpRequestId,
 ) -> Result<
     (
-        ContentId,
+        HttpRequestId,
         web_time::SystemTime,
         web_time::Instant,
         reqwest::Request,
@@ -177,7 +178,6 @@ pub(crate) async fn build_and_log_outbound_request(
         }
     };
 
-    let request_id = ContentId(uuid::Uuid::new_v4().to_string());
     BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
         span_id: FunctionId(runtime_context.span_id.to_string()),
         event_id: ContentId(uuid::Uuid::new_v4().to_string()),
@@ -186,7 +186,7 @@ pub(crate) async fn build_and_log_outbound_request(
         callsite: "".to_string(),
         verbosity: TraceLevel::Info,
         content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
-            request_id: request_id.clone(),
+            request_id: http_request_id.clone(),
             url: built_req.url().to_string(),
             method: built_req.method().to_string(),
             headers: json_headers(built_req.headers()),
@@ -195,13 +195,13 @@ pub(crate) async fn build_and_log_outbound_request(
         tags: Default::default(),
     }));
 
-    Ok((request_id, system_now, instant_now, built_req))
+    Ok((http_request_id, system_now, instant_now, built_req))
 }
 
 pub async fn execute_request(
     client: &(impl WithClient + RequestBuilder),
     built_req: reqwest::Request,
-    request_id: ContentId,
+    http_request_id: HttpRequestId,
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     system_now: web_time::SystemTime,
     instant_now: web_time::Instant,
@@ -214,7 +214,7 @@ pub async fn execute_request(
             log_http_response(
                 runtime_context,
                 TraceLevel::Error,
-                request_id.clone(),
+                http_request_id.clone(),
                 e.status()
                     .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
@@ -256,7 +256,7 @@ pub async fn execute_request(
                 log_http_response(
                     runtime_context,
                     TraceLevel::Error,
-                    request_id.clone(),
+                    http_request_id.clone(),
                     0,
                     serde_json::Value::Null,
                     serde_json::Value::String(format!("Could not read response body: {:?}", e)),
@@ -284,7 +284,7 @@ pub async fn execute_request(
         log_http_response(
             runtime_context,
             TraceLevel::Error,
-            request_id.clone(),
+            http_request_id.clone(),
             logged_res.status.as_u16(),
             json_headers(&logged_res.headers),
             serde_json::Value::String(resp_body.clone()),
@@ -313,7 +313,7 @@ pub async fn execute_request(
                 log_http_response(
                     runtime_context,
                     TraceLevel::Error,
-                    request_id.clone(),
+                    http_request_id.clone(),
                     0,
                     serde_json::Value::Null,
                     serde_json::Value::String(format!("Could not read response body: {:?}", e)),
@@ -342,7 +342,7 @@ pub async fn execute_request(
             log_http_response(
                 runtime_context,
                 TraceLevel::Error,
-                request_id.clone(),
+                http_request_id.clone(),
                 logged_response.status.as_u16(),
                 json_headers(&logged_response.headers),
                 serde_json::Value::String(resp_body.clone()),
@@ -367,7 +367,7 @@ pub async fn execute_request(
         log_http_response(
             runtime_context,
             TraceLevel::Info,
-            request_id.clone(),
+            http_request_id.clone(),
             logged_response.status.as_u16(),
             json_headers(&logged_response.headers),
             serde_json::Value::String(resp_body),
@@ -394,9 +394,17 @@ pub async fn make_request(
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     stream: bool,
     runtime_context: &RuntimeContext,
+    http_request_id: HttpRequestId,
 ) -> Result<(LoggedHttpResponse, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let (request_id, system_now, instant_now, built_req) =
-        build_and_log_outbound_request(client, prompt, true, stream, runtime_context).await?;
+    let (request_id, system_now, instant_now, built_req) = build_and_log_outbound_request(
+        client,
+        prompt,
+        true,
+        stream,
+        runtime_context,
+        http_request_id,
+    )
+    .await?;
 
     match execute_request(
         client,
@@ -422,9 +430,10 @@ pub async fn make_parsed_request(
     stream: bool,
     response_type: ResponseType,
     runtime_context: &RuntimeContext,
+    http_request_id: HttpRequestId,
 ) -> LLMResponse {
     let (response, system_now, instant_now) =
-        match make_request(client, prompt, stream, runtime_context).await {
+        match make_request(client, prompt, stream, runtime_context, http_request_id).await {
             Ok((response, system_now, instant_now)) => (response, system_now, instant_now),
             Err(e) => return e,
         };

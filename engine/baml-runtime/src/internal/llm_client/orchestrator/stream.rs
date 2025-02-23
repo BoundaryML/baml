@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_std::stream::StreamExt;
-use baml_types::{BamlValue, BamlValueWithMeta};
+use baml_types::{tracing::events::HttpRequestId, BamlValue, BamlValueWithMeta};
 // use btrace::tracer::tracer::{btrace, WithTraceContext};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
@@ -59,7 +59,8 @@ where
         };
 
         let (system_start, instant_start) = (web_time::SystemTime::now(), web_time::Instant::now());
-        let stream_res = node.stream(ctx, &prompt).await;
+        let http_request_id = HttpRequestId(uuid::Uuid::new_v4().to_string());
+        let stream_res = node.stream(ctx, &prompt, http_request_id).await;
         let final_response = match stream_res {
             Ok(response) => response
                 .map(|stream_part| {
@@ -126,15 +127,22 @@ where
                     Some(parse_fn(&s.content))
                 }
             }
-            LLMResponse::LLMFailure(LLMErrorResponse { code, client, message, .. }) => {
+            LLMResponse::LLMFailure(LLMErrorResponse {
+                code,
+                client,
+                message,
+                ..
+            }) => {
                 match code {
                     // This is some internal BAML error, so handle it like any other error
                     crate::internal::llm_client::ErrorCode::Other(2) => None,
-                    _ => Some(Err(anyhow::anyhow!(crate::errors::ExposedError::ClientHttpError {
-                        client_name: client.clone(),
-                        message: message.clone(),
-                        status_code: code.clone(),
-                    }))),
+                    _ => Some(Err(anyhow::anyhow!(
+                        crate::errors::ExposedError::ClientHttpError {
+                            client_name: client.clone(),
+                            message: message.clone(),
+                            status_code: code.clone(),
+                        }
+                    ))),
                 }
             }
             _ => None,

@@ -634,7 +634,8 @@ impl Drop for Collector {
 mod tests {
     use super::*;
     use baml_types::tracing::events::{
-        ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent, TraceLevel,
+        ContentId, FunctionEnd, FunctionId, FunctionStart, HttpRequestId, TraceData, TraceEvent,
+        TraceLevel,
     };
     use core::time::Duration;
     use serial_test::serial;
@@ -1228,13 +1229,13 @@ mod tests {
             let llm_calls = vec![
                 (
                     LoggedLLMRequest {
-                        request_id: ContentId("req_1".to_string()),
+                        request_id: HttpRequestId("req_1".to_string()),
                         client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
                         params: serde_json::json!({ "temperature": 0.7 }),
                         prompt: serde_json::json!(["Hello world"]),
                     },
                     LoggedLLMResponse {
-                        request_id: ContentId("req_1".to_string()),
+                        request_id: HttpRequestId("req_1".to_string()),
                         model: Some("test-model-v1".into()),
                         finish_reason: Some("stop".into()),
                         usage: Some(LLMUsage {
@@ -1248,13 +1249,13 @@ mod tests {
                 ),
                 (
                     LoggedLLMRequest {
-                        request_id: ContentId("req_2".to_string()),
+                        request_id: HttpRequestId("req_2".to_string()),
                         client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
                         params: serde_json::json!({ "temperature": 0.9 }),
                         prompt: serde_json::json!(["Next message"]),
                     },
                     LoggedLLMResponse {
-                        request_id: ContentId("req_2".to_string()),
+                        request_id: HttpRequestId("req_2".to_string()),
                         model: Some("test-model-v2".into()),
                         finish_reason: Some("length".into()),
                         usage: Some(LLMUsage {

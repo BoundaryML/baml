@@ -8,7 +8,7 @@ use crate::{
     RuntimeContext,
 };
 use anyhow::{Context, Result};
-use baml_types::BamlMap;
+use baml_types::{tracing::events::HttpRequestId, BamlMap};
 use eventsource_stream::Eventsource;
 use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
@@ -32,10 +32,18 @@ pub async fn make_stream_request(
     model_name: Option<String>,
     response_type: ResponseType,
     runtime_context: &RuntimeContext,
+    http_request_id: HttpRequestId,
 ) -> StreamResponse {
     let (request_id, start_time_system, start_time_instant, built_req) =
-        build_and_log_outbound_request(client, prompt, true, true, runtime_context).await?;
-
+        build_and_log_outbound_request(
+            client,
+            prompt,
+            true,
+            true,
+            runtime_context,
+            http_request_id,
+        )
+        .await?;
     let resp = match execute_request(
         client,
         built_req,

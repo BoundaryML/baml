@@ -1,4 +1,5 @@
 use anyhow::Result;
+use baml_types::tracing::events::HttpRequestId;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
 use crate::{internal::llm_client::LLMResponse, RuntimeContext};
@@ -14,13 +15,21 @@ where
     T: super::WithClientProperties,
 {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions> {
-        Ok(ChatOptions::new(self.default_role(), Some(self.allowed_roles())))
+        Ok(ChatOptions::new(
+            self.default_role(),
+            Some(self.allowed_roles()),
+        ))
     }
 }
 
 pub trait WithChat: Sync + Send + WithChatOptions {
     #[allow(async_fn_in_trait)]
-    async fn chat(&self, ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse;
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse;
 }
 
 pub trait WithStreamChat: Sync + Send {
@@ -29,6 +38,7 @@ pub trait WithStreamChat: Sync + Send {
         &self,
         ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse;
 }
 
@@ -39,7 +49,12 @@ where
     T: WithNoChat + Send + Sync + WithChatOptions,
 {
     #[allow(async_fn_in_trait)]
-    async fn chat(&self, _: &RuntimeContext, _: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        _: &RuntimeContext,
+        _: &[RenderedChatMessage],
+        _: HttpRequestId,
+    ) -> LLMResponse {
         LLMResponse::InternalFailure("Chat prompts are not supported by this provider".to_string())
     }
 }
@@ -49,7 +64,12 @@ where
     T: WithNoChat + Send + Sync,
 {
     #[allow(async_fn_in_trait)]
-    async fn stream_chat(&self, _: &RuntimeContext, _: &[RenderedChatMessage]) -> StreamResponse {
+    async fn stream_chat(
+        &self,
+        _: &RuntimeContext,
+        _: &[RenderedChatMessage],
+        _: HttpRequestId,
+    ) -> StreamResponse {
         Err(LLMResponse::InternalFailure(
             "Chat prompts are not supported by this provider".to_string(),
         ))
