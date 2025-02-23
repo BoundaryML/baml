@@ -15,7 +15,10 @@ mod tests {
     use wasmtimer::tokio::*;
 
     // pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
-    use baml_runtime::{tracingv2::storage::storage::BAML_TRACER, InternalRuntimeInterface};
+    use baml_runtime::{
+        tracingv2::storage::storage::{Collector, BAML_TRACER},
+        InternalRuntimeInterface,
+    };
     use std::collections::HashMap;
 
     use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
@@ -35,15 +38,6 @@ mod tests {
     use wasmtimer::tokio::{interval, sleep, timeout};
     use web_sys::console::log_1;
 
-    // #[wasm_bindgen_test]
-    // pub async fn sleep_test() {
-    //     log_1(&JsValue::from_str("Sleeping Rust"));
-    //     sleep(Duration::from_secs(3)).await;
-    //     // let now = Delay::new(Duration::from_secs(3)).await;
-    //     log_1(&JsValue::from_str("Slept Rust"));
-    // }
-
-    /// Sample BAML content for testing.
     fn sample_baml_content() -> String {
         r##"
 
@@ -92,6 +86,8 @@ mod tests {
         .to_string()
     }
 
+    // TODO: add a flag to run_test that's debug, to attach a collector on every test. The collector can be created inside run_test. Make the collector call track_function(..)
+    // Then we can check the baml_tracer events since they'll be kept.
     #[wasm_bindgen_test]
     async fn test_run_tests() {
         wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
@@ -131,17 +127,19 @@ mod tests {
         assert!(diagnostics.errors().is_empty());
 
         let functions = current_runtime.list_functions();
+
         for f in functions.iter() {
             f.run_test(
                 &mut current_runtime,
                 "One".to_string(),
                 (js_sys::Function::new_no_args("")),
                 (js_sys::Function::new_no_args("")),
+                // Some(collector),
             )
             .await;
         }
 
-        let events = BAML_TRACER.blocking_lock().events();
+        let events = BAML_TRACER.lock().unwrap().events();
         log::info!("Events {:#?}", events);
         // TODO: this makes the test hang on Node, but not in browser.
         flush().await;

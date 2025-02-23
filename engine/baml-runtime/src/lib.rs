@@ -238,6 +238,7 @@ impl BamlRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
+        collector: Option<Arc<Collector>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
@@ -248,6 +249,12 @@ impl BamlRuntime {
             .inner
             .get_test_type_builder(function_name, test_name, ctx)
             .unwrap();
+
+        if let Some(span) = span.clone() {
+            if let Some(collector) = collector {
+                collector.track_function(FunctionId(span.clone().span_id.to_string()));
+            }
+        }
 
         let run_to_response = || async {
             let rctx = ctx.create_ctx(type_builder.as_ref(), None)?;
