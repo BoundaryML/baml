@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.75.0",
+  "version": "0.76.2",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -30,7 +30,9 @@
     "./stream.d.ts",
     "./stream.js",
     "./type_builder.d.ts",
-    "./type_builder.js"
+    "./type_builder.js",
+    "./errors.d.ts",
+    "./errors.js"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -78,7 +80,7 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   },
-  "packageManager": "pnpm@9.0.6",
+  "packageManager": "pnpm@9.12.0",
   "bugs": {
     "url": "https://github.com/BoundaryML/baml/issues"
   },

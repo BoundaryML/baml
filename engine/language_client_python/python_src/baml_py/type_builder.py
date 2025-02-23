@@ -6,14 +6,16 @@ from .baml_py import (
     ClassPropertyBuilder as _ClassPropertyBuilder,
     EnumValueBuilder,
     TypeBuilder as _TypeBuilder,
+    BamlRuntime,
 )
 
 
 class TypeBuilder:
-    def __init__(self, classes: typing.Set[str], enums: typing.Set[str]):
+    def __init__(self, classes: typing.Set[str], enums: typing.Set[str], runtime: BamlRuntime):
         self.__classes = classes
         self.__enums = enums
         self.__tb = _TypeBuilder()
+        self.__runtime = runtime
 
     def __str__(self) -> str:
         """
@@ -99,6 +101,9 @@ class TypeBuilder:
             raise ValueError(f"Enum with name {name} already exists.")
         self.__enums.add(name)
         return NewEnumBuilder(self._tb, name)
+
+    def add_baml(self, baml: str):
+        return self._tb.add_baml(baml, self.__runtime)
 
 
 class NewClassBuilder:

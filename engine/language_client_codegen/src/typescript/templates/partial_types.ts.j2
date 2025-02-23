@@ -1,6 +1,7 @@
-import { Image } from "@boundaryml/baml"
-
-import * as types from "./types"
+import type { Image, Audio } from "@boundaryml/baml"
+import type { Checked, Check } from "./types"
+import type { {% for t in types %} {{ t }}{% if !loop.last %}, {% endif %}{% endfor %} } from "./types"
+import type * as types from "./types"
 
 /******************************************************************************
 *
@@ -14,22 +15,24 @@ export interface StreamState<T> {
     state: "Pending" | "Incomplete" | "Complete"
 }
 
-{# Partial classes (used for streaming) -#}
-{% for cls in partial_classes %}
-{%- if let Some(docstring) = cls.docstring %}
-{{docstring}}
-{%- endif %}
-export interface {{cls.name}} {
-    
-    {%- for (name, optional, type, m_docstring) in cls.fields %}
-    {%- if let Some(docstring) = m_docstring %}
-    {{ docstring }}
+export namespace partial_types {
+    {# Partial classes (used for streaming) -#}
+    {% for cls in partial_classes %}
+    {%- if let Some(docstring) = cls.docstring %}
+    {{docstring}}
     {%- endif %}
-    {{name}}{% if optional %}?{% endif%}: {{type}}
-    {%- endfor %}
+    export interface {{cls.name}} {
 
-    {%- if cls.dynamic %}
-    [key: string]: any;
-    {%- endif %}
+        {%- for (name, optional, type, m_docstring) in cls.fields %}
+        {%- if let Some(docstring) = m_docstring %}
+        {{ docstring }}
+        {%- endif %}
+        {{name}}{% if optional %}?{% endif%}: {{type}}
+        {%- endfor %}
+
+        {%- if cls.dynamic %}
+        [key: string]: any;
+        {%- endif %}
+    }
+    {% endfor %}
 }
-{% endfor %}

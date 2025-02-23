@@ -23,7 +23,7 @@ use axum_extra::{
     headers::{self, authorization::Basic, Authorization, Header},
     TypedHeader,
 };
-use baml_types::{BamlValue, GeneratorDefaultClientMode};
+use baml_types::{BamlValue, GeneratorDefaultClientMode, GeneratorOutputType};
 use core::pin::Pin;
 use futures::Stream;
 use jsonish::ResponseBamlValue;
@@ -65,7 +65,7 @@ impl ServeArgs {
         if !self.preview {
             log::warn!(
                 r#"BAML-over-HTTP API is a preview feature.
-                
+
 Please run with --preview, like so:
 
     {} serve --preview
@@ -417,11 +417,11 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     ) -> Response {
         let mut b_options = None;
         if let Some(options_value) = b_args.get("__baml_options__") {
-            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+            match BamlOptions::deserialize(options_value) {
                 Ok(opts) => b_options = Some(opts),
-                Err(_) => {
+                Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: "Failed to parse __baml_options__".to_string(),
+                        message: format!("Failed to parse __baml_options__: {}", e),
                     }
                     .into_response()
                 }
@@ -553,11 +553,11 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     ) -> Response {
         let mut b_options = None;
         if let Some(options_value) = body.get("__baml_options__") {
-            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+            match BamlOptions::deserialize(options_value) {
                 Ok(opts) => b_options = Some(opts),
-                Err(_) => {
+                Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: "Failed to parse __baml_options__".to_string(),
+                        message: format!("Failed to parse __baml_options__: {}", e),
                     }
                     .into_response()
                 }
@@ -623,6 +623,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             true,
             GeneratorDefaultClientMode::Sync,
             Vec::new(),
+            None,
         )
         .map_err(|_| BamlError::InternalError {
             message: "Failed to make placeholder generator".to_string(),
@@ -716,4 +717,67 @@ fn parse_args(
     }
 
     Ok(args)
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_types::BamlMap;
+    use internal_llm_client::{ClientProvider, OpenAIClientProviderVariant};
+
+    use crate::client_registry::ClientProperty;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_baml_options() {
+        let baml_options: BamlOptions = serde_json::from_str(
+            r#"
+        {
+            "client_registry": {
+                "clients": [
+                    {
+                        "name": "testing",
+                        "provider": "openai",
+                        "options": {
+                            "model": "gpt-4o",
+                            "api_key": "[redacted]",
+                            "base_url": "[redacted]"
+                        }
+                    }
+                ],
+                "primary": "testing"
+            }
+        }"#,
+        )
+        .unwrap();
+        assert!(
+            baml_options.client_registry.is_some(),
+            "client_registry should be Some"
+        );
+        let client_registry = baml_options.client_registry.unwrap();
+        
+        
+        let provider = ClientProvider::OpenAI(OpenAIClientProviderVariant::Base);
+        let retry_policy = None;
+        let options = BamlMap::from_iter(vec![(
+            "model".to_string(),
+            BamlValue::String("gpt-4o".to_string()),
+        ), (
+            "api_key".to_string(),
+            BamlValue::String("[redacted]".to_string()),
+        ), (
+            "base_url".to_string(),
+            BamlValue::String("[redacted]".to_string()),
+        ),]);
+        let client_property =
+            ClientProperty::new("testing".into(), provider, retry_policy, options);
+
+        let expected_client_registry = {
+            let mut client_registry = ClientRegistry::new();
+            client_registry.add_client(client_property);
+            client_registry.set_primary("testing".to_string());
+            client_registry
+        };
+        assert_eq!(client_registry, expected_client_registry);
+    }
 }

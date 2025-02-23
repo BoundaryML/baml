@@ -14,6 +14,7 @@ mod parse_type_expression_block;
 mod parse_types;
 mod parse_value_expression_block;
 pub use parse_schema::parse_schema;
+pub use parse_type_builder_block::parse_type_builder_contents_from_str;
 
 // The derive is placed here because it generates the `Rule` enum which is used in all parsing functions.
 // It is more convenient if this enum is directly available here.

@@ -164,3 +164,4 @@ web_modules/
 yarn-debug.log*
 yarn-error.log*
 yarn.lock
+artifacts

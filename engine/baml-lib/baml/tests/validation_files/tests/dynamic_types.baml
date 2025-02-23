@@ -11,6 +11,12 @@ class Education {
   year int
 }
 
+enum Job {
+  SoftwareEngineer
+  DataScientist
+  @@dynamic
+}
+
 // This function returns the dynamic class defined above.
 function ExtractResume(from_text: string) -> Resume { 
   client "openai/gpt-4o-mini"
@@ -28,11 +34,22 @@ test ReturnDynamicClassTest {
       start_date string
       end_date string
     }
+
+    enum Level {
+      Junior
+      Mid
+      Senior
+    }
  
     // This `dynamic` block is used to inject new properties into the
     // `@@dynamic` part of the Resume class.
-    dynamic Resume {
+    dynamic class Resume {
       experience Experience[]
+      level Level
+    }
+
+    dynamic enum Job {
+      ProductManager
     }
   }
   args {

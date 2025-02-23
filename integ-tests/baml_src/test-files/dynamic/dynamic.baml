@@ -26,7 +26,7 @@ class DynamicClassTwo {
 function DynamicFunc(input: DynamicClassOne) -> DynamicClassTwo {
   client GPT35
   prompt #"
-    Please extract the schema from 
+    Please extract the schema from
     {{ input }}
 
     {{ ctx.output_format }}
@@ -69,7 +69,7 @@ function DynamicListInputOutput(input: DynInputOutput[]) -> DynInputOutput[] {
 class DynamicOutput {
   @@dynamic
 }
- 
+
 function MyFunc(input: string) -> DynamicOutput {
   client GPT35
   prompt #"

@@ -33,6 +33,7 @@ mod google;
 mod openai;
 pub(super) mod request;
 mod vertex;
+mod stream_request;
 
 // use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
 // use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;

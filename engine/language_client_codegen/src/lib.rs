@@ -33,6 +33,9 @@ pub struct GeneratorArgs {
     // Default call mode for functions
     default_client_mode: GeneratorDefaultClientMode,
     on_generate: Vec<String>,
+
+    // The type of client to generate
+    client_type: Option<GeneratorOutputType>,
 }
 
 fn relative_path_to_baml_src(path: &Path, baml_src: &Path) -> Result<PathBuf> {
@@ -54,6 +57,7 @@ impl GeneratorArgs {
         no_version_check: bool,
         default_client_mode: GeneratorDefaultClientMode,
         on_generate: Vec<String>,
+        client_type: Option<GeneratorOutputType>,
     ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
         let input_file_map: BTreeMap<PathBuf, String> = input_files
@@ -70,6 +74,7 @@ impl GeneratorArgs {
             no_version_check,
             default_client_mode,
             on_generate,
+            client_type,
         })
     }
 
@@ -185,6 +190,7 @@ impl GenerateClient for GeneratorOutputType {
             GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
             GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
             GeneratorOutputType::Typescript => typescript::generate(ir, gen),
+            GeneratorOutputType::TypescriptReact => typescript::generate(ir, gen),
         }?;
 
         #[cfg(not(target_arch = "wasm32"))]

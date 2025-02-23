@@ -2,7 +2,7 @@
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ pip install baml
+#  $ pip install baml-py
 #
 ###############################################################################
 
@@ -2525,6 +2525,29 @@ class BamlAsyncClient:
       )
       return cast(types.RecursiveAliasDependency, raw.cast_to(types, types, partial_types, False))
     
+    async def TellStory(
+        self,
+        story: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "TellStory",
+        {
+          "story": story,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(str, raw.cast_to(types, types, partial_types, False))
+    
     async def TestAnthropic(
         self,
         input: str,
@@ -3874,6 +3897,29 @@ class BamlAsyncClient:
         collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
+    
+    async def TestUniverseQuestion(
+        self,
+        question: types.UniverseQuestionInput,
+        baml_options: BamlCallOptions = {},
+    ) -> types.UniverseQuestion:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "TestUniverseQuestion",
+        {
+          "question": question,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(types.UniverseQuestion, raw.cast_to(types, types, partial_types, False))
     
     async def TestVertex(
         self,
@@ -7210,6 +7256,36 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def TellStory(
+        self,
+        story: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "TellStory",
+        {
+          "story": story,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
     def TestAnthropic(
         self,
         input: str,
@@ -8932,6 +9008,36 @@ class BamlStreamClient:
         raw,
         lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestUniverseQuestion(
+        self,
+        question: types.UniverseQuestionInput,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.UniverseQuestion, types.UniverseQuestion]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "TestUniverseQuestion",
+        {
+          "question": question,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlStream[partial_types.UniverseQuestion, types.UniverseQuestion](
+        raw,
+        lambda x: cast(partial_types.UniverseQuestion, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.UniverseQuestion, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     

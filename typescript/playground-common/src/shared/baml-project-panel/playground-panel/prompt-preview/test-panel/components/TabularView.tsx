@@ -88,7 +88,8 @@ const ResponseContent = ({
         <>
           <ParsedResponseRenderer response={getTestStateResponse(state)} />
 
-          {getExplanation(state) && (
+          {/* Don't show the explanation for now. */}
+          {false && getExplanation(state) && (
             <div className='flex flex-col gap-2 mt-2 text-xs text-muted-foreground/80'>
               <div>BAML parser fixed the following issues:</div>
               <pre>{getExplanation(state)}</pre>
@@ -178,6 +179,18 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
             Model
           </Label>
         </div>
+        <div className='flex items-center space-x-2'>
+          <input
+            type='checkbox'
+            id='showDuration'
+            checked={config.showDuration}
+            onChange={() => toggleConfig('showDuration')}
+            className='w-4 h-4 rounded opacity-80 text-primary focus:ring-primary'
+          />
+          <Label htmlFor='showDuration' className='text-muted-foreground/80'>
+            Duration
+          </Label>
+        </div>
       </div>
 
       <Table className='w-full table-fixed'>
@@ -199,6 +212,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
             </TableHead>
             <TableHead className='w-[10%] px-1 py-1'>Status</TableHead>
             {config.showModel && <TableHead className='w-[10%] py-1'>Model</TableHead>}
+            {config.showDuration && <TableHead className='w-[10%] py-1'>Duration</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -309,6 +323,13 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                       <span className='text-xs text-muted-foreground'>
                         {test.response.response.llm_response()?.model}
                       </span>
+                    )}
+                  </TableCell>
+                )}
+                {config.showDuration && (
+                  <TableCell className='px-1 py-1 whitespace-normal'>
+                    {test.response.status === 'done' && (
+                      <span className='text-xs text-muted-foreground'>{test.response.latency_ms.toFixed(0)} ms</span>
                     )}
                   </TableCell>
                 )}

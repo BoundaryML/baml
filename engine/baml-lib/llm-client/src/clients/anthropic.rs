@@ -1,6 +1,9 @@
 use std::collections::HashSet;
 
-use crate::{AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection};
+use crate::{
+    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
+    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+};
 use anyhow::Result;
 
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
@@ -8,7 +11,7 @@ use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedAnthropic<Meta> {
     base_url: UnresolvedUrl,
     api_key: StringOr,
@@ -58,23 +61,28 @@ pub struct ResolvedAnthropic {
 impl ResolvedAnthropic {
     pub fn allowed_roles(&self) -> Vec<String> {
         self.role_selection.allowed_or_else(|| {
-            vec!["system".to_string(), "user".to_string(), "assistant".to_string()]
+            vec![
+                "system".to_string(),
+                "user".to_string(),
+                "assistant".to_string(),
+            ]
         })
     }
 
     pub fn default_role(&self) -> String {
-        self.role_selection
-            .default_or_else(|| {
-                let allowed_roles = self.allowed_roles();
-                if allowed_roles.contains(&"user".to_string()) {
-                    "user".to_string()
-                } else {
-                    allowed_roles.first().cloned().unwrap_or_else(|| "user".to_string())
-                }
-            })
+        self.role_selection.default_or_else(|| {
+            let allowed_roles = self.allowed_roles();
+            if allowed_roles.contains(&"user".to_string()) {
+                "user".to_string()
+            } else {
+                allowed_roles
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "user".to_string())
+            }
+        })
     }
 }
-
 
 impl<Meta: Clone> UnresolvedAnthropic<Meta> {
     pub fn required_env_vars(&self) -> HashSet<String> {

@@ -175,8 +175,10 @@ client<llm> AwsBedrock {
   provider aws-bedrock
   options {
     inference_configuration {
-      max_tokens 100
+      max_tokens 2048
     }
+    // max_tokens 100000
+    // max_completion_tokens 100000
     // model "anthropic.claude-3-5-sonnet-20240620-v1:0"
     // model_id "anthropic.claude-3-haiku-20240307-v1:0"
     model "meta.llama3-8b-instruct-v1:0"

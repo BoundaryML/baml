@@ -6,6 +6,7 @@
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "keywords": [],
+  "packageManager": "pnpm@9.12.0",
   "author": "",
   "license": "ISC",
   "scripts": {

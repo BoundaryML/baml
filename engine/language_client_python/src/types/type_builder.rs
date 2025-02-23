@@ -7,6 +7,8 @@ use pyo3::{
     Bound, PyResult,
 };
 
+use crate::errors::BamlError;
+
 crate::lang_wrapper!(TypeBuilder, type_builder::TypeBuilder);
 crate::lang_wrapper!(EnumBuilder, type_builder::EnumBuilder, sync_thread_safe, name: String);
 crate::lang_wrapper!(ClassBuilder, type_builder::ClassBuilder, sync_thread_safe, name: String);
@@ -125,6 +127,16 @@ impl TypeBuilder {
             rs_types.push(item.borrow().inner.lock().unwrap().clone());
         }
         Ok(baml_types::FieldType::union(rs_types).into())
+    }
+
+    pub fn add_baml(
+        &self,
+        baml: &str,
+        rt: &crate::runtime::BamlRuntime,
+    ) -> Result<(), pyo3::PyErr> {
+        self.inner
+            .add_baml(baml, &rt.inner)
+            .map_err(BamlError::from_anyhow)
     }
 }
 

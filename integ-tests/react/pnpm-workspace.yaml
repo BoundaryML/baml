@@ -1,0 +1,10 @@
+packages:
+  - '../../engine/language_client_typescript'
+  - '../../engine/language_client_typescript/npm/darwin-arm64'
+  - '../../engine/language_client_typescript/npm/darwin-x64'
+  - '../../engine/language_client_typescript/npm/linux-arm64-gmu'
+  - '../../engine/language_client_typescript/npm/linux-arm64-musl'
+  - '../../engine/language_client_typescript/npm/linux-x64-gnu'
+  - '../../engine/language_client_typescript/npm/linux-x64-musl'
+  - '../../engine/language_client_typescript/npm/win32-x64-msvc'
+  - '../../typescript/nextjs-plugin'

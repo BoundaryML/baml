@@ -2,6 +2,7 @@
   "name": "@gloo-ai/baml-language-server",
   "description": "Baml Language Server",
   "displayName": "Baml Language Server",
+  "packageManager": "pnpm@9.12.0",
   "version": "0.1.0",
   "author": "Gloo",
   "license": "Apache-2.0",

@@ -60,7 +60,8 @@
         toolchain = with fenix.packages.${system}; combine [
           minimal.cargo
           minimal.rustc
-          latest.rust-std
+          minimal.rust-std
+          targets.wasm32-unknown-unknown.latest.rust-std
         ];
 
         version = (builtins.fromTOML (builtins.readFile ./engine/Cargo.toml)).workspace.package.version;
@@ -75,6 +76,28 @@
           inherit (fenix.packages.${system}.minimal) cargo rustc;
           inherit (fenix.packages.${system}.latest) rust-std;
         };
+
+        buildInputs = (with pkgs; [
+          git
+          openssl
+          pkg-config
+          lld_19
+          pythonEnv
+          ruby
+          maturin
+          nodePackages.pnpm
+          nodePackages.nodejs
+          toolchain
+          uv
+          wasm-pack
+        ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
+        nativeBuildInputs = [
+          pkgs.openssl
+          pkgs.pkg-config
+          pkgs.ruby
+          pythonEnv
+          pkgs.maturin
+        ];
 
       in
         {
@@ -109,24 +132,7 @@
               runHook postCheck
             '';
 
-            buildInputs = (with pkgs; [
-              openssl
-              pkg-config
-              lld_19
-              pythonEnv
-              ruby
-              maturin
-              nodePackages.pnpm
-              nodePackages.nodejs
-              uv
-            ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
-            nativeBuildInputs = [
-              pkgs.openssl
-              pkgs.pkg-config
-              pkgs.ruby
-              pythonEnv
-              pkgs.maturin
-            ];
+            inherit buildInputs;
             PYTHON_SYS_EXECUTABLE="${pythonEnv}/bin/python3";
             LD_LIBRARY_PATH="${pythonEnv}/lib";
             PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
@@ -134,7 +140,7 @@
 
           };
           devShell = pkgs.mkShell rec {
-            buildInputs = with pkgs; [toolchain uv];
+            inherit buildInputs;
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
           };

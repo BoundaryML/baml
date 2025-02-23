@@ -1,9 +1,8 @@
-import { b } from '../test-setup'
+import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts'
 import { ClientRegistry } from '@boundaryml/baml'
-import { STSClient, AssumeRoleCommand, GetCallerIdentityCommand } from '@aws-sdk/client-sts'
+import { b } from '../test-setup'
 
 describe('AWS Provider', () => {
-
   it('should support AWS', async () => {
     const res = await b.TestAws('Dr. Pepper')
     expect(res.length).toBeGreaterThan(0)
@@ -33,7 +32,9 @@ describe('AWS Provider', () => {
     await expect(async () => {
       await b.TestAwsInvalidAccessKey('Write a nice short story about Dr. Pepper', { clientRegistry: cr })
     }).rejects.toMatchObject({
-      code: 'GenericFailure',
+      name: 'BamlClientHttpError',
+      status_code: 403,
+      client_name: 'InvalidAwsClient',
     })
   })
 
@@ -56,10 +57,8 @@ describe('AWS Provider', () => {
   })
 
   describe('Dynamic Client Registry', () => {
-
     describe('Credential Resolution', () => {
-
-      test('should handle session credentials correctly', async () => {
+      it('should handle session credentials correctly', async () => {
         const sts = new STSClient({
           region: 'us-east-1',
           credentials: {
@@ -93,7 +92,7 @@ describe('AWS Provider', () => {
         expect(result.length).toBeGreaterThan(0)
       })
 
-      test('should require region in all environments', async () => {
+      it('should require region in all environments', async () => {
         // Clear all region-related environment variables
         const cr = new ClientRegistry()
         cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
@@ -103,14 +102,21 @@ describe('AWS Provider', () => {
         })
         cr.setPrimary('DynamicAWSClient')
 
-        await expect(async () => {
+        try {
           await b.TestAws('Dr. Pepper', { clientRegistry: cr })
-        }).rejects.toMatchObject({
-          code: 'GenericFailure',
-        })
+        } catch (e) {
+          expect(e).toMatchObject({
+            name: 'BamlClientHttpError',
+            status_code: 403,
+            client_name: 'DynamicAWSClient',
+            message: expect.stringContaining('BamlError: BamlClientError: BamlClientHttpError:'),
+          })
+          return
+        }
+        throw new Error('Expected error was not thrown')
       })
 
-      test('should throw error when region is empty or AWS_REGION is unset', async () => {
+      it('should throw error when region is empty or AWS_REGION is unset', async () => {
         // Clear all region-related environment variables
 
         const crEmptyRegion = new ClientRegistry()
@@ -139,7 +145,10 @@ describe('AWS Provider', () => {
         await expect(async () => {
           await b.TestAws('Dr. Pepper', { clientRegistry: crNoEnvRegion })
         }).rejects.toMatchObject({
-          code: 'GenericFailure',
+          name: 'BamlClientHttpError',
+          status_code: 403,
+          client_name: 'DynamicAWSClient',
+          message: expect.stringContaining('BamlError: BamlClientError: BamlClientHttpError:'),
         })
       })
     })
@@ -159,7 +168,7 @@ describe('AWS Provider', () => {
       expect(result.length).toBeGreaterThan(0)
     })
 
-    test('should support AWS credentials configuration', async () => {
+    it('should support AWS credentials configuration', async () => {
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
         model_id: 'meta.llama3-8b-instruct-v1:0',
@@ -172,7 +181,10 @@ describe('AWS Provider', () => {
       await expect(async () => {
         await b.TestAws('Dr. Pepper', { clientRegistry: cr })
       }).rejects.toMatchObject({
-        code: 'GenericFailure',
+        name: 'BamlClientHttpError',
+        status_code: 403,
+        client_name: 'DynamicAWSClient',
+        message: expect.stringContaining('BamlError: BamlClientError: BamlClientHttpError:'),
       })
     })
 
@@ -224,7 +236,6 @@ describe('AWS Provider', () => {
     })
 
     it('should handle invalid configuration gracefully', async () => {
-
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
         model_id: 'meta.llama3-8b-instruct-v1:0',
@@ -243,7 +254,6 @@ describe('AWS Provider', () => {
     })
 
     it('should handle non-existent model gracefully', async () => {
-
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
         model_id: 'non-existent-model-123',
@@ -257,12 +267,14 @@ describe('AWS Provider', () => {
       await expect(async () => {
         await b.TestAws('Dr. Pepper', { clientRegistry: cr })
       }).rejects.toMatchObject({
-        code: 'GenericFailure',
-        message: expect.stringContaining('model'),
+        name: 'BamlClientHttpError',
+        status_code: 401,
+        client_name: 'DynamicAWSClient',
+        message: expect.stringContaining('BamlError: BamlClientError: BamlClientHttpError:'),
       })
     })
 
-    test('should throw error when using temporary credentials without session token', async () => {
+    it('should throw error when using temporary credentials without session token', async () => {
       // Clear all AWS-related environment variables
 
       const sts = new STSClient({
@@ -297,15 +309,18 @@ describe('AWS Provider', () => {
       await expect(async () => {
         await b.TestAwsInvalidSessionToken('Dr. Pepper', { clientRegistry: cr })
       }).rejects.toMatchObject({
-        code: 'GenericFailure',
+        name: 'BamlClientHttpError',
+        status_code: 403,
+        client_name: 'DynamicAWSClient',
+        message: expect.stringContaining('BamlError: BamlClientError: BamlClientHttpError:'),
       })
     })
 
-    test('should throw error when region is not provided', async () => {
+    it('should throw error when region is not provided', async () => {
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
         model_id: 'meta.llama3-8b-instruct-v1:0',
-        region: null
+        region: null,
       })
       cr.setPrimary('DynamicAWSClient')
 
@@ -316,7 +331,7 @@ describe('AWS Provider', () => {
       })
     })
 
-    test('should throw error when using invalid profile', async () => {
+    it('should throw error when using invalid profile', async () => {
       // Clear any existing profile
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
@@ -336,49 +351,48 @@ describe('AWS Provider', () => {
     })
 
     it('should support both AWS_REGION and AWS_DEFAULT_REGION environment variables', async () => {
+      const crWithAwsRegion = new ClientRegistry()
+      crWithAwsRegion.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
+        model_id: 'meta.llama3-8b-instruct-v1:0',
+        // Don't specify region, let it use AWS_REGION
+        inference_configuration: {
+          max_tokens: 100,
+        },
+      })
+      crWithAwsRegion.setPrimary('DynamicAWSClient')
 
-        const crWithAwsRegion = new ClientRegistry()
-        crWithAwsRegion.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
-          model_id: 'meta.llama3-8b-instruct-v1:0',
-          // Don't specify region, let it use AWS_REGION
-          inference_configuration: {
-            max_tokens: 100,
-          },
-        })
-        crWithAwsRegion.setPrimary('DynamicAWSClient')
+      const resultWithAwsRegion = await b.TestAws('Dr. Pepper', { clientRegistry: crWithAwsRegion })
+      expect(resultWithAwsRegion.length).toBeGreaterThan(0)
 
-        const resultWithAwsRegion = await b.TestAws('Dr. Pepper', { clientRegistry: crWithAwsRegion })
-        expect(resultWithAwsRegion.length).toBeGreaterThan(0)
+      const crWithDefaultRegion = new ClientRegistry()
+      crWithDefaultRegion.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
+        model_id: 'meta.llama3-8b-instruct-v1:0',
+        // Don't specify region, let it use AWS_DEFAULT_REGION
+        inference_configuration: {
+          max_tokens: 100,
+        },
+      })
+      crWithDefaultRegion.setPrimary('DynamicAWSClient')
 
-        const crWithDefaultRegion = new ClientRegistry()
-        crWithDefaultRegion.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
-          model_id: 'meta.llama3-8b-instruct-v1:0',
-          // Don't specify region, let it use AWS_DEFAULT_REGION
-          inference_configuration: {
-            max_tokens: 100,
-          },
-        })
-        crWithDefaultRegion.setPrimary('DynamicAWSClient')
+      const resultWithDefaultRegion = await b.TestAws('Dr. Pepper', { clientRegistry: crWithDefaultRegion })
+      expect(resultWithDefaultRegion.length).toBeGreaterThan(0)
 
-        const resultWithDefaultRegion = await b.TestAws('Dr. Pepper', { clientRegistry: crWithDefaultRegion })
-        expect(resultWithDefaultRegion.length).toBeGreaterThan(0)
+      // Test that AWS_REGION takes precedence over AWS_DEFAULT_REGION
+      process.env.AWS_REGION = 'us-east-1'
+      process.env.AWS_DEFAULT_REGION = 'us-west-2' // Different region
 
-        // Test that AWS_REGION takes precedence over AWS_DEFAULT_REGION
-        process.env.AWS_REGION = 'us-east-1'
-        process.env.AWS_DEFAULT_REGION = 'us-west-2' // Different region
+      const crWithBothRegions = new ClientRegistry()
+      crWithBothRegions.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
+        model_id: 'meta.llama3-8b-instruct-v1:0',
+        // Don't specify region, should use AWS_REGION over AWS_DEFAULT_REGION
+        inference_configuration: {
+          max_tokens: 100,
+        },
+      })
+      crWithBothRegions.setPrimary('DynamicAWSClient')
 
-        const crWithBothRegions = new ClientRegistry()
-        crWithBothRegions.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
-          model_id: 'meta.llama3-8b-instruct-v1:0',
-          // Don't specify region, should use AWS_REGION over AWS_DEFAULT_REGION
-          inference_configuration: {
-            max_tokens: 100,
-          },
-        })
-        crWithBothRegions.setPrimary('DynamicAWSClient')
-
-        const resultWithBothRegions = await b.TestAws('Dr. Pepper', { clientRegistry: crWithBothRegions })
-        expect(resultWithBothRegions.length).toBeGreaterThan(0)
+      const resultWithBothRegions = await b.TestAws('Dr. Pepper', { clientRegistry: crWithBothRegions })
+      expect(resultWithBothRegions.length).toBeGreaterThan(0)
     })
   })
 })

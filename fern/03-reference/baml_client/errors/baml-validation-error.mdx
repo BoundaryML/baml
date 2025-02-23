@@ -1,0 +1,66 @@
+---
+title: BamlValidationError
+description: Technical reference for the BamlValidationError class
+---
+
+The `BamlValidationError` class represents an error that occurs when BAML fails to parse or validate LLM output.
+
+## Type Definition
+
+<CodeBlocks>
+```typescript Type Definition
+class BamlValidationError extends Error {
+  type: 'BamlValidationError'
+  message: string
+  prompt: string
+  raw_output: string
+}
+```
+</CodeBlocks>
+
+## Properties
+
+<ParamField
+  path="type"
+  type="'BamlValidationError'"
+>
+  Literal type identifier for the error class.
+</ParamField>
+
+<ParamField
+  path="message"
+  type="string"
+>
+  Error message describing the specific validation failure.
+</ParamField>
+
+<ParamField
+  path="prompt"
+  type="string"
+>
+  The original prompt sent to the LLM.
+</ParamField>
+
+<ParamField
+  path="raw_output"
+  type="string"
+>
+  The raw output from the LLM that failed validation.
+</ParamField>
+
+## Type Guards
+
+The error can be identified using TypeScript's `instanceof` operator:
+
+<CodeBlocks>
+```typescript Type Check
+if (error instanceof BamlValidationError) {
+  // Handle validation error
+}
+```
+</CodeBlocks>
+
+## Related Errors
+
+- [BamlClientFinishReasonError](./baml-client-finish-reason-error)
+- [BamlClientError](./baml-client-error)

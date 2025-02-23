@@ -19,6 +19,7 @@ pub mod vertex;
 /// `Meta` is a generic carrying span information, so that if it comes from a .baml file,
 /// we can trace it back to the original location in said .baml file. In dynamic clients,
 /// though, we can't do that, so we just pass in `()`.
+#[derive(Clone)]
 pub enum UnresolvedClientProperty<Meta> {
     OpenAI(openai::UnresolvedOpenAI<Meta>),
     Anthropic(anthropic::UnresolvedAnthropic<Meta>),

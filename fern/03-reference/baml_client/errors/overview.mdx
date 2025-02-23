@@ -1,0 +1,82 @@
+---
+title: BAML Error Types
+description: Technical reference for BAML error handling classes
+---
+
+BAML provides a set of error classes for handling different error scenarios when working with LLMs. Each error type is designed to handle specific failure cases in the BAML runtime.
+
+## Error Class Hierarchy
+
+All BAML errors extend the base JavaScript `Error` class and include a literal `type` field for type identification.
+
+<CodeBlocks>
+```typescript Type Hierarchy
+// Base JavaScript Error class
+class Error {
+  message: string
+  name: string
+  stack?: string
+}
+
+// BAML-specific error classes
+class BamlValidationError extends Error {
+  type: 'BamlValidationError'
+  message: string
+  prompt: string
+  raw_output: string
+}
+
+class BamlClientFinishReasonError extends Error {
+  type: 'BamlClientFinishReasonError'
+  message: string
+  prompt: string
+  raw_output: string
+}
+```
+</CodeBlocks>
+
+## Error Types
+
+### [BamlValidationError](./baml-validation-error)
+Thrown when BAML fails to parse or validate LLM output. Contains the original prompt and raw output for debugging.
+
+### [BamlClientFinishReasonError](./baml-client-finish-reason-error)
+Thrown when an LLM terminates with a disallowed finish reason. Includes the original prompt and partial output received before termination.
+
+## Type Guards
+
+All BAML errors can be identified using TypeScript's `instanceof` operator:
+
+<CodeBlocks>
+```typescript Type Checking
+try {
+  // BAML operation
+} catch (error) {
+  if (error instanceof BamlValidationError) {
+    // Handle validation error
+  } else if (error instanceof BamlClientFinishReasonError) {
+    // Handle finish reason error
+  }
+}
+```
+</CodeBlocks>
+
+## Common Properties
+
+All BAML error classes include:
+
+<ParamField
+  path="type"
+  type="string"
+>
+  Literal type identifier specific to each error class.
+</ParamField>
+
+<ParamField
+  path="message"
+  type="string"
+>
+  Human-readable error message describing the failure.
+</ParamField>
+
+For detailed information about each error type, refer to their individual reference pages.

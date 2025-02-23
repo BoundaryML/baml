@@ -7,7 +7,7 @@ use crate::ClientSpec;
 
 use super::helpers::{Error, PropertyHandler};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedRoundRobin<Meta> {
     pub strategy: Vec<(either::Either<StringOr, ClientSpec>, Meta)>,
     start_index: Option<i32>,

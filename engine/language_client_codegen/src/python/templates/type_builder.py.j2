@@ -1,6 +1,8 @@
 import typing
 from baml_py.baml_py import FieldType, EnumValueBuilder, EnumBuilder, ClassBuilder
 from baml_py.type_builder import TypeBuilder as _TypeBuilder, ClassPropertyBuilder
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
+
 
 class TypeBuilder(_TypeBuilder):
     def __init__(self):
@@ -8,7 +10,7 @@ class TypeBuilder(_TypeBuilder):
           [{% for cls in classes %}"{{cls.name}}",{% endfor %}]
         ), enums=set(
           [{% for enum in enums %}"{{enum.name}}",{% endfor %}]
-        ))
+        ), runtime=DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
 
 {% for cls in classes %}{% if cls.dynamic %}
     {# BUG: this resets the class properties list on each access #}

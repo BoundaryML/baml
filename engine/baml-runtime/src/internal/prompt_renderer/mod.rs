@@ -18,6 +18,7 @@ use crate::RuntimeContext;
 
 use super::llm_client::parsed_value_to_response;
 
+#[derive(Debug)]
 pub struct PromptRenderer {
     function_name: String,
     client_spec: ClientSpec,
@@ -55,7 +56,7 @@ impl PromptRenderer {
         &self,
         ir: &IntermediateRepr,
         raw_string: &str,
-        allow_partials: bool
+        allow_partials: bool,
     ) -> Result<ResponseBamlValue> {
         let parsed = jsonish::from_str(
             &self.output_defs,

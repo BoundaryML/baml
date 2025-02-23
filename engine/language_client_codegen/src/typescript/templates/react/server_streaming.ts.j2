@@ -1,0 +1,40 @@
+'use server'
+
+import { b } from '../index';
+import type { Check, Checked  } from "../types";
+import type { Image, Audio } from "@boundaryml/baml";
+
+import type { {% for t in types %} {{ t }}{% if !loop.last %}, {% endif %}{% endfor %} } from "../types"
+
+import type * as types from "../types"
+
+/**
+ * Streaming BAML server actions that return ReadableStreams.
+ */
+{%- for func in funcs %}
+
+/**
+ * Executes the streaming variant of the "{{ func.name }}" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+{%- for (name, optional, type) in func.args %}
+ * @param { {{ type }} } {{ name }}{% if optional %} (optional){% endif %} - Input parameter.
+{%- endfor %}
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const {{ func.name }} = async (
+  {%- for (name, optional, type) in func.args %}
+  {{ name }}{% if optional %}?{% endif %}: {{ type }},
+  {%- endfor %}
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.{{ func.name }}(
+    {%- for (name, _, _) in func.args %}
+    {{ name }},
+    {%- endfor %}
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+{%- endfor %}

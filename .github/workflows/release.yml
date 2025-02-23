@@ -96,7 +96,7 @@ jobs:
       - name: setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9.0.6
+          version: 9.12.0
           package_json_file: engine/language_client_typescript/package.json
           run_install: false
 

@@ -30,6 +30,7 @@ pub(crate) struct TypescriptTypes<'ir> {
 #[derive(askama::Template)]
 #[template(path = "partial_types.ts.j2", escape = "none")]
 pub(crate) struct TypescriptStreamTypes<'ir> {
+    types: Vec<String>,
     partial_classes: Vec<PartialTypescriptClass<'ir>>,
 }
 
@@ -65,23 +66,28 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptTyp
     fn try_from(
         (ir, _): (&'ir IntermediateRepr, &'ir GeneratorArgs),
     ) -> Result<TypescriptTypes<'ir>> {
+        let mut enums: Vec<TypescriptEnum> = ir
+            .walk_enums()
+            .map(|e| Into::<TypescriptEnum>::into(&e))
+            .collect::<Vec<_>>();
+        enums.sort_by(|a, b| a.name.cmp(b.name));
+
+        let mut classes: Vec<TypescriptClass> = ir
+            .walk_classes()
+            .map(|e| Into::<TypescriptClass>::into(&e))
+            .collect::<Vec<_>>();
+        classes.sort_by(|a, b| a.name.cmp(&b.name));
+
+        let mut structural_recursive_alias_cycles: Vec<TypescriptTypeAlias> = ir
+            .walk_alias_cycles()
+            .map(TypescriptTypeAlias::from)
+            .collect::<Vec<_>>();
+        structural_recursive_alias_cycles.sort_by(|a, b| a.name.cmp(&b.name));
+
         Ok(TypescriptTypes {
-            enums: ir
-                .walk_enums()
-                .map(|e| Into::<TypescriptEnum>::into(&e))
-                .collect::<Vec<_>>(),
-            classes: ir
-                .walk_classes()
-                .map(|e| Into::<TypescriptClass>::into(&e))
-                .collect::<Vec<_>>(),
-            structural_recursive_alias_cycles: {
-                let mut cycles = ir
-                .walk_alias_cycles()
-                .map(TypescriptTypeAlias::from)
-                .collect::<Vec<_>>();
-                cycles.sort_by_key(|alias| alias.name.clone());
-                cycles
-            },
+            enums,
+            classes,
+            structural_recursive_alias_cycles,
         })
     }
 }
@@ -92,11 +98,23 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypescriptStr
     fn try_from(
         (ir, _): (&'ir IntermediateRepr, &'ir GeneratorArgs),
     ) -> Result<TypescriptStreamTypes<'ir>> {
+        let mut types: Vec<String> = ir
+            .walk_classes()
+            .map(|c| c.name().to_string())
+            .chain(ir.walk_enums().map(|e| e.name().to_string()))
+            .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
+            .collect();
+        types.sort();
+
+        let mut partial_classes: Vec<PartialTypescriptClass> = ir
+            .walk_classes()
+            .map(|e| Into::<PartialTypescriptClass>::into(e))
+            .collect::<Vec<_>>();
+        partial_classes.sort_by(|a, b| a.name.cmp(&b.name));
+
         Ok(TypescriptStreamTypes {
-            partial_classes: ir
-                .walk_classes()
-                .map(|e| Into::<PartialTypescriptClass>::into(e))
-                .collect::<Vec<_>>(),
+            types,
+            partial_classes,
         })
     }
 }
@@ -105,16 +123,19 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir GeneratorArgs)> for TypeBuilder<'
     type Error = anyhow::Error;
 
     fn try_from((ir, _): (&'ir IntermediateRepr, &'ir GeneratorArgs)) -> Result<TypeBuilder<'ir>> {
-        Ok(TypeBuilder {
-            enums: ir
-                .walk_enums()
-                .map(|e| Into::<TypescriptEnum>::into(&e))
-                .collect::<Vec<_>>(),
-            classes: ir
-                .walk_classes()
-                .map(|e| Into::<TypescriptClass>::into(&e))
-                .collect::<Vec<_>>(),
-        })
+        let mut enums: Vec<TypescriptEnum> = ir
+            .walk_enums()
+            .map(|e| Into::<TypescriptEnum>::into(&e))
+            .collect::<Vec<_>>();
+        enums.sort_by(|a, b| a.name.cmp(b.name));
+
+        let mut classes: Vec<TypescriptClass> = ir
+            .walk_classes()
+            .map(|e| Into::<TypescriptClass>::into(&e))
+            .collect::<Vec<_>>();
+        classes.sort_by(|a, b| a.name.cmp(&b.name));
+
+        Ok(TypeBuilder { enums, classes })
     }
 }
 

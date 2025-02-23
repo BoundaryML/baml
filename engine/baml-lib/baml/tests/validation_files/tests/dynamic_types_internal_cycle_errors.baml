@@ -12,7 +12,7 @@ class DynamicClass {
 test AttemptToMakeClassInfinitelyRecursive {
   functions [TypeBuilderFn]
   type_builder {
-    dynamic DynamicClass {
+    dynamic class DynamicClass {
       cycle DynamicClass
     }
   }
@@ -25,7 +25,7 @@ test AttemptToMakeClassInfinitelyRecursive {
 //   -->  tests/dynamic_types_internal_cycle_errors.baml:15
 //    | 
 // 14 |   type_builder {
-// 15 |     dynamic DynamicClass {
+// 15 |     dynamic class DynamicClass {
 // 16 |       cycle DynamicClass
 // 17 |     }
 //    | 

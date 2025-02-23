@@ -326,22 +326,26 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for OpenApi
     type Error = anyhow::Error;
 
     fn try_from((ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
-        Ok(Self {
-            paths: ir
-                .walk_functions()
-                .map(|f| {
-                    f.try_into().context(format!(
-                        "Failed to convert BAML function {} to OpenAPI method",
-                        f.item.elem.name()
-                    ))
-                })
-                .collect::<Result<_>>()?,
-            schemas: vec![]
-                .into_iter()
-                .chain(ir.walk_enums().map(|e| Ok((e.name(), e.try_into()?))))
-                .chain(ir.walk_classes().map(|c| Ok((c.name(), c.try_into()?))))
-                .collect::<Result<_>>()?,
-        })
+        let mut paths: Vec<OpenApiMethodDef> = ir
+            .walk_functions()
+            .map(|f| {
+                f.try_into().context(format!(
+                    "Failed to convert BAML function {} to OpenAPI method",
+                    f.item.elem.name()
+                ))
+            })
+            .collect::<Result<_>>()?;
+        paths.sort_by(|a, b| a.function_name.cmp(b.function_name));
+
+        let mut schemas: IndexMap<&str, TypeSpecWithMeta> = vec![]
+            .into_iter()
+            .chain(ir.walk_enums().map(|e| Ok((e.name(), e.try_into()?))))
+            .chain(ir.walk_classes().map(|c| Ok((c.name(), c.try_into()?))))
+            .collect::<Result<_>>()?;
+        // Sort schemas by key (name)
+        schemas.sort_keys();
+
+        Ok(Self { paths, schemas })
     }
 }
 
@@ -358,15 +362,21 @@ fn check() -> TypeSpecWithMeta {
 /// produce a named type for each of these the way we do for SDK
 /// codegeneration.
 fn type_def_for_checks(checks: TypeCheckAttributes) -> TypeSpecWithMeta {
+    let mut properties: IndexMap<String, TypeSpecWithMeta> = checks
+        .0
+        .iter()
+        .map(|check_name| (check_name.clone(), check()))
+        .collect();
+    properties.sort_keys();
+
+    let mut required: Vec<String> = checks.0.into_iter().collect();
+    required.sort();
+
     TypeSpecWithMeta {
         meta: TypeMetadata::default(),
         type_spec: TypeSpec::Inline(TypeDef::Class {
-            properties: checks
-                .0
-                .iter()
-                .map(|check_name| (check_name.clone(), check()))
-                .collect(),
-            required: checks.0.into_iter().collect(),
+            properties,
+            required,
             additional_properties: false,
         }),
     }
@@ -378,19 +388,21 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
     fn try_from(value: Walker<'ir, &'ir Node<Function>>) -> Result<Self> {
         let function_name = value.item.elem.name();
         let mut properties: IndexMap<String, TypeSpecWithMeta> = value
-                        .item
-                        .elem
-                        .inputs()
-                        .iter()
-                        .map(|(name, t)| {
-                            Ok((
-                                name.to_string(),
-                                t.to_type_spec(value.db).context(format!(
-                                    "Failed to convert arg {name} (for function {function_name}) to OpenAPI type",
-                                ))?,
-                            ))
-                        })
-                        .collect::<Result<_>>()?;
+            .item
+            .elem
+            .inputs()
+            .iter()
+            .map(|(name, t)| {
+                Ok((
+                    name.to_string(),
+                    t.to_type_spec(value.db).context(format!(
+                        "Failed to convert arg {name} (for function {function_name}) to OpenAPI type",
+                    ))?,
+                ))
+            })
+            .collect::<Result<_>>()?;
+        properties.sort_keys();
+
         properties.insert(
             "__baml_options__".to_string(),
             TypeSpecWithMeta {
@@ -405,19 +417,26 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
                 },
             },
         );
+
+        let mut required: Vec<String> = value
+            .item
+            .elem
+            .inputs()
+            .iter()
+            .filter_map(|(name, t)| {
+                if t.is_optional() {
+                    None
+                } else {
+                    Some(name.to_string())
+                }
+            })
+            .collect();
+        required.sort();
+
         Ok(Self {
             function_name,
             request_body: TypeSpecWithMeta {
                 meta: TypeMetadata {
-                    // We _deliberately_ set this, even though OpenAPI doesn't require it,
-                    // because some generators will de-duplicate names of generated types
-                    // based on type shape
-                    //
-                    // For example, the Golang generator will use "ClassifyMessageRequest" as the
-                    // request type for b.GetOrderInfo if they both have (input: string) as their
-                    // function arg signature (I think the Java generator too?)
-                    //
-                    // title: None,
                     title: Some(format!("{}Request", function_name)),
                     r#enum: None,
                     r#const: None,
@@ -425,19 +444,7 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
                 },
                 type_spec: TypeSpec::Inline(TypeDef::Class {
                     properties,
-                    required: value
-                        .item
-                        .elem
-                        .inputs()
-                        .iter()
-                        .filter_map(|(name, t)| {
-                            if t.is_optional() {
-                                None
-                            } else {
-                                Some(name.to_string())
-                            }
-                        })
-                        .collect(),
+                    required,
                     additional_properties: false,
                 }),
             },
@@ -477,6 +484,39 @@ impl<'ir> TryFrom<ClassWalker<'ir>> for TypeSpecWithMeta {
     type Error = anyhow::Error;
 
     fn try_from(c: ClassWalker<'ir>) -> Result<Self> {
+        let mut properties: IndexMap<String, TypeSpecWithMeta> = c
+            .item
+            .elem
+            .static_fields
+            .iter()
+            .map(|f| {
+                Ok((
+                    f.elem.name.to_string(),
+                    f.elem.r#type.elem.to_type_spec(c.db).context(format!(
+                        "Failed to convert {}.{} to OpenAPI type",
+                        c.name(),
+                        f.elem.name
+                    ))?,
+                ))
+            })
+            .collect::<Result<_>>()?;
+        properties.sort_keys();
+
+        let mut required: Vec<String> = c
+            .item
+            .elem
+            .static_fields
+            .iter()
+            .filter_map(|f| {
+                if f.elem.r#type.elem.is_optional() {
+                    None
+                } else {
+                    Some(f.elem.name.to_string())
+                }
+            })
+            .collect();
+        required.sort();
+
         Ok(TypeSpecWithMeta {
             meta: TypeMetadata {
                 title: None,
@@ -485,36 +525,8 @@ impl<'ir> TryFrom<ClassWalker<'ir>> for TypeSpecWithMeta {
                 nullable: false,
             },
             type_spec: TypeSpec::Inline(TypeDef::Class {
-                properties: c
-                    .item
-                    .elem
-                    // TODO: should go through walk_fields()
-                    .static_fields
-                    .iter()
-                    .map(|f| {
-                        Ok((
-                            f.elem.name.to_string(),
-                            f.elem.r#type.elem.to_type_spec(c.db).context(format!(
-                                "Failed to convert {}.{} to OpenAPI type",
-                                c.name(),
-                                f.elem.name
-                            ))?,
-                        ))
-                    })
-                    .collect::<Result<_>>()?,
-                required: c
-                    .item
-                    .elem
-                    .static_fields
-                    .iter()
-                    .filter_map(|f| {
-                        if f.elem.r#type.elem.is_optional() {
-                            None
-                        } else {
-                            Some(f.elem.name.to_string())
-                        }
-                    })
-                    .collect(),
+                properties,
+                required,
                 additional_properties: false,
             }),
         })

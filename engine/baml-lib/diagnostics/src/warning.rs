@@ -160,7 +160,7 @@ impl DatamodelWarning {
     pub fn pretty_print(&self, f: &mut dyn std::io::Write) -> std::io::Result<()> {
         pretty_print(
             f,
-            self.span(),
+            &[self.span()],
             self.message.as_ref(),
             &DatamodelWarningColorer {},
         )

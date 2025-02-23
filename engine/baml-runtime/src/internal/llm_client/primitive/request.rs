@@ -13,7 +13,9 @@ use baml_types::tracing::events::{
 };
 use baml_types::BamlMap;
 use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
+pub use internal_llm_client::ResponseType;
 use reqwest::{header::HeaderMap, Response, StatusCode};
+
 use serde::de::DeserializeOwned;
 use serde_json::json;
 
@@ -67,7 +69,9 @@ pub trait RequestBuilder {
     fn http_client(&self) -> &reqwest::Client;
 }
 
-fn to_prompt(prompt: either::Either<&String, &[RenderedChatMessage]>) -> RenderedPrompt {
+pub(crate) fn to_prompt(
+    prompt: either::Either<&String, &[RenderedChatMessage]>,
+) -> internal_baml_jinja::RenderedPrompt {
     match prompt {
         either::Left(p) => RenderedPrompt::Completion(p.clone()),
         either::Right(p) => RenderedPrompt::Chat(p.to_vec()),
@@ -122,7 +126,7 @@ async fn log_http_response(
     }));
 }
 
-async fn build_and_log_outbound_request(
+pub(crate) async fn build_and_log_outbound_request(
     client: &(impl WithClient + RequestBuilder),
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     allow_proxy: bool,
@@ -152,23 +156,26 @@ async fn build_and_log_outbound_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:#?}", e),
+                message: format!("Failed to create request builder: {:#?}", e),
                 code: ErrorCode::Other(2),
             })
         })?;
 
-    let built_req = req_builder.build().map_err(|e| {
-        LLMResponse::LLMFailure(LLMErrorResponse {
-            client: client.context().name.to_string(),
-            model: None,
-            prompt: to_prompt(prompt),
-            start_time: system_now,
-            request_options: client.request_options().clone(),
-            latency: instant_now.elapsed(),
-            message: format!("{:#?}", e),
-            code: ErrorCode::Other(2),
-        })
-    })?;
+    let built_req = match req_builder.build() {
+        Ok(req) => req,
+        Err(e) => {
+            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
+                client: client.context().name.to_string(),
+                model: None,
+                prompt: to_prompt(prompt),
+                start_time: system_now,
+                request_options: client.request_options().clone(),
+                latency: instant_now.elapsed(),
+                message: format!("Failed to build request: {:#?}", e),
+                code: ErrorCode::Other(2),
+            }));
+        }
+    };
 
     let request_id = ContentId(uuid::Uuid::new_v4().to_string());
     BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
@@ -191,7 +198,7 @@ async fn build_and_log_outbound_request(
     Ok((request_id, system_now, instant_now, built_req))
 }
 
-async fn execute_request(
+pub async fn execute_request(
     client: &(impl WithClient + RequestBuilder),
     built_req: reqwest::Request,
     request_id: ContentId,
@@ -222,10 +229,22 @@ async fn execute_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("{:?}", e),
+                message: {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        format!("{}", e.to_string())
+                    }
+                    #[cfg(target_arch = "wasm32")]
+                    {
+                        format!(
+                            "{}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)",
+                            e.to_string()
+                        )
+                    }
+                },
                 code: e
                     .status()
-                    .map_or(ErrorCode::Other(2), ErrorCode::from_status),
+                    .map_or(ErrorCode::Other(2), |s| ErrorCode::from_status(s)),
             }));
         }
     };
@@ -365,37 +384,9 @@ async fn execute_request(
     }
 }
 
-enum EitherResponse {
+pub(crate) enum EitherResponse {
     Raw(Response),
     Consumed(LoggedHttpResponse),
-}
-
-pub async fn make_request_stream(
-    client: &(impl WithClient + RequestBuilder),
-    prompt: either::Either<&String, &[RenderedChatMessage]>,
-    stream: bool,
-    runtime_context: &RuntimeContext,
-) -> Result<(Response, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let (request_id, system_now, instant_now, built_req) =
-        build_and_log_outbound_request(client, prompt, true, stream, runtime_context).await?;
-
-    match execute_request(
-        client,
-        built_req,
-        request_id,
-        prompt,
-        system_now,
-        instant_now,
-        runtime_context,
-        false,
-    )
-    .await?
-    {
-        (EitherResponse::Raw(resp), sys, inst) => Ok((resp, sys, inst)),
-        (EitherResponse::Consumed(_), _, _) => {
-            unreachable!("We never consume the body in streaming mode unless an error is returned.")
-        }
-    }
 }
 
 pub async fn make_request(
@@ -424,44 +415,81 @@ pub async fn make_request(
     }
 }
 
-pub async fn make_parsed_request<T: DeserializeOwned>(
+pub async fn make_parsed_request(
     client: &(impl WithClient + RequestBuilder),
+    model_name: Option<String>,
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     stream: bool,
+    response_type: ResponseType,
     runtime_context: &RuntimeContext,
-) -> Result<(T, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let (logged_response, system_now, instant_now) =
-        make_request(client, prompt, stream, runtime_context).await?;
+) -> LLMResponse {
+    let (response, system_now, instant_now) =
+        match make_request(client, prompt, stream, runtime_context).await {
+            Ok((response, system_now, instant_now)) => (response, system_now, instant_now),
+            Err(e) => return e,
+        };
 
-    let json_val =
-        serde_json::from_slice::<serde_json::Value>(&logged_response.body).map_err(|e| {
-            LLMResponse::LLMFailure(LLMErrorResponse {
-                client: client.context().name.to_string(),
-                model: None,
-                prompt: to_prompt(prompt),
-                start_time: system_now,
-                request_options: client.request_options().clone(),
-                latency: instant_now.elapsed(),
-                message: format!("Failed to parse JSON: {}", e),
-                code: ErrorCode::Other(2),
-            })
-        })?;
-
-    match T::deserialize(&json_val).context(format!(
-        "Failed to parse into a response into {}: {}",
-        std::any::type_name::<T>(),
-        json_val
-    )) {
-        Ok(response) => Ok((response, system_now, instant_now)),
-        Err(e) => Err(LLMResponse::LLMFailure(LLMErrorResponse {
+    let response_body = serde_json::from_slice::<serde_json::Value>(&response.body).map_err(|e| {
+        LLMResponse::LLMFailure(LLMErrorResponse {
             client: client.context().name.to_string(),
             model: None,
             prompt: to_prompt(prompt),
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("Failed to parse JSON: {}", e.to_string()),
             code: ErrorCode::Other(2),
-        })),
+        })
+    });
+
+    let response_body = match response_body {
+        Ok(response) => response,
+        Err(e) => {
+            return LLMResponse::LLMFailure(LLMErrorResponse {
+                client: client.context().name.to_string(),
+                model: None,
+                prompt: to_prompt(prompt),
+                start_time: system_now,
+                request_options: client.request_options().clone(),
+                latency: instant_now.elapsed(),
+                message: e.to_string(),
+                code: ErrorCode::Other(2),
+            })
+        }
+    };
+
+    match response_type {
+        ResponseType::OpenAI => super::openai::response_handler::parse_openai_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Anthropic => super::anthropic::response_handler::parse_anthropic_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Google => super::google::response_handler::parse_google_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
+        ResponseType::Vertex => super::vertex::response_handler::parse_vertex_response(
+            client,
+            prompt,
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        ),
     }
 }

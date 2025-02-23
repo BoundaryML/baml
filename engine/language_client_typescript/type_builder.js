@@ -6,10 +6,12 @@ class TypeBuilder {
     tb;
     classes;
     enums;
-    constructor({ classes, enums }) {
+    runtime;
+    constructor({ classes, enums, runtime }) {
         this.classes = classes;
         this.enums = enums;
         this.tb = new native_1.TypeBuilder();
+        this.runtime = runtime;
     }
     _tb() {
         return this.tb;
@@ -72,6 +74,9 @@ class TypeBuilder {
         }
         this.enums.add(name);
         return new EnumBuilder(this.tb, name);
+    }
+    addBaml(baml) {
+        this.tb.addBaml(baml, this.runtime);
     }
 }
 exports.TypeBuilder = TypeBuilder;

@@ -22,7 +22,7 @@ test AttemptToIntroduceInfiniteCycle {
       p A
     }
 
-    dynamic DynamicClass {
+    dynamic class DynamicClass {
       cycle A
     }
   }
@@ -34,7 +34,7 @@ test AttemptToIntroduceInfiniteCycle {
 test AttemptToMakeClassInfinitelyRecursive {
   functions [TypeBuilderFn]
   type_builder {
-    dynamic DynamicClass {
+    dynamic class DynamicClass {
       cycle DynamicClass
     }
   }

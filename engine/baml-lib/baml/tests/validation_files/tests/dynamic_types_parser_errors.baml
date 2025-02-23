@@ -5,7 +5,7 @@ function TypeBuilderFn(from_text: string) -> Resume {
     class Foo {
       foo string
     }
-    dynamic Bar {
+    dynamic class Bar {
       bar int
     }
   }
@@ -17,7 +17,7 @@ test MultipleTypeBuilderBlocks {
     class Foo {
       foo string
     }
-    dynamic Bar {
+    dynamic class Bar {
       bar int
     }
   }
@@ -25,8 +25,20 @@ test MultipleTypeBuilderBlocks {
     class A {
       a string
     }
-    dynamic B {
+    dynamic class B {
       b int
+    }
+  }
+  args {
+    from_text "Test"
+  }
+}
+
+test IncompleteDynamicDef {
+  functions [TypeBuilderFn]
+  type_builder {
+    dynamic Bar {
+      bar int
     }
   }
   args {
@@ -39,7 +51,7 @@ test IncompleteSyntax {
   type_builder {
     type
 
-    dynamic Bar {
+    dynamic class Bar {
       bar int
     }
   }
@@ -56,7 +68,7 @@ test IncompleteSyntax {
 //  5 |     class Foo {
 //  6 |       foo string
 //  7 |     }
-//  8 |     dynamic Bar {
+//  8 |     dynamic class Bar {
 //  9 |       bar int
 // 10 |     }
 // 11 |   }
@@ -69,15 +81,21 @@ test IncompleteSyntax {
 // 25 |     class A {
 // 26 |       a string
 // 27 |     }
-// 28 |     dynamic B {
+// 28 |     dynamic class B {
 // 29 |       b int
 // 30 |     }
 // 31 |   }
 //    | 
-// error: Error validating: Syntax error in type builder block
+// error: Error validating: Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.
 //   -->  tests/dynamic_types_parser_errors.baml:40
 //    | 
 // 39 |   type_builder {
-// 40 |     type
-// 41 | 
+// 40 |     dynamic Bar {
+//    | 
+// error: Error validating: Syntax error in type builder block
+//   -->  tests/dynamic_types_parser_errors.baml:52
+//    | 
+// 51 |   type_builder {
+// 52 |     type
+// 53 | 
 //    | 

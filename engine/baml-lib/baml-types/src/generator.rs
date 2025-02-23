@@ -20,6 +20,9 @@ pub enum GeneratorOutputType {
     #[strum(serialize = "typescript")]
     Typescript,
 
+    #[strum(serialize = "typescript/react")]
+    TypescriptReact,
+
     #[strum(serialize = "ruby/sorbet")]
     RubySorbet,
 }
@@ -38,6 +41,7 @@ impl GeneratorOutputType {
             // DO NOT CHANGE THIS DEFAULT EVER OR YOU WILL BREAK EXISTING USERS
             Self::PythonPydantic => GeneratorDefaultClientMode::Async,
             Self::Typescript => GeneratorDefaultClientMode::Async,
+            Self::TypescriptReact => GeneratorDefaultClientMode::Async,
             Self::RubySorbet => GeneratorDefaultClientMode::Sync,
         }
     }
@@ -48,6 +52,7 @@ impl GeneratorOutputType {
             Self::OpenApi => GeneratorDefaultClientMode::Sync,
             Self::PythonPydantic => GeneratorDefaultClientMode::Sync,
             Self::Typescript => GeneratorDefaultClientMode::Async,
+            Self::TypescriptReact => GeneratorDefaultClientMode::Async,
             Self::RubySorbet => GeneratorDefaultClientMode::Sync,
         }
     }
@@ -56,7 +61,6 @@ impl GeneratorOutputType {
 impl clap::ValueEnum for GeneratorOutputType {
     fn value_variants<'a>() -> &'a [Self] {
         use strum::VariantArray;
-
         Self::VARIANTS
     }
 

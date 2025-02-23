@@ -205,14 +205,18 @@ impl BamlRuntime {
             })
             .collect::<Vec<_>>();
 
-        let (result, _event_id) = self.inner.call_function_sync(
-            function_name,
-            &args_map,
-            &ctx_mng,
-            tb.as_ref(),
-            cb.as_ref(),
-            Some(collector_list),
-        );
+        let (result, _event_id) = Python::with_gil(|py| {
+            py.allow_threads(|| {
+                self.inner.call_function_sync(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    Some(collector_list),
+                )
+            })
+        });
 
         result
             .map(FunctionResult::from)

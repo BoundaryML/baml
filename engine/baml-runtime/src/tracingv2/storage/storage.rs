@@ -1228,6 +1228,7 @@ mod tests {
             let llm_calls = vec![
                 (
                     LoggedLLMRequest {
+                        request_id: ContentId("req_1".to_string()),
                         client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
                         params: serde_json::json!({ "temperature": 0.7 }),
                         prompt: serde_json::json!(["Hello world"]),
@@ -1247,6 +1248,7 @@ mod tests {
                 ),
                 (
                     LoggedLLMRequest {
+                        request_id: ContentId("req_2".to_string()),
                         client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
                         params: serde_json::json!({ "temperature": 0.9 }),
                         prompt: serde_json::json!(["Next message"]),

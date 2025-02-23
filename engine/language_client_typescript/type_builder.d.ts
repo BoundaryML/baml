@@ -1,4 +1,4 @@
-import { ClassPropertyBuilder as _ClassPropertyBuilder, EnumValueBuilder, FieldType, TypeBuilder as _TypeBuilder } from './native';
+import { ClassPropertyBuilder as _ClassPropertyBuilder, EnumValueBuilder, FieldType, TypeBuilder as _TypeBuilder, BamlRuntime } from './native';
 type IsLiteral<T extends string> = string extends T ? false : true;
 type NameOf<T extends string> = IsLiteral<T> extends true ? T : 'DynamicType';
 type CheckNever<T, TypeName extends string, Value extends string> = [T] extends [never] ? `Error: Attempt to add value '${Value}' which is already a part of '${NameOf<TypeName>}'.` : T;
@@ -8,9 +8,11 @@ export declare class TypeBuilder {
     private tb;
     protected classes: Set<string>;
     protected enums: Set<string>;
-    constructor({ classes, enums }: {
+    protected runtime: BamlRuntime;
+    constructor({ classes, enums, runtime }: {
         classes: Set<string>;
         enums: Set<string>;
+        runtime: BamlRuntime;
     });
     _tb(): _TypeBuilder;
     null(): FieldType;
@@ -28,6 +30,7 @@ export declare class TypeBuilder {
     enumBuilder<Name extends string, T extends string>(name: Name, values: T[]): EnumBuilder<Name, T>;
     addClass<Name extends string>(name: Name): ClassBuilder<Name>;
     addEnum<Name extends string>(name: Name): EnumBuilder<Name>;
+    addBaml(baml: string): void;
 }
 export declare class ClassBuilder<ClassName extends string, Properties extends string = string> {
     private properties;
