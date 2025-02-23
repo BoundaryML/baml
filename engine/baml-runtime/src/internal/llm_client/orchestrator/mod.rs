@@ -333,7 +333,6 @@ impl WithSingleCallable for OrchestratorNode {
             &http_request_id,
             "OrchestratorNode::single_call::response",
         );
-        log::info!("----------------- putting Trace event: {:?}", trace_event);
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         response

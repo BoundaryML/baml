@@ -373,7 +373,6 @@ pub struct FunctionLog {
 
 impl Clone for FunctionLog {
     fn clone(&self) -> Self {
-        log::info!("Cloning function log: {}", self.id().0);
         // Creating a new FunctionLog will inc_ref again:
         Self::new(self.id.clone())
     }
@@ -381,7 +380,6 @@ impl Clone for FunctionLog {
 
 impl FunctionLog {
     pub fn new(id: FunctionId) -> Self {
-        log::info!("Creating new function log: {}", id.0);
         // Manually increment the global reference count
         BAML_TRACER.lock().unwrap().inc_ref(&id);
 
@@ -443,11 +441,11 @@ impl FunctionLog {
 
 impl Drop for FunctionLog {
     fn drop(&mut self) {
-        log::info!(
-            "Dropping function log: {}, instance_id: {}",
-            self.id.0,
-            self.instance_id
-        );
+        // log::info!(
+        //     "Dropping function log: {}, instance_id: {}",
+        //     self.id.0,
+        //     self.instance_id
+        // );
         // Manually decrement the global ref count
         BAML_TRACER.lock().unwrap().dec_ref(&self.id);
     }
