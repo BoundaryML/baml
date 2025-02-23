@@ -78,6 +78,36 @@ pub(crate) fn to_prompt(
     }
 }
 
+pub enum JsonBodyInput<'a> {
+    ReqwestBody(Option<&'a reqwest::Body>),
+    String(String),
+}
+
+fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
+    let string_to_parse = match input {
+        JsonBodyInput::ReqwestBody(maybe_body) => {
+            if let Some(b) = maybe_body {
+                std::str::from_utf8(b.as_bytes().context("Failed to convert body to string")?)?
+                    .to_string()
+            } else {
+                return Ok(serde_json::Value::Null);
+            }
+        }
+        JsonBodyInput::String(s) => s,
+    };
+
+    // Try to parse as JSON object first
+    if let Ok(json) = serde_json::from_str(&string_to_parse) {
+        return Ok(json);
+    }
+    // Try to parse as JSON array
+    if let Ok(json) = serde_json::from_str(&format!("[{}]", string_to_parse)) {
+        return Ok(json);
+    }
+    // Fall back to string if not valid JSON object or array
+    Ok(serde_json::Value::String(string_to_parse))
+}
+
 fn json_headers(headers: &HeaderMap) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (key, value) in headers.iter() {
@@ -85,20 +115,6 @@ fn json_headers(headers: &HeaderMap) -> serde_json::Value {
         map.insert(key.to_string(), serde_json::Value::String(value_str));
     }
     serde_json::Value::Object(map)
-}
-
-fn json_body(body: Option<&reqwest::Body>) -> Result<serde_json::Value> {
-    if let Some(b) = body {
-        if let Ok(s) =
-            std::str::from_utf8(b.as_bytes().context("Failed to convert body to string")?)
-        {
-            Ok(serde_json::Value::String(s.to_string()))
-        } else {
-            Ok(serde_json::Value::Null)
-        }
-    } else {
-        Ok(serde_json::Value::Null)
-    }
 }
 
 async fn log_http_response(
@@ -190,7 +206,7 @@ pub(crate) async fn build_and_log_outbound_request(
             url: built_req.url().to_string(),
             method: built_req.method().to_string(),
             headers: json_headers(built_req.headers()),
-            body: json_body(built_req.body()).unwrap_or_default(),
+            body: json_body(JsonBodyInput::ReqwestBody(built_req.body())).unwrap_or_default(),
         })),
         tags: Default::default(),
     }));
@@ -334,32 +350,6 @@ pub async fn execute_request(
             }
         };
 
-        if !logged_response.status.is_success() {
-            let resp_body = match std::str::from_utf8(&logged_response.body) {
-                Ok(s) if !s.is_empty() => s.to_string(),
-                _ => "<no response or invalid utf-8>".to_string(),
-            };
-            log_http_response(
-                runtime_context,
-                TraceLevel::Error,
-                http_request_id.clone(),
-                logged_response.status.as_u16(),
-                json_headers(&logged_response.headers),
-                serde_json::Value::String(resp_body.clone()),
-            )
-            .await;
-            return Err(LLMResponse::LLMFailure(LLMErrorResponse {
-                client: client.context().name.to_string(),
-                model: None,
-                prompt: to_prompt(prompt),
-                start_time: system_now,
-                request_options: client.request_options().clone(),
-                latency: instant_now.elapsed(),
-                message: format!("Request failed: {}\n{}", &logged_response.url, resp_body),
-                code: ErrorCode::from_status(logged_response.status),
-            }));
-        }
-
         let resp_body = match std::str::from_utf8(&logged_response.body) {
             Ok(b) => b.to_string(),
             Err(_) => "<invalid utf-8>".to_string(),
@@ -370,7 +360,7 @@ pub async fn execute_request(
             http_request_id.clone(),
             logged_response.status.as_u16(),
             json_headers(&logged_response.headers),
-            serde_json::Value::String(resp_body),
+            json_body(JsonBodyInput::String(resp_body)).unwrap_or_default(),
         )
         .await;
 

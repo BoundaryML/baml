@@ -1307,4 +1307,30 @@ mod tests {
             }
         });
     }
+
+    // TODO: validate http request body and response body are serde objects
+    // but need to inject these events in as well.
+    //  let calls = func_log.calls();
+    //  for call in calls {
+    //      if let LLMCallKind::Basic(req) = call.clone() {
+    //          match &req.request.as_ref().unwrap().body {
+    //              serde_json::Value::Object(_) => {}
+    //              _ => panic!("HTTP request body should be a serde object"),
+    //          };
+    //          match &req.response.as_ref().unwrap().body {
+    //              serde_json::Value::Object(_) => {}
+    //              _ => panic!("HTTP response body should be a serde object"),
+    //          };
+    //      }
+    //      if let LLMCallKind::Stream(resp) = call.clone() {
+    //          match &resp.request.as_ref().unwrap().body {
+    //              serde_json::Value::Object(_) => {}
+    //              _ => panic!("HTTP request body should be a serde object"),
+    //          };
+    //          match &resp.response.as_ref().unwrap().body {
+    //              serde_json::Value::Object(_) => {}
+    //              _ => panic!("HTTP response body should be a serde object"),
+    //          };
+    //      }
+    //  }
 }

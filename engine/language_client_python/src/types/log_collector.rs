@@ -18,6 +18,7 @@ crate::lang_wrapper!(
 #[pymethods]
 impl Collector {
     #[new]
+    #[pyo3(signature = (name=None))]
     pub fn new(name: Option<String>) -> Self {
         let collector = baml_runtime::tracingv2::storage::storage::Collector::new(name);
         Self {

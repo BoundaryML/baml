@@ -7,7 +7,7 @@ import pytest
 from assertpy import assert_that
 from dotenv import load_dotenv
 from .base64_test_data import image_b64, audio_b64
-from openai import ChatCompletion
+from openai.types.chat import ChatCompletion
 
 load_dotenv()
 import baml_py
@@ -76,13 +76,13 @@ async def test_collector_events_present():
 
     collector = Collector(name="my-collector")
     function_logs = collector.logs
-    print("### function_logs", function_logs, file=sys.stderr)
+    # print("### function_logs", function_logs, file=sys.stderr)
     assert len(function_logs) == 0
 
     await b.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector})
 
     function_logs = collector.logs
-    print("### function_logs2", function_logs, file=sys.stderr)
+    # print("### function_logs2", function_logs, file=sys.stderr)
     assert len(function_logs) == 1
 
     log = collector.last
@@ -107,13 +107,13 @@ async def test_collector_events_present():
     assert len(calls) == 1
 
     call = calls[0]
-    print(
-        "#### call provider, client_name, selected ####",
-        call.provider,
-        call.client_name,
-        call.selected,
-        file=sys.stderr,
-    )
+    # print(
+    #     "#### call provider, client_name, selected ####",
+    #     call.provider,
+    #     call.client_name,
+    #     call.selected,
+    #     file=sys.stderr,
+    # )
     assert call.provider == "openai"
     assert call.client_name == "GPT4oMini"
     assert call.selected
@@ -121,8 +121,25 @@ async def test_collector_events_present():
     # Verify request/response
     request = call.http_request
     assert request is not None
+    print(f"### request.body: {request.body} \n {type(request.body)}", file=sys.stderr)
+    assert isinstance(request.body, dict)
     assert "messages" in request.body
-    assert "content" in request.body
+    assert "content" in request.body["messages"][0]
+    assert request.body["messages"][0]["content"] is not None
+    assert request.body["model"] == "gpt-4o-mini"
+
+    # Verify http response
+    response = call.http_response
+    assert response is not None
+    assert response.status == 200
+    assert response.body is not None
+    assert isinstance(response.body, dict)
+    completion = ChatCompletion(**response.body)
+    assert "choices" in response.body
+    assert len(response.body["choices"]) > 0
+    assert "message" in response.body["choices"][0]
+    assert "content" in response.body["choices"][0]["message"]
+    assert completion.choices[0].message.content is not None
 
     # Verify call timing
     call_timing = call.timing
