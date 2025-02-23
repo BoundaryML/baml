@@ -74,7 +74,7 @@ async def test_collector_events_present():
     # garbage collected!
     assert Collector.__function_span_count() == 0
 
-    collector = Collector(id="my-collector")
+    collector = Collector(name="my-collector")
     function_logs = collector.logs
     print("### function_logs", function_logs, file=sys.stderr)
     assert len(function_logs) == 0
@@ -107,8 +107,15 @@ async def test_collector_events_present():
     assert len(calls) == 1
 
     call = calls[0]
+    print(
+        "#### call provider, client_name, selected ####",
+        call.provider,
+        call.client_name,
+        call.selected,
+        file=sys.stderr,
+    )
     assert call.provider == "openai"
-    assert call.client_name == "gpt-4"
+    assert call.client_name == "GPT4oMini"
     assert call.selected
 
     # Verify request/response
@@ -132,6 +139,9 @@ async def test_collector_events_present():
 
     # Verify raw response exists
     assert log.raw_llm_response is not None
+
+    assert collector.usage.input_tokens == log.usage.input_tokens
+    assert collector.usage.output_tokens == log.usage.output_tokens
 
     # Verify metadata
     assert isinstance(log.metadata, dict)

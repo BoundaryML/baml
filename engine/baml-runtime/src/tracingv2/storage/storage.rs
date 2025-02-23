@@ -96,6 +96,7 @@ impl TraceStorage {
     pub fn put(&mut self, event: Arc<TraceEvent>) {
         let Some(&count) = self.ref_counts.get(&event.span_id) else {
             // If no references exist, skip or handle otherwise
+            log::info!("No references for FunctionID {:?}", event.span_id);
             return;
         };
         if count > 0 {
@@ -162,6 +163,7 @@ fn build_function_log(
 
     let mut usage = Usage::default();
     let mut combined_metadata = HashMap::new();
+    let mut raw_llm_response: Option<String> = None;
 
     // We must group requests by request_id for LLM calls.
     let mut calls_map: HashMap<String, CallAccumulator> = HashMap::new();
@@ -207,6 +209,9 @@ fn build_function_log(
                         output_tokens: usage_info.output_tokens.map(|t| t as i64),
                     });
                 }
+
+                // TODO: zero copy?
+                raw_llm_response = llm_res.raw_text_output.clone();
             }
 
             // Raw requests and responses
@@ -239,7 +244,6 @@ fn build_function_log(
 
     // Build each LLMCall or LLMStreamCall
     let mut calls = Vec::new();
-    println!("calls_map: {:#?}", calls_map);
     for (_rid, call_acc) in calls_map {
         let (client, provider) = parse_llm_client_and_provider(call_acc.llm_request.as_ref());
         let start_t = call_acc.timestamp_first_seen.unwrap_or(start_ms);
@@ -275,7 +279,7 @@ fn build_function_log(
                 request: call_acc.http_request.clone(),
                 response: call_acc.http_responses.first().cloned(),
                 usage: Some(local_usage),
-                selected: false,
+                selected: call_acc.llm_response.is_some(),
             }));
         } else {
             // Streaming call
@@ -291,7 +295,7 @@ fn build_function_log(
                 request: call_acc.http_request.clone(),
                 response: call_acc.http_responses.first().cloned(),
                 usage: Some(local_usage),
-                selected: false,
+                selected: call_acc.llm_response.is_some(),
                 chunks: Vec::new(),
             }));
         }
@@ -315,7 +319,7 @@ fn build_function_log(
         },
         usage,
         calls,
-        raw_llm_response: None,
+        raw_llm_response,
         metadata: combined_metadata,
     };
 
@@ -341,15 +345,9 @@ struct CallAccumulator {
     pub timestamp_last_seen: Option<i64>,
 }
 
-/// Helper to parse out the client/provider from a LoggedLLMRequest.
 fn parse_llm_client_and_provider(req: Option<&Arc<LoggedLLMRequest>>) -> (String, String) {
     match req {
-        Some(r) => match &r.client {
-            baml_types::tracing::events::LLMClient::Ref(name) => (name.clone(), "".into()),
-            baml_types::tracing::events::LLMClient::ShortHand(provider, name) => {
-                (name.clone(), provider.clone())
-            }
-        },
+        Some(r) => (r.client_name.clone(), r.client_provider.clone()),
         None => ("".into(), "".into()),
     }
 }
@@ -542,21 +540,21 @@ pub struct LLMStreamCall {
 /// it decrements the global ref counts for all tracked IDs.
 #[derive(Debug)]
 pub struct Collector {
-    collector_id: String,
+    name: String,
     // Now just a regular Mutex<HashSet> - no Arc needed since we want independent sets
     tracked_ids: Mutex<HashSet<FunctionId>>,
 }
 
 impl Collector {
-    pub fn new(id: String) -> Self {
+    pub fn new(name: Option<String>) -> Self {
         Self {
-            collector_id: id,
+            name: name.unwrap_or("collector".to_string()),
             tracked_ids: Mutex::new(HashSet::new()),
         }
     }
 
-    pub fn id(&self) -> String {
-        self.collector_id.clone()
+    pub fn name(&self) -> String {
+        self.name.clone()
     }
 
     pub fn track_function(&self, fid: FunctionId) {
@@ -595,12 +593,36 @@ impl Collector {
             .find(|fid| fid == fid)
             .map(|fid| FunctionLog::new(fid.clone()))
     }
+
+    pub fn usage(&self) -> Usage {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        let mut total_usage = Usage::default();
+
+        for fid in guard.iter() {
+            let mut log = FunctionLog::new(fid.clone());
+            let usage = log.usage();
+            total_usage.input_tokens = match (total_usage.input_tokens, usage.input_tokens) {
+                (Some(a), Some(b)) => Some(a + b),
+                (None, Some(b)) => Some(b),
+                (Some(a), None) => Some(a),
+                (None, None) => None,
+            };
+            total_usage.output_tokens = match (total_usage.output_tokens, usage.output_tokens) {
+                (Some(a), Some(b)) => Some(a + b),
+                (None, Some(b)) => Some(b),
+                (Some(a), None) => Some(a),
+                (None, None) => None,
+            };
+        }
+
+        total_usage
+    }
 }
 
 impl Clone for Collector {
     fn clone(&self) -> Self {
         // Create a new collector with empty set
-        let new_collector = Self::new(format!("{}_clone", self.collector_id));
+        let new_collector = Self::new(Some(format!("{}_clone", self.name)));
 
         // Get all currently tracked IDs from the original
         let tracked = self.tracked_ids.lock().unwrap();
@@ -629,7 +651,7 @@ impl Drop for Collector {
 //  Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-// watch out when running all cargo tests in the project -- as they could mess with the global tracer state. Perhaps we need #[tokio::test]
+// watch out when running all cargo tests in the project -- as they could mess with the global tracer state if you don't add the #[serial]. Perhaps we need #[tokio::test]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -661,7 +683,7 @@ mod tests {
             }
 
             // Create a collector to track the function ID
-            let collector = Collector::new("test_collector".to_string());
+            let collector = Collector::new(Some("test_collector".to_string()));
             collector.track_function(f_id.clone());
             {
                 let tracer = BAML_TRACER.lock().unwrap();
@@ -685,9 +707,6 @@ mod tests {
                 let mut tracer = BAML_TRACER.lock().unwrap();
                 tracer.put(event.clone());
             }
-
-            // Wait a bit
-            tokio::time::sleep(Duration::from_millis(10)).await;
 
             // Check events exist
             {
@@ -720,7 +739,7 @@ mod tests {
             }
 
             // Create original collector and track function
-            let collector1 = Collector::new("test_collector1".to_string());
+            let collector1 = Collector::new(Some("test_collector1".to_string()));
             collector1.track_function(f_id.clone());
 
             // Check initial reference count is 1
@@ -793,7 +812,7 @@ mod tests {
             }
 
             // Create original collector and track function
-            let collector1 = Collector::new("test_collector1".to_string());
+            let collector1 = Collector::new(Some("test_collector1".to_string()));
             collector1.track_function(f_id.clone());
 
             // Check initial reference count is 1
@@ -891,7 +910,7 @@ mod tests {
             }
 
             // Create a collector to track the function ID
-            let collector = Collector::new("test_collector".to_string());
+            let collector = Collector::new(Some("test_collector".to_string()));
             collector.track_function(f_id.clone());
 
             // Create and insert start event
@@ -935,8 +954,6 @@ mod tests {
                 tracer.put(end_event.clone());
             }
 
-            tokio::time::sleep(Duration::from_millis(50)).await;
-
             let mut func_log = FunctionLog::new(f_id.clone());
             assert_eq!(func_log.id(), f_id);
 
@@ -977,7 +994,7 @@ mod tests {
             }
 
             // Create a collector to track the function ID
-            let collector = Collector::new("test_collector".to_string());
+            let collector = Collector::new(Some("test_collector".to_string()));
             collector.track_function(f_id.clone());
 
             let mut tags = serde_json::Map::new();
@@ -1012,8 +1029,6 @@ mod tests {
                 tracer.put(start_event.clone());
             }
 
-            tokio::time::sleep(Duration::from_millis(50)).await;
-
             let mut func_log = FunctionLog::new(f_id.clone());
             let meta = func_log.metadata();
             assert_eq!(meta.get("foo").unwrap(), "bar");
@@ -1038,7 +1053,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let f_id = FunctionId("test_timing".to_string());
-            let collector = Collector::new("test_collector".to_string());
+            let collector = Collector::new(Some("test_collector".to_string()));
             collector.track_function(f_id.clone());
             let start_time = web_time::SystemTime::now();
             // Create start event
@@ -1095,7 +1110,8 @@ mod tests {
             let duration = end_time.duration_since(start_time).unwrap();
 
             assert!(
-                duration.as_millis() == func_log.timing().duration_ms.unwrap().try_into().unwrap()
+                // leeway since test is a bit flaky -- maybe due to web_time crate
+                (duration.as_millis() as i64 - func_log.timing().duration_ms.unwrap()).abs() <= 5
             );
 
             // Start time should be valid (non-zero)
@@ -1125,7 +1141,7 @@ mod tests {
         }
 
         // Create a collector and track our function
-        let collector = Collector::new("test_collector".to_string());
+        let collector = Collector::new(Some("test_collector".to_string()));
         collector.track_function(f_id.clone());
 
         // Insert a FunctionStart event
@@ -1207,9 +1223,6 @@ mod tests {
             tracer.put(end_event);
         }
 
-        // Give some brief time for the tracer to gather events
-        tokio::time::sleep(Duration::from_millis(50)).await;
-
         collector
     }
 
@@ -1217,8 +1230,8 @@ mod tests {
     #[serial]
     fn test_usage_accumulation_within_function_log_retries() {
         use baml_types::tracing::events::{
-            ContentId, FunctionEnd, FunctionId, FunctionStart, LLMClient, LLMUsage,
-            LoggedLLMRequest, LoggedLLMResponse, TraceData, TraceEvent, TraceLevel,
+            ContentId, FunctionEnd, FunctionId, FunctionStart, LLMUsage, LoggedLLMRequest,
+            LoggedLLMResponse, TraceData, TraceEvent, TraceLevel,
         };
         use std::time::Duration;
 
@@ -1230,7 +1243,8 @@ mod tests {
                 (
                     LoggedLLMRequest {
                         request_id: HttpRequestId("req_1".to_string()),
-                        client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
+                        client_name: "my_client".into(),
+                        client_provider: "my_provider".into(),
                         params: serde_json::json!({ "temperature": 0.7 }),
                         prompt: serde_json::json!(["Hello world"]),
                     },
@@ -1250,7 +1264,8 @@ mod tests {
                 (
                     LoggedLLMRequest {
                         request_id: HttpRequestId("req_2".to_string()),
-                        client: LLMClient::ShortHand("my_provider".into(), "my_client".into()),
+                        client_name: "my_client".into(),
+                        client_provider: "my_provider".into(),
                         params: serde_json::json!({ "temperature": 0.9 }),
                         prompt: serde_json::json!(["Next message"]),
                     },

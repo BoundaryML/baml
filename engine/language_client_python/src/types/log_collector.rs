@@ -1,34 +1,14 @@
 use std::sync::{Arc, Mutex};
 
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
-// use baml_types::tracing::events::{FunctionId, TraceEvent};
+use either::Either;
 use pyo3::{
     prelude::*,
     types::{PyDict, PyList},
     IntoPyObjectExt,
 };
-// use baml_types::tracing::events::TraceEvent;
-use either::Either;
 use serde_json::Value as JsonValue;
-// Suppose we have a "LastRequestInfo" Python-exposed struct:
-// #[pyo3::prelude::pyclass(module = "baml_py.baml_py")]
-// #[derive(Clone)]
-// pub struct LastRequestInfo {
-//     #[pyo3(get, set)]
-//     pub id: String,
-//     #[pyo3(get, set)]
-//     pub usage: String,
-//     #[pyo3(get, set)]
-//     pub raw_request: String,
-//     #[pyo3(get, set)]
-//     pub raw_response: Vec<String>,
-//     #[pyo3(get, set)]
-//     pub pre_parser: Option<String>,
-// }
 
-// Use the macro from lang_wrapper.rs to create a pyo3 class named "LogCollector"
-// around our Rust `Collector`, with Arc-based clone safety.
-// We also add a custom attribute "last" of type Option<LastRequestInfo>.
 crate::lang_wrapper!(
     Collector,
     baml_runtime::tracingv2::storage::storage::Collector,
@@ -38,12 +18,10 @@ crate::lang_wrapper!(
 #[pymethods]
 impl Collector {
     #[new]
-    pub fn new(id: String) -> Self {
-        let collector = baml_runtime::tracingv2::storage::storage::Collector::new(id);
+    pub fn new(name: Option<String>) -> Self {
+        let collector = baml_runtime::tracingv2::storage::storage::Collector::new(name);
         Self {
-            // id,
             inner: Arc::new(collector),
-            // last: None,
         }
     }
 
@@ -55,8 +33,8 @@ impl Collector {
             .map(|log| log.inner.lock().unwrap().id().0.clone())
             .collect();
         format!(
-            "LogCollector(collector_id={}, function_log_ids=[{}])",
-            self.inner.id(),
+            "LogCollector(name={}, function_log_ids=[{}])",
+            self.inner.name(),
             log_ids.join(", ")
         )
     }
@@ -89,6 +67,13 @@ impl Collector {
             })
     }
 
+    #[getter]
+    pub fn usage(&self) -> Usage {
+        Usage {
+            inner: self.inner.usage(),
+        }
+    }
+
     #[staticmethod]
     pub fn __function_span_count() -> usize {
         BAML_TRACER.lock().unwrap().function_span_count()
@@ -103,7 +88,6 @@ crate::lang_wrapper!(
 
 #[pymethods]
 impl FunctionLog {
-    /// For Python: `repr(function_log)`
     fn __repr__(&self) -> String {
         format!(
             "FunctionLog(id={}, function_name={}, type={}, timing={}, usage={}, calls=[{}], raw_llm_response={})",
@@ -120,13 +104,11 @@ impl FunctionLog {
         )
     }
 
-    /// pyi: @property def id -> str
     #[getter]
     pub fn id(&self) -> String {
         self.inner.lock().unwrap().id().0
     }
 
-    /// pyi: @property def function_name -> str
     #[getter]
     pub fn function_name(&self) -> String {
         self.inner.lock().unwrap().function_name()
@@ -138,7 +120,6 @@ impl FunctionLog {
         self.inner.lock().unwrap().log_type().to_string()
     }
 
-    /// pyi: @property def timing -> Timing
     #[getter]
     pub fn timing(&self) -> Timing {
         Timing {
@@ -146,7 +127,6 @@ impl FunctionLog {
         }
     }
 
-    /// pyi: @property def usage -> Usage
     #[getter]
     pub fn usage(&self) -> Usage {
         Usage {
@@ -175,9 +155,6 @@ impl FunctionLog {
             .collect::<Vec<_>>())
     }
 
-    /// pyi: @property def raw_llm_response -> Optional[str]
-    /// Example: you might extract from the last call's response body,
-    /// or store it in the underlying struct. Show a placeholder here:
     #[getter]
     pub fn raw_llm_response(&self) -> Option<String> {
         // Modify as needed to locate or parse the "raw_llm_response"

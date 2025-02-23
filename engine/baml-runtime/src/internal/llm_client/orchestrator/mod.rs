@@ -29,8 +29,8 @@ pub use stream::orchestrate_stream;
 use crate::tracing::Visualize;
 use anyhow::Result;
 use baml_types::tracing::events::{
-    ContentId, FunctionId, HTTPRequest, HTTPResponse, LLMClient, LoggedLLMRequest,
-    LoggedLLMResponse, TraceData, TraceEvent, TraceLevel,
+    ContentId, FunctionId, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse,
+    TraceData, TraceEvent, TraceLevel,
 };
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
@@ -284,7 +284,7 @@ impl WithSingleCallable for OrchestratorNode {
         http_request_id: HttpRequestId,
     ) -> LLMResponse {
         // Create IDs for the function call and content
-        let function_id = FunctionId(uuid::Uuid::new_v4().to_string());
+        let function_id = FunctionId(ctx.span_id.clone().to_string());
         let event_id = ContentId(uuid::Uuid::new_v4().to_string());
         // Log LLMRequest
         BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
@@ -296,7 +296,8 @@ impl WithSingleCallable for OrchestratorNode {
             verbosity: TraceLevel::Info,
             content: TraceData::LLMRequest(Arc::new(LoggedLLMRequest {
                 request_id: http_request_id.clone(),
-                client: LLMClient::Ref(self.provider.default_role()),
+                client_name: self.provider.name().to_string(),
+                client_provider: self.provider.provider_name().to_string(),
                 params: serde_json::json!({
                     "request_options": "",
                 }),
@@ -323,13 +324,16 @@ impl WithSingleCallable for OrchestratorNode {
             .single_call(ctx, prompt, http_request_id.clone())
             .await;
 
+        log::info!("----------------- got response: {:?}", response);
+
         // After we get the response, log LLMResponse
         let trace_event = make_trace_event_for_response(
             &response,
             &function_id,
             &http_request_id,
-            "OrchestratorNode::single_call",
+            "OrchestratorNode::single_call::response",
         );
+        log::info!("----------------- putting Trace event: {:?}", trace_event);
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         response
@@ -356,7 +360,8 @@ impl WithStreamable for OrchestratorNode {
             verbosity: TraceLevel::Info,
             content: TraceData::LLMRequest(Arc::new(LoggedLLMRequest {
                 request_id: http_request_id.clone(),
-                client: LLMClient::Ref(self.provider.default_role()),
+                client_name: self.provider.name().to_string(),
+                client_provider: self.provider.provider_name().to_string(),
                 params: serde_json::json!({
                     "request_options": "",
                 }),

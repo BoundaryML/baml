@@ -275,6 +275,10 @@ impl LLMPrimitiveProvider {
         &match_llm_provider!(self, context).name
     }
 
+    pub fn provider_name(&self) -> &str {
+        &match_llm_provider!(self, context).provider
+    }
+
     pub fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         match_llm_provider!(self, request_options)
     }

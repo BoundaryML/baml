@@ -115,16 +115,17 @@ pub struct FunctionEnd {
 // TODO: fix this.
 pub type Prompt = serde_json::Value;
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum LLMClient {
-    Ref(String),
-    ShortHand(String, String),
-}
+// #[derive(Debug, Serialize, Deserialize)]
+// pub enum LLMClientName {
+//     Ref(String),
+//     ShortHand(String, String),
+// }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMRequest {
     pub request_id: HttpRequestId,
-    pub client: LLMClient,
+    pub client_name: String,
+    pub client_provider: String,
     pub params: serde_json::Value,
     pub prompt: Prompt,
 }
