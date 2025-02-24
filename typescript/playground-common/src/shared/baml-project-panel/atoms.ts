@@ -77,41 +77,45 @@ export const ctxAtom = atom((get) => {
   return context
 })
 
-export const runtimeAtom = atom((get) => {
-  try {
-    const wasm = get(wasmAtom)
-    const project = get(projectAtom)
-    const envVars = get(envVarsAtom)
-    // const vscodeEnv = get(vscodeEnvAtom)
+export const runtimeAtom = unwrap(
+  atom(async (get) => {
+    try {
+      const wasm = get(wasmAtom)
+      const project = get(projectAtom)
+      const envVars = get(envVarsAtom)
+      const vscodeEnv = (await vscode.loadEnv())?.envVars ?? {}
 
-    if (wasm === undefined || project === undefined) {
-      return { rt: undefined, diags: undefined }
-    }
-    const selectedEnvVars = Object.fromEntries(Object.entries(envVars).filter(([key, value]) => value !== undefined))
-    const rt = project.runtime(selectedEnvVars)
-    const diags = project.diagnostics(rt)
-    return { rt, diags }
-  } catch (e) {
-    console.log('Error occurred while getting runtime', e)
-    const wasm = get(wasmAtom)
-    if (wasm) {
-      const WasmDiagnosticError = wasm.WasmDiagnosticError
-      if (e instanceof WasmDiagnosticError) {
-        return { rt: undefined, diags: e }
+      if (wasm === undefined || project === undefined) {
+        return { rt: undefined, diags: undefined }
+      }
+      const selectedEnvVars = Object.fromEntries(
+        [...Object.entries(vscodeEnv), ...Object.entries(envVars)].filter(([key, value]) => value !== undefined),
+      )
+      const rt = project.runtime(selectedEnvVars)
+      const diags = project.diagnostics(rt)
+      return { rt, diags }
+    } catch (e) {
+      console.log('Error occurred while getting runtime', e)
+      const wasm = get(wasmAtom)
+      if (wasm) {
+        const WasmDiagnosticError = wasm.WasmDiagnosticError
+        if (e instanceof WasmDiagnosticError) {
+          return { rt: undefined, diags: e }
+        }
+      }
+      if (e instanceof Error) {
+        console.error(e.message)
+      } else {
+        console.error(e)
       }
     }
-    if (e instanceof Error) {
-      console.error(e.message)
-    } else {
-      console.error(e)
-    }
-  }
-  return { rt: undefined, diags: undefined }
-})
+    return { rt: undefined, diags: undefined }
+  }),
+)
 
 export const diagnosticsAtom = atom((get) => {
   const runtime = get(runtimeAtom)
-  return runtime.diags?.errors() ?? []
+  return runtime?.diags?.errors() ?? []
 })
 
 export const numErrorsAtom = atom((get) => {
@@ -129,7 +133,7 @@ export const generatedFilesAtom = atom((get) => {
     return undefined
   }
   const runtime = get(runtimeAtom)
-  if (runtime.rt === undefined) {
+  if (runtime?.rt === undefined) {
     return undefined
   }
 
@@ -171,6 +175,8 @@ const vscodeEnvAtom = unwrap(
   atom(async () => {
     try {
       const res = await vscode.loadEnv()
+      console.log('fetched env vars from vscode', res)
+
       return res
     } catch (e) {
       console.error(`Error occurred while loading env from vscode:\n${JSON.stringify(e)}`)
@@ -182,9 +188,6 @@ const vscodeEnvAtom = unwrap(
 const playgroundPortAtom = unwrap(
   atom(async () => {
     try {
-      const resp = await vscode.loadEnv()
-      console.log('fetched env vars from vscode', resp)
-
       const res = await vscode.getPlaygroundPort()
       return res
     } catch (e) {
@@ -281,7 +284,11 @@ export const envVarsAtom = atom(
 )
 
 export const requiredEnvVarsAtom = atom((get) => {
-  const { rt } = get(runtimeAtom)
+  const runtime = get(runtimeAtom)
+  if (runtime === undefined) {
+    return []
+  }
+  const rt = runtime.rt
   if (rt === undefined) {
     return []
   }

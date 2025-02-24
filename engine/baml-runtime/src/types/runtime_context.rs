@@ -41,9 +41,11 @@ cfg_if::cfg_if!(
         use core::pin::Pin;
         use core::future::Future;
         pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
+        pub type AwsCredProvider = Option<Box<dyn Fn() -> core::pin::Pin<Box<dyn Future<Output = Result<HashMap<String, String>>>>>>>;
     } else {
         use futures::future::BoxFuture;
         pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
+        pub type AwsCredProvider = Option<Box<fn() -> BoxFuture<'static, Result<HashMap<String, String>>>>>;
     }
 );
 
@@ -51,6 +53,7 @@ cfg_if::cfg_if!(
 pub struct RuntimeContext {
     // path to baml_src in the local filesystem
     pub baml_src: Arc<BamlSrcReader>,
+    pub aws_cred_provider: Arc<AwsCredProvider>,
     env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
     pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
@@ -76,6 +79,7 @@ impl RuntimeContext {
 
     pub fn new(
         baml_src: Arc<BamlSrcReader>,
+        aws_cred_provider: Arc<AwsCredProvider>,
         env: HashMap<String, String>,
         tags: HashMap<String, BamlValue>,
         client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
@@ -87,6 +91,7 @@ impl RuntimeContext {
     ) -> RuntimeContext {
         RuntimeContext {
             baml_src,
+            aws_cred_provider,
             env,
             tags,
             client_overrides,

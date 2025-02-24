@@ -13,7 +13,7 @@ import { useCallback } from 'react'
 export const renderedPromptAtom = atom<WasmPrompt | undefined>(undefined)
 
 export const PromptPreviewContent = () => {
-  const { rt } = useAtomValue(runtimeAtom)
+  const rt = useAtomValue(runtimeAtom)?.rt
   const ctx = useAtomValue(ctxAtom)
   const { selectedFn, selectedTc } = useAtomValue(selectionAtom)
   const diagnostics = useAtomValue(diagnosticsAtom)

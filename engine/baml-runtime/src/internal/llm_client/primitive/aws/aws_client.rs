@@ -138,7 +138,7 @@ impl AwsClient {
     // Note: This function necessarily exposes secret keys when they are provided, so it should
     // only be called while generating real requests to the provider, not when rendering raw
     // cURL previews.
-    async fn client_anyhow(&self) -> Result<bedrock::Client> {
+    async fn client_anyhow(&self, ctx: &RuntimeContext) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
         let loader = super::wasm::load_aws_config();
         #[cfg(not(target_arch = "wasm32"))]
@@ -162,6 +162,7 @@ impl AwsClient {
                 {
                     loader.credentials_provider(WasmAwsCreds {
                         default_chain: builder.build().await,
+                        // aws_cred_provider: ctx.aws_cred_provider.clone(),
                     })
                 }
 
@@ -396,7 +397,7 @@ impl WithStreamChat for AwsClient {
         let request_options = Default::default();
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
-        let aws_client = match self.client_anyhow().await {
+        let aws_client = match self.client_anyhow(ctx).await {
             Ok(c) => c,
             Err(e) => {
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -679,7 +680,7 @@ impl AwsClient {
 impl WithChat for AwsClient {
     async fn chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         chat_messages: &[RenderedChatMessage],
     ) -> LLMResponse {
         let client = self.context.name.to_string();
@@ -688,7 +689,7 @@ impl WithChat for AwsClient {
         let request_options = Default::default();
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
-        let aws_client = match self.client_anyhow().await {
+        let aws_client = match self.client_anyhow(ctx).await {
             Ok(c) => c,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {
@@ -704,7 +705,7 @@ impl WithChat for AwsClient {
             }
         };
 
-        let request = match self.build_request(_ctx, chat_messages) {
+        let request = match self.build_request(ctx, chat_messages) {
             Ok(r) => r,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {

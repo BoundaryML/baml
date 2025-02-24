@@ -15,7 +15,7 @@ import { testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from '
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 
 export const useRunTests = (maxBatchSize = 5) => {
-  const { rt } = useAtomValue(runtimeAtom)
+  const rt = useAtomValue(runtimeAtom)?.rt
   const ctx = useAtomValue(ctxAtom)
   const wasm = useAtomValue(wasmAtom)
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)

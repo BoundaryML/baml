@@ -360,12 +360,12 @@ const getActiveWorkspacePath = (): string | undefined => {
   return workspace.workspaceFolders?.[0]?.uri.fsPath
 }
 
-const getEnvVarBlob = async (activeWorkspacePath: string): Promise<string> => {
+const getEnvVarBlob = async ({ activeWorkspacePath }: { activeWorkspacePath: string }): Promise<string> => {
   const envVarFile: string | undefined = workspace.getConfiguration('baml').get('envVarFile')
   const envVarCommand: string | undefined = workspace.getConfiguration('baml').get('envVarCommand')
 
   if (envVarFile) {
-    await readFileAsync(join(activeWorkspacePath, envVarFile))
+    return await readFileAsync(join(activeWorkspacePath, envVarFile), 'utf-8')
   }
   if (envVarCommand) {
     const { stdout, stderr } = await execAsync(envVarCommand, {
@@ -403,8 +403,10 @@ const loadEnv = async (req: LoadEnvRequest): Promise<LoadEnvResponse> => {
     console.log('Error loading aws creds:', err)
   }
 
-  const envVarBlob = await getEnvVarBlob(activeWorkspacePath)
+  const envVarBlob = await getEnvVarBlob({ activeWorkspacePath })
   const envVars = dotenv.parse(envVarBlob)
+
+  console.log('env vars loaded', envVars)
 
   return { envVars, awsCreds }
 }

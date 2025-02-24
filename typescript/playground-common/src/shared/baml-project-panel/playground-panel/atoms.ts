@@ -2,8 +2,7 @@ import { atom } from 'jotai'
 import { requiredEnvVarsAtom, envVarsAtom, runtimeAtom } from '../atoms'
 
 export const runtimeStateAtom = atom((get) => {
-  const { rt } = get(runtimeAtom)
-  console.log('rt', rt)
+  const rt = get(runtimeAtom)?.rt
   if (rt === undefined) {
     return { functions: [] }
   }
@@ -58,7 +57,7 @@ export const testcaseObjectAtom = atomFamily((params: { functionName: string; te
 export const updateCursorAtom = atom(
   null,
   (get, set, cursor: { fileName: string; fileText: string; line: number; column: number }) => {
-    const runtime = get(runtimeAtom).rt
+    const runtime = get(runtimeAtom)?.rt
 
     if (runtime) {
       const fileName = cursor.fileName
