@@ -560,13 +560,13 @@ pub struct LLMStreamCall {
     pub chunks: Vec<serde_json::Value>,
 }
 
-/// A Collector holds references to multiple FunctionIds. When dropped,
-/// it decrements the global ref counts for all tracked IDs.
+/// A Collector holds references to multiple FunctionIds in order of insertion.
+/// When dropped, it decrements the global ref counts for all tracked IDs.
 #[derive(Debug)]
 pub struct Collector {
     name: String,
-    // Now just a regular Mutex<HashSet> - no Arc needed since we want independent sets
-    tracked_ids: Mutex<HashSet<FunctionId>>,
+    // Using IndexSet to preserve the insertion order of tracked FuncIds
+    tracked_ids: Mutex<IndexSet<FunctionId>>,
 }
 
 impl Collector {
@@ -577,7 +577,7 @@ impl Collector {
         );
         Self {
             name: name.unwrap_or("collector".to_string()),
-            tracked_ids: Mutex::new(HashSet::new()),
+            tracked_ids: Mutex::new(IndexSet::new()),
         }
     }
 
@@ -590,20 +590,20 @@ impl Collector {
         // First increment the global ref count
         BAML_TRACER.lock().unwrap().inc_ref(&fid);
 
-        // Then add to our set
+        // Then add to our set (maintaining insertion order)
         let mut guard = self.tracked_ids.lock().unwrap();
         guard.insert(fid);
     }
 
     pub fn untrack_function(&self, fid: &FunctionId) {
         let mut guard = self.tracked_ids.lock().unwrap();
-        if guard.remove(fid) {
+        if guard.swap_remove(fid) {
             BAML_TRACER.lock().unwrap().dec_ref(fid);
         }
     }
 
     pub fn function_logs(&self) -> Vec<FunctionLog> {
-        let mut guard = self.tracked_ids.lock().unwrap();
+        let guard = self.tracked_ids.lock().unwrap();
         guard
             .iter()
             .map(|fid| FunctionLog::new(fid.clone()))
@@ -611,22 +611,21 @@ impl Collector {
     }
 
     pub fn last_function_log(&self) -> Option<FunctionLog> {
-        let mut guard = self.tracked_ids.lock().unwrap();
-        guard.iter().last().map(|id| FunctionLog::new(id.clone()))
+        let guard = self.tracked_ids.lock().unwrap();
+        guard
+            .iter()
+            .last() // Based on insertion order
+            .map(|id| FunctionLog::new(id.clone()))
     }
 
     pub fn function_log_by_id(&self, fid: &FunctionId) -> Option<FunctionLog> {
-        let mut guard = self.tracked_ids.lock().unwrap();
-        guard
-            .iter()
-            .find(|fid| fid == fid)
-            .map(|fid| FunctionLog::new(fid.clone()))
+        let guard = self.tracked_ids.lock().unwrap();
+        guard.get(fid).map(|fid| FunctionLog::new(fid.clone()))
     }
 
     pub fn usage(&self) -> Usage {
-        let mut guard = self.tracked_ids.lock().unwrap();
+        let guard = self.tracked_ids.lock().unwrap();
         let mut total_usage = Usage::default();
-
         for fid in guard.iter() {
             let mut log = FunctionLog::new(fid.clone());
             let usage = log.usage();
@@ -643,7 +642,6 @@ impl Collector {
                 (None, None) => None,
             };
         }
-
         total_usage
     }
 }

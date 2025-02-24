@@ -331,6 +331,7 @@ async def test_collector_mixed_async_sync_calls():
 
     # Verify the second call's usage
     usage_second_call = logs[1].usage
+    assert logs[1].timing.start_time_utc_ms > logs[0].timing.start_time_utc_ms
     total_input = usage_first_call.input_tokens + usage_second_call.input_tokens
     total_output = usage_first_call.output_tokens + usage_second_call.output_tokens
     assert collector.usage.input_tokens == total_input
