@@ -53,12 +53,12 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             # Remove the callback, so that the ffi_stream can be GC'd
             # If we don't do this, the ffi_stream *and* this BamlStream object
             # will never get collected since they circularly reference each other.
-            self.__ffi_stream.on_event(None)  # type: ignore
             return retval
         except Exception as e:
             self.__future.set_exception(e)
             raise
         finally:
+            self.__ffi_stream.on_event(None)  # type: ignore
             self.__is_done = True
             self.__event_queue.put_nowait(None)
 
