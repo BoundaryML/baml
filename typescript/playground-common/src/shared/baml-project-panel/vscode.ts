@@ -11,6 +11,8 @@ import {
   SetProxySettingsRequest,
   LoadEnvRequest,
   LoadEnvResponse,
+  LoadAwsCredsRequest,
+  LoadAwsCredsResponse,
 } from './vscode-rpc'
 import type { WebviewApi } from 'vscode-webview'
 
@@ -117,6 +119,13 @@ class VSCodeAPIWrapper {
   public async loadEnv() {
     const resp = await this.rpc<LoadEnvRequest, LoadEnvResponse>({
       vscodeCommand: 'LOAD_ENV',
+    })
+    return resp
+  }
+
+  public async loadAwsCreds() {
+    const resp = await this.rpc<LoadAwsCredsRequest, LoadAwsCredsResponse>({
+      vscodeCommand: 'LOAD_AWS_CREDS',
     })
     return resp
   }

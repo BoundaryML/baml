@@ -335,6 +335,20 @@ export class WebviewPanelHost {
               }
             })()
             return
+          case 'LOAD_AWS_CREDS':
+            ;(async () => {
+              try {
+                const credentialProvider = fromIni({
+                  profile: 'boundaryml-prod',
+                })
+                const awsCreds = await credentialProvider()
+                this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: { awsCreds } })
+              } catch (error) {
+                console.error('Error loading aws creds:', error)
+                this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: { error } })
+              }
+            })()
+            return
           case 'INITIALIZED': // when the playground is initialized and listening for file changes, we should resend all project files.
             // request diagnostics, which updates the runtime and triggers a new project files update.
             addProject()
@@ -393,20 +407,10 @@ const loadEnv = async (req: LoadEnvRequest): Promise<LoadEnvResponse> => {
     return { envVars: {} }
   }
 
-  let awsCreds: AwsCredentialIdentity | undefined
-  try {
-    const credentialProvider = fromIni({
-      profile: 'boundaryml-prod',
-    })
-    awsCreds = await credentialProvider()
-  } catch (err) {
-    console.log('Error loading aws creds:', err)
-  }
-
   const envVarBlob = await getEnvVarBlob({ activeWorkspacePath })
   const envVars = dotenv.parse(envVarBlob)
 
-  console.log('env vars loaded', envVars)
+  console.log('env vars loaded', { time: Date.now(), envVars })
 
-  return { envVars, awsCreds }
+  return { envVars }
 }

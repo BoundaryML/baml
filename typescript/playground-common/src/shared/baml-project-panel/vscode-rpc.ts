@@ -123,9 +123,20 @@ export interface LoadEnvRequest {
 
 export interface LoadEnvResponse {
   envVars: Record<string, string>
-  awsCreds?: AwsCredentialIdentity
   error?: string
 }
+
+export interface LoadAwsCredsRequest {
+  vscodeCommand: 'LOAD_AWS_CREDS'
+}
+
+export type LoadAwsCredsResponse =
+  | {
+      awsCreds: AwsCredentialIdentity
+    }
+  | {
+      error: string
+    }
 
 export interface InitializedRequest {
   vscodeCommand: 'INITIALIZED'
@@ -144,6 +155,7 @@ type ApiPairs = [
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],
   [GetPlaygroundPortRequest, GetPlaygroundPortResponse],
   [LoadEnvRequest, LoadEnvResponse],
+  [LoadAwsCredsRequest, LoadAwsCredsResponse],
   [InitializedRequest, InitializedResponse],
 ]
 
