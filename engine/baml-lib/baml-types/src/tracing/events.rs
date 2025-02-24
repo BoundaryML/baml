@@ -29,6 +29,9 @@ pub struct TraceEvent {
     // a unique identifier for this particular content
     pub event_id: ContentId,
 
+    // The content of the log
+    pub content: TraceData,
+
     // The chain of spans that lead to this log event
     // Includes span_id at the last position (content_span_id is not included)
     pub span_chain: Vec<FunctionId>,
@@ -44,9 +47,6 @@ pub struct TraceEvent {
     /// verbosity level
     #[serde(with = "level_serde")]
     pub verbosity: TraceLevel,
-
-    // The content of the log
-    pub content: TraceData,
 
     pub tags: TraceTags,
 }

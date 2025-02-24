@@ -58,6 +58,7 @@ pub struct RuntimeContext {
     pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
     pub type_alias_overrides: IndexMap<String, FieldType>,
     pub recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
+    // Only the BAML_TRACER depends on this. If it goes missing due to a bug, we just wont publish logs.
     pub span_id: Option<uuid::Uuid>,
     pub recursive_class_overrides: Vec<IndexSet<String>>,
 }

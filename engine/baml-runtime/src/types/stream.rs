@@ -130,7 +130,7 @@ impl FunctionResultStream {
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
 
-        let rctx = ctx.create_ctx(tb, cb);
+        let rctx = ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id));
         let res = match rctx {
             Ok(rctx) => {
                 async {

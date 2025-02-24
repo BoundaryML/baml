@@ -257,10 +257,12 @@ impl BamlRuntime {
         }
 
         let run_to_response = || async {
-            let rctx = ctx.create_ctx(type_builder.as_ref(), None)?;
+            let rctx =
+                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let (params, constraints) =
                 self.get_test_params_and_constraints(function_name, test_name, &rctx, true)?;
-            let rctx_stream = ctx.create_ctx(type_builder.as_ref(), None)?;
+            let rctx_stream =
+                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let mut stream = self.inner.stream_function_impl(
                 function_name.into(),
                 &params,
@@ -360,6 +362,14 @@ impl BamlRuntime {
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
+        log::info!(
+            "fn: {}, tracer Span: {:?}, ctx.span: {:?} params: {:?}",
+            function_name,
+            span,
+            ctx.span_id(),
+            params
+        );
+
         if let Some(span) = span.clone() {
             if let Some(collectors) = collectors {
                 for collector in collectors.iter() {
@@ -368,7 +378,7 @@ impl BamlRuntime {
             }
         }
 
-        let response = match ctx.create_ctx(tb, cb) {
+        let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id)) {
             Ok(rctx) => {
                 self.inner
                     // TODO: add tracer here?
@@ -407,7 +417,7 @@ impl BamlRuntime {
             function_name,
             params,
             self.tracer.clone(),
-            ctx.create_ctx(tb, cb)?,
+            ctx.create_ctx(tb, cb, None)?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
             collectors.unwrap_or_else(|| vec![]),

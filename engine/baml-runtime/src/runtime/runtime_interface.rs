@@ -301,7 +301,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
     ) -> Result<Option<TypeBuilder>> {
-        let func = self.get_function(function_name, &ctx.create_ctx(None, None)?)?;
+        let func = self.get_function(function_name, &ctx.create_ctx(None, None, None)?)?;
         let test = self.ir().find_test(&func, test_name)?;
 
         if test.type_builder_contents().is_empty() {

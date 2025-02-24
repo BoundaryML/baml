@@ -86,6 +86,7 @@ impl RuntimeContextManager {
             .unwrap_or_default()
     }
 
+    // Note, after entering, calling ctx.span_id() will return the span id of the old context still.
     pub fn enter(&self, name: &str) -> uuid::Uuid {
         let last_tags = self.clone_last_tags();
         let span = uuid::Uuid::new_v4();
@@ -122,6 +123,14 @@ impl RuntimeContextManager {
         &self,
         type_builder: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
+        // the tracer initializes the new span_id,
+        // and then passes it back in here for a new context. It's kind of circular since tracer uses this class to _create_ the span_id....
+        // Anyway RuntimeCtx is passed everywhere and we need to know what the last span_id that the tracer created was.
+        // tl;dr
+        // 1. Tracer creates a new span id using the current context that's passe dinto call_function()
+        // 2. Tracer passes the span_id back in here for a new context
+        // 3. profit
+        span_id: Option<uuid::Uuid>,
     ) -> Result<RuntimeContext> {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {
@@ -143,8 +152,6 @@ impl RuntimeContextManager {
         let (cls, enm, als, rec_cls, rec_als) = type_builder
             .map(TypeBuilder::to_overrides)
             .unwrap_or_default();
-
-        let span_id: Option<uuid::Uuid> = self.span_id().ok();
 
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),

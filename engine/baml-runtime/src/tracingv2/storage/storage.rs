@@ -111,7 +111,10 @@ impl TraceStorage {
 
     /// Append a new event for the given function ID, but only if ref_count > 0.
     pub fn put(&mut self, event: Arc<TraceEvent>) {
-        // log::info!("Putting event: {:?}", event);
+        log::info!(
+            "#####################   Putting event: ############\n {:?}\n\n",
+            event
+        );
         let Some(&count) = self.ref_counts.get(&event.span_id) else {
             // If no references exist, skip or handle otherwise
             // log::trace!("No references for FunctionID {:?} -- dropping events", event.span_id);

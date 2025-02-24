@@ -248,7 +248,11 @@ impl BamlTracer {
         self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
 
-        log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
+        log::info!(
+            "\n------------ Entering span {:#?} in {:?}\n",
+            span_id,
+            function_name
+        );
         let span = TracingSpan {
             span_id,
             params: params.clone(),
@@ -307,8 +311,8 @@ impl BamlTracer {
                 ctx
             );
         };
-        log::trace!(
-            "Finishing span: {:#?} {}\nevent chain {:?}",
+        log::info!(
+            "\n------------ Finishing span: {:#?} {}\nevent chain {:?}\n",
             span,
             span_id,
             event_chain
@@ -320,7 +324,6 @@ impl BamlTracer {
 
         if let Some(tracer) = &self.tracer {
             tracer.submit(response.to_log_schema(&self.options, event_chain, tags, span))?;
-            // tracer.publish() // uses a channel
             guard.finalize();
             Ok(Some(span_id))
         } else {
