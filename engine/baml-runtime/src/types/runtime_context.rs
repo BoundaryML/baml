@@ -41,11 +41,11 @@ cfg_if::cfg_if!(
         use core::pin::Pin;
         use core::future::Future;
         pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
-        pub type AwsCredProvider = Option<Box<dyn Fn() -> core::pin::Pin<Box<dyn Future<Output = Result<HashMap<String, String>>>>>>>;
+        pub type AwsCredProvider = Option<Box<dyn Fn(Option<&str>) -> core::pin::Pin<Box<dyn Future<Output = Result<HashMap<String, String>>>>>>>;
     } else {
         use futures::future::BoxFuture;
         pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
-        pub type AwsCredProvider = Option<Box<fn() -> BoxFuture<'static, Result<HashMap<String, String>>>>>;
+        pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, Result<HashMap<String, String>>>>>;
     }
 );
 

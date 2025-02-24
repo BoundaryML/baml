@@ -5,6 +5,7 @@ use anyhow::Context;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
+use baml_runtime::AwsCredProvider;
 use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
@@ -18,6 +19,7 @@ use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 use internal_llm_client::AllowedRoleMetadata;
+use js_sys::Object;
 use jsonish::deserializer::deserialize_flags::Flag;
 use jsonish::BamlValueWithFlags;
 
@@ -26,6 +28,7 @@ use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
 use jsonish::ResponseBamlValue;
+use log::kv;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -1480,6 +1483,49 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
     }))
 }
 
+fn js_fn_to_aws_cred_provider(load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
+    Some(Box::new(move |profile_name| {
+        Box::pin({
+            let profile_name = profile_name.map(|s| s.to_string());
+            let load_aws_creds_cb = load_aws_creds_cb.clone();
+            async move {
+                let null = JsValue::NULL;
+                let profile_name = if let Some(profile_name) = profile_name {
+                    JsValue::from(profile_name)
+                } else {
+                    JsValue::NULL
+                };
+                let Ok(load) = load_aws_creds_cb.call1(&null, &profile_name) else {
+                    anyhow::bail!("loadAwsCreds did not return a promise")
+                };
+
+                let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
+
+                let load = match load {
+                    Ok(load) => load,
+                    Err(err) => {
+                        if let Some(e) = err.dyn_ref::<js_sys::Error>() {
+                            if let Some(e_str) = e.message().as_string() {
+                                anyhow::bail!("{}", e_str)
+                            }
+                        }
+
+                        return Err(anyhow::anyhow!("{:?}", err).context("loadAwsCreds rejected"));
+                    }
+                };
+
+                match serde_wasm_bindgen::from_value::<HashMap<String, String>>(load) {
+                    Ok(creds) => Ok(creds),
+                    Err(e) => Err(anyhow::anyhow!(
+                        "Expected loadAwsCreds to return a HashMap<string, string>. {}",
+                        e
+                    )),
+                }
+            }
+        })
+    }))
+}
+
 #[wasm_bindgen]
 pub struct WasmCallContext {
     /// Index of the orchestration graph node to use for the call
@@ -1619,8 +1665,10 @@ impl WasmFunction {
         &self,
         rt: &mut WasmRuntime,
         test_name: String,
+        env_vars: JsValue,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
+        load_aws_creds_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
 
@@ -1635,9 +1683,19 @@ impl WasmFunction {
             on_partial_response.call1(&this, &res).unwrap();
         });
 
-        let ctx = rt.create_ctx_manager(
+        let env_vars: HashMap<String, String> =
+            serde_wasm_bindgen::from_value(env_vars).map_err(|e| {
+                JsValue::from_str(&format!(
+                    "Expected env_vars to be HashMap<string, string>. {}",
+                    e
+                ))
+            })?;
+
+        let ctx = rt.create_ctx_manager_with_env(
             BamlValue::String("wasm".to_string()),
+            env_vars,
             js_fn_to_baml_src_reader(get_baml_src_cb),
+            js_fn_to_aws_cred_provider(load_aws_creds_cb),
         );
         let (test_response, span) = rt
             .run_test(&function_name, &test_name, &ctx, Some(cb))

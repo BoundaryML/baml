@@ -45,10 +45,11 @@ impl RuntimeContextManager {
     pub fn new_from_env_vars(
         env_vars: HashMap<String, String>,
         baml_src_reader: BamlSrcReader,
+        aws_cred_provider: AwsCredProvider,
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
-            aws_cred_provider: Arc::new(None),
+            aws_cred_provider: Arc::new(aws_cred_provider),
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),

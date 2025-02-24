@@ -40,6 +40,7 @@ use std::sync::OnceLock;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
+pub use runtime_context::AwsCredProvider;
 pub use runtime_context::BamlSrcReader;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
@@ -173,7 +174,25 @@ impl BamlRuntime {
         language: BamlValue,
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
-        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
+        let ctx =
+            RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader, None);
+        let tags: HashMap<String, BamlValue> = [("baml.language", language)]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+        ctx.upsert_tags(tags);
+        ctx
+    }
+
+    pub fn create_ctx_manager_with_env(
+        &self,
+        language: BamlValue,
+        env_vars: HashMap<String, String>,
+        baml_src_reader: BamlSrcReader,
+        aws_cred_provider: AwsCredProvider,
+    ) -> RuntimeContextManager {
+        let ctx =
+            RuntimeContextManager::new_from_env_vars(env_vars, baml_src_reader, aws_cred_provider);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
