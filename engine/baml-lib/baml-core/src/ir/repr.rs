@@ -621,8 +621,8 @@ impl WithRepr<FieldType> for ast::FieldType {
 
         let mut symbol_spans = HashMap::new();
 
-        let mut queue = vec![self];
-        while let Some(item) = queue.pop() {
+        let mut stack = vec![self];
+        while let Some(item) = stack.pop() {
             match item {
                 // Base case, store span.
                 ast::FieldType::Symbol(_, idn, ..) => {
@@ -636,14 +636,14 @@ impl WithRepr<FieldType> for ast::FieldType {
                     }
                 }
                 // Recurse.
-                ast::FieldType::List(_, ft, ..) => queue.push(ft),
+                ast::FieldType::List(_, ft, ..) => stack.push(ft),
                 ast::FieldType::Map(_, kv, ..) => {
                     let (k, v) = &**kv;
-                    queue.push(k);
-                    queue.push(v);
+                    stack.push(k);
+                    stack.push(v);
                 }
                 ast::FieldType::Union(_, items, ..) | ast::FieldType::Tuple(_, items, ..) => {
-                    queue.extend(items.iter());
+                    stack.extend(items.iter());
                 }
                 // No identifiers here.
                 ast::FieldType::Primitive(..) | ast::FieldType::Literal(..) => {}
