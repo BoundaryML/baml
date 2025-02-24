@@ -85,6 +85,9 @@ export const runtimeAtom = unwrap(
       const envVars = get(envVarsAtom)
       const vscodeEnv = (await vscode.loadEnv())?.envVars ?? {}
 
+      const awsCreds = await vscode.loadAwsCreds()
+      console.log('awsCreds', awsCreds)
+
       if (wasm === undefined || project === undefined) {
         return { rt: undefined, diags: undefined }
       }

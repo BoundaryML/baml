@@ -45,7 +45,7 @@ cfg_if::cfg_if!(
     } else {
         use futures::future::BoxFuture;
         pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
-        pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, Result<HashMap<String, String>>>>>;
+        pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, Result<HashMap<String, String>>>>>>;
     }
 );
 
