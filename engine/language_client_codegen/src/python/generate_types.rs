@@ -128,9 +128,9 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
                     (
                         Cow::Borrowed(f.elem.name.as_str()),
                         add_default_value(
-                            c.db,
+                            c.ir,
                             &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_type_ref(c.db, false),
+                            &f.elem.r#type.elem.to_type_ref(c.ir, false),
                         ),
                         f.elem.docstring.as_ref().map(render_docstring),
                     )
@@ -145,13 +145,13 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
 impl<'ir> From<Walker<'ir, (&'ir String, &'ir FieldType)>> for PythonTypeAlias<'ir> {
     fn from(
         Walker {
-            db,
+            ir,
             item: (name, target),
         }: Walker<(&'ir String, &'ir FieldType)>,
     ) -> Self {
         PythonTypeAlias {
             name: Cow::Borrowed(name),
-            target: target.to_type_ref(db, false),
+            target: target.to_type_ref(ir, false),
         }
     }
 }
@@ -182,30 +182,30 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                 .map(|f| {
                     // Fields with @stream.done should take their type from
                     let needed: bool = f.attributes.get("stream.not_null").is_some();
-                    let (_, metadata) = c.db.distribute_metadata(&f.elem.r#type.elem);
+                    let (_, metadata) = c.ir.distribute_metadata(&f.elem.r#type.elem);
                     let done: bool = metadata.1.done;
                     let field = match (done, needed) {
                         // A normal partial field.
                         (false, false) => add_default_value(
-                            c.db,
+                            c.ir,
                             &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, false),
+                            &f.elem.r#type.elem.to_partial_type_ref(c.ir, false, false),
                         ),
                         // A field with @stream.done and no @stream.not_null
                         (true, false) => add_default_value(
-                            c.db,
+                            c.ir,
                             &f.elem.r#type.elem,
-                            &optional(&f.elem.r#type.elem.to_type_ref(c.db, true)),
+                            &optional(&f.elem.r#type.elem.to_type_ref(c.ir, true)),
                         ),
                         (false, true) => add_default_value(
-                            c.db,
+                            c.ir,
                             &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_partial_type_ref(c.db, false, true),
+                            &f.elem.r#type.elem.to_partial_type_ref(c.ir, false, true),
                         ),
                         (true, true) => add_default_value(
-                            c.db,
+                            c.ir,
                             &f.elem.r#type.elem,
-                            &f.elem.r#type.elem.to_type_ref(c.db, true), // TODO: Fix.
+                            &f.elem.r#type.elem.to_type_ref(c.ir, true), // TODO: Fix.
                         ),
                     };
                     (
@@ -396,11 +396,13 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     format!("Optional[\"{name}\"]")
                 }
             }
-            FieldType::Literal(value) => if needed || wrapped {
-                to_python_literal(value)
-            } else {
-                format!("Optional[{}]", to_python_literal(value))
-            }, // TODO: Handle `needed` here.
+            FieldType::Literal(value) => {
+                if needed || wrapped {
+                    to_python_literal(value)
+                } else {
+                    format!("Optional[{}]", to_python_literal(value))
+                }
+            } // TODO: Handle `needed` here.
 
             FieldType::List(inner) => {
                 format!("List[{}]", inner.to_partial_type_ref(ir, true, false))

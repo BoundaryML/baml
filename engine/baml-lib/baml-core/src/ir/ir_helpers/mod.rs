@@ -2,7 +2,11 @@ mod error_utils;
 pub mod scope_diagnostics;
 mod to_baml_arg;
 
+use std::collections::HashSet;
+
 use indexmap::IndexMap;
+use internal_baml_diagnostics::Span;
+use internal_baml_schema_ast::ast::{WithIdentifier, WithSpan};
 use itertools::Itertools;
 
 use self::scope_diagnostics::ScopeStack;
@@ -14,6 +18,7 @@ use crate::{
         TypeAlias,
     },
 };
+
 use anyhow::Result;
 use baml_types::{
     BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
@@ -50,6 +55,9 @@ pub trait IRHelper {
         function: &'a FunctionWalker<'a>,
         test_name: &str,
     ) -> Result<TestCaseWalker<'a>>;
+
+    fn find_class_locations(&self, type_name: &str) -> Vec<Span>;
+
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
@@ -231,6 +239,70 @@ impl IRHelper for IntermediateRepr {
                 error_not_found!("template string", template_string_name, &template_strings)
             }
         }
+    }
+
+    fn find_class_locations(&self, class_name: &str) -> Vec<Span> {
+        let mut locations = vec![];
+
+        for cls in self.walk_classes() {
+            // First look for the definition of the class.
+            if cls.name() == class_name {
+                locations.push(
+                    cls.item
+                        .attributes
+                        .identifier_span
+                        .as_ref()
+                        .unwrap()
+                        .to_owned(),
+                );
+            }
+
+            // After that we'll find all the references to this class in the
+            // fields of other classes.
+            for field in cls.walk_fields() {
+                field
+                    .elem()
+                    .r#type
+                    .attributes
+                    .symbol_spans
+                    .iter()
+                    .for_each(|(name, spans)| {
+                        if name == class_name {
+                            locations.extend(spans.iter().cloned());
+                        }
+                    });
+            }
+        }
+
+        // Now do the same for type aliases.
+        for alias in self.walk_type_aliases() {
+            alias
+                .elem()
+                .r#type
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == class_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        // Then find function inputs and outputs pointing to this class.
+        for func in self.walk_functions() {
+            func.item
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == class_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        locations
     }
 
     fn check_function_params<'a>(

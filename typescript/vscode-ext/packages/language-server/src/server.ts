@@ -24,6 +24,8 @@ import {
   TextDocuments,
   FormattingOptions,
   TextEdit,
+  ResponseError,
+  ErrorCodes,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
@@ -146,7 +148,7 @@ export function startServer(options?: LSOptions): void {
           triggerCharacters: ['@', '"', '.'],
         },
         hoverProvider: true,
-        renameProvider: false,
+        renameProvider: true,
         documentSymbolProvider: true,
         codeLensProvider: {
           resolveProvider: true,
@@ -743,6 +745,59 @@ export function startServer(options?: LSOptions): void {
       return allFunctions
     },
   )
+
+  connection.onRequest('textDocument/rename', (params: RenameParams) => {
+    const doc = getDocument(params.textDocument.uri)
+
+    if (!doc) {
+      return null
+    }
+
+    const project = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+
+    if (!project) {
+      return null
+    }
+
+    const symbol = getWordAtPosition(doc, params.position)
+
+    // TODO: Enums, type aliases, etc.
+    if (project.runtime().is_valid_enum(symbol)) {
+      throw new ResponseError(ErrorCodes.InvalidRequest, `Enum renaming is not yet supported: '${symbol}'`)
+    }
+    if (project.runtime().is_valid_function(symbol)) {
+      throw new ResponseError(ErrorCodes.InvalidRequest, `Function renaming is not yet supported: '${symbol}'`)
+    }
+    if (!project.runtime().is_valid_class(symbol)) {
+      throw new ResponseError(ErrorCodes.InvalidRequest, `Cannot rename symbol '${symbol}'`)
+    }
+
+    const changes: { [uri: string]: TextEdit[] } = {}
+
+    for (const location of project.runtime().search_for_class_locations(symbol)) {
+      if (!changes[location.uri]) {
+        changes[location.uri] = []
+      }
+
+      changes[location.uri].push({
+        range: {
+          start: {
+            line: location.start_line,
+            character: location.start_character,
+          },
+          end: {
+            line: location.end_line,
+            character: location.end_character,
+          },
+        },
+        newText: params.newName,
+      })
+    }
+
+    console.log(changes)
+
+    return { changes }
+  })
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection
