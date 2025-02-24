@@ -50,8 +50,8 @@ const readFileAsync = promisify(fs.readFile)
  * - Setting the HTML (and by proxy CSS/JavaScript) content of the webview panel
  * - Setting message listeners so data can be passed between the webview and extension
  */
-export class WebPanelView {
-  public static currentPanel: WebPanelView | undefined
+export class WebPanelHost {
+  public static currentPanel: WebPanelHost | undefined
   private readonly _panel: WebviewPanel
   private _disposables: Disposable[] = []
   private _port: () => number
@@ -89,9 +89,9 @@ export class WebPanelView {
    * @param extensionUri The URI of the directory containing the extension.
    */
   public static render(extensionUri: Uri, portLoader: () => number, reporter: TelemetryReporter) {
-    if (WebPanelView.currentPanel) {
+    if (WebPanelHost.currentPanel) {
       // If the webview panel already exists reveal it
-      WebPanelView.currentPanel._panel.reveal(ViewColumn.Beside)
+      WebPanelHost.currentPanel._panel.reveal(ViewColumn.Beside)
     } else {
       // If a webview panel does not already exist create and show a new one
       const panel = window.createWebviewPanel(
@@ -119,7 +119,7 @@ export class WebPanelView {
         },
       )
 
-      WebPanelView.currentPanel = new WebPanelView(panel, extensionUri, portLoader, reporter)
+      WebPanelHost.currentPanel = new WebPanelHost(panel, extensionUri, portLoader, reporter)
     }
   }
 
@@ -136,7 +136,7 @@ export class WebPanelView {
    * Cleans up and disposes of webview resources when the webview panel is closed.
    */
   public dispose() {
-    WebPanelView.currentPanel = undefined
+    WebPanelHost.currentPanel = undefined
 
     // Dispose of the current webview panel
     this._panel.dispose()
