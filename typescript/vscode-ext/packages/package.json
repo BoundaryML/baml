@@ -16,14 +16,12 @@
   ],
   "activationEvents": [
     "onLanguage:baml",
-    "onLanguage:python",
-    "onLanguage:json"
+    "onLanguage:python"
   ],
   "main": "./vscode/out/extension.js",
   "contributes": {
     "activationEvents": [
       "onLanguage:baml",
-      "onLanguage:json",
       "onLanguage:python"
     ],
     "configuration": {
@@ -193,3 +191,4 @@
   },
   "preview": false
 }
+

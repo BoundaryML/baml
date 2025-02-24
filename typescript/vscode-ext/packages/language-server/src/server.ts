@@ -158,7 +158,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -168,7 +168,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -178,7 +178,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
