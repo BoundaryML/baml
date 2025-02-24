@@ -25,7 +25,6 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use baml_types::tracing::events::HttpRequestId;
-// use btrace::WithTraceContext;
 use chrono::{Duration, Utc};
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]

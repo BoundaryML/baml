@@ -109,7 +109,7 @@ impl FunctionResultStream {
             }
             let trace_event = TraceEvent {
                 span_id: FunctionId(span.span_id.to_string()),
-                event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
                 span_chain: vec![],
                 timestamp: web_time::SystemTime::now(),
                 callsite: self.function_name.clone(),
@@ -148,19 +148,6 @@ impl FunctionResultStream {
 
                     FunctionResult::new_chain(history)
                 }
-                // .btrace(
-                //     tracing::Level::INFO,
-                //     format!("baml_stream_function::{}", self.function_name),
-                //     json!({}),
-                //     |result| match result {
-                //         Ok(result) => json!({
-                //             "result": format!("TODO: actually return this as a json object: {}", result.to_string()),
-                //         }),
-                //         Err(e) => json!({
-                //             "exception": e.to_string()
-                //         }),
-                //     },
-                // )
                 .await
             }
             Err(e) => Err(e),

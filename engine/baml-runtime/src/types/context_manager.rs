@@ -21,7 +21,6 @@ pub struct RuntimeContextManager {
     context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
-    // tracer: Arc<BamlTracer>,
 }
 
 impl fmt::Debug for RuntimeContextManager {
@@ -41,7 +40,6 @@ impl RuntimeContextManager {
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
             env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
-            // tracer: self.tracer.clone(),
         }
     }
 
@@ -57,14 +55,12 @@ impl RuntimeContextManager {
     pub fn new_from_env_vars(
         env_vars: HashMap<String, String>,
         baml_src_reader: BamlSrcReader,
-        // tracer: Arc<BamlTracer>,
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),
-            // tracer,
         }
     }
 
@@ -164,7 +160,6 @@ impl RuntimeContextManager {
             rec_cls,
             rec_als,
             span_id,
-            // self.tracer.clone(),
         );
 
         ctx.client_overrides = match client_registry {

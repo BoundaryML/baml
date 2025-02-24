@@ -23,7 +23,6 @@ use crate::{
 use anyhow::{Context, Result};
 use baml_types::tracing::events::HttpRequestId;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
-// use btrace::WithTraceContext;
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use http::header;

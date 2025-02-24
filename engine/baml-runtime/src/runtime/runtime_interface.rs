@@ -366,7 +366,6 @@ impl RuntimeConstructor for InternalBamlRuntime {
 }
 
 impl RuntimeInterface for InternalBamlRuntime {
-    // TODO: add tracer here?
     async fn call_function_impl(
         &self,
         function_name: String,
@@ -418,7 +417,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         if let Some(span_id) = ctx.span_id {
             let trace_event = TraceEvent {
                 span_id: FunctionId(span_id.to_string()),
-                event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
                 span_chain: vec![],
                 timestamp: web_time::SystemTime::now(),
                 callsite: function_name.clone(),
@@ -449,7 +448,6 @@ impl RuntimeInterface for InternalBamlRuntime {
 
         // Now actually execute the code.
         let (history, _) =
-            // TODO: add tracer here?
             orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
                 renderer.parse(self.ir(), s, false)
             })
@@ -459,7 +457,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         if let Some(span_id) = ctx.span_id {
             BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
                 span_id: FunctionId(span_id.to_string()),
-                event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
                 span_chain: vec![],
                 timestamp: end_time,
                 callsite: function_name.clone(),

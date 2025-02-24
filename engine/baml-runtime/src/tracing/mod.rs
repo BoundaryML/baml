@@ -41,11 +41,9 @@ cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm_tracer;
         use self::wasm_tracer::NonThreadedTracer as TracerImpl;
-        // use crate::tracingv2::tracer:: as TracerImplV2;
     } else {
         mod threaded_tracer;
         use self::threaded_tracer::ThreadedTracer as TracerImpl;
-        // use self::threaded_tracer::ThreadedTracerV2 as TracerImplV2;
     }
 }
 
@@ -59,7 +57,6 @@ pub struct TracingSpan {
 pub struct BamlTracer {
     options: APIWrapper,
     tracer: Option<TracerImpl>,
-    // tracer_v2: Option<TracerImplV2>,
     trace_stats: TraceStats,
 }
 
@@ -248,11 +245,7 @@ impl BamlTracer {
         self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
 
-        log::info!(
-            "\n------------ Entering span {:#?} in {:?}\n",
-            span_id,
-            function_name
-        );
+        log::trace!(" Entering span {:#?} in {:?}", span_id, function_name);
         let span = TracingSpan {
             span_id,
             params: params.clone(),
@@ -311,8 +304,8 @@ impl BamlTracer {
                 ctx
             );
         };
-        log::info!(
-            "\n------------ Finishing span: {:#?} {}\nevent chain {:?}\n",
+        log::trace!(
+            "Finishing span: {:#?} {}\nevent chain {:?}",
             span,
             span_id,
             event_chain
@@ -338,7 +331,7 @@ impl BamlTracer {
 
         let trace_event = TraceEvent {
             span_id: FunctionId(span_id.to_string()),
-            event_id: ContentId(span_id.to_string()), // TODO generate uuid
+            event_id: ContentId(span_id.to_string()),
             span_chain: vec![],
             timestamp: web_time::SystemTime::now(),
             callsite: "".to_string(),

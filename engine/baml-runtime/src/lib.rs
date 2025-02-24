@@ -79,8 +79,6 @@ pub struct BamlRuntime {
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
     pub async_runtime: Arc<tokio::runtime::Runtime>,
-    // pub trace_agent_tx:
-    //     tokio::sync::mpsc::UnboundedSender<Arc<baml_types::tracing::events::TraceEvent>>,
 }
 
 impl BamlRuntime {
@@ -142,18 +140,12 @@ impl BamlRuntime {
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
 
-        // let (tx, rx) =
-        //     tokio::sync::mpsc::unbounded_channel::<Arc<baml_types::tracing::events::TraceEvent>>();
-        // #[cfg(not(target_arch = "wasm32"))]
-        // btrace::TracerThread::run(rx);
-
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(&path)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: Self::get_tokio_singleton()?,
-            // trace_agent_tx: tx,
         })
     }
 
@@ -166,9 +158,6 @@ impl BamlRuntime {
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
-        // let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-        // #[cfg(not(target_arch = "wasm32"))]
-        // btrace::TracerThread::run(rx);
 
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
@@ -176,7 +165,6 @@ impl BamlRuntime {
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: Self::get_tokio_singleton()?,
-            // trace_agent_tx: tx,
         })
     }
 
@@ -190,11 +178,7 @@ impl BamlRuntime {
         language: BamlValue,
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
-        let ctx = RuntimeContextManager::new_from_env_vars(
-            self.env_vars.clone(),
-            baml_src_reader,
-            // self.tracer.clone(),
-        );
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -381,7 +365,6 @@ impl BamlRuntime {
         let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id)) {
             Ok(rctx) => {
                 self.inner
-                    // TODO: add tracer here?
                     .call_function_impl(function_name.clone(), params, rctx)
                     .await
             }

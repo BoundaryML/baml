@@ -36,8 +36,6 @@ use crate::internal::llm_client::{
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     ModelFeatures, ResolveMediaUrls,
 };
-// use btrace::WithTraceContext;
-
 use crate::{RenderCurlSettings, RuntimeContext};
 
 // represents client that interacts with the Bedrock API
@@ -507,14 +505,6 @@ impl WithStreamChat for AwsClient {
                                         ref delta,
                                     )) = content_block_delta.delta
                                     {
-                                        // btrace::log(
-                                        //     btrace::Level::INFO,
-                                        //     "aws_client".to_string(),
-                                        //     "event".to_string(),
-                                        //     json!({
-                                        //         "delta.content": delta,
-                                        //     }),
-                                        // );
                                         new_state.content += delta;
                                         // TODO- handle
                                     }
@@ -732,28 +722,7 @@ impl WithChat for AwsClient {
         let system_start = SystemTime::now();
         let instant_start = Instant::now();
 
-        let response = match request
-            .send()
-            // .btrace(
-            //     tracing_core::Level::INFO,
-            //     "aws_chat",
-            //     json!({
-            //         "prompt": chat_messages,
-            //     }),
-            //     |v| match v {
-            //         Ok(response) => json!({
-            //             // TODO: structured tracing for bedrock responses
-            //             "llm.response": format!("{:?}", response),
-            //         }),
-            //         Err(e) => json!({
-            //             "exception": {
-            //                 "message": format!("{:?}", e),
-            //             },
-            //         }),
-            //     },
-            // )
-            .await
-        {
+        let response = match request.send().await {
             Ok(resp) => resp,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {

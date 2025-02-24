@@ -2,7 +2,6 @@ mod call;
 mod stream;
 
 use baml_types::tracing::events::{HttpRequestId, LLMUsage};
-// use btrace::tracer::tracer::WithTraceContext;
 use serde_json::json;
 use web_time::Duration; // Add this line
 
@@ -13,7 +12,6 @@ use crate::{
     internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
     RuntimeContext,
 };
-// use btrace::WithTraceContext;
 
 use super::traits::{WithClientProperties, WithRenderRawCurl};
 use super::LLMCompleteResponse;

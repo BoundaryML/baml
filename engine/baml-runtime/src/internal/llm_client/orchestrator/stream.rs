@@ -179,15 +179,6 @@ where
         {
             break;
         }
-        // btrace::tracer::tracer::log(
-        //     tracing_core::Level::INFO,
-        //     format!("baml_src::{}", node.provider.name()),
-        //     "Failed to start stream".to_string(),
-        //     json!({
-        //         "sleep_duration": sleep_duration,
-        //         "baml.llm_client": node_name,
-        //     }),
-        // );
 
         if let Some(duration) = sleep_duration {
             total_sleep_duration += duration;
