@@ -12,12 +12,13 @@ use crate::{
     RuntimeContext, SpanCtx,
 };
 
-use super::runtime_context::BamlSrcReader;
+use super::runtime_context::{AwsCredProvider, BamlSrcReader};
 pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
 #[derive(Clone)]
 pub struct RuntimeContextManager {
     baml_src_reader: Arc<BamlSrcReader>,
+    aws_cred_provider: Arc<AwsCredProvider>,
     context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
@@ -36,7 +37,7 @@ impl RuntimeContextManager {
     pub fn deep_clone(&self) -> Self {
         Self {
             baml_src_reader: self.baml_src_reader.clone(),
-
+            aws_cred_provider: self.aws_cred_provider.clone(),
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
             env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
@@ -58,6 +59,7 @@ impl RuntimeContextManager {
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
+            aws_cred_provider: Arc::new(None),
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),
@@ -151,6 +153,7 @@ impl RuntimeContextManager {
 
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),
+            self.aws_cred_provider.clone(),
             self.env_vars.clone(),
             tags,
             Default::default(),
@@ -179,6 +182,7 @@ impl RuntimeContextManager {
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
+            self.aws_cred_provider.clone(),
             self.env_vars.clone(),
             ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
             Default::default(),

@@ -78,16 +78,13 @@ export const ctxAtom = atom((get) => {
   return context
 })
 
-export const runtimeAtom = atom<{
-  rt: WasmRuntime | undefined
-  diags: WasmDiagnosticError | undefined
-  lastValidRt: WasmRuntime | undefined
-}>((get) => {
-  try {
-    const wasm = get(wasmAtom)
-    const project = get(projectAtom)
-    const envVars = get(envVarsAtom)
-    // const vscodeEnv = get(vscodeEnvAtom)
+export const runtimeAtom = unwrap(
+  atom(async (get) => {
+    try {
+      const wasm = get(wasmAtom)
+      const project = get(projectAtom)
+      const envVars = get(envVarsAtom)
+      const vscodeEnv = (await vscode.loadEnv())?.envVars ?? {}
 
     if (wasm === undefined || project === undefined) {
       let previousState: {
@@ -126,7 +123,7 @@ export const runtimeAtom = atom<{
 
 export const diagnosticsAtom = atom((get) => {
   const runtime = get(runtimeAtom)
-  return runtime.diags?.errors() ?? []
+  return runtime?.diags?.errors() ?? []
 })
 
 export const numErrorsAtom = atom((get) => {
@@ -144,7 +141,7 @@ export const generatedFilesAtom = atom((get) => {
     return undefined
   }
   const runtime = get(runtimeAtom)
-  if (runtime.rt === undefined) {
+  if (runtime?.rt === undefined) {
     return undefined
   }
 
@@ -186,6 +183,8 @@ const vscodeEnvAtom = unwrap(
   atom(async () => {
     try {
       const res = await vscode.loadEnv()
+      console.log('fetched env vars from vscode', res)
+
       return res
     } catch (e) {
       console.error(`Error occurred while loading env from vscode:\n${JSON.stringify(e)}`)
@@ -197,9 +196,6 @@ const vscodeEnvAtom = unwrap(
 const playgroundPortAtom = unwrap(
   atom(async () => {
     try {
-      const resp = await vscode.loadEnv()
-      console.log('fetched env vars from vscode', resp)
-
       const res = await vscode.getPlaygroundPort()
       return res
     } catch (e) {
@@ -296,7 +292,11 @@ export const envVarsAtom = atom(
 )
 
 export const requiredEnvVarsAtom = atom((get) => {
-  const { rt } = get(runtimeAtom)
+  const runtime = get(runtimeAtom)
+  if (runtime === undefined) {
+    return []
+  }
+  const rt = runtime.rt
   if (rt === undefined) {
     return []
   }

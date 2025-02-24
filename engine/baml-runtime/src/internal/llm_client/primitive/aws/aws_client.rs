@@ -291,6 +291,7 @@ impl AwsClient {
                 {
                     loader.credentials_provider(WasmAwsCreds {
                         default_chain: builder.build().await,
+                        // aws_cred_provider: ctx.aws_cred_provider.clone(),
                     })
                 }
 

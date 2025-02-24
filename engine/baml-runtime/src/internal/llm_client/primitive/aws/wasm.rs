@@ -29,6 +29,8 @@ use pin_project_lite::pin_project;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use crate::runtime_context::AwsCredProvider;
+
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");
     let aws_config_contents = r#"
@@ -169,6 +171,7 @@ impl HttpClient for BrowserHttp2 {
 #[derive(Debug)]
 pub(super) struct WasmAwsCreds {
     pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
+    // pub aws_cred_provider: Arc<AwsCredProvider>,
 }
 
 impl aws_credential_types::provider::ProvideCredentials for WasmAwsCreds {
