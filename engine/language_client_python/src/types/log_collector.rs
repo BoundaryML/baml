@@ -79,6 +79,12 @@ impl Collector {
     pub fn __function_span_count() -> usize {
         BAML_TRACER.lock().unwrap().function_span_count()
     }
+
+    #[staticmethod]
+    pub fn __print_storage() {
+        let tracer = BAML_TRACER.lock().unwrap();
+        log::info!("Storage: {:#?}", tracer);
+    }
 }
 
 crate::lang_wrapper!(
@@ -376,7 +382,6 @@ fn serde_value_to_py(py: Python<'_>, value: &JsonValue) -> PyResult<PyObject> {
         }
     }
 }
-
 #[pymethods]
 impl HTTPRequest {
     /// Return the raw JSON string, as originally stored.

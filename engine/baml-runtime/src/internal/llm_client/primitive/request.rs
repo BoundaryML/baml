@@ -125,21 +125,25 @@ async fn log_http_response(
     headers: serde_json::Value,
     body: serde_json::Value,
 ) {
-    BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-        span_id: FunctionId(runtime_context.span_id.to_string()),
-        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-        span_chain: vec![],
-        timestamp: web_time::SystemTime::now(),
-        callsite: "".to_string(),
-        verbosity: trace_level,
-        content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
-            request_id: http_request_id,
-            status,
-            headers,
-            body,
-        })),
-        tags: Default::default(),
-    }));
+    if let Some(span_id) = runtime_context.span_id {
+        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+            span_id: FunctionId(span_id.to_string()),
+            event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: "".to_string(),
+            verbosity: trace_level,
+            content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
+                request_id: http_request_id,
+                status,
+                headers,
+                body,
+            })),
+            tags: Default::default(),
+        }));
+    } else {
+        log::warn!("No span id found for function while emitting logs. Log event may be dropped.",);
+    }
 }
 
 pub(crate) async fn build_and_log_outbound_request(
@@ -194,22 +198,26 @@ pub(crate) async fn build_and_log_outbound_request(
         }
     };
 
-    BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-        span_id: FunctionId(runtime_context.span_id.to_string()),
-        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-        span_chain: vec![],
-        timestamp: web_time::SystemTime::now(),
-        callsite: "".to_string(),
-        verbosity: TraceLevel::Info,
-        content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
-            request_id: http_request_id.clone(),
-            url: built_req.url().to_string(),
-            method: built_req.method().to_string(),
-            headers: json_headers(built_req.headers()),
-            body: json_body(JsonBodyInput::ReqwestBody(built_req.body())).unwrap_or_default(),
-        })),
-        tags: Default::default(),
-    }));
+    if let Some(span_id) = runtime_context.span_id {
+        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+            span_id: FunctionId(span_id.to_string()),
+            event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: "".to_string(),
+            verbosity: TraceLevel::Info,
+            content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
+                request_id: http_request_id.clone(),
+                url: built_req.url().to_string(),
+                method: built_req.method().to_string(),
+                headers: json_headers(built_req.headers()),
+                body: json_body(JsonBodyInput::ReqwestBody(built_req.body())).unwrap_or_default(),
+            })),
+            tags: Default::default(),
+        }));
+    } else {
+        log::warn!("No span id found for function while emitting logs. Log event may be dropped.");
+    }
 
     Ok((http_request_id, system_now, instant_now, built_req))
 }

@@ -260,7 +260,6 @@ impl BamlRuntime {
             let rctx = ctx.create_ctx(type_builder.as_ref(), None)?;
             let (params, constraints) =
                 self.get_test_params_and_constraints(function_name, test_name, &rctx, true)?;
-            log::info!("params: {:#?}", params);
             let rctx_stream = ctx.create_ctx(type_builder.as_ref(), None)?;
             let mut stream = self.inner.stream_function_impl(
                 function_name.into(),

@@ -37,6 +37,12 @@ pub struct FunctionResultStream {
     pub(crate) collectors: Vec<Arc<Collector>>,
 }
 
+impl Drop for FunctionResultStream {
+    fn drop(&mut self) {
+        log::info!("Dropping FunctionResultStream: {}", self.function_name);
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 // JsFuture is !Send, so when building for WASM, we have to drop that requirement from StreamCallback
 static_assertions::assert_impl_all!(FunctionResultStream: Send);
@@ -87,6 +93,7 @@ impl FunctionResultStream {
     where
         F: Fn(FunctionResult),
     {
+        log::info!("### FunctionResultStream::run");
         let mut local_orchestrator = Vec::new();
         std::mem::swap(&mut local_orchestrator, &mut self.orchestrator);
 
@@ -100,29 +107,28 @@ impl FunctionResultStream {
             for collector in self.collectors.iter() {
                 collector.track_function(FunctionId(span.clone().span_id.to_string()));
             }
+            let trace_event = TraceEvent {
+                span_id: FunctionId(span.span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: self.function_name.clone(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionStart(FunctionStart {
+                    name: self.function_name.clone(),
+                    // TODO:
+                    args: vec![],
+                    //  TODO!
+                    options: BamlOptions {
+                        type_builder: None,
+                        client_registry: None,
+                    },
+                }),
+                // TODO: send separately?
+                tags: Default::default(),
+            };
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
-
-        let trace_event = TraceEvent {
-            span_id: FunctionId(span.as_ref().unwrap().span_id.to_string()),
-            event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
-            span_chain: vec![],
-            timestamp: web_time::SystemTime::now(),
-            callsite: self.function_name.clone(),
-            verbosity: TraceLevel::Info,
-            content: TraceData::FunctionStart(FunctionStart {
-                name: self.function_name.clone(),
-                // TODO:
-                args: vec![],
-                //  TODO!
-                options: BamlOptions {
-                    type_builder: None,
-                    client_registry: None,
-                },
-            }),
-            // TODO: send separately?
-            tags: Default::default(),
-        };
-        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         let rctx = ctx.create_ctx(tb, cb);
         let res = match rctx {
@@ -139,6 +145,7 @@ impl FunctionResultStream {
                         on_event,
                     )
                     .await;
+
                     FunctionResult::new_chain(history)
                 }
                 // .btrace(
@@ -160,7 +167,7 @@ impl FunctionResultStream {
         };
 
         let mut target_id = None;
-        if let Some(span) = span {
+        if let Some(span) = span.clone() {
             #[cfg(not(target_arch = "wasm32"))]
             match self.tracer.finish_baml_span(span, ctx, &res) {
                 Ok(id) => target_id = id,
@@ -172,6 +179,49 @@ impl FunctionResultStream {
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
         };
+
+        match &res {
+            Ok(result) => {
+                if let Some(span_id) = &span.map(|s| s.span_id.to_string()) {
+                    let trace_event = TraceEvent {
+                        span_id: FunctionId(span_id.to_string()),
+                        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                        span_chain: vec![],
+                        timestamp: web_time::SystemTime::now(),
+                        callsite: self.function_name.clone(),
+                        verbosity: TraceLevel::Info,
+                        content: TraceData::FunctionEnd(FunctionEnd {
+                            result: Ok(baml_types::BamlValue::Null),
+                        }),
+                        tags: Default::default(),
+                    };
+                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                } else {
+                    log::warn!(
+                        "No span id found for function while emitting logs. Log event may be dropped."
+                    );
+                }
+            }
+            Err(e) => {
+                if let Some(span_id) = span.as_ref().map(|s| s.span_id.to_string()) {
+                    let trace_event = TraceEvent {
+                        span_id: FunctionId(span_id.to_string()),
+                        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                        span_chain: vec![],
+                        timestamp: web_time::SystemTime::now(),
+                        callsite: self.function_name.clone(),
+                        verbosity: TraceLevel::Info,
+                        content: TraceData::FunctionEnd(FunctionEnd {
+                            result: Err(anyhow::anyhow!("{}", e)),
+                        }),
+                        tags: Default::default(),
+                    };
+                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                } else {
+                    log::warn!("No span id found for function while emitting logs. Log event may be dropped.");
+                }
+            }
+        }
 
         (res, target_id)
     }

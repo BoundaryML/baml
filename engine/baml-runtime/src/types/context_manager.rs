@@ -51,7 +51,7 @@ impl RuntimeContextManager {
             .unwrap()
             .last()
             .map(|(id, ..)| *id)
-            .ok_or_else(|| anyhow::anyhow!("No span id found"))
+            .ok_or_else(|| anyhow::anyhow!("No span id found. This indicates a bug in BAML. Please report this with a stack trace (RUST_BACKTRACE=1)"))
     }
 
     pub fn new_from_env_vars(
@@ -144,7 +144,7 @@ impl RuntimeContextManager {
             .map(TypeBuilder::to_overrides)
             .unwrap_or_default();
 
-        let span_id = self.span_id()?;
+        let span_id: Option<uuid::Uuid> = self.span_id().ok();
 
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),
@@ -185,7 +185,7 @@ impl RuntimeContextManager {
             Default::default(),
             Default::default(),
             Default::default(),
-            uuid::Uuid::new_v4(),
+            Some(uuid::Uuid::new_v4()),
         )
     }
 

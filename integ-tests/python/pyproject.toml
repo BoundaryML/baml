@@ -12,7 +12,7 @@ dependencies = [
     "maturin",
     "openai>=1.63.2",
     "psutil",
-    "pydantic",
+    "pydantic>=2.10.6",
     "pytest",
     "pytest-asyncio",
     "python-dotenv",

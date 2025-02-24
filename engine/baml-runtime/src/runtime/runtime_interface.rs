@@ -415,27 +415,34 @@ impl RuntimeInterface for InternalBamlRuntime {
         //     }
         // };
 
-        let trace_event = TraceEvent {
-            span_id: FunctionId(ctx.span_id.to_string()),
-            event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
-            span_chain: vec![],
-            timestamp: web_time::SystemTime::now(),
-            callsite: function_name.clone(),
-            verbosity: TraceLevel::Info,
-            content: TraceData::FunctionStart(FunctionStart {
-                name: function_name.clone(),
-                // TODO:
-                args: vec![],
-                //  TODO!
-                options: BamlOptions {
-                    type_builder: None,
-                    client_registry: None,
-                },
-            }),
-            // TODO: send separately?
-            tags: Default::default(),
-        };
-        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+        if let Some(span_id) = ctx.span_id {
+            let trace_event = TraceEvent {
+                span_id: FunctionId(span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: function_name.clone(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionStart(FunctionStart {
+                    name: function_name.clone(),
+                    // TODO:
+                    args: vec![],
+                    //  TODO!
+                    options: BamlOptions {
+                        type_builder: None,
+                        client_registry: None,
+                    },
+                }),
+                // TODO: send separately?
+                tags: Default::default(),
+            };
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+        } else {
+            log::warn!(
+                "No span id found for function while emitting logs: {}. Log event may be dropped.",
+                function_name
+            );
+        }
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
         let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
@@ -449,19 +456,26 @@ impl RuntimeInterface for InternalBamlRuntime {
             .await;
 
         let end_time = web_time::SystemTime::now();
-        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-            span_id: FunctionId(ctx.span_id.to_string()),
-            event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
-            span_chain: vec![],
-            timestamp: end_time,
-            callsite: function_name.clone(),
-            verbosity: TraceLevel::Info,
-            content: TraceData::FunctionEnd(FunctionEnd {
-                // TODO: add the result here
-                result: Ok(baml_types::BamlValue::Null),
-            }),
-            tags: Default::default(),
-        }));
+        if let Some(span_id) = ctx.span_id {
+            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+                span_id: FunctionId(span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()), // TODO generate uuid
+                span_chain: vec![],
+                timestamp: end_time,
+                callsite: function_name.clone(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionEnd(FunctionEnd {
+                    // TODO: add the result here
+                    result: Ok(baml_types::BamlValue::Null),
+                }),
+                tags: Default::default(),
+            }));
+        } else {
+            log::warn!(
+                "No span id found for function while emitting logs: {}. Log event may be dropped.",
+                function_name
+            );
+        }
 
         FunctionResult::new_chain(history)
     }

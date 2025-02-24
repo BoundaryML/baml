@@ -58,7 +58,7 @@ pub struct RuntimeContext {
     pub enum_overrides: IndexMap<String, RuntimeEnumOverride>,
     pub type_alias_overrides: IndexMap<String, FieldType>,
     pub recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
-    pub span_id: uuid::Uuid,
+    pub span_id: Option<uuid::Uuid>,
     pub recursive_class_overrides: Vec<IndexSet<String>>,
 }
 
@@ -85,8 +85,7 @@ impl RuntimeContext {
         type_alias_overrides: IndexMap<String, FieldType>,
         recursive_class_overrides: Vec<IndexSet<String>>,
         recursive_type_alias_overrides: Vec<IndexMap<String, FieldType>>,
-        span_id: uuid::Uuid,
-        // tracer: Arc<BamlTracer>,
+        span_id: Option<uuid::Uuid>,
     ) -> RuntimeContext {
         RuntimeContext {
             baml_src,

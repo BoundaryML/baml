@@ -5,10 +5,10 @@
 //! for a single FunctionId, even if multiple Collectors or FunctionLogs want it.
 //! It uses manual reference counting (`inc_ref` / `dec_ref`) to free memory for
 //! a FunctionId as soon as there are no more "owners."
-
 use indexmap::{IndexMap, IndexSet};
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -45,10 +45,22 @@ pub struct TraceStorage {
     function_inners: Mutex<HashMap<FunctionId, Arc<Mutex<FunctionLogInner>>>>,
 }
 
+impl fmt::Debug for TraceStorage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "TraceStorage {{ ref_counts: {:#?}, function_span_count: {:#?} }}",
+            self.ref_counts,
+            self.function_span_count()
+        )
+    }
+}
+
 impl TraceStorage {
     /// Increase the reference count for the given FunctionId.
     /// If there's no entry yet, create one (with an empty Vec of events).
     pub fn inc_ref(&mut self, function_id: &FunctionId) {
+        log::info!("Incrementing ref count for FunctionID {:?}", function_id);
         let count = self.ref_counts.entry(function_id.clone()).or_insert(0);
         *count += 1;
 
@@ -61,6 +73,7 @@ impl TraceStorage {
     /// Decrease the reference count for the given FunctionId,
     /// and if it hits zero, remove from memory (both events and cached FunctionLogInner).
     pub fn dec_ref(&mut self, function_id: &FunctionId) {
+        log::info!("Decrementing ref count for FunctionID {:?}", function_id);
         match self.ref_counts.get_mut(function_id) {
             Some(rc) => {
                 if *rc == 0 {
@@ -88,15 +101,20 @@ impl TraceStorage {
             }
         }
         // log::info!("Decremented ref count for FunctionID {:?}", function_id);
-        log::info!("Ref counts: {:?}", self.ref_counts);
-        log::info!("Total events: {:?}", self.events().values().len());
+        log::info!(
+            "Ref counts: {:?}, span_map_function_count: {:?}",
+            self.ref_counts,
+            self.span_map.len()
+        );
+        // log::info!("Total events: {:?}", self.events().values().len());
     }
 
     /// Append a new event for the given function ID, but only if ref_count > 0.
     pub fn put(&mut self, event: Arc<TraceEvent>) {
+        // log::info!("Putting event: {:?}", event);
         let Some(&count) = self.ref_counts.get(&event.span_id) else {
             // If no references exist, skip or handle otherwise
-            log::info!("No references for FunctionID {:?}", event.span_id);
+            // log::trace!("No references for FunctionID {:?} -- dropping events", event.span_id);
             return;
         };
         if count > 0 {
@@ -374,6 +392,7 @@ pub struct FunctionLog {
 impl Clone for FunctionLog {
     fn clone(&self) -> Self {
         // Creating a new FunctionLog will inc_ref again:
+        log::info!("Cloning FunctionLog: {:?}", self.id);
         Self::new(self.id.clone())
     }
 }
@@ -382,8 +401,12 @@ impl FunctionLog {
     pub fn new(id: FunctionId) -> Self {
         // Manually increment the global reference count
         BAML_TRACER.lock().unwrap().inc_ref(&id);
-
         let instance_id = Uuid::new_v4().to_string();
+        log::info!(
+            "Creating new FunctionLog for FunctionID {:?} instance_id: {}",
+            id,
+            instance_id
+        );
         Self {
             id,
             inner: None,
@@ -441,11 +464,11 @@ impl FunctionLog {
 
 impl Drop for FunctionLog {
     fn drop(&mut self) {
-        // log::info!(
-        //     "Dropping function log: {}, instance_id: {}",
-        //     self.id.0,
-        //     self.instance_id
-        // );
+        log::info!(
+            "Dropping function log: {}, instance_id: {}",
+            self.id.0,
+            self.instance_id
+        );
         // Manually decrement the global ref count
         BAML_TRACER.lock().unwrap().dec_ref(&self.id);
     }
@@ -545,6 +568,10 @@ pub struct Collector {
 
 impl Collector {
     pub fn new(name: Option<String>) -> Self {
+        log::info!(
+            "Creating new Collector: {}",
+            name.clone().unwrap_or("collector".to_string())
+        );
         Self {
             name: name.unwrap_or("collector".to_string()),
             tracked_ids: Mutex::new(HashSet::new()),
@@ -556,6 +583,7 @@ impl Collector {
     }
 
     pub fn track_function(&self, fid: FunctionId) {
+        log::info!("Tracking function: {:?}", fid);
         // First increment the global ref count
         BAML_TRACER.lock().unwrap().inc_ref(&fid);
 
@@ -619,6 +647,7 @@ impl Collector {
 
 impl Clone for Collector {
     fn clone(&self) -> Self {
+        log::info!("Cloning collector: {}", self.name);
         // Create a new collector with empty set
         let new_collector = Self::new(Some(format!("{}_clone", self.name)));
 
@@ -636,6 +665,7 @@ impl Clone for Collector {
 
 impl Drop for Collector {
     fn drop(&mut self) {
+        log::info!("Dropping collector: {}", self.name);
         // On drop, we untrack (and thus dec_ref) everything we were tracking
         let mut tracer = BAML_TRACER.lock().unwrap();
         let guard = self.tracked_ids.lock().unwrap();
