@@ -2,7 +2,7 @@
 import * as vscode from 'vscode'
 import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
-import { WebPanelView, openPlaygroundConfig } from './panels/WebPanelView'
+import { WebPanelHost, openPlaygroundConfig } from './panels/WebPanelHost'
 import plugins from './plugins'
 import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
@@ -171,7 +171,7 @@ export function activate(context: vscode.ExtensionContext) {
   let port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
-    WebPanelView.currentPanel?.postMessage('port_number', {
+    WebPanelHost.currentPanel?.postMessage('port_number', {
       port: port,
     })
   })
@@ -269,7 +269,7 @@ export function activate(context: vscode.ExtensionContext) {
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
 
-      WebPanelView.render(context.extensionUri, getPort, telemetry)
+      WebPanelHost.render(context.extensionUri, getPort, telemetry)
       if (telemetry) {
         telemetry.sendTelemetryEvent({
           event: 'baml.openBamlPanel',
@@ -280,7 +280,7 @@ export function activate(context: vscode.ExtensionContext) {
       requestDiagnostics()
 
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebPanelView.currentPanel?.postMessage('select_function', {
+      WebPanelHost.currentPanel?.postMessage('select_function', {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
       })
@@ -298,7 +298,7 @@ export function activate(context: vscode.ExtensionContext) {
       showTests?: boolean
       testCaseName?: string
     }) => {
-      WebPanelView.render(context.extensionUri, getPort, telemetry)
+      WebPanelHost.render(context.extensionUri, getPort, telemetry)
       if (telemetry) {
         telemetry.sendTelemetryEvent({
           event: 'baml.runBamlTest',
@@ -310,12 +310,12 @@ export function activate(context: vscode.ExtensionContext) {
       requestDiagnostics()
 
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebPanelView.currentPanel?.postMessage('select_function', {
+      WebPanelHost.currentPanel?.postMessage('select_function', {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
       })
 
-      WebPanelView.currentPanel?.postMessage('run_test', {
+      WebPanelHost.currentPanel?.postMessage('run_test', {
         test_name: args?.testCaseName ?? 'default',
       })
 
@@ -355,7 +355,7 @@ export function activate(context: vscode.ExtensionContext) {
         const text = editor.document.getText()
 
         // TODO: buggy when used with multiple functions, needs a fix.
-        WebPanelView.currentPanel?.postMessage('update_cursor', {
+        WebPanelHost.currentPanel?.postMessage('update_cursor', {
           cursor: {
             fileName: name,
             fileText: text,
