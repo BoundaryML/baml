@@ -269,82 +269,103 @@ impl AwsClient {
         http_request_id: &HttpRequestId,
     ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
-        let loader = super::wasm::load_aws_config();
+        let mut loader = {
+            let loader = super::wasm::load_aws_config();
+            let mut builder =
+                aws_config::default_provider::credentials::DefaultCredentialsChain::builder();
+            if let Some(profile) = self.properties.profile.as_ref() {
+                builder = builder.profile_name(profile);
+            }
+            log::debug!("Building wasm aws credentials chain - UNCONDITIONALLY BECAUSE BULLSHIT $ENV_VAR UNCONDITIONAL SUBSTITUTION");
+            loader.credentials_provider(WasmAwsCreds {
+                default_chain: builder.build().await,
+                // aws_cred_provider: ctx.aws_cred_provider.clone(),
+            })
+        };
         #[cfg(not(target_arch = "wasm32"))]
-        let loader = aws_config::defaults(BehaviorVersion::latest());
+        let loader = {
+            aws_config::defaults(BehaviorVersion::latest());
 
-        // Set credentials provider
-        let mut loader = match (
-            self.properties.access_key_id.as_ref(),
-            self.properties.secret_access_key.as_ref(),
-            self.properties.session_token.as_ref(),
-        ) {
-            (None, None, None) => {
-                let mut builder =
-                    aws_config::default_provider::credentials::DefaultCredentialsChain::builder();
-                if let Some(profile) = self.properties.profile.as_ref() {
-                    builder = builder.profile_name(profile);
-                }
-                log::debug!("Building wasm aws credentials chain - none of access key id / secret access key / session token provided");
-                // is it because of the 'static lifetime requirement?
-                #[cfg(target_arch = "wasm32")]
-                {
-                    loader.credentials_provider(WasmAwsCreds {
-                        default_chain: builder.build().await,
-                        // aws_cred_provider: ctx.aws_cred_provider.clone(),
-                    })
-                }
-
-                #[cfg(not(target_arch = "wasm32"))]
-                {
-                    loader.credentials_provider(builder.build().await)
-                }
-            }
-            _ => {
-                log::debug!("Building wasm aws credentials chain - at least one of access key id / secret access key / session token provided");
-                if let Some(aws_access_key_id) = self.properties.access_key_id.as_ref() {
-                    if aws_access_key_id.starts_with("$") {
-                        return Err(anyhow::anyhow!(
-                            "AWS access key id expected, please set: env.{}",
-                            &aws_access_key_id[1..]
-                        ));
+            // Set credentials provider
+            let mut loader = match (
+                self.properties.access_key_id.as_ref(),
+                self.properties.secret_access_key.as_ref(),
+                self.properties.session_token.as_ref(),
+            ) {
+                (None, None, None) => {
+                    let mut builder =
+                        aws_config::default_provider::credentials::DefaultCredentialsChain::builder(
+                        );
+                    if let Some(profile) = self.properties.profile.as_ref() {
+                        builder = builder.profile_name(profile);
                     }
-                }
-                if let Some(aws_secret_access_key) = self.properties.secret_access_key.as_ref() {
-                    // Exposing the secret key here is relatively safe. First, we expose it only
-                    // to check if it starts with $. If so, the remainer should be an env
-                    // var name, which is also safe to expose.
-                    if aws_secret_access_key
-                        .api_key
-                        .expose_secret()
-                        .starts_with("$")
+                    log::debug!("Building wasm aws credentials chain - none of access key id / secret access key / session token provided");
+                    // is it because of the 'static lifetime requirement?
+                    #[cfg(target_arch = "wasm32")]
                     {
-                        return Err(anyhow::anyhow!(
-                            "AWS secret access key expected, please set: env.{}",
-                            &aws_secret_access_key.api_key.expose_secret()[1..]
-                        ));
+                        loader.credentials_provider(WasmAwsCreds {
+                            default_chain: builder.build().await,
+                            // aws_cred_provider: ctx.aws_cred_provider.clone(),
+                        })
+                    }
+
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        loader.credentials_provider(builder.build().await)
                     }
                 }
-                if let Some(aws_session_token) = self.properties.session_token.as_ref() {
-                    if aws_session_token.starts_with("$") {
-                        return Err(anyhow::anyhow!(
-                            "AWS session token expected, please set: env.{}",
-                            &aws_session_token[1..]
-                        ));
+                _ => {
+                    log::debug!(
+                        "Building wasm aws credentials chain - at least one was provided {:?} {} {:?}",
+                        self.properties.access_key_id,
+                        self.properties.secret_access_key.is_some(),
+                        self.properties.session_token,
+                    );
+                    if let Some(aws_access_key_id) = self.properties.access_key_id.as_ref() {
+                        if aws_access_key_id.starts_with("$") {
+                            return Err(anyhow::anyhow!(
+                                "AWS access key id expected, please set: env.{}",
+                                &aws_access_key_id[1..]
+                            ));
+                        }
                     }
+                    if let Some(aws_secret_access_key) = self.properties.secret_access_key.as_ref()
+                    {
+                        // Exposing the secret key here is relatively safe. First, we expose it only
+                        // to check if it starts with $. If so, the remainer should be an env
+                        // var name, which is also safe to expose.
+                        if aws_secret_access_key
+                            .api_key
+                            .expose_secret()
+                            .starts_with("$")
+                        {
+                            return Err(anyhow::anyhow!(
+                                "AWS secret access key expected, please set: env.{}",
+                                &aws_secret_access_key.api_key.expose_secret()[1..]
+                            ));
+                        }
+                    }
+                    if let Some(aws_session_token) = self.properties.session_token.as_ref() {
+                        if aws_session_token.starts_with("$") {
+                            return Err(anyhow::anyhow!(
+                                "AWS session token expected, please set: env.{}",
+                                &aws_session_token[1..]
+                            ));
+                        }
+                    }
+                    loader.credentials_provider(Credentials::new(
+                        self.properties.access_key_id.clone().unwrap_or("".into()),
+                        self.properties
+                            .secret_access_key
+                            .as_ref()
+                            .map_or("", |key| key.api_key.expose_secret())
+                            .to_string(),
+                        self.properties.session_token.clone(),
+                        None,
+                        "baml-runtime",
+                    ))
                 }
-                loader.credentials_provider(Credentials::new(
-                    self.properties.access_key_id.clone().unwrap_or("".into()),
-                    self.properties
-                        .secret_access_key
-                        .as_ref()
-                        .map_or("", |key| key.api_key.expose_secret())
-                        .to_string(),
-                    self.properties.session_token.clone(),
-                    None,
-                    "baml-runtime",
-                ))
-            }
+            };
         };
 
         // Set region if specified

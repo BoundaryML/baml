@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aws_config::ConfigLoader;
+use aws_credential_types::{provider::future::ProvideCredentials, Credentials};
 use aws_smithy_async::{
     rt::sleep::{AsyncSleep, Sleep},
     time::TimeSource,
@@ -22,6 +23,7 @@ use aws_smithy_runtime_api::{
 use aws_smithy_types::body::SdkBody;
 
 use aws_config::{BehaviorVersion, SdkConfig};
+use chrono::{DateTime, Utc};
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use futures::Stream;
@@ -168,10 +170,18 @@ impl HttpClient for BrowserHttp2 {
     }
 }
 
-#[derive(Debug)]
 pub(super) struct WasmAwsCreds {
     pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
     // pub aws_cred_provider: Arc<AwsCredProvider>,
+}
+
+impl std::fmt::Debug for WasmAwsCreds {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmAwsCreds")
+            .field("default_chain", &self.default_chain)
+            .field("aws_cred_provider", &"<no-repr-available>")
+            .finish()
+    }
 }
 
 impl aws_credential_types::provider::ProvideCredentials for WasmAwsCreds {
@@ -182,6 +192,17 @@ impl aws_credential_types::provider::ProvideCredentials for WasmAwsCreds {
         Self: 'a,
     {
         log::debug!("Providing AWS credentials for wasm");
-        self.default_chain.provide_credentials()
+        // self.default_chain.provide_credentials()
+        // let datetime_str = "2025-02-24T19:38:05.000Z";
+        // let datetime: DateTime<Utc> = datetime_str.parse().expect("Invalid datetime format");
+        // let expires_after =
+        //     web_time::UNIX_EPOCH + web_time::Duration::from_secs(datetime.timestamp() as u64);
+        ProvideCredentials::ready(Ok(Credentials::new(
+            "fake-access-key-id".to_string(),
+            "fake-secret-access-key".to_string(),
+            None,
+            None,
+            "hardcoded-boundaryml-dev",
+        )))
     }
 }
