@@ -52,7 +52,7 @@
     "json-schema-faker": "^0.5.6",
     "lucide-react": "^0.364.0",
     "nanoid": "^5.0.7",
-    "next": "^15.1.5",
+    "next": "^15.1.7",
     "next-themes": "^0.3.0",
     "posthog-js": "^1.205.1",
     "react": "^18",
