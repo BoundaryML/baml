@@ -395,7 +395,7 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
             .map(|(name, t)| {
                 Ok((
                     name.to_string(),
-                    t.to_type_spec(value.db).context(format!(
+                    t.to_type_spec(value.ir).context(format!(
                         "Failed to convert arg {name} (for function {function_name}) to OpenAPI type",
                     ))?,
                 ))
@@ -449,7 +449,7 @@ impl<'ir> TryFrom<Walker<'ir, &'ir Node<Function>>> for OpenApiMethodDef<'ir> {
                 }),
             },
             response: {
-                let mut response_type = value.item.elem.output().to_type_spec(value.db)?;
+                let mut response_type = value.item.elem.output().to_type_spec(value.ir)?;
                 response_type.meta.title = Some(format!("{}Response", function_name));
                 response_type
             },
@@ -492,7 +492,7 @@ impl<'ir> TryFrom<ClassWalker<'ir>> for TypeSpecWithMeta {
             .map(|f| {
                 Ok((
                     f.elem.name.to_string(),
-                    f.elem.r#type.elem.to_type_spec(c.db).context(format!(
+                    f.elem.r#type.elem.to_type_spec(c.ir).context(format!(
                         "Failed to convert {}.{} to OpenAPI type",
                         c.name(),
                         f.elem.name

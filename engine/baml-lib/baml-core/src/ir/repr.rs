@@ -1,9 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use baml_types::{
     Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable, StreamingBehavior,
-    StringOr, UnresolvedValue,
+    UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
@@ -16,7 +16,8 @@ use internal_baml_parser_database::{
 };
 
 use internal_baml_schema_ast::ast::{
-    self, Attribute, FieldArity, SubType, ValExpId, WithName, WithSpan,
+    self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
+    WithSpan,
 };
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
@@ -51,9 +52,9 @@ pub struct IntermediateRepr {
 
 /// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
-pub struct Walker<'db, I> {
-    /// The parser database being traversed.
-    pub db: &'db IntermediateRepr,
+pub struct Walker<'ir, I> {
+    /// The IR being traversed.
+    pub ir: &'ir IntermediateRepr,
     /// The identifier of the focused element.
     pub item: I,
 }
@@ -116,17 +117,17 @@ impl IntermediateRepr {
     }
 
     pub fn walk_enums(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Enum>>> {
-        self.enums.iter().map(|e| Walker { db: self, item: e })
+        self.enums.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_classes(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Class>>> {
-        self.classes.iter().map(|e| Walker { db: self, item: e })
+        self.classes.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_type_aliases(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TypeAlias>>> {
         self.type_aliases
             .iter()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     // TODO: Exact size Iterator + Node<>?
@@ -134,7 +135,7 @@ impl IntermediateRepr {
         self.structural_recursive_alias_cycles
             .iter()
             .flatten()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     pub fn function_names(&self) -> impl ExactSizeIterator<Item = &str> {
@@ -142,7 +143,7 @@ impl IntermediateRepr {
     }
 
     pub fn walk_functions(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Function>>> {
-        self.functions.iter().map(|e| Walker { db: self, item: e })
+        self.functions.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_tests(
@@ -150,14 +151,14 @@ impl IntermediateRepr {
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
         self.functions.iter().flat_map(move |f| {
             f.elem.tests().iter().map(move |t| Walker {
-                db: self,
+                ir: self,
                 item: (f, t),
             })
         })
     }
 
     pub fn walk_clients(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Client>>> {
-        self.clients.iter().map(|e| Walker { db: self, item: e })
+        self.clients.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_template_strings(
@@ -165,7 +166,7 @@ impl IntermediateRepr {
     ) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TemplateString>>> {
         self.template_strings
             .iter()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     #[allow(dead_code)]
@@ -174,7 +175,7 @@ impl IntermediateRepr {
     ) -> impl ExactSizeIterator<Item = Walker<'_, &Node<RetryPolicy>>> {
         self.retry_policies
             .iter()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     pub fn from_parser_database(
@@ -356,8 +357,65 @@ pub struct NodeAttributes {
 
     pub constraints: Vec<Constraint>,
 
-    // Spans
+    /// Total span of the Node.
+    ///
+    /// ```ignore
+    /// <SPAN_START> class Example {
+    ///     a string
+    ///     b int
+    /// } <SPAN_END>
+    /// ```
+    ///
+    /// TODO: Create an `ir::Span` struct and use it to store all the spans
+    /// we've defined here. Something like:
+    ///
+    /// ```ignore
+    /// struct Span {
+    ///     total: ast::Span,
+    ///     identifier: ast::Span,
+    ///     symbols: HashMap<String, ast::Span>,
+    /// }
+    /// ```
     pub span: Option<ast::Span>,
+
+    /// Span of the identifier only.
+    ///
+    /// ```ignore
+    /// class <SPAN_START> Example <SPAN_END> {
+    ///     a string
+    ///     b int
+    /// }
+    /// ```
+    ///
+    /// In the case of fields this is the field name span.
+    ///
+    /// ```ignore
+    /// class Example {
+    ///     <SPAN_START> a <SPAN_END> string
+    ///     b int
+    /// }
+    /// ```
+    pub identifier_span: Option<ast::Span>,
+
+    /// Other important spans for renaming or similar features.
+    ///
+    /// For example, imagine we have a union:
+    ///
+    /// ```ignore
+    /// class Example {
+    ///     union int | OtherClass | string | OtherClass // Yes it can appear multiple times
+    /// }
+    /// ```
+    ///
+    /// And we want to rename the `OtherClass` type. We can't do that unless we
+    /// know the exact span of the symbol in the union.
+    ///
+    /// We could store this in [`FieldType::WithMetadata`] but currently that
+    /// variant only stores data attached to the field by the user (contraints,
+    /// streaming behavior), and it would also require every single
+    /// [`FieldType`] in the IR to be [`FieldType::WithMetadata`] which might
+    /// break some code or match statements elsewhere.
+    pub symbol_spans: HashMap<String, Vec<ast::Span>>,
 }
 
 impl NodeAttributes {
@@ -385,6 +443,8 @@ impl Default for NodeAttributes {
             meta: IndexMap::new(),
             constraints: Vec::new(),
             span: None,
+            identifier_span: None,
+            symbol_spans: HashMap::new(),
         }
     }
 }
@@ -483,11 +543,7 @@ pub struct Node<T> {
 pub trait WithRepr<T> {
     /// Represents block or field attributes - @@ for enums and classes, @ for enum values and class fields
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes {
-            meta: IndexMap::new(),
-            constraints: Vec::new(),
-            span: None,
-        }
+        NodeAttributes::default()
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<T>;
@@ -562,10 +618,44 @@ impl WithRepr<FieldType> for ast::FieldType {
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
             meta.insert("stream.with_state".to_string(), val);
         }
+
+        let mut symbol_spans = HashMap::new();
+
+        let mut stack = vec![self];
+        while let Some(item) = stack.pop() {
+            match item {
+                // Base case, store span.
+                ast::FieldType::Symbol(_, idn, ..) => {
+                    if !symbol_spans.contains_key(idn.name()) {
+                        symbol_spans.insert(idn.name().to_string(), vec![idn.span().clone()]);
+                    } else {
+                        symbol_spans
+                            .get_mut(idn.name())
+                            .unwrap()
+                            .push(idn.span().clone());
+                    }
+                }
+                // Recurse.
+                ast::FieldType::List(_, ft, ..) => stack.push(ft),
+                ast::FieldType::Map(_, kv, ..) => {
+                    let (k, v) = &**kv;
+                    stack.push(k);
+                    stack.push(v);
+                }
+                ast::FieldType::Union(_, items, ..) | ast::FieldType::Tuple(_, items, ..) => {
+                    stack.extend(items.iter());
+                }
+                // No identifiers here.
+                ast::FieldType::Primitive(..) | ast::FieldType::Literal(..) => {}
+            }
+        }
+
         let attributes = NodeAttributes {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: None,
+            symbol_spans,
         };
 
         attributes
@@ -703,6 +793,8 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
             meta: Default::default(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: None,
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -748,6 +840,8 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
@@ -765,6 +859,8 @@ impl WithRepr<Enum> for EnumWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
@@ -810,6 +906,8 @@ impl WithRepr<Field> for FieldWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.ast_field().identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
@@ -859,6 +957,8 @@ impl WithRepr<Class> for ClassWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
@@ -1072,11 +1172,26 @@ fn process_field(
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
-    fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let mut symbol_spans = HashMap::new();
+
+        for arg in self.walk_input_args().chain(self.walk_output_args()) {
+            let node_attrs = WithRepr::attributes(arg.field_type(), db);
+            for (symbol, mut spans) in node_attrs.symbol_spans {
+                if !symbol_spans.contains_key(&symbol) {
+                    symbol_spans.insert(symbol, spans);
+                } else {
+                    symbol_spans.get_mut(&symbol).unwrap().append(&mut spans);
+                }
+            }
+        }
+
         NodeAttributes {
             meta: Default::default(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans,
         }
     }
 
@@ -1134,6 +1249,8 @@ impl WithRepr<Client> for ClientWalker<'_> {
             meta: IndexMap::new(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -1170,6 +1287,8 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
             meta: IndexMap::new(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -1237,7 +1356,9 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
         NodeAttributes {
             meta: IndexMap::new(),
             constraints,
-            span: Some(span),
+            span: Some(span.clone()),
+            identifier_span: Some(span),
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -1259,8 +1380,10 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             .collect();
         NodeAttributes {
             meta: IndexMap::new(),
-            span: Some(self.span().clone()),
             constraints,
+            span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         }
     }
 

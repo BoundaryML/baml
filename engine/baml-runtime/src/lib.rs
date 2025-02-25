@@ -583,7 +583,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
-    static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
+    static VALID_EXTENSIONS: [&str; 1] = ["baml"];
 
     log::trace!("Reading files from {:#}", dir.to_string_lossy());
 

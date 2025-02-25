@@ -748,9 +748,9 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::FinishReasonError {
                             message, ..
                         } => Some(message.clone()),
-                        baml_runtime::errors::ExposedError::ClientHttpError {
-                            message, ..
-                        } => Some(message.clone()),
+                        baml_runtime::errors::ExposedError::ClientHttpError { message, .. } => {
+                            Some(message.clone())
+                        }
                     },
                     None => Some(format!("{e:#}")),
                 }
@@ -1237,6 +1237,42 @@ impl WasmRuntime {
         }
 
         None
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_class(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_class(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_enum(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_enum(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_function(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_function(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_class_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
     }
 
     #[wasm_bindgen]
