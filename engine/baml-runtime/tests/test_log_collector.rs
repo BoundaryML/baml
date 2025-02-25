@@ -1,18 +1,19 @@
 // run these tests with:
 // RUST_LOG=info cargo test test_call_function_unions1 --no-default-features --features "internal" -- --nocapture
 // need to fix the tokio runtime getting closed but at least you can log things.
-// #[cfg(feature = "internal")]
+#[cfg(feature = "internal")]
 mod internal_tests {
     use std::any;
     use std::collections::HashMap;
 
+    use baml_runtime::tracingv2::publisher::publisher::flush;
     use baml_runtime::{tracingv2::storage::storage::BAML_TRACER, BamlRuntime};
     use std::sync::Once;
 
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
     use baml_runtime::InternalRuntimeInterface;
     use baml_runtime::{
-        internal::llm_client::LLMResponse, DiagnosticsError, IRHelper, RenderedPrompt,
+        internal::llm_client::LLMResponse, DiagnosticsError, IRHelper,
     };
     use baml_types::tracing::events::FunctionId;
     use baml_types::BamlValue;
@@ -107,7 +108,7 @@ mod internal_tests {
 
         let trace_storage = BAML_TRACER.lock().unwrap();
         let trace = trace_storage
-            .get(FunctionId(function_span_id.unwrap_or_default().to_string()))
+            .get_events(&FunctionId(function_span_id.unwrap_or_default().to_string()))
             .unwrap();
 
         log::info!("Trace: {:#?}", trace);

@@ -967,6 +967,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "console_error_panic_hook",
  "console_log",
  "criterion",
  "dashmap",

@@ -170,6 +170,7 @@ wasm-bindgen-test = "0.3.50"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 serial_test = "3.2.0"
+console_error_panic_hook = "0.1.7"
 
 [ benches ]
 name = "bench"
