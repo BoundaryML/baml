@@ -77,7 +77,7 @@ export declare class FunctionResult {
 }
 
 export declare class FunctionResultStream {
-  onEvent(func: (err: any, param: FunctionResult) => void): void
+  onEvent(func?: ((err: any, param: FunctionResult) => void) | undefined): void
   done(rctx: RuntimeContextManager): Promise<FunctionResult>
 }
 

@@ -27,7 +27,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       return retval
     } finally {
       this.eventQueue.push(null)
-      this.ffiStream.onEvent(null)
+      this.ffiStream.onEvent(undefined)
     }
   }
 

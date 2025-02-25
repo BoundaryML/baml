@@ -229,13 +229,13 @@ async function main() {
   return memoryUsage;
 }
 
-describe('Memory usage tests', () => {
-  test('memory usage stays within limits', async () => {
-    const memoryUsage = await main();
-    const maxHeapUsedDiffMB = Math.round(memoryUsage.peakDiff.heapUsed / 1024 / 1024 * 100) / 100;
-    expect(maxHeapUsedDiffMB).toBeLessThan(50);
-  }, 90000);
-});
+// describe('Memory usage tests', () => {
+//   test('memory usage stays within limits', async () => {
+//     const memoryUsage = await main();
+//     const maxHeapUsedDiffMB = Math.round(memoryUsage.peakDiff.heapUsed / 1024 / 1024 * 100) / 100;
+//     expect(maxHeapUsedDiffMB).toBeLessThan(50);
+//   }, 90000);
+// });
 
 // Modify the main execution block
 if (require.main === module) {

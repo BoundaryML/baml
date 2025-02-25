@@ -30,7 +30,7 @@ class BamlStream {
         }
         finally {
             this.eventQueue.push(null);
-            this.ffiStream.onEvent(null);
+            this.ffiStream.onEvent(undefined);
         }
     }
     driveToCompletionInBg() {
