@@ -90,6 +90,32 @@ impl LLMProvider {
             }
         }
     }
+
+    pub fn completion_to_provider_body<'a>(
+        &self,
+        prompt: &String,
+        ctx: &RuntimeContext,
+        client_lookup: &'a dyn InternalClientLookup<'a>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        match self {
+            LLMProvider::Primitive(provider) => provider.completion_to_provider_body(prompt),
+
+            LLMProvider::Strategy(provider) => {
+                let orchestrator = provider.iter_orchestrator(
+                    &mut Default::default(),
+                    Default::default(),
+                    ctx,
+                    client_lookup,
+                )?;
+
+                orchestrator
+                    .first()
+                    .ok_or(anyhow::anyhow!("Strategy provider is empty: {}", provider))?
+                    .provider
+                    .completion_to_provider_body(prompt)
+            }
+        }
+    }
 }
 
 impl WithRetryPolicy for LLMProvider {

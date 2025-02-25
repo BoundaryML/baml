@@ -23,14 +23,14 @@ crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
 
 #[pyclass]
 pub struct PyPrompt {
-    chat: serde_json::Map<String, serde_json::Value>,
+    body: serde_json::Map<String, serde_json::Value>,
 }
 
 #[pymethods]
 impl PyPrompt {
     fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
-        for (key, value) in &self.chat {
+        for (key, value) in &self.body {
             dict.set_item(key, serde_value_to_py_any(value, py)?)?;
         }
 
@@ -380,14 +380,17 @@ impl BamlRuntime {
                 .map(|(prompt, ..)| prompt)
                 .map_err(BamlError::from_anyhow)?;
 
-            match prompt {
-                baml_runtime::RenderedPrompt::Chat(chat) => Ok(PyPrompt {
-                    chat: provider
-                        .chat_to_message(&chat, &ctx, &*baml_runtime)
-                        .map_err(BamlError::from_anyhow)?,
-                }),
-                baml_runtime::RenderedPrompt::Completion(_completion) => todo!(),
-            }
+            let body = match prompt {
+                baml_runtime::RenderedPrompt::Chat(chat) => provider
+                    .chat_to_message(&chat, &ctx, &*baml_runtime)
+                    .map_err(BamlError::from_anyhow)?,
+
+                baml_runtime::RenderedPrompt::Completion(completion) => provider
+                    .completion_to_provider_body(&completion, &ctx, &*baml_runtime)
+                    .map_err(BamlError::from_anyhow)?,
+            };
+
+            Ok(PyPrompt { body })
         })
         .map(pyo3::Bound::into)
     }

@@ -22,8 +22,8 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        ToProviderMessage, WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl,
-        WithRetryPolicy, WithSingleCallable, WithStreamable,
+        CompletionToProviderBody, ToProviderMessage, WithClient, WithClientProperties, WithPrompt,
+        WithRenderRawCurl, WithRetryPolicy, WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
@@ -215,6 +215,21 @@ impl LLMPrimitiveProvider {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
         }
+    }
+
+    pub fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        Ok(match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Anthropic(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Google(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Vertex(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        })
     }
 }
 
