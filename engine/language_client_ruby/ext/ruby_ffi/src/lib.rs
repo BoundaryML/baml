@@ -129,6 +129,8 @@ impl BamlRuntimeFfi {
             &ctx.inner,
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+            // TODO: wire this
+            Some(vec![]),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -170,6 +172,8 @@ impl BamlRuntimeFfi {
             &ctx.inner,
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+            // TODO: wire this
+            Some(vec![]),
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(
