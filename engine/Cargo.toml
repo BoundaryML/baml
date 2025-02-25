@@ -106,7 +106,7 @@ web-time = "1.1.0"
 
 
 [workspace.package]
-version = "0.76.2"
+version = "0.77.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

@@ -10,7 +10,7 @@ impl LanguageFeatures for PythonLanguageFeatures {
 #
 #  Welcome to Baml! To use this generated code, please run the following:
 #
-#  $ pip install baml
+#  $ pip install baml-py
 #
 ###############################################################################
 
