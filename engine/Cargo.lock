@@ -962,7 +962,6 @@ dependencies = [
  "axum-extra",
  "baml-types",
  "base64 0.22.1",
- "btrace",
  "bytes",
  "cfg-if",
  "chrono",
@@ -1272,33 +1271,6 @@ dependencies = [
  "memchr",
  "regex-automata 0.4.7",
  "serde",
-]
-
-[[package]]
-name = "btrace"
-version = "0.77.0"
-dependencies = [
- "anyhow",
- "baml-types",
- "base64 0.22.1",
- "bytes",
- "futures-timer",
- "hostname",
- "js-sys",
- "log",
- "once_cell",
- "reqwest",
- "serde",
- "serde_json",
- "time",
- "tokio",
- "tokio-stream",
- "tracing-core",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "web-time",
 ]
 
 [[package]]
@@ -4610,7 +4582,6 @@ dependencies = [
  "anyhow",
  "axum",
  "baml-types",
- "btrace",
  "env_logger",
  "log",
  "reqwest",

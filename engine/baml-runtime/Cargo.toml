@@ -21,7 +21,6 @@ unused_variables = "allow"
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
-btrace.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
