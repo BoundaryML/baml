@@ -81,7 +81,7 @@ We choose one of the three strategies based on the following rules, in order:
 1. Is `credentials` provided?
      - If so, and it's a string containing a JSON object, we use `AuthStrategy::JsonFile` with `credentials`.
      - If so, and it's a JSON object, we use `AuthStrategy::JsonObject` with `credentials` (this is probably only
-       relevant if you're using the [`ClientRegistry`](/ref/baml-client/client-registry) API in `baml_client`).
+       relevant if you're using the [`ClientRegistry`](/ref/baml_client/client-registry) API in `baml_client`).
      - If so, but it's just a regular string, use `AuthStrategy::JsonFile` with `credentials`.
 1. Is `credentials_content` provided?
      - If so, we use `AuthStrategy::JsonString` with `credentials_content`
