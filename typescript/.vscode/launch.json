@@ -17,9 +17,7 @@
       ],
       "env": {
         "VSCODE_DEBUG_MODE": "true"
-      },
-      "preLaunchTask": "Watch All",
-      "postDebugTask": "Terminate All"
+      }
     },
     {
       "type": "node",
