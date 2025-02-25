@@ -32,6 +32,7 @@ use client_registry::ClientRegistry;
 use indexmap::IndexMap;
 use internal::llm_client::llm_provider::LLMProvider;
 use internal::llm_client::orchestrator::OrchestrationScope;
+use internal::llm_client::retry_policy::CallablePolicy;
 use internal::prompt_renderer::PromptRenderer;
 use internal_baml_core::configuration::CloudProject;
 use internal_baml_core::configuration::CodegenGenerator;
@@ -533,6 +534,20 @@ impl BamlRuntime {
                     })
             })
             .collect()
+    }
+}
+
+impl<'a> InternalClientLookup<'a> for BamlRuntime {
+    fn get_llm_provider(
+        &'a self,
+        client_spec: &ClientSpec,
+        ctx: &RuntimeContext,
+    ) -> Result<Arc<LLMProvider>> {
+        self.inner.get_llm_provider(client_spec, ctx)
+    }
+
+    fn get_retry_policy(&self, policy_name: &str, ctx: &RuntimeContext) -> Result<CallablePolicy> {
+        self.inner.get_retry_policy(policy_name, ctx)
     }
 }
 

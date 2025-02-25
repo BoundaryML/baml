@@ -10,25 +10,27 @@ use crate::types::ClientRegistry;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
-use pyo3::{pyclass, IntoPyObjectExt, PyObject, Python};
+use pyo3::{
+    pyclass,
+    types::{PyDict, PyDictMethods, PyList, PyListMethods},
+    IntoPyObjectExt, PyObject, Python,
+};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
 
-pub struct Prompt {
+#[pyclass]
+pub struct PyPrompt {
     chat: serde_json::Map<String, serde_json::Value>,
 }
 
-crate::lang_wrapper!(PyPrompt, Prompt);
-
 #[pymethods]
 impl PyPrompt {
-    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, pyo3::types::PyDict>> {
-        use pyo3::types::{PyDict, PyDictMethods};
+    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyDict>> {
         let dict = PyDict::new(py);
-        for (key, value) in &self.inner.chat {
+        for (key, value) in &self.chat {
             dict.set_item(key, serde_value_to_py_any(value, py)?)?;
         }
 
@@ -36,18 +38,28 @@ impl PyPrompt {
     }
 }
 
+/// Convert a [`serde_json::Value`] to a [`pyo3::PyAny`].
 fn serde_value_to_py_any<'py>(
     v: &serde_json::Value,
     py: Python<'py>,
 ) -> PyResult<pyo3::Py<pyo3::PyAny>> {
-    use pyo3::types::{PyDict, PyDictMethods, PyListMethods};
     match v {
         serde_json::Value::Null => Ok(py.None()),
         serde_json::Value::Bool(b) => b.into_py_any(py),
-        serde_json::Value::Number(_n) => todo!(),
         serde_json::Value::String(s) => s.into_py_any(py),
+        serde_json::Value::Number(n) => {
+            if let Some(i) = n.as_i64() {
+                i.into_py_any(py)
+            } else if let Some(f) = n.as_f64() {
+                f.into_py_any(py)
+            } else {
+                Err(BamlError::new_err(format!(
+                    "Can't convert '{n}' to a Python number"
+                )))
+            }
+        }
         serde_json::Value::Array(a) => {
-            let list = pyo3::types::PyList::empty(py);
+            let list = PyList::empty(py);
             for item in a {
                 list.append(serde_value_to_py_any(item, py)?)?;
             }
@@ -323,6 +335,10 @@ impl BamlRuntime {
         ))
     }
 
+    /// Expose the prompt of a function.
+    ///
+    /// Returns a JSON object that represents the prompt as understood by the
+    /// LLM provider.
     #[pyo3(signature = (function_name, args, ctx, tb, cb))]
     fn render_prompt(
         &self,
@@ -365,11 +381,11 @@ impl BamlRuntime {
                 .map_err(BamlError::from_anyhow)?;
 
             match prompt {
-                baml_runtime::RenderedPrompt::Chat(chat) => Ok(PyPrompt::from(Prompt {
+                baml_runtime::RenderedPrompt::Chat(chat) => Ok(PyPrompt {
                     chat: provider
-                        .chat_to_message(&chat)
+                        .chat_to_message(&chat, &ctx, &*baml_runtime)
                         .map_err(BamlError::from_anyhow)?,
-                })),
+                }),
                 baml_runtime::RenderedPrompt::Completion(_completion) => todo!(),
             }
         })

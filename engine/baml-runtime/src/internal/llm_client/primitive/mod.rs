@@ -212,7 +212,7 @@ impl LLMPrimitiveProvider {
             LLMPrimitiveProvider::Google(client) => client.chat_to_message(chat),
             LLMPrimitiveProvider::Vertex(client) => client.chat_to_message(chat),
             LLMPrimitiveProvider::Aws(client) => {
-                todo!("AWS client does not implement ToProviderMessageExt::chat_to_message")
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
         }
     }

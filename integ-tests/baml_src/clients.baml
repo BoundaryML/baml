@@ -304,8 +304,8 @@ client<llm> Lottery_SimpleSyntax {
   options {
     start 0
     strategy [
-      GPT35
       Claude
+      GPT35
     ]
   }
 }

@@ -2154,6 +2154,24 @@ export const TestFallbackClient = async (
 };
 
 /**
+ * Executes the "TestFallbackStrategy" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestFallbackStrategy"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestFallbackStrategy = async (
+  input: string,
+): Promise<string> => {
+  return b.TestFallbackStrategy(
+    input,
+  );
+};
+
+/**
  * Executes the "TestFallbackToShorthand" BAML action.
  *
  * This server action calls the underlying BAML function "TestFallbackToShorthand"
@@ -2774,6 +2792,24 @@ export const TestRetryConstant = async (
 export const TestRetryExponential = async (
 ): Promise<string> => {
   return b.TestRetryExponential(
+  );
+};
+
+/**
+ * Executes the "TestRoundRobinStrategy" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestRoundRobinStrategy"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestRoundRobinStrategy = async (
+  input: string,
+): Promise<string> => {
+  return b.TestRoundRobinStrategy(
+    input,
   );
 };
 

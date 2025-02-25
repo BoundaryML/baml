@@ -2746,6 +2746,29 @@ class BamlAsyncClient:
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
+    async def TestFallbackStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "TestFallbackStrategy",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(str, raw.cast_to(types, types, partial_types, False))
+    
     async def TestFallbackToShorthand(
         self,
         input: str,
@@ -3544,6 +3567,29 @@ class BamlAsyncClient:
         "TestRetryExponential",
         {
           
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+      return cast(str, raw.cast_to(types, types, partial_types, False))
+    
+    async def TestRoundRobinStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.call_function(
+        "TestRoundRobinStrategy",
+        {
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
@@ -7262,6 +7308,36 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def TestFallbackStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "TestFallbackStrategy",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
     def TestFallbackToShorthand(
         self,
         input: str,
@@ -8296,6 +8372,36 @@ class BamlStreamClient:
       raw = self.__runtime.stream_function(
         "TestRetryExponential",
         {
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestRoundRobinStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.stream_function(
+        "TestRoundRobinStrategy",
+        {
+          "input": input,
         },
         None,
         self.__ctx_manager.get(),
@@ -11373,6 +11479,30 @@ class PromptRenderer:
 
       return raw.to_dict()
     
+    async def TestFallbackStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[str, Any]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.render_prompt(
+        "TestFallbackStrategy",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
     async def TestFallbackToShorthand(
         self,
         input: str,
@@ -12203,6 +12333,30 @@ class PromptRenderer:
       raw = await self.__runtime.render_prompt(
         "TestRetryExponential",
         {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    async def TestRoundRobinStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[str, Any]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = await self.__runtime.render_prompt(
+        "TestRoundRobinStrategy",
+        {
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
