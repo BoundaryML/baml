@@ -27,6 +27,7 @@ from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, D
 
 OutputType = TypeVar('OutputType')
 
+
 # Define the TypedDict with optional parameters having default values
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
@@ -36,15 +37,21 @@ class BamlSyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
+    __prompt_renderer: "PromptRenderer"
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
+      self.__prompt_renderer = PromptRenderer(self.__runtime, self.__ctx_manager)
 
     @property
     def stream(self):
       return self.__stream_client
+
+    @property
+    def prompt(self):
+      return self.__prompt_renderer
 
     
     def AaaSamOutputFormat(
@@ -8647,6 +8654,3906 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+
+
+class PromptRenderer:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+
+    
+    def AaaSamOutputFormat(
+        self,
+        recipe: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Recipe:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AaaSamOutputFormat",
+        {
+          "recipe": recipe,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AliasThatPointsToRecursiveType(
+        self,
+        list: types.LinkedListAliasNode,
+        baml_options: BamlCallOptions = {},
+    ) -> types.LinkedListAliasNode:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AliasThatPointsToRecursiveType",
+        {
+          "list": list,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AliasWithMultipleAttrs(
+        self,
+        money: Checked[int,types.Literal["gt_ten"]],
+        baml_options: BamlCallOptions = {},
+    ) -> Checked[int,types.Literal["gt_ten"]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AliasWithMultipleAttrs",
+        {
+          "money": money,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AliasedInputClass(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AliasedInputClass",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AliasedInputClass2(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AliasedInputClass2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AliasedInputClassNested(
+        self,
+        input: types.InputClassNested,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AliasedInputClassNested",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AliasedInputEnum(
+        self,
+        input: types.AliasedEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AliasedInputEnum",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AliasedInputList(
+        self,
+        input: List[types.AliasedEnum],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AliasedInputList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AllowedOptionals(
+        self,
+        optionals: types.OptionalListAndMap,
+        baml_options: BamlCallOptions = {},
+    ) -> types.OptionalListAndMap:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AllowedOptionals",
+        {
+          "optionals": optionals,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AssertFn(
+        self,
+        a: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AssertFn",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def AudioInput(
+        self,
+        aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "AudioInput",
+        {
+          "aud": aud,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def BuildLinkedList(
+        self,
+        input: List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> types.LinkedList:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "BuildLinkedList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def BuildTree(
+        self,
+        input: types.BinaryNode,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Tree:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "BuildTree",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ClassThatPointsToRecursiveClassThroughAlias(
+        self,
+        cls: types.ClassToRecAlias,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ClassToRecAlias:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ClassThatPointsToRecursiveClassThroughAlias",
+        {
+          "cls": cls,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ClassifyDynEnumTwo(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Union[types.DynEnumTwo, str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ClassifyDynEnumTwo",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ClassifyMessage(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Category:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ClassifyMessage",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ClassifyMessage2(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Category:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ClassifyMessage2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ClassifyMessage3(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Category:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ClassifyMessage3",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def Completion(
+        self,
+        prefix: str,suffix: str,language: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "Completion",
+        {
+          "prefix": prefix,"suffix": suffix,"language": language,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def CustomTask(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "CustomTask",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DescribeImage(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DescribeImage",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DescribeImage2(
+        self,
+        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DescribeImage2",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DescribeImage3(
+        self,
+        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DescribeImage3",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DescribeImage4(
+        self,
+        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DescribeImage4",
+        {
+          "classWithImage": classWithImage,"img2": img2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DifferentiateUnions(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> Union[types.OriginalA, types.OriginalB]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DifferentiateUnions",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DummyOutputFunction(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DummyOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DummyOutputFunction",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DynamicFunc(
+        self,
+        input: types.DynamicClassOne,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DynamicClassTwo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DynamicFunc",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DynamicInputOutput(
+        self,
+        input: types.DynInputOutput,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DynInputOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DynamicInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def DynamicListInputOutput(
+        self,
+        input: List[types.DynInputOutput],
+        baml_options: BamlCallOptions = {},
+    ) -> List[types.DynInputOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "DynamicListInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExpectFailure(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExpectFailure",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ContactInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExtractHobby(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[Union[types.Hobby, str]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExtractHobby",
+        {
+          "text": text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExtractNames(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExtractNames",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExtractPeople(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[types.Person]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExtractPeople",
+        {
+          "text": text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExtractReceiptInfo(
+        self,
+        email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
+        baml_options: BamlCallOptions = {},
+    ) -> types.ReceiptInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExtractReceiptInfo",
+        {
+          "email": email,"reason": reason,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExtractResume(
+        self,
+        resume: str,img: Optional[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> types.Resume:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExtractResume",
+        {
+          "resume": resume,"img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ExtractResume2(
+        self,
+        resume: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Resume:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ExtractResume2",
+        {
+          "resume": resume,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnClassOptionalOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Optional[types.ClassOptionalOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnClassOptionalOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnClassOptionalOutput2(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Optional[types.ClassOptionalOutput2]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnClassOptionalOutput2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnEnumListOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[types.EnumOutput]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnEnumListOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnEnumOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.EnumOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnEnumOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnLiteralClassInputOutput(
+        self,
+        input: types.LiteralClassHello,
+        baml_options: BamlCallOptions = {},
+    ) -> types.LiteralClassHello:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnLiteralClassInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnLiteralUnionClassInputOutput(
+        self,
+        input: Union[types.LiteralClassOne, types.LiteralClassTwo],
+        baml_options: BamlCallOptions = {},
+    ) -> Union[types.LiteralClassOne, types.LiteralClassTwo]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnLiteralUnionClassInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnNamedArgsSingleStringOptional(
+        self,
+        myString: Optional[str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputBool(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> bool:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputBool",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputClass(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestOutputClass:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputClass",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputClassList(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[types.TestOutputClass]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputClassList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputClassNested(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestClassNested:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputClassNested",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputClassWithEnum(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestClassWithEnum:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputClassWithEnum",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputInt(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputInt",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputLiteralBool(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Literal[False]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputLiteralBool",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputLiteralInt(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Literal[5]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputLiteralInt",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputLiteralString(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Literal["example output"]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputLiteralString",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnOutputStringList(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnOutputStringList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnTestAliasedEnumOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestEnum:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnTestAliasedEnumOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnTestClassAlias(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestClassAlias:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnTestClassAlias",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def FnTestNamedArgsSingleEnum(
+        self,
+        myArg: types.NamedArgsSingleEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def GetDataType(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.RaysData:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "GetDataType",
+        {
+          "text": text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def GetOrderInfo(
+        self,
+        email: types.Email,
+        baml_options: BamlCallOptions = {},
+    ) -> types.OrderInfo:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "GetOrderInfo",
+        {
+          "email": email,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def GetQuery(
+        self,
+        query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.SearchParams:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "GetQuery",
+        {
+          "query": query,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def InOutEnumMapKey(
+        self,
+        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[types.MapKey, str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "InOutEnumMapKey",
+        {
+          "i1": i1,"i2": i2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def InOutLiteralStringUnionMapKey(
+        self,
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "InOutLiteralStringUnionMapKey",
+        {
+          "i1": i1,"i2": i2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def InOutSingleLiteralStringMapKey(
+        self,
+        m: Dict[Literal["key"], str],
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[Literal["key"], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "InOutSingleLiteralStringMapKey",
+        {
+          "m": m,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def JsonTypeAliasCycle(
+        self,
+        input: types.JsonValue,
+        baml_options: BamlCallOptions = {},
+    ) -> types.JsonValue:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "JsonTypeAliasCycle",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def LiteralUnionsTest(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Union[Literal[1], Literal[True], Literal["string output"]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "LiteralUnionsTest",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def MakeBlockConstraint(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> Checked[types.BlockConstraint,types.Literal["cross_field"]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "MakeBlockConstraint",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def MakeNestedBlockConstraint(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> types.NestedBlockConstraint:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "MakeNestedBlockConstraint",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def MakeSemanticContainer(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> types.SemanticContainer:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "MakeSemanticContainer",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def MapAlias(
+        self,
+        m: Dict[str, List[str]],
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[str, List[str]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "MapAlias",
+        {
+          "m": m,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def MergeAliasAttributes(
+        self,
+        money: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.MergeAttrs:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "MergeAliasAttributes",
+        {
+          "money": money,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def MyFunc(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.DynamicOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "MyFunc",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def NestedAlias(
+        self,
+        c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
+        baml_options: BamlCallOptions = {},
+    ) -> Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "NestedAlias",
+        {
+          "c": c,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def NullLiteralClassHello(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.ClassForNullLiteral:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "NullLiteralClassHello",
+        {
+          "s": s,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def OptionalTest_Function(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> List[Optional[types.OptionalTest_ReturnType]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "OptionalTest_Function",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.FooAny:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Checked[int,types.Literal["too_big"]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PrimitiveAlias(
+        self,
+        p: Union[int, str, bool, float],
+        baml_options: BamlCallOptions = {},
+    ) -> Union[int, str, bool, float]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PrimitiveAlias",
+        {
+          "p": p,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PromptTestClaude(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PromptTestClaude",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PromptTestClaudeChat(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PromptTestClaudeChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PromptTestClaudeChatNoSystem(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PromptTestClaudeChatNoSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PromptTestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PromptTestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PromptTestOpenAIChat(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PromptTestOpenAIChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PromptTestOpenAIChatNoSystem(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def PromptTestStreaming(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "PromptTestStreaming",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def RecursiveAliasCycle(
+        self,
+        input: types.RecAliasOne,
+        baml_options: BamlCallOptions = {},
+    ) -> types.RecAliasOne:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "RecursiveAliasCycle",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def RecursiveClassWithAliasIndirection(
+        self,
+        cls: types.NodeWithAliasIndirection,
+        baml_options: BamlCallOptions = {},
+    ) -> types.NodeWithAliasIndirection:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "RecursiveClassWithAliasIndirection",
+        {
+          "cls": cls,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ReturnAliasWithMergedAttributes(
+        self,
+        money: Checked[int,types.Literal["gt_ten"]],
+        baml_options: BamlCallOptions = {},
+    ) -> Checked[int,types.Literal["gt_ten"]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ReturnAliasWithMergedAttributes",
+        {
+          "money": money,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ReturnFailingAssert(
+        self,
+        inp: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ReturnFailingAssert",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ReturnJsonEntry(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.JsonTemplate:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ReturnJsonEntry",
+        {
+          "s": s,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def ReturnMalformedConstraints(
+        self,
+        a: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.MalformedConstraints:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "ReturnMalformedConstraints",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def SchemaDescriptions(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Schema:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "SchemaDescriptions",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def SimpleRecursiveListAlias(
+        self,
+        input: types.RecursiveListAlias,
+        baml_options: BamlCallOptions = {},
+    ) -> types.RecursiveListAlias:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "SimpleRecursiveListAlias",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def SimpleRecursiveMapAlias(
+        self,
+        input: types.RecursiveMapAlias,
+        baml_options: BamlCallOptions = {},
+    ) -> types.RecursiveMapAlias:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "SimpleRecursiveMapAlias",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def StreamBigNumbers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.BigNumbers:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "StreamBigNumbers",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def StreamFailingAssertion(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TwoStoriesOneTitle:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,"length": length,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def StreamOneBigNumber(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "StreamOneBigNumber",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def StreamUnionIntegers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> List[Union[int, str]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "StreamUnionIntegers",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def StreamingCompoundNumbers(
+        self,
+        digits: int,yapping: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> types.CompoundBigNumbers:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "StreamingCompoundNumbers",
+        {
+          "digits": digits,"yapping": yapping,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TakeRecAliasDep(
+        self,
+        input: types.RecursiveAliasDependency,
+        baml_options: BamlCallOptions = {},
+    ) -> types.RecursiveAliasDependency:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TakeRecAliasDep",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TellStory(
+        self,
+        story: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TellStory",
+        {
+          "story": story,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAnthropic(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAnthropic",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAnthropicShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAnthropicShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAws(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAws",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAwsInvalidAccessKey(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAwsInvalidAccessKey",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAwsInvalidProfile(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAwsInvalidProfile",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAwsInvalidRegion(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAwsInvalidRegion",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAwsInvalidSessionToken(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAwsInvalidSessionToken",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzure(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzure",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzureFailure(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzureFailure",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzureO1NoMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzureO1NoMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzureO1WithMaxCompletionTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzureO1WithMaxCompletionTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzureO1WithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzureO1WithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzureO3NoMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzureO3NoMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzureO3WithMaxCompletionTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzureO3WithMaxCompletionTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestAzureWithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestAzureWithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestCaching(
+        self,
+        input: str,not_cached: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestCaching",
+        {
+          "input": input,"not_cached": not_cached,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFallbackClient(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFallbackClient",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFallbackStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFallbackStrategy",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFallbackToShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFallbackToShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleBool(
+        self,
+        myBool: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleClass(
+        self,
+        myArg: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleEnumList(
+        self,
+        myArg: List[types.NamedArgsSingleEnumList],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleFloat(
+        self,
+        myFloat: float,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleInt(
+        self,
+        myInt: int,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleMapStringToClass(
+        self,
+        myMap: Dict[str, types.StringToClassEntry],
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[str, types.StringToClassEntry]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          "myMap": myMap,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleMapStringToMap(
+        self,
+        myMap: Dict[str, Dict[str, str]],
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[str, Dict[str, str]]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          "myMap": myMap,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleMapStringToString(
+        self,
+        myMap: Dict[str, str],
+        baml_options: BamlCallOptions = {},
+    ) -> Dict[str, str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          "myMap": myMap,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleString(
+        self,
+        myString: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleString",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleStringArray(
+        self,
+        myStringArray: List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestFnNamedArgsSingleStringList(
+        self,
+        myArg: List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestGemini(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestGemini",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestGeminiOpenAiGeneric(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestGeminiOpenAiGeneric",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestGeminiSystem(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestGeminiSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestGeminiSystemAsChat(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestGeminiSystemAsChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestImageInput(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestImageInput",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestImageInputAnthropic(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestImageInputAnthropic",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestImageListInput(
+        self,
+        imgs: List[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestImageListInput",
+        {
+          "imgs": imgs,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestMemory(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TestMemoryOutput:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestMemory",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestMulticlassNamedArgs(
+        self,
+        myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg": myArg,"myArg2": myArg2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestNamedArgsLiteralBool(
+        self,
+        myBool: Literal[True],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestNamedArgsLiteralBool",
+        {
+          "myBool": myBool,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestNamedArgsLiteralInt(
+        self,
+        myInt: Literal[1],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestNamedArgsLiteralInt",
+        {
+          "myInt": myInt,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestNamedArgsLiteralString(
+        self,
+        myString: Literal["My String"],
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestNamedArgsLiteralString",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOllama(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOllama",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAILegacyProvider(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAIO1NoMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAIO1NoMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAIO1WithMaxCompletionTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAIO1WithMaxCompletionTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAIO1WithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAIO1WithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAIShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAIShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAIWithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAIWithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestOpenAIWithNullMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestOpenAIWithNullMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestRetryConstant(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestRetryConstant",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestRetryExponential(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestRetryExponential",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestRoundRobinStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestRoundRobinStrategy",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestSingleFallbackClient(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestSingleFallbackClient",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestUniverseQuestion(
+        self,
+        question: types.UniverseQuestionInput,
+        baml_options: BamlCallOptions = {},
+    ) -> types.UniverseQuestion:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestUniverseQuestion",
+        {
+          "question": question,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestVertex(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestVertex",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestVertexWithSystemInstructions(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestVertexWithSystemInstructions",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def UnionTest_Function(
+        self,
+        input: Union[str, bool],
+        baml_options: BamlCallOptions = {},
+    ) -> types.UnionTest_ReturnType:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "UnionTest_Function",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def UseBlockConstraint(
+        self,
+        inp: types.BlockConstraintForParam,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "UseBlockConstraint",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def UseMalformedConstraints(
+        self,
+        a: types.MalformedConstraints2,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "UseMalformedConstraints",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def UseNestedBlockConstraint(
+        self,
+        inp: types.NestedBlockConstraintForParam,
+        baml_options: BamlCallOptions = {},
+    ) -> int:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "UseNestedBlockConstraint",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+
 
 b = BamlSyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
 

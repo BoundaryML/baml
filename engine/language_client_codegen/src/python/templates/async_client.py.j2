@@ -137,7 +137,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "{{fn.name}}",
         {
           {%- for (name, _) in fn.args %}

@@ -406,6 +406,47 @@ impl BamlRuntime {
         )
     }
 
+    pub async fn prompt_to_provider_body(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let ctx = context_manager.create_ctx(tb, cb)?;
+
+        let provider = self.llm_provider_from_function(&function_name, &ctx)?;
+
+        let prompt = self
+            .render_prompt(&function_name, &ctx, &params, None)
+            .await
+            .map(|(prompt, ..)| prompt)?;
+
+        match prompt {
+            RenderedPrompt::Chat(chat) => provider.chat_to_message(&chat, &ctx, self),
+
+            RenderedPrompt::Completion(completion) => {
+                provider.completion_to_provider_body(&completion, &ctx, self)
+            }
+        }
+    }
+
+    pub fn prompt_to_provider_body_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let fut = self.prompt_to_provider_body(function_name, params, context_manager, tb, cb);
+        // TODO: If no images or media we don't have to "block" anything.
+        // This computation is not usually so expensive that it needs to run
+        // on other threads.
+        self.async_runtime.block_on(fut)
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn generate_client(
         &self,

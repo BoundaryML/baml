@@ -337,10 +337,14 @@ impl BamlRuntime {
 
     /// Expose the prompt of a function.
     ///
-    /// Returns a JSON object that represents the prompt as understood by the
-    /// LLM provider.
+    /// This is NOT the same as "rendering" the prompt since it returns a JSON
+    /// object that represents the prompt as understood by the LLM provider.
+    ///
+    /// Prompt rendering in the context of Baml source means building a
+    /// [`baml_runtime::RenderedPrompt`] object. We take that object and pass
+    /// it to the LLM provider implementation to get the JSON out of it.
     #[pyo3(signature = (function_name, args, ctx, tb, cb))]
-    fn render_prompt(
+    fn prompt_to_provider_body(
         &self,
         py: Python<'_>,
         function_name: String,
@@ -361,38 +365,68 @@ impl BamlRuntime {
         };
 
         let baml_runtime = self.inner.clone();
-        let context_manager = ctx.inner.clone();
+        let ctx_manager = ctx.inner.clone();
         let type_builder = tb.map(|tb| tb.inner.clone());
         let client_registry = cb.map(|cb| cb.inner.clone());
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let ctx = context_manager
-                .create_ctx(type_builder.as_ref(), client_registry.as_ref())
-                .map_err(BamlError::from_anyhow)?;
-
-            let provider = baml_runtime
-                .llm_provider_from_function(&function_name, &ctx)
-                .map_err(BamlError::from_anyhow)?;
-
-            let prompt = baml_runtime
-                .render_prompt(&function_name, &ctx, &args_map, None)
+            let body = baml_runtime
+                .prompt_to_provider_body(
+                    function_name,
+                    &args_map,
+                    &ctx_manager,
+                    type_builder.as_ref(),
+                    client_registry.as_ref(),
+                )
                 .await
-                .map(|(prompt, ..)| prompt)
                 .map_err(BamlError::from_anyhow)?;
-
-            let body = match prompt {
-                baml_runtime::RenderedPrompt::Chat(chat) => provider
-                    .chat_to_message(&chat, &ctx, &*baml_runtime)
-                    .map_err(BamlError::from_anyhow)?,
-
-                baml_runtime::RenderedPrompt::Completion(completion) => provider
-                    .completion_to_provider_body(&completion, &ctx, &*baml_runtime)
-                    .map_err(BamlError::from_anyhow)?,
-            };
 
             Ok(PyPrompt { body })
         })
         .map(pyo3::Bound::into)
+    }
+
+    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    fn prompt_to_provider_body_sync(
+        &self,
+        function_name: String,
+        args: PyObject,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> PyResult<PyPrompt> {
+        let Some(args) = parse_py_type(args, false)? else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args, perhaps you used a non-serializable type?",
+            ));
+        };
+        let Some(args_map) = args.as_map_owned() else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args as a map",
+            ));
+        };
+
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
+        // TODO: Figure out if this will be async or not (images, media, etc).
+        // If it's not async then skip gil and threads.
+        let result = Python::with_gil(|py| {
+            py.allow_threads(|| {
+                self.inner.prompt_to_provider_body_sync(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                )
+            })
+        });
+
+        result
+            .map(|body| PyPrompt { body })
+            .map_err(BamlError::from_anyhow)
     }
 
     #[pyo3()]

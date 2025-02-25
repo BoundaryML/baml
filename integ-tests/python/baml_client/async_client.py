@@ -8677,7 +8677,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AaaSamOutputFormat",
         {
           "recipe": recipe,
@@ -8701,7 +8701,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AliasThatPointsToRecursiveType",
         {
           "list": list,
@@ -8725,7 +8725,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AliasWithMultipleAttrs",
         {
           "money": money,
@@ -8749,7 +8749,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AliasedInputClass",
         {
           "input": input,
@@ -8773,7 +8773,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AliasedInputClass2",
         {
           "input": input,
@@ -8797,7 +8797,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AliasedInputClassNested",
         {
           "input": input,
@@ -8821,7 +8821,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AliasedInputEnum",
         {
           "input": input,
@@ -8845,7 +8845,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AliasedInputList",
         {
           "input": input,
@@ -8869,7 +8869,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AllowedOptionals",
         {
           "optionals": optionals,
@@ -8893,7 +8893,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AssertFn",
         {
           "a": a,
@@ -8917,7 +8917,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "AudioInput",
         {
           "aud": aud,
@@ -8941,7 +8941,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "BuildLinkedList",
         {
           "input": input,
@@ -8965,7 +8965,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "BuildTree",
         {
           "input": input,
@@ -8989,7 +8989,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
           "cls": cls,
@@ -9013,7 +9013,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ClassifyDynEnumTwo",
         {
           "input": input,
@@ -9037,7 +9037,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ClassifyMessage",
         {
           "input": input,
@@ -9061,7 +9061,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ClassifyMessage2",
         {
           "input": input,
@@ -9085,7 +9085,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ClassifyMessage3",
         {
           "input": input,
@@ -9109,7 +9109,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "Completion",
         {
           "prefix": prefix,
@@ -9135,7 +9135,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "CustomTask",
         {
           "input": input,
@@ -9159,7 +9159,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DescribeImage",
         {
           "img": img,
@@ -9183,7 +9183,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DescribeImage2",
         {
           "classWithImage": classWithImage,
@@ -9208,7 +9208,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DescribeImage3",
         {
           "classWithImage": classWithImage,
@@ -9233,7 +9233,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DescribeImage4",
         {
           "classWithImage": classWithImage,
@@ -9258,7 +9258,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DifferentiateUnions",
         {
         },
@@ -9281,7 +9281,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DummyOutputFunction",
         {
           "input": input,
@@ -9305,7 +9305,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DynamicFunc",
         {
           "input": input,
@@ -9329,7 +9329,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DynamicInputOutput",
         {
           "input": input,
@@ -9353,7 +9353,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "DynamicListInputOutput",
         {
           "input": input,
@@ -9377,7 +9377,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExpectFailure",
         {
         },
@@ -9400,7 +9400,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExtractContactInfo",
         {
           "document": document,
@@ -9424,7 +9424,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExtractHobby",
         {
           "text": text,
@@ -9448,7 +9448,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExtractNames",
         {
           "input": input,
@@ -9472,7 +9472,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExtractPeople",
         {
           "text": text,
@@ -9496,7 +9496,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExtractReceiptInfo",
         {
           "email": email,
@@ -9521,7 +9521,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExtractResume",
         {
           "resume": resume,
@@ -9546,7 +9546,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ExtractResume2",
         {
           "resume": resume,
@@ -9570,7 +9570,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnClassOptionalOutput",
         {
           "input": input,
@@ -9594,7 +9594,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnClassOptionalOutput2",
         {
           "input": input,
@@ -9618,7 +9618,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnEnumListOutput",
         {
           "input": input,
@@ -9642,7 +9642,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnEnumOutput",
         {
           "input": input,
@@ -9666,7 +9666,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnLiteralClassInputOutput",
         {
           "input": input,
@@ -9690,7 +9690,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnLiteralUnionClassInputOutput",
         {
           "input": input,
@@ -9714,7 +9714,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnNamedArgsSingleStringOptional",
         {
           "myString": myString,
@@ -9738,7 +9738,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputBool",
         {
           "input": input,
@@ -9762,7 +9762,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputClass",
         {
           "input": input,
@@ -9786,7 +9786,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputClassList",
         {
           "input": input,
@@ -9810,7 +9810,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputClassNested",
         {
           "input": input,
@@ -9834,7 +9834,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputClassWithEnum",
         {
           "input": input,
@@ -9858,7 +9858,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputInt",
         {
           "input": input,
@@ -9882,7 +9882,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputLiteralBool",
         {
           "input": input,
@@ -9906,7 +9906,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputLiteralInt",
         {
           "input": input,
@@ -9930,7 +9930,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputLiteralString",
         {
           "input": input,
@@ -9954,7 +9954,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnOutputStringList",
         {
           "input": input,
@@ -9978,7 +9978,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnTestAliasedEnumOutput",
         {
           "input": input,
@@ -10002,7 +10002,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnTestClassAlias",
         {
           "input": input,
@@ -10026,7 +10026,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "FnTestNamedArgsSingleEnum",
         {
           "myArg": myArg,
@@ -10050,7 +10050,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "GetDataType",
         {
           "text": text,
@@ -10074,7 +10074,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "GetOrderInfo",
         {
           "email": email,
@@ -10098,7 +10098,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "GetQuery",
         {
           "query": query,
@@ -10122,7 +10122,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "InOutEnumMapKey",
         {
           "i1": i1,
@@ -10147,7 +10147,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "InOutLiteralStringUnionMapKey",
         {
           "i1": i1,
@@ -10172,7 +10172,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "InOutSingleLiteralStringMapKey",
         {
           "m": m,
@@ -10196,7 +10196,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "JsonTypeAliasCycle",
         {
           "input": input,
@@ -10220,7 +10220,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "LiteralUnionsTest",
         {
           "input": input,
@@ -10244,7 +10244,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "MakeBlockConstraint",
         {
         },
@@ -10267,7 +10267,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "MakeNestedBlockConstraint",
         {
         },
@@ -10290,7 +10290,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "MakeSemanticContainer",
         {
         },
@@ -10313,7 +10313,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "MapAlias",
         {
           "m": m,
@@ -10337,7 +10337,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "MergeAliasAttributes",
         {
           "money": money,
@@ -10361,7 +10361,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "MyFunc",
         {
           "input": input,
@@ -10385,7 +10385,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "NestedAlias",
         {
           "c": c,
@@ -10409,7 +10409,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "NullLiteralClassHello",
         {
           "s": s,
@@ -10433,7 +10433,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "OptionalTest_Function",
         {
           "input": input,
@@ -10457,7 +10457,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PredictAge",
         {
           "name": name,
@@ -10481,7 +10481,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PredictAgeBare",
         {
           "inp": inp,
@@ -10505,7 +10505,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PrimitiveAlias",
         {
           "p": p,
@@ -10529,7 +10529,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PromptTestClaude",
         {
           "input": input,
@@ -10553,7 +10553,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PromptTestClaudeChat",
         {
           "input": input,
@@ -10577,7 +10577,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PromptTestClaudeChatNoSystem",
         {
           "input": input,
@@ -10601,7 +10601,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PromptTestOpenAI",
         {
           "input": input,
@@ -10625,7 +10625,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PromptTestOpenAIChat",
         {
           "input": input,
@@ -10649,7 +10649,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PromptTestOpenAIChatNoSystem",
         {
           "input": input,
@@ -10673,7 +10673,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "PromptTestStreaming",
         {
           "input": input,
@@ -10697,7 +10697,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "RecursiveAliasCycle",
         {
           "input": input,
@@ -10721,7 +10721,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "RecursiveClassWithAliasIndirection",
         {
           "cls": cls,
@@ -10745,7 +10745,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ReturnAliasWithMergedAttributes",
         {
           "money": money,
@@ -10769,7 +10769,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ReturnFailingAssert",
         {
           "inp": inp,
@@ -10793,7 +10793,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ReturnJsonEntry",
         {
           "s": s,
@@ -10817,7 +10817,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "ReturnMalformedConstraints",
         {
           "a": a,
@@ -10841,7 +10841,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "SchemaDescriptions",
         {
           "input": input,
@@ -10865,7 +10865,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "SimpleRecursiveListAlias",
         {
           "input": input,
@@ -10889,7 +10889,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "SimpleRecursiveMapAlias",
         {
           "input": input,
@@ -10913,7 +10913,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "StreamBigNumbers",
         {
           "digits": digits,
@@ -10937,7 +10937,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "StreamFailingAssertion",
         {
           "theme": theme,
@@ -10962,7 +10962,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "StreamOneBigNumber",
         {
           "digits": digits,
@@ -10986,7 +10986,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "StreamUnionIntegers",
         {
           "digits": digits,
@@ -11010,7 +11010,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "StreamingCompoundNumbers",
         {
           "digits": digits,
@@ -11035,7 +11035,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TakeRecAliasDep",
         {
           "input": input,
@@ -11059,7 +11059,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TellStory",
         {
           "story": story,
@@ -11083,7 +11083,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAnthropic",
         {
           "input": input,
@@ -11107,7 +11107,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAnthropicShorthand",
         {
           "input": input,
@@ -11131,7 +11131,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAws",
         {
           "input": input,
@@ -11155,7 +11155,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAwsInvalidAccessKey",
         {
           "input": input,
@@ -11179,7 +11179,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAwsInvalidProfile",
         {
           "input": input,
@@ -11203,7 +11203,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAwsInvalidRegion",
         {
           "input": input,
@@ -11227,7 +11227,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAwsInvalidSessionToken",
         {
           "input": input,
@@ -11251,7 +11251,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzure",
         {
           "input": input,
@@ -11275,7 +11275,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzureFailure",
         {
           "input": input,
@@ -11299,7 +11299,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzureO1NoMaxTokens",
         {
           "input": input,
@@ -11323,7 +11323,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzureO1WithMaxCompletionTokens",
         {
           "input": input,
@@ -11347,7 +11347,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzureO1WithMaxTokens",
         {
           "input": input,
@@ -11371,7 +11371,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzureO3NoMaxTokens",
         {
           "input": input,
@@ -11395,7 +11395,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzureO3WithMaxCompletionTokens",
         {
           "input": input,
@@ -11419,7 +11419,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestAzureWithMaxTokens",
         {
           "input": input,
@@ -11443,7 +11443,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestCaching",
         {
           "input": input,
@@ -11468,7 +11468,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFallbackClient",
         {
         },
@@ -11491,7 +11491,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFallbackStrategy",
         {
           "input": input,
@@ -11515,7 +11515,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFallbackToShorthand",
         {
           "input": input,
@@ -11539,7 +11539,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleBool",
         {
           "myBool": myBool,
@@ -11563,7 +11563,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleClass",
         {
           "myArg": myArg,
@@ -11587,7 +11587,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleEnumList",
         {
           "myArg": myArg,
@@ -11611,7 +11611,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleFloat",
         {
           "myFloat": myFloat,
@@ -11635,7 +11635,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleInt",
         {
           "myInt": myInt,
@@ -11659,7 +11659,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleMapStringToClass",
         {
           "myMap": myMap,
@@ -11683,7 +11683,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleMapStringToMap",
         {
           "myMap": myMap,
@@ -11707,7 +11707,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleMapStringToString",
         {
           "myMap": myMap,
@@ -11731,7 +11731,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleString",
         {
           "myString": myString,
@@ -11755,7 +11755,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleStringArray",
         {
           "myStringArray": myStringArray,
@@ -11779,7 +11779,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestFnNamedArgsSingleStringList",
         {
           "myArg": myArg,
@@ -11803,7 +11803,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestGemini",
         {
           "input": input,
@@ -11827,7 +11827,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestGeminiOpenAiGeneric",
         {
         },
@@ -11850,7 +11850,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestGeminiSystem",
         {
           "input": input,
@@ -11874,7 +11874,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestGeminiSystemAsChat",
         {
           "input": input,
@@ -11898,7 +11898,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestImageInput",
         {
           "img": img,
@@ -11922,7 +11922,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestImageInputAnthropic",
         {
           "img": img,
@@ -11946,7 +11946,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestImageListInput",
         {
           "imgs": imgs,
@@ -11970,7 +11970,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestMemory",
         {
           "input": input,
@@ -11994,7 +11994,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestMulticlassNamedArgs",
         {
           "myArg": myArg,
@@ -12019,7 +12019,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestNamedArgsLiteralBool",
         {
           "myBool": myBool,
@@ -12043,7 +12043,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestNamedArgsLiteralInt",
         {
           "myInt": myInt,
@@ -12067,7 +12067,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestNamedArgsLiteralString",
         {
           "myString": myString,
@@ -12091,7 +12091,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOllama",
         {
           "input": input,
@@ -12115,7 +12115,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAI",
         {
           "input": input,
@@ -12139,7 +12139,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAILegacyProvider",
         {
           "input": input,
@@ -12163,7 +12163,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAIO1NoMaxTokens",
         {
           "input": input,
@@ -12187,7 +12187,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
           "input": input,
@@ -12211,7 +12211,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAIO1WithMaxTokens",
         {
           "input": input,
@@ -12235,7 +12235,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAIShorthand",
         {
           "input": input,
@@ -12259,7 +12259,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAIWithMaxTokens",
         {
           "input": input,
@@ -12283,7 +12283,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestOpenAIWithNullMaxTokens",
         {
           "input": input,
@@ -12307,7 +12307,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestRetryConstant",
         {
         },
@@ -12330,7 +12330,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestRetryExponential",
         {
         },
@@ -12353,7 +12353,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestRoundRobinStrategy",
         {
           "input": input,
@@ -12377,7 +12377,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestSingleFallbackClient",
         {
         },
@@ -12400,7 +12400,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestUniverseQuestion",
         {
           "question": question,
@@ -12424,7 +12424,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestVertex",
         {
           "input": input,
@@ -12448,7 +12448,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "TestVertexWithSystemInstructions",
         {
         },
@@ -12471,7 +12471,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "UnionTest_Function",
         {
           "input": input,
@@ -12495,7 +12495,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "UseBlockConstraint",
         {
           "inp": inp,
@@ -12519,7 +12519,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "UseMalformedConstraints",
         {
           "a": a,
@@ -12543,7 +12543,7 @@ class PromptRenderer:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.render_prompt(
+      raw = await self.__runtime.prompt_to_provider_body(
         "UseNestedBlockConstraint",
         {
           "inp": inp,
