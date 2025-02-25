@@ -463,7 +463,7 @@ mod tests {
         let env_vars: HashMap<&str, &str> = HashMap::new();
         let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
-        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None).unwrap();
+        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None).unwrap();
 
         let field_type = FieldType::Enum("Foo".to_string());
         let render_output =

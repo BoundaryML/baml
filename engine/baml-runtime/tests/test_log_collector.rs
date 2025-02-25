@@ -93,12 +93,19 @@ mod internal_tests {
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
-        let call_function_future =
-            runtime.call_function(function_name.to_string(), &params, &ctx_manager, None, None);
+        let call_function_future = runtime.call_function(
+            function_name.to_string(),
+            &params,
+            &ctx_manager,
+            None,
+            None,
+            // TODO: add an actual collector
+            None,
+        );
 
         let (res, function_span_id) = runtime.async_runtime.block_on(call_function_future);
 
-        let trace_storage = runtime.async_runtime.block_on(BAML_TRACER.lock());
+        let trace_storage = BAML_TRACER.lock().unwrap();
         let trace = trace_storage
             .get(FunctionId(function_span_id.unwrap_or_default().to_string()))
             .unwrap();

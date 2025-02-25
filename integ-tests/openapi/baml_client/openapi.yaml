@@ -2003,6 +2003,19 @@ paths:
                 title: TestOpenAIResponse
                 type: string
       operationId: TestOpenAI
+  /call/TestOpenAIGPT4oMini:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIGPT4oMini'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIGPT4oMiniResponse
+                type: string
+      operationId: TestOpenAIGPT4oMini
   /call/TestOpenAILegacyProvider:
     post:
       requestBody:
@@ -4607,6 +4620,22 @@ components:
         application/json:
           schema:
             title: TestOpenAIRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIGPT4oMini:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIGPT4oMiniRequest
             type: object
             properties:
               input:

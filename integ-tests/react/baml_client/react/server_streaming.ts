@@ -2765,6 +2765,25 @@ export const TestOpenAI = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestOpenAIGPT4oMini" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIGPT4oMini = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIGPT4oMini(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestOpenAILegacyProvider" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

@@ -167,6 +167,7 @@ export type StreamingServerTypes = {
   TestNamedArgsLiteralString: string,
   TestOllama: string,
   TestOpenAI: string,
+  TestOpenAIGPT4oMini: string,
   TestOpenAILegacyProvider: string,
   TestOpenAIO1NoMaxTokens: string,
   TestOpenAIO1WithMaxCompletionTokens: string,

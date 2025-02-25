@@ -2622,6 +2622,24 @@ export const TestOpenAI = async (
 };
 
 /**
+ * Executes the "TestOpenAIGPT4oMini" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIGPT4oMini"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIGPT4oMini = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIGPT4oMini(
+    input,
+  );
+};
+
+/**
  * Executes the "TestOpenAILegacyProvider" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAILegacyProvider"

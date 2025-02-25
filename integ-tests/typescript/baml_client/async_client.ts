@@ -2920,7 +2920,7 @@ export class BamlAsyncClient {
         __baml_options__?.clientRegistry,
       )
       return raw.parsed(false) as string
-    } catch (error: any) {
+    } catch (error) {
       throw toBamlError(error);
     }
   }
@@ -7006,10 +7006,9 @@ class BamlStreamClient {
       )
       return new BamlStream<string, string>(
         raw,
-        (a): a is string => a,
-        (a): a is string => a,
+        (a): string => a,
+        (a): string => a,
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
       )
     } catch (error) {
       throw toBamlError(error);

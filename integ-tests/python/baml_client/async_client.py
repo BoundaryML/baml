@@ -2536,7 +2536,8 @@ class BamlAsyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
       raw = await self.__runtime.call_function(
         "TellStory",
         {
@@ -2545,6 +2546,7 @@ class BamlAsyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3909,7 +3911,8 @@ class BamlAsyncClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
       raw = await self.__runtime.call_function(
         "TestUniverseQuestion",
         {
@@ -3918,6 +3921,7 @@ class BamlAsyncClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
       return cast(types.UniverseQuestion, raw.cast_to(types, types, partial_types, False))
     
@@ -7267,7 +7271,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
       raw = self.__runtime.stream_function(
         "TellStory",
         {
@@ -7277,6 +7282,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9022,7 +9028,8 @@ class BamlStreamClient:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
       raw = self.__runtime.stream_function(
         "TestUniverseQuestion",
         {
@@ -9032,6 +9039,7 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        collectors,
       )
 
       return baml_py.BamlStream[partial_types.UniverseQuestion, types.UniverseQuestion](

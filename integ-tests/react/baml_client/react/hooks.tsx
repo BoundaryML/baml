@@ -7506,6 +7506,56 @@ export function useTestOpenAI(
   throw new Error('Invalid props')
 }
 /**
+ * A specialized hook for the TestOpenAIGPT4oMini BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestOpenAIGPT4oMini({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestOpenAIGPT4oMini({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestOpenAIGPT4oMini(props: HookInput<'TestOpenAIGPT4oMini', { stream: false }>): HookOutput<'TestOpenAIGPT4oMini', { stream: false }>
+export function useTestOpenAIGPT4oMini(props?: HookInput<'TestOpenAIGPT4oMini', { stream?: true }>): HookOutput<'TestOpenAIGPT4oMini', { stream: true }>
+export function useTestOpenAIGPT4oMini(
+  props: HookInput<'TestOpenAIGPT4oMini', { stream?: boolean }> = {},
+): HookOutput<'TestOpenAIGPT4oMini', { stream: true }> | HookOutput<'TestOpenAIGPT4oMini', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestOpenAIGPT4oMini, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestOpenAIGPT4oMini, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
  * A specialized hook for the TestOpenAILegacyProvider BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

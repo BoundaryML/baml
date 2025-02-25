@@ -628,7 +628,7 @@ test RecursiveAliasCycle {
 
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
-        let run_test_future = runtime.run_test(function_name, test_name, &ctx, Some(|r| {}));
+        let run_test_future = runtime.run_test(function_name, test_name, &ctx, Some(|r| {}), None);
         let (res, span) = runtime.async_runtime.block_on(run_test_future);
 
         Ok(())
