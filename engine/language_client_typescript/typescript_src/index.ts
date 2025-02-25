@@ -1,3 +1,5 @@
+export * from "./errors";
+
 export {
   BamlRuntime,
   FunctionResult,
@@ -8,8 +10,7 @@ export {
   invoke_runtime_cli,
   ClientRegistry,
   BamlLogEvent,
-} from './native'
+} from "./native";
 
-export { BamlStream } from './stream'
-export { BamlCtxManager } from './async_context_vars'
-export * from './errors'
+export { BamlStream } from "./stream";
+export { BamlCtxManager } from "./async_context_vars";

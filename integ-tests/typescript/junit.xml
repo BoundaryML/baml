@@ -1,742 +1,178 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="71" failures="28" errors="0" time="31.434">
-  <testsuite name="Memory usage tests" errors="0" failures="1" skipped="0" timestamp="2025-02-25T02:50:45" time="3.721" tests="1">
-    <testcase classname="Memory usage tests memory usage stays within limits" name="Memory usage tests memory usage stays within limits" time="0.024">
-      <failure>ReferenceError: toBamlError is not defined
-    at BamlStreamClient.TestMemory (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:6812:7)
-    at measureMemoryUsage.sampleInterval (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/load.test.ts:201:33)
-    at measureMemoryUsage (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/load.test.ts:81:26)
-    at main (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/load.test.ts:197:33)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/load.test.ts:234:31)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+<testsuites name="jest tests" tests="71" failures="1" errors="0" time="35.469">
+  <testsuite name="Constraint Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="7.069" tests="4">
+    <testcase classname="Constraint Tests should handle checks in return types" name="Constraint Tests should handle checks in return types" time="0.802">
+    </testcase>
+    <testcase classname="Constraint Tests should handle checks in returned unions" name="Constraint Tests should handle checks in returned unions" time="0.704">
+    </testcase>
+    <testcase classname="Constraint Tests should handle block-level checks" name="Constraint Tests should handle block-level checks" time="0.578">
+    </testcase>
+    <testcase classname="Constraint Tests should handle nested-block-level checks" name="Constraint Tests should handle nested-block-level checks" time="0.777">
     </testcase>
   </testsuite>
-  <testsuite name="Anthropic Provider" errors="0" failures="1" skipped="0" timestamp="2025-02-25T02:50:45" time="6.115" tests="2">
-    <testcase classname="Anthropic Provider should support anthropic shorthand" name="Anthropic Provider should support anthropic shorthand" time="2.252">
+  <testsuite name="Anthropic Provider" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="7.821" tests="2">
+    <testcase classname="Anthropic Provider should support anthropic shorthand" name="Anthropic Provider should support anthropic shorthand" time="2.68">
     </testcase>
-    <testcase classname="Anthropic Provider Streaming should support streaming in Claude" name="Anthropic Provider Streaming should support streaming in Claude" time="0.002">
-      <failure>ReferenceError: toBamlError is not defined
-    at BamlStreamClient.PromptTestClaude (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:5278:7)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/anthropic.test.ts:11:31)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="Anthropic Provider Streaming should support streaming in Claude" name="Anthropic Provider Streaming should support streaming in Claude" time="1.115">
     </testcase>
   </testsuite>
-  <testsuite name="Tracing Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T02:50:49" time="3.248" tests="2">
+  <testsuite name="Error Handling Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:13" time="2.108" tests="5">
+    <testcase classname="Error Handling Tests should raise an error for invalid argument types" name="Error Handling Tests should raise an error for invalid argument types" time="0.003">
+    </testcase>
+    <testcase classname="Error Handling Tests should raise an error for invalid client configuration" name="Error Handling Tests should raise an error for invalid client configuration" time="0.208">
+    </testcase>
+    <testcase classname="Error Handling Tests should raise a BAMLValidationError with proper details" name="Error Handling Tests should raise a BAMLValidationError with proper details" time="0.766">
+    </testcase>
+    <testcase classname="Error Handling Tests should handle client HTTP errors" name="Error Handling Tests should handle client HTTP errors" time="0.166">
+    </testcase>
+    <testcase classname="Error Handling Tests should raise a BamlClientHttpError with proper details" name="Error Handling Tests should raise a BamlClientHttpError with proper details" time="0.202">
+    </testcase>
+  </testsuite>
+  <testsuite name="Recursive Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="10.412" tests="2">
+    <testcase classname="Recursive Type Tests simple recursive type" name="Recursive Type Tests simple recursive type" time="2.767">
+    </testcase>
+    <testcase classname="Recursive Type Tests mutually recursive type" name="Recursive Type Tests mutually recursive type" time="3.683">
+    </testcase>
+  </testsuite>
+  <testsuite name="Azure Provider" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="10.908" tests="6">
+    <testcase classname="Azure Provider should support azure with default max_tokens" name="Azure Provider should support azure with default max_tokens" time="0.491">
+    </testcase>
+    <testcase classname="Azure Provider should support o1 model without max_tokens" name="Azure Provider should support o1 model without max_tokens" time="3.138">
+    </testcase>
+    <testcase classname="Azure Provider should fail when setting max_tokens for o1 model" name="Azure Provider should fail when setting max_tokens for o1 model" time="0.254">
+    </testcase>
+    <testcase classname="Azure Provider should support non-o1 model with explicit max_tokens" name="Azure Provider should support non-o1 model with explicit max_tokens" time="0.442">
+    </testcase>
+    <testcase classname="Azure Provider should support o1 model with explicit max_completion_tokens" name="Azure Provider should support o1 model with explicit max_completion_tokens" time="2.531">
+    </testcase>
+    <testcase classname="Azure Provider should fail if azure is not configured correctly" name="Azure Provider should fail if azure is not configured correctly" time="0.042">
+    </testcase>
+  </testsuite>
+  <testsuite name="Tracing Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:12" time="4.914" tests="2">
     <testcase classname="Tracing Tests Sync Tracing supports tracing sync" name="Tracing Tests Sync Tracing supports tracing sync" time="0.001">
     </testcase>
-    <testcase classname="Tracing Tests Async Tracing supports tracing async" name="Tracing Tests Async Tracing supports tracing async" time="2.968">
+    <testcase classname="Tracing Tests Async Tracing supports tracing async" name="Tracing Tests Async Tracing supports tracing async" time="4.346">
     </testcase>
   </testsuite>
-  <testsuite name="Constraint Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T02:50:45" time="7.068" tests="4">
-    <testcase classname="Constraint Tests should handle checks in return types" name="Constraint Tests should handle checks in return types" time="1.019">
+  <testsuite name="Dynamic Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="12.312" tests="8">
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" time="0.92">
     </testcase>
-    <testcase classname="Constraint Tests should handle checks in returned unions" name="Constraint Tests should handle checks in returned unions" time="0.909">
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" time="0.784">
     </testcase>
-    <testcase classname="Constraint Tests should handle block-level checks" name="Constraint Tests should handle block-level checks" time="0.546">
+    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" time="1.065">
     </testcase>
-    <testcase classname="Constraint Tests should handle nested-block-level checks" name="Constraint Tests should handle nested-block-level checks" time="0.781">
+    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" time="1.925">
     </testcase>
-  </testsuite>
-  <testsuite name="Error Handling Tests" errors="0" failures="5" skipped="0" timestamp="2025-02-25T02:50:51" time="1.84" tests="5">
-    <testcase classname="Error Handling Tests should raise an error for invalid argument types" name="Error Handling Tests should raise an error for invalid argument types" time="0.066">
-      <failure>Error: expect(received).rejects.toThrow(expected)
-
-Expected substring: &quot;BamlInvalidArgumentError&quot;
-Received message:   &quot;toBamlError is not defined&quot;
-
-      2362 |       return raw.parsed(false) as string
-      2363 |     } catch (error) {
-    &gt; 2364 |       throw toBamlError(error);
-           |       ^
-      2365 |     }
-      2366 |   }
-      2367 |   
-
-      at BamlAsyncClient.TestCaching (baml_client/async_client.ts:2364:7)
-      at tests/error-handling.test.ts:6:7
-      at Object.&lt;anonymous&gt; (tests/error-handling.test.ts:5:5)
-    at Object.toThrow (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/error-handling.test.ts:7:16)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="Dynamic Type Tests Add Baml should add to existing class" name="Dynamic Type Tests Add Baml should add to existing class" time="1.033">
     </testcase>
-    <testcase classname="Error Handling Tests should raise an error for invalid client configuration" name="Error Handling Tests should raise an error for invalid client configuration" time="0.189">
-      <failure>Error: expect(received).rejects.toThrow(expected)
-
-Expected substring: &quot;BamlClientError&quot;
-Received message:   &quot;toBamlError is not defined&quot;
-
-      1462 |       return raw.parsed(false) as DynamicOutput
-      1463 |     } catch (error) {
-    &gt; 1464 |       throw toBamlError(error);
-           |       ^
-      1465 |     }
-      1466 |   }
-      1467 |   
-
-      at BamlAsyncClient.MyFunc (baml_client/async_client.ts:1464:7)
-      at tests/error-handling.test.ts:15:7
-      at Object.&lt;anonymous&gt; (tests/error-handling.test.ts:11:5)
-    at Object.toThrow (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/error-handling.test.ts:16:16)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="Dynamic Type Tests Add Baml should add to existing enum" name="Dynamic Type Tests Add Baml should add to existing enum" time="0.545">
     </testcase>
-    <testcase classname="Error Handling Tests should raise a BAMLValidationError with proper details" name="Error Handling Tests should raise a BAMLValidationError with proper details" time="0.464">
-      <failure>Error: expect(received).toBe(expected) // Object.is equality
-
-Expected: &quot;FAILED&quot;
-Received: &quot;ReferenceError: toBamlError is not defined&quot;
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/error-handling.test.ts:30:28)</failure>
+    <testcase classname="Dynamic Type Tests Add Baml should add both class and enum" name="Dynamic Type Tests Add Baml should add both class and enum" time="1.195">
     </testcase>
-    <testcase classname="Error Handling Tests should handle client HTTP errors" name="Error Handling Tests should handle client HTTP errors" time="0.167">
-      <failure>Error: expect(received).toBe(expected) // Object.is equality
-
-Expected: &quot;FAILED&quot;
-Received: &quot;ReferenceError: toBamlError is not defined&quot;
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/error-handling.test.ts:47:28)</failure>
-    </testcase>
-    <testcase classname="Error Handling Tests should raise a BamlClientHttpError with proper details" name="Error Handling Tests should raise a BamlClientHttpError with proper details" time="0.242">
-      <failure>Error: expect(received).toBe(expected) // Object.is equality
-
-Expected: &quot;FAILED&quot;
-Received: &quot;ReferenceError: toBamlError is not defined&quot;
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/error-handling.test.ts:64:30)</failure>
+    <testcase classname="Dynamic Type Tests Add Baml should add baml with attrs" name="Dynamic Type Tests Add Baml should add baml with attrs" time="0.804">
     </testcase>
   </testsuite>
-  <testsuite name="Azure Provider" errors="0" failures="2" skipped="0" timestamp="2025-02-25T02:50:45" time="8.321" tests="6">
-    <testcase classname="Azure Provider should support azure with default max_tokens" name="Azure Provider should support azure with default max_tokens" time="0.474">
+  <testsuite name="Vertex Provider" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="16.447" tests="2">
+    <testcase classname="Vertex Provider should support vertex" name="Vertex Provider should support vertex" time="8.638">
     </testcase>
-    <testcase classname="Azure Provider should support o1 model without max_tokens" name="Azure Provider should support o1 model without max_tokens" time="1.281">
-    </testcase>
-    <testcase classname="Azure Provider should fail when setting max_tokens for o1 model" name="Azure Provider should fail when setting max_tokens for o1 model" time="0.72">
-      <failure>Error: expect(received).rejects.toThrow(expected)
-
-Expected pattern: /max_tokens.*not supported/
-Received message: &quot;toBamlError is not defined&quot;
-
-      2282 |       return raw.parsed(false) as string
-      2283 |     } catch (error) {
-    &gt; 2284 |       throw toBamlError(error);
-           |       ^
-      2285 |     }
-      2286 |   }
-      2287 |   
-
-      at BamlAsyncClient.TestAzureO1WithMaxTokens (baml_client/async_client.ts:2284:7)
-      at tests/providers/azure.test.ts:16:7
-      at Object.&lt;anonymous&gt; (tests/providers/azure.test.ts:15:5)
-    at Object.toThrow (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/azure.test.ts:17:16)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
-    </testcase>
-    <testcase classname="Azure Provider should support non-o1 model with explicit max_tokens" name="Azure Provider should support non-o1 model with explicit max_tokens" time="0.433">
-    </testcase>
-    <testcase classname="Azure Provider should support o1 model with explicit max_completion_tokens" name="Azure Provider should support o1 model with explicit max_completion_tokens" time="1.475">
-    </testcase>
-    <testcase classname="Azure Provider should fail if azure is not configured correctly" name="Azure Provider should fail if azure is not configured correctly" time="0.053">
-      <failure>Error: expect(received).rejects.toThrow(expected)
-
-Expected substring: &quot;BamlClientError&quot;
-Received message:   &quot;toBamlError is not defined&quot;
-
-      2222 |       return raw.parsed(false) as string
-      2223 |     } catch (error) {
-    &gt; 2224 |       throw toBamlError(error);
-           |       ^
-      2225 |     }
-      2226 |   }
-      2227 |   
-
-      at BamlAsyncClient.TestAzureFailure (baml_client/async_client.ts:2224:7)
-      at tests/providers/azure.test.ts:32:7
-      at Object.&lt;anonymous&gt; (tests/providers/azure.test.ts:31:5)
-    at Object.toThrow (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/azure.test.ts:33:16)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="Vertex Provider should support vertex with system_instructions" name="Vertex Provider should support vertex with system_instructions" time="3.722">
     </testcase>
   </testsuite>
-  <testsuite name="Recursive Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T02:50:45" time="9.478" tests="2">
-    <testcase classname="Recursive Type Tests simple recursive type" name="Recursive Type Tests simple recursive type" time="2.801">
+  <testsuite name="Gemini Provider" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="18.078" tests="2">
+    <testcase classname="Gemini Provider Streaming should support streaming in Gemini" name="Gemini Provider Streaming should support streaming in Gemini" time="7.683">
     </testcase>
-    <testcase classname="Recursive Type Tests mutually recursive type" name="Recursive Type Tests mutually recursive type" time="2.782">
-    </testcase>
-  </testsuite>
-  <testsuite name="Gemini Provider" errors="0" failures="1" skipped="0" timestamp="2025-02-25T02:50:45" time="12.952" tests="2">
-    <testcase classname="Gemini Provider Streaming should support streaming in Gemini" name="Gemini Provider Streaming should support streaming in Gemini" time="0.013">
-      <failure>ReferenceError: toBamlError is not defined
-    at BamlStreamClient.TestGemini (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:6630:7)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/gemini.test.ts:6:31)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
-    </testcase>
-    <testcase classname="Gemini Provider system message should support system_instructions in Gemini" name="Gemini Provider system message should support system_instructions in Gemini" time="9.004">
+    <testcase classname="Gemini Provider system message should support system_instructions in Gemini" name="Gemini Provider system message should support system_instructions in Gemini" time="6.257">
     </testcase>
   </testsuite>
-  <testsuite name="Dynamic Type Tests" errors="0" failures="2" skipped="0" timestamp="2025-02-25T02:50:45" time="14.215" tests="8">
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" time="1.195">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" time="1.334">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" time="0.908">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" time="2.662">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add to existing class" name="Dynamic Type Tests Add Baml should add to existing class" time="1.234">
-      <failure>Error: expect(received).toEqual(expected) // deep equality
-
-- Expected  - 1
-+ Received  + 1
-
-@@ -1,10 +1,10 @@
-  Array [
-    Object {
-      &quot;age&quot;: 30,
-      &quot;extra&quot;: Object {
--       &quot;height&quot;: 6,
-+       &quot;height&quot;: 72,
-        &quot;weight&quot;: 180,
-      },
-      &quot;hair_color&quot;: &quot;YELLOW&quot;,
-      &quot;name&quot;: &quot;John Doe&quot;,
-    },
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/dynamic-types.test.ts:98:19)</failure>
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add to existing enum" name="Dynamic Type Tests Add Baml should add to existing enum" time="0.846">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add both class and enum" name="Dynamic Type Tests Add Baml should add both class and enum" time="1.196">
-      <failure>Error: expect(received).toEqual(expected) // deep equality
-
-- Expected  - 1
-+ Received  + 1
-
-@@ -1,10 +1,10 @@
-  Array [
-    Object {
-      &quot;age&quot;: 30,
-      &quot;extra&quot;: Object {
--       &quot;height&quot;: 6,
-+       &quot;height&quot;: 72,
-        &quot;weight&quot;: 180,
-      },
-      &quot;hair_color&quot;: &quot;BROWN&quot;,
-      &quot;hobbies&quot;: Array [
-        &quot;BikeRiding&quot;,
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/dynamic-types.test.ts:147:19)</failure>
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add baml with attrs" name="Dynamic Type Tests Add Baml should add baml with attrs" time="0.902">
-    </testcase>
-  </testsuite>
-  <testsuite name="Vertex Provider" errors="0" failures="0" skipped="0" timestamp="2025-02-25T02:50:45" time="16.261" tests="2">
-    <testcase classname="Vertex Provider should support vertex" name="Vertex Provider should support vertex" time="8.244">
-    </testcase>
-    <testcase classname="Vertex Provider should support vertex with system_instructions" name="Vertex Provider should support vertex with system_instructions" time="4.162">
-    </testcase>
-  </testsuite>
-  <testsuite name="OpenAI Provider" errors="0" failures="4" skipped="0" timestamp="2025-02-25T02:50:45" time="18.838" tests="9">
-    <testcase classname="OpenAI Provider should support OpenAI shorthand" name="OpenAI Provider should support OpenAI shorthand" time="0.777">
+  <testsuite name="OpenAI Provider" errors="0" failures="1" skipped="0" timestamp="2025-02-25T04:59:05" time="25.94" tests="9">
+    <testcase classname="OpenAI Provider should support OpenAI shorthand" name="OpenAI Provider should support OpenAI shorthand" time="0.61">
     </testcase>
     <testcase classname="OpenAI Provider should support openai with default max_tokens" name="OpenAI Provider should support openai with default max_tokens" time="0.626">
       <failure>Error: expect(received).toContain(expected) // indexOf
 
 Expected substring: &quot;donkey&quot;
 Received string:    &quot;jungle drums echo,··
-barrels roll with mighty force—··
-king kong&apos;s wild playground.&quot;
+barrels roll in rhythmic dance—··
+kong&apos;s quest through wild lands.&quot;
     at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/openai.test.ts:11:31)</failure>
     </testcase>
-    <testcase classname="OpenAI Provider should support o1 model without max_tokens" name="OpenAI Provider should support o1 model without max_tokens" time="2.879">
+    <testcase classname="OpenAI Provider should support o1 model without max_tokens" name="OpenAI Provider should support o1 model without max_tokens" time="3.038">
     </testcase>
-    <testcase classname="OpenAI Provider should fail when setting max_tokens for o1 model" name="OpenAI Provider should fail when setting max_tokens for o1 model" time="0.31">
-      <failure>Error: expect(received).rejects.toThrow(expected)
-
-Expected pattern: /max_tokens.*not supported/
-Received message: &quot;toBamlError is not defined&quot;
-
-      2982 |       return raw.parsed(false) as string
-      2983 |     } catch (error) {
-    &gt; 2984 |       throw toBamlError(error);
-           |       ^
-      2985 |     }
-      2986 |   }
-      2987 |   
-
-      at BamlAsyncClient.TestOpenAIO1WithMaxTokens (baml_client/async_client.ts:2984:7)
-      at tests/providers/openai.test.ts:21:7
-      at Object.&lt;anonymous&gt; (tests/providers/openai.test.ts:20:5)
-    at Object.toThrow (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/openai.test.ts:22:16)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="OpenAI Provider should fail when setting max_tokens for o1 model" name="OpenAI Provider should fail when setting max_tokens for o1 model" time="0.252">
     </testcase>
-    <testcase classname="OpenAI Provider should support non-o1 model with explicit max_tokens" name="OpenAI Provider should support non-o1 model with explicit max_tokens" time="2.067">
+    <testcase classname="OpenAI Provider should support non-o1 model with explicit max_tokens" name="OpenAI Provider should support non-o1 model with explicit max_tokens" time="0.958">
     </testcase>
-    <testcase classname="OpenAI Provider should support o1 model with explicit max_completion_tokens" name="OpenAI Provider should support o1 model with explicit max_completion_tokens" time="7.191">
+    <testcase classname="OpenAI Provider should support o1 model with explicit max_completion_tokens" name="OpenAI Provider should support o1 model with explicit max_completion_tokens" time="1.868">
     </testcase>
-    <testcase classname="OpenAI Provider should support openai with null max_tokens" name="OpenAI Provider should support openai with null max_tokens" time="1.016">
+    <testcase classname="OpenAI Provider should support openai with null max_tokens" name="OpenAI Provider should support openai with null max_tokens" time="1.427">
     </testcase>
-    <testcase classname="OpenAI Provider Streaming should support streaming in OpenAI" name="OpenAI Provider Streaming should support streaming in OpenAI" time="0.003">
-      <failure>ReferenceError: toBamlError is not defined
-    at BamlStreamClient.PromptTestStreaming (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:5434:7)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/openai.test.ts:42:31)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="OpenAI Provider Streaming should support streaming in OpenAI" name="OpenAI Provider Streaming should support streaming in OpenAI" time="6.375">
     </testcase>
-    <testcase classname="OpenAI Provider Streaming should support streaming without iterating" name="OpenAI Provider Streaming should support streaming without iterating" time="0.001">
-      <failure>ReferenceError: toBamlError is not defined
-    at BamlStreamClient.PromptTestStreaming (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:5434:7)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/openai.test.ts:71:36)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="OpenAI Provider Streaming should support streaming without iterating" name="OpenAI Provider Streaming should support streaming without iterating" time="6.61">
     </testcase>
   </testsuite>
-  <testsuite name="Basic Input/Output Tests" errors="0" failures="1" skipped="0" timestamp="2025-02-25T02:50:45" time="24.687" tests="11">
-    <testcase classname="Basic Input/Output Tests Input Types single bool" name="Basic Input/Output Tests Input Types single bool" time="0.694">
+  <testsuite name="Basic Input/Output Tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="26.08" tests="11">
+    <testcase classname="Basic Input/Output Tests Input Types single bool" name="Basic Input/Output Tests Input Types single bool" time="1.047">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single string list" name="Basic Input/Output Tests Input Types single string list" time="0.534">
+    <testcase classname="Basic Input/Output Tests Input Types single string list" name="Basic Input/Output Tests Input Types single string list" time="0.696">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single class" name="Basic Input/Output Tests Input Types single class" time="0.509">
+    <testcase classname="Basic Input/Output Tests Input Types single class" name="Basic Input/Output Tests Input Types single class" time="0.624">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types multiple classes" name="Basic Input/Output Tests Input Types multiple classes" time="0.619">
+    <testcase classname="Basic Input/Output Tests Input Types multiple classes" name="Basic Input/Output Tests Input Types multiple classes" time="0.469">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single enum list" name="Basic Input/Output Tests Input Types single enum list" time="0.481">
+    <testcase classname="Basic Input/Output Tests Input Types single enum list" name="Basic Input/Output Tests Input Types single enum list" time="0.419">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single float" name="Basic Input/Output Tests Input Types single float" time="0.398">
+    <testcase classname="Basic Input/Output Tests Input Types single float" name="Basic Input/Output Tests Input Types single float" time="0.36">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single int" name="Basic Input/Output Tests Input Types single int" time="0.444">
+    <testcase classname="Basic Input/Output Tests Input Types single int" name="Basic Input/Output Tests Input Types single int" time="0.757">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types should work for all outputs" name="Basic Input/Output Tests Output Types should work for all outputs" time="11.475">
+    <testcase classname="Basic Input/Output Tests Output Types should work for all outputs" name="Basic Input/Output Tests Output Types should work for all outputs" time="7.9">
     </testcase>
-    <testcase classname="Basic Input/Output Tests json type alias cycle" name="Basic Input/Output Tests json type alias cycle" time="1.878">
+    <testcase classname="Basic Input/Output Tests json type alias cycle" name="Basic Input/Output Tests json type alias cycle" time="1.862">
     </testcase>
-    <testcase classname="Basic Input/Output Tests json type alias as class dependency" name="Basic Input/Output Tests json type alias as class dependency" time="3.632">
+    <testcase classname="Basic Input/Output Tests json type alias as class dependency" name="Basic Input/Output Tests json type alias as class dependency" time="3.011">
     </testcase>
-    <testcase classname="Semantic Streaming Tests should support semantic streaming" name="Semantic Streaming Tests should support semantic streaming" time="0.001">
-      <failure>ReferenceError: toBamlError is not defined
-    at BamlStreamClient.MakeSemanticContainer (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:5018:7)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/input-output.test.ts:128:29)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="Semantic Streaming Tests should support semantic streaming" name="Semantic Streaming Tests should support semantic streaming" time="4.857">
     </testcase>
   </testsuite>
-  <testsuite name="AWS Provider" errors="0" failures="11" skipped="0" timestamp="2025-02-25T02:50:45" time="31.138" tests="17">
-    <testcase classname="AWS Provider should support AWS" name="AWS Provider should support AWS" time="5.774">
+  <testsuite name="Memory usage tests" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="28.744" tests="1">
+    <testcase classname="Memory usage tests memory usage stays within limits" name="Memory usage tests memory usage stays within limits" time="24.576">
     </testcase>
-    <testcase classname="AWS Provider should handle invalid AWS region gracefully" name="AWS Provider should handle invalid AWS region gracefully" time="1.293">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 3
-+ Received  + 1
-
-- Object {
--   &quot;code&quot;: &quot;GenericFailure&quot;,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:14:16)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+  </testsuite>
+  <testsuite name="AWS Provider" errors="0" failures="0" skipped="0" timestamp="2025-02-25T04:59:05" time="35.112" tests="17">
+    <testcase classname="AWS Provider should support AWS" name="AWS Provider should support AWS" time="5.709">
     </testcase>
-    <testcase classname="AWS Provider should handle invalid AWS access key gracefully" name="AWS Provider should handle invalid AWS access key gracefully" time="0.4">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 5
-+ Received  + 1
-
-- Object {
--   &quot;client_name&quot;: &quot;InvalidAwsClient&quot;,
--   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
--   &quot;status_code&quot;: 403,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:34:16)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider should handle invalid AWS region gracefully" name="AWS Provider should handle invalid AWS region gracefully" time="0.767">
     </testcase>
-    <testcase classname="AWS Provider Streaming should support streaming in AWS" name="AWS Provider Streaming should support streaming in AWS" time="0.002">
-      <failure>ReferenceError: toBamlError is not defined
-    at BamlStreamClient.TestAws (/Users/vbv/repos/gloo-lang/integ-tests/typescript/baml_client/async_client.ts:5928:7)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:43:31)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider should handle invalid AWS access key gracefully" name="AWS Provider should handle invalid AWS access key gracefully" time="0.422">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" name="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" time="6.476">
+    <testcase classname="AWS Provider Streaming should support streaming in AWS" name="AWS Provider Streaming should support streaming in AWS" time="4.742">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" name="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" time="0.405">
-      <failure>Error: expect(received).toMatchObject(expected)
-
-- Expected  - 6
-+ Received  + 1
-
-- Object {
--   &quot;client_name&quot;: &quot;DynamicAWSClient&quot;,
--   &quot;message&quot;: StringContaining &quot;BamlError: BamlClientError: BamlClientHttpError:&quot;,
--   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
--   &quot;status_code&quot;: 403,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:108:21)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" name="AWS Provider Dynamic Client Registry Credential Resolution should handle session credentials correctly" time="6.385">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" name="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" time="0.003">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 3
-+ Received  + 1
-
-- Object {
--   &quot;code&quot;: &quot;GenericFailure&quot;,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:133:20)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" name="AWS Provider Dynamic Client Registry Credential Resolution should require region in all environments" time="0.382">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support dynamic client configuration" name="AWS Provider Dynamic Client Registry should support dynamic client configuration" time="1.695">
+    <testcase classname="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" name="AWS Provider Dynamic Client Registry Credential Resolution should throw error when region is empty or AWS_REGION is unset" time="0.361">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support AWS credentials configuration" name="AWS Provider Dynamic Client Registry should support AWS credentials configuration" time="0.371">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 6
-+ Received  + 1
-
-- Object {
--   &quot;client_name&quot;: &quot;DynamicAWSClient&quot;,
--   &quot;message&quot;: StringContaining &quot;BamlError: BamlClientError: BamlClientHttpError:&quot;,
--   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
--   &quot;status_code&quot;: 403,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:183:18)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry should support dynamic client configuration" name="AWS Provider Dynamic Client Registry should support dynamic client configuration" time="1.418">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support AWS profile configuration" name="AWS Provider Dynamic Client Registry should support AWS profile configuration" time="1.406">
+    <testcase classname="AWS Provider Dynamic Client Registry should support AWS credentials configuration" name="AWS Provider Dynamic Client Registry should support AWS credentials configuration" time="0.264">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support both model and model_id parameters" name="AWS Provider Dynamic Client Registry should support both model and model_id parameters" time="2.927">
+    <testcase classname="AWS Provider Dynamic Client Registry should support AWS profile configuration" name="AWS Provider Dynamic Client Registry should support AWS profile configuration" time="1.393">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" name="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" time="0.693">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 3
-+ Received  + 1
-
-- Object {
--   &quot;code&quot;: &quot;GenericFailure&quot;,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:251:18)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry should support both model and model_id parameters" name="AWS Provider Dynamic Client Registry should support both model and model_id parameters" time="2.992">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" name="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" time="0.396">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 6
-+ Received  + 1
-
-- Object {
--   &quot;client_name&quot;: &quot;DynamicAWSClient&quot;,
--   &quot;message&quot;: StringContaining &quot;BamlError: BamlClientError: BamlClientHttpError:&quot;,
--   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
--   &quot;status_code&quot;: 401,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:269:18)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" name="AWS Provider Dynamic Client Registry should handle invalid configuration gracefully" time="0.391">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" name="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" time="0.773">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 6
-+ Received  + 1
-
-- Object {
--   &quot;client_name&quot;: &quot;DynamicAWSClient&quot;,
--   &quot;message&quot;: StringContaining &quot;BamlError: BamlClientError: BamlClientHttpError:&quot;,
--   &quot;name&quot;: &quot;BamlClientHttpError&quot;,
--   &quot;status_code&quot;: 403,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:311:18)
-    at processTicksAndRejections (node:internal/process/task_queues:95:5)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" name="AWS Provider Dynamic Client Registry should handle non-existent model gracefully" time="0.419">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should throw error when region is not provided" name="AWS Provider Dynamic Client Registry should throw error when region is not provided" time="0.005">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 3
-+ Received  + 1
-
-- Object {
--   &quot;code&quot;: &quot;GenericFailure&quot;,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:329:18)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" name="AWS Provider Dynamic Client Registry should throw error when using temporary credentials without session token" time="0.74">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using invalid profile" name="AWS Provider Dynamic Client Registry should throw error when using invalid profile" time="0.001">
-      <failure>Error: expect(received).rejects.toMatchObject(expected)
-
-- Expected  - 3
-+ Received  + 1
-
-- Object {
--   &quot;code&quot;: &quot;GenericFailure&quot;,
-- }
-+ [ReferenceError: toBamlError is not defined]
-    at Object.toMatchObject (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/expect@29.7.0/node_modules/expect/build/index.js:218:22)
-    at Object.&lt;anonymous&gt; (/Users/vbv/repos/gloo-lang/integ-tests/typescript/tests/providers/aws.test.ts:348:18)
-    at Promise.then.completed (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:298:28)
-    at new Promise (&lt;anonymous&gt;)
-    at callAsyncCircusFn (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/utils.js:231:10)
-    at _callCircusTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:316:40)
-    at _runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:252:3)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:126:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at _runTestsForDescribeBlock (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:121:9)
-    at run (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/run.js:71:3)
-    at runAndTransformResultsToJestFormat (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapterInit.js:122:21)
-    at jestAdapter (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:79:19)
-    at runTestInternal (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/vbv/repos/gloo-lang/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="AWS Provider Dynamic Client Registry should throw error when region is not provided" name="AWS Provider Dynamic Client Registry should throw error when region is not provided" time="0.002">
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" name="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" time="4.238">
+    <testcase classname="AWS Provider Dynamic Client Registry should throw error when using invalid profile" name="AWS Provider Dynamic Client Registry should throw error when using invalid profile" time="0.002">
+    </testcase>
+    <testcase classname="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" name="AWS Provider Dynamic Client Registry should support both AWS_REGION and AWS_DEFAULT_REGION environment variables" time="4.309">
     </testcase>
   </testsuite>
 </testsuites>
