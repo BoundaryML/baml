@@ -346,13 +346,6 @@ impl BamlRuntime {
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
-        log::info!(
-            "fn: {}, tracer Span: {:?}, ctx.span: {:?} params: {:?}",
-            function_name,
-            span,
-            ctx.span_id(),
-            params
-        );
 
         if let Some(span) = span.clone() {
             if let Some(collectors) = collectors {

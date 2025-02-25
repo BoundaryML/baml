@@ -35,7 +35,7 @@ RUN curl https://mise.run | sh \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 
 # Install WASM tools
-RUN cargo install wasm-bindgen-cli@0.2.92 wasm-pack
+RUN cargo install wasm-bindgen-cli@0.2.100 wasm-pack
 
 # Install Infisical
 RUN curl -1sLf 'https://dl.cloudsmith.io/public/infisical/infisical-cli/setup.deb.sh' | sudo -E bash \
