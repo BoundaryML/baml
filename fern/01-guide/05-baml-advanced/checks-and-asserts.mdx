@@ -1,8 +1,8 @@
+
 With checks and asserts, you can set specific rules to ensure your data's
 value falls within an acceptable range.
 
 BAML provides two types of validations:
-
 - **`@assert`** for strict validations. If a type fails an `@assert` validation, it
   will not be returned in the response. If the failing assertion was part of the
   top-level type, it will raise an exception. If it's part of a container, it
@@ -66,11 +66,9 @@ Likewise, the keyword `this` refers to the value of the type instance it is
 directly associated with (e.g., `int` or `string`).
 
 ## Chaining Assertions
-
 You can have multiple assertions on a single field by chaining multiple `@assert` attributes.
 
 In this example, the asserts on `bar` and `baz` are equivalent.
-
 ```baml BAML
 class Foo {
   bar int @assert(between_0_and_10, {{ this > 0 and this < 10 }})
@@ -95,13 +93,15 @@ For now, see our [Jinja cookbook / guide](/ref/prompt-syntax/what-is-jinja)
 or the [Minijinja filters docs](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions)
 for more information on writing expressions.
 
+
+
 ### Expression keywords
 
 - `this` refers to the value of the current field being validated.
 
+
 `this.field` is used to refer to a specific field within the context of `this`.
 Access nested fields of a data type by chaining the field names together with a `.` as shown below.
-
 ```baml BAML
 class Resume {
   name string
@@ -157,7 +157,7 @@ def main():
         quote = citation.quote
         website_link = citation.website_link
         print(f"Quote: {quote} from {website_link}")
-
+        
     except BamlValidationError as e:
         print(f"Validation error: {str(e)}")
     except Exception as e:
@@ -166,45 +166,43 @@ def main():
 ```
 
 ```typescript Typescript
-import { b, BamlValidationError } from "./baml_client";
-import { Citation } from "./baml_client/types";
+import { b, BamlValidationError } from './baml_client';
+import { Citation } from './baml_client/types';
 
 const main = () => {
-  try {
-    const citation = b.GetCitation(
-      "SpaceX, is an American spacecraft manufacturer, launch service provider..."
-    );
+    try {
+        const citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...");
+        
+        const quote = citation.quote.value;
+        console.log(`Quote: ${quote}`);
 
-    const quote = citation.quote.value;
-    console.log(`Quote: ${quote}`);
+        const checks = citation.quote.checks;
+        console.log(`Check exact_citation_found: ${checks.exact_citation_found.status}`);
+        for (const check of get_checks(checks)) {
+            console.log(`Check ${check.name}: ${check.status}`);
+        }
 
-    const checks = citation.quote.checks;
-    console.log(
-      `Check exact_citation_found: ${checks.exact_citation_found.status}`
-    );
-    for (const check of get_checks(checks)) {
-      console.log(`Check ${check.name}: ${check.status}`);
+        const author = citation.author;
+        console.log(`Author: ${author}`);
+    } catch (e) {
+        if (e instanceof BamlValidationError) {
+            console.log(`Validation error: ${e}`);
+        } else {
+            console.error(e);
+        }
     }
-
-    const author = citation.author;
-    console.log(`Author: ${author}`);
-  } catch (e) {
-    if (e instanceof BamlValidationError) {
-      console.log(`Validation error: ${e}`);
-    } else {
-      console.error(e);
-    }
-  }
 };
 ```
 
 </CodeBlocks>
+
 
 ## Checks
 
 `@check` attributes add validation without raising exceptions if they fail.
 Types with `@check` attributes allow the checks to be inspected at
 runtime.
+
 
 ```baml BAML
 ( bar int @check(less_than_zero, {{ this < 0 }}) )[]
@@ -216,15 +214,16 @@ List[Checked[int, Dict[Literal["less_than_zero"]]]]
 ```
 
 ```typescript Typescript
-Checked < int, "less_than_zero" > [];
+Checked<int,"less_than_zero">[]
 ```
-
 </CodeBlocks>
+
 
 The following example uses both `@check` and `@assert`. If `line_number` fails its
 `@assert`, no `Citation` will be returned by `GetCitation()`. However,
 `exact_citation_not_found` can fail without interrupting the result. Because it
 was a `@check`, client code can inspect the result of the check.
+
 
 ```baml BAML
 class Citation {
@@ -233,13 +232,13 @@ class Citation {
 	  {{ this|length > 0 }}
   )
   line_number string @assert(
-    has_line_number,
+    has_line_number
     {{ this|length >= 0 }}
   )
 }
 
 function GetCitation(full_text: string) -> Citation {
-  client GPT4
+  client GPT4 
   prompt #"
     Generate a citation of the text below in MLA format:
     {{full_text}}
@@ -256,10 +255,10 @@ from baml_client import b
 from baml_client.types import Citation, get_checks
 
 def main():
-citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
+    citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch service provider...")
 
     # Access the value of the quote field
-    quote = citation.quote.value
+    quote = citation.quote.value 
     print(f"Quote: {quote}")
 
     # Access a particular check.
@@ -269,8 +268,7 @@ citation = b.GetCitation("SpaceX, is an American spacecraft manufacturer, launch
     # Access each check and its status.
     for check in get_checks(citation.quote.checks):
         print(f"Check {check.name}: {check.status}")
-
-````
+```
 
 ```typescript Typescript
 import { b, get_checks } from './baml_client'
@@ -292,7 +290,8 @@ const main = () => {
         console.log(`Check: ${check.name}, Status: ${check.status}`)
     }
 }
-````
+```
+
 
 </CodeBlocks>
 
@@ -307,12 +306,10 @@ class Foo {
 }
 ```
 
-<Tip>
-  {" "}
-  When using `@check`, all checks on the response data are evaluated even if one
-  fails. In contrast, with `@assert`, a failure will stop the parsing process and
-  immediately raise an exception.{" "}
-</Tip>
+<Tip> When using `@check`, all checks on the response data are evaluated even if
+one fails. In contrast, with `@assert`, a failure will stop the parsing process
+and immediately raise an exception. </Tip>
+
 
 ## Advanced Example
 
@@ -320,7 +317,7 @@ The following example shows more complex minijinja expressions, see the
 [Minijinja filters docs](https://docs.rs/minijinja/latest/minijinja/filters/index.html#functions)
 for more information on available operators to use in your assertions.
 
----
+--------
 
 The `Book` and `Library` classes below demonstrate how to validate a book's
 title, author, ISBN, publication year, genres, and a library's name and books.
