@@ -9,7 +9,7 @@ from . import partial_types, types
 from .types import Checked, Check
 from .type_builder import TypeBuilder
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
-
+from .parser import LlmResponseParser
 
 OutputType = TypeVar('OutputType')
 
@@ -24,7 +24,7 @@ class BamlAsyncClient:
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
     __prompt_body: "PromptBody"
-    __llm_response_parser: "LlmResponseParser"
+    __llm_response_parser: LlmResponseParser
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
@@ -156,43 +156,6 @@ class PromptBody:
       )
 
       return raw.to_dict()
-    {% endfor %}
-
-
-class LlmResponseParser:
-    __runtime: baml_py.BamlRuntime
-    __ctx_manager: baml_py.BamlCtxManager
-
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
-      self.__runtime = runtime
-      self.__ctx_manager = ctx_manager
-
-    {% for fn in funcs %}
-    def {{ fn.name }}(
-        self,
-        llm_response: str,
-        baml_options: BamlCallOptions = {},
-    ) -> {{fn.return_type}}:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      parsed = self.__runtime.parse_llm_response(
-        "{{fn.name}}",
-        llm_response,
-        types,
-        types,
-        partial_types,
-        False,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-
-      return cast({{fn.return_type}}, parsed)
     {% endfor %}
 
 

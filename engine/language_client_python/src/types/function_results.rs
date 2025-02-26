@@ -41,6 +41,10 @@ impl FunctionResult {
             .result_with_constraints_content()
             .map_err(BamlError::from_anyhow)?;
 
+        // TODO: The .cast_to() function is only called in codegen once at the
+        // end of each Baml function, it should be possible to avoid the
+        // `parsed.clone()` call here. Take a look at how `parse_llm_response`
+        // is implemented in `runtime.rs`.
         pythonize_strict(
             py,
             parsed.clone(),

@@ -1,79 +1,21 @@
 use crate::errors::{BamlError, BamlInvalidArgumentError};
 use crate::parse_py_type::parse_py_type;
-use crate::types::function_results::{pythonize_strict, FunctionResult};
-use crate::types::trace_stats::TraceStats;
-
 use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
+use crate::types::function_results::{pythonize_strict, FunctionResult};
+use crate::types::prompt::PyPrompt;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
+use crate::types::trace_stats::TraceStats;
 use crate::types::type_builder::TypeBuilder;
 use crate::types::ClientRegistry;
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
-use pyo3::{
-    pyclass,
-    types::{PyDict, PyDictMethods, PyList, PyListMethods},
-    IntoPyObjectExt, PyObject, Python,
-};
+use pyo3::{pyclass, IntoPyObjectExt, PyObject, Python};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
-
-#[pyclass]
-pub struct PyPrompt {
-    body: serde_json::Map<String, serde_json::Value>,
-}
-
-#[pymethods]
-impl PyPrompt {
-    fn to_dict<'py>(&self, py: Python<'py>) -> PyResult<pyo3::Bound<'py, PyDict>> {
-        let dict = PyDict::new(py);
-        for (key, value) in &self.body {
-            dict.set_item(key, serde_value_to_py_any(value, py)?)?;
-        }
-
-        Ok(dict)
-    }
-}
-
-/// Convert a [`serde_json::Value`] to a [`pyo3::PyAny`].
-fn serde_value_to_py_any<'py>(
-    v: &serde_json::Value,
-    py: Python<'py>,
-) -> PyResult<pyo3::Py<pyo3::PyAny>> {
-    match v {
-        serde_json::Value::Null => Ok(py.None()),
-        serde_json::Value::Bool(b) => b.into_py_any(py),
-        serde_json::Value::String(s) => s.into_py_any(py),
-        serde_json::Value::Number(n) => {
-            if let Some(i) = n.as_i64() {
-                i.into_py_any(py)
-            } else if let Some(f) = n.as_f64() {
-                f.into_py_any(py)
-            } else {
-                Err(BamlError::new_err(format!(
-                    "Can't convert '{n}' to a Python number"
-                )))
-            }
-        }
-        serde_json::Value::Array(a) => {
-            let list = PyList::empty(py);
-            for item in a {
-                list.append(serde_value_to_py_any(item, py)?)?;
-            }
-            Ok(list.into())
-        }
-        serde_json::Value::Object(o) => {
-            let dict = PyDict::new(py);
-            for (key, value) in o {
-                dict.set_item(key, serde_value_to_py_any(value, py)?)?;
-            }
-            Ok(dict.into())
-        }
-    }
-}
 
 #[derive(Debug, Clone)]
 #[pyclass]
@@ -381,7 +323,7 @@ impl BamlRuntime {
                 .await
                 .map_err(BamlError::from_anyhow)?;
 
-            Ok(PyPrompt { body })
+            Ok(PyPrompt::from(body))
         })
         .map(pyo3::Bound::into)
     }
@@ -424,9 +366,7 @@ impl BamlRuntime {
             })
         });
 
-        result
-            .map(|body| PyPrompt { body })
-            .map_err(BamlError::from_anyhow)
+        result.map(PyPrompt::from).map_err(BamlError::from_anyhow)
     }
 
     #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb))]
@@ -447,6 +387,11 @@ impl BamlRuntime {
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
 
+        // Having no intermediary object wrappers allows us to avoid clonning
+        // the parsed value (unlike FunctionResult::cast_to). We pass that
+        // straight into pythonize_strict and return the final python object.
+        // Downside is we require a lot of parameters for this function, but
+        // this is only called in codegen, not part of the public API.
         let parsed = self
             .inner
             .parse_llm_response(

@@ -42,6 +42,12 @@ impl From<PythonClient> for SyncPythonClient {
     }
 }
 
+impl From<PythonClient> for PythonLlmResponseParser {
+    fn from(value: PythonClient) -> Self {
+        Self { funcs: value.funcs }
+    }
+}
+
 struct PythonFunction {
     name: String,
     partial_return_type: String,
@@ -64,6 +70,12 @@ struct PythonGlobals {}
 struct PythonTracing {}
 
 #[derive(askama::Template)]
+#[template(path = "parser.py.j2", escape = "none")]
+struct PythonLlmResponseParser {
+    funcs: Vec<PythonFunction>,
+}
+
+#[derive(askama::Template)]
 #[template(path = "inlinedbaml.py.j2", escape = "none")]
 struct InlinedBaml {
     file_map: Vec<(String, String)>,
@@ -82,6 +94,7 @@ pub(crate) fn generate(
     collector.add_template::<AsyncPythonClient>("async_client.py", (ir, generator))?;
     collector.add_template::<SyncPythonClient>("sync_client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
+    collector.add_template::<PythonLlmResponseParser>("parser.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.py", (ir, generator))?;
     collector.add_template::<PythonInit>("__init__.py", (ir, generator))?;
@@ -135,6 +148,15 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncPythonCl
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for SyncPythonClient {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let python_client = PythonClient::try_from(params)?;
+        Ok(python_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonLlmResponseParser {
     type Error = anyhow::Error;
 
     fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
@@ -307,7 +329,8 @@ mod tests {
     use super::*;
 
     fn mk_ir() -> IntermediateRepr {
-        make_test_ir(r#"
+        make_test_ir(
+            r#"
 class Greg {
   inner Foo? @stream.not_null @stream.with_state @check(foo, {{ true }})
 }
@@ -337,11 +360,23 @@ class Foo {
 //   inner_done_str string
 //   @@stream.done
 // }
-        "#).unwrap()
+        "#,
+        )
+        .unwrap()
     }
 
     fn mk_gen() -> GeneratorArgs {
-        GeneratorArgs::new("baml_client", "baml_src", vec![], "no_version".to_string(), true, GeneratorDefaultClientMode::Async, Vec::new(), Some(GeneratorOutputType::PythonPydantic)).unwrap()
+        GeneratorArgs::new(
+            "baml_client",
+            "baml_src",
+            vec![],
+            "no_version".to_string(),
+            true,
+            GeneratorDefaultClientMode::Async,
+            Vec::new(),
+            Some(GeneratorOutputType::PythonPydantic),
+        )
+        .unwrap()
     }
 
     #[test]

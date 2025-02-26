@@ -448,6 +448,9 @@ impl BamlRuntime {
         self.async_runtime.block_on(fut)
     }
 
+    // TODO: Should this have an async version? Parse in a different thread and
+    // allow the async runtime to schedule other futures? Do it only if the
+    // input is very large?
     pub fn parse_llm_response(
         &self,
         function_name: String,
