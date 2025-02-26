@@ -41,6 +41,7 @@ use internal_baml_core::configuration::GeneratorOutputType;
 use internal_baml_core::ir::FunctionWalker;
 use internal_llm_client::AllowedRoleMetadata;
 use internal_llm_client::ClientSpec;
+use jsonish::ResponseBamlValue;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 use runtime_interface::InternalClientLookup;
@@ -445,6 +446,25 @@ impl BamlRuntime {
         // This computation is not usually so expensive that it needs to run
         // on other threads.
         self.async_runtime.block_on(fut)
+    }
+
+    pub fn parse_llm_response(
+        &self,
+        function_name: String,
+        llm_response: String,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> Result<ResponseBamlValue> {
+        let ctx = ctx.create_ctx(tb, cb)?;
+
+        let renderer = PromptRenderer::from_function(
+            &self.inner.get_function(&function_name, &ctx)?,
+            self.inner.ir(),
+            &ctx,
+        )?;
+
+        renderer.parse(&self.inner.ir(), &llm_response, false)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -2013,3 +2013,41 @@ async def test_expose_prompt_gpt4_sync():
             }
         ]
     }
+
+def test_parse_llm_response():
+    llm_response = """
+    ```json
+    {
+        "len": 5,
+        "head": {
+            "data": 1,
+            "next": {
+                "data": 2,
+                "next": {
+                    "data": 3,
+                    "next": {
+                        "data": 4,
+                        "next": {
+                            "data": 5,
+                            "next": null
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ```
+    """
+
+    parsed = b.parse.BuildLinkedList(llm_response)
+
+    assert parsed == LinkedList(
+        len=5,
+        head=Node(
+            data=1,
+            next=Node(
+                data=2,
+                next=Node(data=3, next=Node(data=4, next=Node(data=5, next=None))),
+            ),
+        ),
+    )

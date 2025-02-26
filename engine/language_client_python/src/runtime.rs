@@ -1,6 +1,6 @@
 use crate::errors::{BamlError, BamlInvalidArgumentError};
 use crate::parse_py_type::parse_py_type;
-use crate::types::function_results::FunctionResult;
+use crate::types::function_results::{pythonize_strict, FunctionResult};
 use crate::types::trace_stats::TraceStats;
 
 use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
@@ -427,6 +427,45 @@ impl BamlRuntime {
         result
             .map(|body| PyPrompt { body })
             .map_err(BamlError::from_anyhow)
+    }
+
+    #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb))]
+    fn parse_llm_response(
+        &self,
+        py: Python<'_>,
+        function_name: String,
+        llm_response: String,
+        enum_module: pyo3::Bound<'_, pyo3::types::PyModule>,
+        cls_module: pyo3::Bound<'_, pyo3::types::PyModule>,
+        partial_cls_module: pyo3::Bound<'_, pyo3::types::PyModule>,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> PyResult<PyObject> {
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
+        let parsed = self
+            .inner
+            .parse_llm_response(
+                function_name,
+                llm_response,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+            )
+            .map_err(BamlError::from_anyhow)?;
+
+        pythonize_strict(
+            py,
+            parsed,
+            &enum_module,
+            &cls_module,
+            &partial_cls_module,
+            allow_partials,
+        )
     }
 
     #[pyo3()]

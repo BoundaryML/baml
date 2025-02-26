@@ -80,7 +80,7 @@ fn pythonize_checks<'a>(
     Ok(dict)
 }
 
-fn pythonize_strict(
+pub(crate) fn pythonize_strict(
     py: Python<'_>,
     parsed: ResponseBamlValue,
     enum_module: &Bound<'_, PyModule>,
