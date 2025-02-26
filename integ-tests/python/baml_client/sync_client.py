@@ -37,13 +37,13 @@ class BamlSyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
-    __prompt_renderer: "PromptRenderer"
+    __prompt_body: "PromptBody"
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
-      self.__prompt_renderer = PromptRenderer(self.__runtime, self.__ctx_manager)
+      self.__prompt_body = PromptBody(self.__runtime, self.__ctx_manager)
 
     @property
     def stream(self):
@@ -51,7 +51,7 @@ class BamlSyncClient:
 
     @property
     def prompt(self):
-      return self.__prompt_renderer
+      return self.__prompt_body
 
     
     def AaaSamOutputFormat(
@@ -8656,7 +8656,7 @@ class BamlStreamClient:
     
 
 
-class PromptRenderer:
+class PromptBody:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
 
