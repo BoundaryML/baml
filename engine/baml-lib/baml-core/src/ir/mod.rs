@@ -3,6 +3,7 @@ pub mod jinja_helpers;
 mod json_schema;
 pub mod repr;
 mod walker;
+pub mod signature;
 
 pub use ir_helpers::{
     scope_diagnostics, ArgCoercer, ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker,

@@ -34,6 +34,10 @@ pub struct InternalBamlRuntime {
 }
 
 impl InternalBamlRuntime {
+    pub(super) fn create_hash(&self) -> String {
+        self.ir.create_hash()
+    }
+
     pub(super) fn from_file_content<T: AsRef<str>>(
         directory: &str,
         files: &HashMap<T, T>,

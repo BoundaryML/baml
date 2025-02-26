@@ -23,7 +23,7 @@ use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
 use crate::Configuration;
-
+use crate::ir::signature::{BamlHash, ProvideBamlHash};
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
 /// raw BAML AST, and should include all information necessary to generate
@@ -326,6 +326,23 @@ impl IntermediateRepr {
             recursive_classes,
             recursive_aliases,
         ))
+    }
+
+    pub fn create_baml_hash(&self) -> String {
+        // hash everything we can based on the IR
+        let enum_names = self
+            .enums
+            .iter()
+            .map(|e| {
+                let hash = e.to_baml_hash();
+
+                (
+                    e.elem.name.as_str(),
+                    hash,
+                )
+            })
+            .collect::<IndexMap<_, _>>();
+        return "TODO".to_string();
     }
 }
 

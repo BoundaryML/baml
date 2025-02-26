@@ -595,6 +595,13 @@ impl Collector {
             .collect()
     }
 
+    pub fn take_logs(&self) -> Vec<FunctionLog> {
+        let mut guard = self.tracked_ids.lock().unwrap();
+        let logs = guard.iter().map(|fid| FunctionLog::new(fid.clone())).collect();
+        guard.clear();
+        logs
+    }
+
     pub fn last_function_log(&self) -> Option<FunctionLog> {
         let guard = self.tracked_ids.lock().unwrap();
         guard

@@ -82,6 +82,10 @@ pub struct BamlRuntime {
 }
 
 impl BamlRuntime {
+    pub fn create_hash(&self) -> String {
+        self.inner.create_hash()
+    }
+
     pub fn env_vars(&self) -> &HashMap<String, String> {
         &self.env_vars
     }
