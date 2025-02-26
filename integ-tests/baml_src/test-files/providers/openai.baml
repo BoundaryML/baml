@@ -94,6 +94,22 @@ function TestOpenAIWithNullMaxTokens(input: string) -> string {
   "#
 }
 
+client GPT4oMini {
+  provider openai
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4o-mini"
+  }
+}
+
+function TestOpenAIGPT4oMini(input: string) -> string {
+  client GPT4oMini
+  prompt #"
+    {{ _.role("user") }}
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+  "#
+}
+
 // Add test cases to verify the behavior
 test TestOpenAIClients {
   functions [

@@ -1,30 +1,39 @@
 {
   "folders": [
     {
+      "name": "baml",
       "path": "."
     },
     {
+      "name": ".github",
       "path": ".github"
     },
     {
+      "name": "docs",
       "path": "docs"
     },
     {
+      "name": "fern",
       "path": "fern"
     },
     {
+      "name": "engine",
       "path": "engine"
     },
     {
+      "name": "integ-tests",
       "path": "integ-tests"
     },
     {
+      "name": "release",
       "path": "release"
     },
     {
+      "name": "tools",
       "path": "tools"
     },
     {
+      "name": "typescript",
       "path": "typescript"
     }
   ],

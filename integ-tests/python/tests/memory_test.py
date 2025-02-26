@@ -2,7 +2,7 @@ import json
 import time
 from typing import Any, Callable, List, TypedDict
 import psutil
-from baml_client import b  # Assuming similar client structure
+from ..baml_client import b  # Assuming similar client structure
 import asyncio
 from typing import TypeVar, Dict
 import tracemalloc

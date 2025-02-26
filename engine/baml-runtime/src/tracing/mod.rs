@@ -1,8 +1,12 @@
 pub mod api_wrapper;
 
 use crate::on_log_event::LogEventCallbackSync;
+use crate::tracingv2::storage::storage::BAML_TRACER;
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
+use baml_types::tracing::events::{
+    BamlOptions, ContentId, FunctionId, FunctionStart, TraceData, TraceEvent, TraceLevel,
+};
 use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
@@ -10,6 +14,8 @@ use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
+use tracing::Instrument;
 
 use jsonish::ResponseBamlValue;
 use uuid::Uuid;
@@ -43,7 +49,7 @@ cfg_if! {
 
 #[derive(Debug, Clone)]
 pub struct TracingSpan {
-    span_id: Uuid,
+    pub span_id: Uuid,
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
 }
@@ -238,7 +244,8 @@ impl BamlTracer {
     ) -> Option<TracingSpan> {
         self.trace_stats.guard().start();
         let span_id = ctx.enter(function_name);
-        log::trace!("Entering span {:#?} in {:?}", span_id, function_name);
+
+        log::trace!(" Entering span {:#?} in {:?}", span_id, function_name);
         let span = TracingSpan {
             span_id,
             params: params.clone(),
@@ -281,6 +288,7 @@ impl BamlTracer {
         }
     }
 
+    // For non-LLM function calls -- used by FFI boundary like with @trace in python
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) fn finish_span(
         &self,
@@ -315,6 +323,22 @@ impl BamlTracer {
             guard.done();
             Ok(None)
         }
+    }
+
+    pub(crate) fn log(&self, event: TraceData, ctx: &RuntimeContextManager) {
+        let span_id = ctx.span_id().unwrap();
+        log::trace!("{:#?} Logging event: {:#?}", span_id, event);
+
+        let trace_event = TraceEvent {
+            span_id: FunctionId(span_id.to_string()),
+            event_id: ContentId(span_id.to_string()),
+            span_chain: vec![],
+            timestamp: web_time::SystemTime::now(),
+            callsite: "".to_string(),
+            verbosity: TraceLevel::Trace,
+            content: event,
+            tags: Default::default(),
+        };
     }
 
     #[cfg(target_arch = "wasm32")]

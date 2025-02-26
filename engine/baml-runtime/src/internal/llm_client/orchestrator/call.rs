@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::BamlValue;
+use baml_types::{tracing::events::HttpRequestId, BamlValue};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use web_time::Duration;
@@ -48,7 +48,8 @@ pub async fn orchestrate(
                 continue;
             }
         };
-        let response = node.single_call(ctx, &prompt).await;
+        let http_request_id = HttpRequestId(uuid::Uuid::new_v4().to_string());
+        let response = node.single_call(ctx, &prompt, http_request_id).await;
         let parsed_response = match &response {
             LLMResponse::Success(s) => {
                 if !node

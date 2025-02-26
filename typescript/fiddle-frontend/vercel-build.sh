@@ -2,7 +2,7 @@
 set -x
 set -e
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain 1.81.0
 export PATH="/vercel/.cargo/bin:$PATH"
 
 source $HOME/.cargo/env
@@ -20,7 +20,7 @@ export OPENSSL_NO_VENDOR=1
 # cargo install
 rustup target add wasm32-unknown-unknown
 cargo update -p wasm-bindgen
-cargo install -f wasm-bindgen-cli@0.2.92
+cargo install -f wasm-bindgen-cli@0.2.100
 
 # cargo build
 cd ../../typescript/fiddle-frontend

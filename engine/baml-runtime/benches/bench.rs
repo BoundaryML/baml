@@ -5,7 +5,9 @@ use baml_types::{BamlValueWithMeta, EvaluationContext, FieldType};
 use internal_baml_core::ir::repr::make_test_ir;
 use jsonish::{from_str, helpers::render_output_format, BamlValueWithFlags};
 
-use baml_runtime::internal::llm_client::{parsed_value_to_response, ResponseBamlValue};
+#[cfg(feature = "internal")]
+mod internal_benchmarks {
+    use baml_runtime::internal::llm_client::{parsed_value_to_response, ResponseBamlValue};
 
 criterion_group!(benches, parse_benchmarks, response_benchmarks);
 criterion_main!(benches);
@@ -104,4 +106,6 @@ fn to_response(
     let target = render_output_format(&ir, target_type, &EvaluationContext::default()).unwrap();
     let parsed = from_str(&target, target_type, msg, allow_partials).unwrap();
     parsed_value_to_response(&ir, parsed, target_type, true).unwrap()
+}
+
 }

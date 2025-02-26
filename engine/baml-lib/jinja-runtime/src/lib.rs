@@ -22,7 +22,9 @@ use crate::output_format::OutputFormat;
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
 pub struct RenderContext_Client {
+    // The name of the actual client
     pub name: String,
+    // The provider for this client
     pub provider: String,
     pub default_role: String,
     pub allowed_roles: Vec<String>,

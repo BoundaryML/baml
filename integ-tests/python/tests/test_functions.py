@@ -51,7 +51,7 @@ from ..baml_client.types import (
     JsonEntry,
     SimpleTag,
 )
-import baml_client.types as types
+
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 from ..baml_client import reset_baml_env_vars
@@ -608,7 +608,7 @@ async def test_anthropic_shorthand_streaming():
 
 @pytest.mark.asyncio
 async def test_fallback_to_shorthand():
-    res = await b.TestFallbackToShorthand(input="Mt Rainier is tall")
+    res = await b.stream.TestFallbackToShorthand(input="Mt Rainier is tall").get_final_response()
     assert len(res) > 0, "Expected non-empty result but got empty."
 
 

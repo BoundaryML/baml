@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlValue};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
@@ -261,8 +261,9 @@ impl WithSingleCallable for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
+        http_request_id: HttpRequestId,
     ) -> LLMResponse {
-        match_llm_provider!(self, single_call, async, ctx, prompt)
+        match_llm_provider!(self, single_call, async, ctx, prompt, http_request_id)
     }
 }
 
@@ -271,8 +272,9 @@ impl WithStreamable for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
+        http_request_id: HttpRequestId,
     ) -> super::traits::StreamResponse {
-        match_llm_provider!(self, stream, async, ctx, prompt)
+        match_llm_provider!(self, stream, async, ctx, prompt, http_request_id)
     }
 }
 
@@ -306,6 +308,10 @@ impl std::fmt::Display for LLMPrimitiveProvider {
 impl LLMPrimitiveProvider {
     pub fn name(&self) -> &str {
         &match_llm_provider!(self, context).name
+    }
+
+    pub fn provider_name(&self) -> &str {
+        &match_llm_provider!(self, context).provider
     }
 
     pub fn request_options(&self) -> &BamlMap<String, serde_json::Value> {

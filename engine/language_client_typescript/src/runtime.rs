@@ -121,7 +121,15 @@ impl BamlRuntime {
 
         let fut = async move {
             let result = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
+                .call_function(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    // TODO: wire this
+                    Some(vec![]),
+                )
                 .await;
 
             result
@@ -162,6 +170,8 @@ impl BamlRuntime {
             &ctx_mng,
             tb.as_ref(),
             cb.as_ref(),
+            // TODO: wire this
+            Some(vec![]),
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -200,6 +210,8 @@ impl BamlRuntime {
                 &ctx,
                 tb.as_ref(),
                 client_registry.as_ref(),
+                // TODO: wire this
+                Some(vec![]),
             )
             .map_err(from_anyhow_error)?;
 
@@ -244,6 +256,8 @@ impl BamlRuntime {
                 &ctx,
                 tb.as_ref(),
                 client_registry.as_ref(),
+                // TODO: wire this
+                Some(vec![]),
             )
             .map_err(from_anyhow_error)?;
 

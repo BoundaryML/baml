@@ -14,6 +14,7 @@ mod runtime;
 pub mod runtime_interface;
 pub mod test_constraints;
 pub mod tracing;
+pub mod tracingv2;
 pub mod type_builder;
 mod types;
 
@@ -24,6 +25,7 @@ use std::sync::Arc;
 use anyhow::Context;
 use anyhow::Result;
 
+use baml_types::tracing::events::FunctionId;
 use baml_types::BamlMap;
 use baml_types::BamlValue;
 use baml_types::Constraint;
@@ -45,7 +47,10 @@ use jsonish::ResponseBamlValue;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
 use runtime_interface::InternalClientLookup;
+use serde_json::json;
 use std::sync::OnceLock;
+use tracingv2::storage::storage::Collector;
+use tracingv2::storage::storage::BAML_TRACER;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
@@ -56,8 +61,6 @@ use runtime_interface::RuntimeInterface;
 use tracing::{BamlTracer, TracingSpan};
 use type_builder::TypeBuilder;
 pub use types::*;
-
-use clap::Parser;
 
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
@@ -145,6 +148,7 @@ impl BamlRuntime {
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
+
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(&path)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
@@ -163,6 +167,7 @@ impl BamlRuntime {
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
+
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
@@ -252,6 +257,7 @@ impl BamlRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
+        collector: Option<Arc<Collector>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
@@ -263,12 +269,19 @@ impl BamlRuntime {
             .get_test_type_builder(function_name, test_name, ctx)
             .unwrap();
 
+        if let Some(span) = span.clone() {
+            if let Some(collector) = collector {
+                collector.track_function(FunctionId(span.clone().span_id.to_string()));
+            }
+        }
+
         let run_to_response = || async {
-            let rctx = ctx.create_ctx(type_builder.as_ref(), None)?;
+            let rctx =
+                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let (params, constraints) =
                 self.get_test_params_and_constraints(function_name, test_name, &rctx, true)?;
-            log::info!("params: {:#?}", params);
-            let rctx_stream = ctx.create_ctx(type_builder.as_ref(), None)?;
+            let rctx_stream =
+                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let mut stream = self.inner.stream_function_impl(
                 function_name.into(),
                 &params,
@@ -276,6 +289,8 @@ impl BamlRuntime {
                 rctx_stream,
                 #[cfg(not(target_arch = "wasm32"))]
                 self.async_runtime.clone(),
+                // TODO: collectors here?
+                vec![],
             )?;
             let (response_res, span_uuid) = stream.run(on_event, ctx, None, None).await;
             log::info!("response_res: {:#?}", response_res);
@@ -349,8 +364,9 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let fut = self.call_function(function_name, params, ctx, tb, cb);
+        let fut = self.call_function(function_name, params, ctx, tb, cb, collectors);
         self.async_runtime.block_on(fut)
     }
 
@@ -361,13 +377,23 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
-        let response = match ctx.create_ctx(tb, cb) {
+
+        if let Some(span) = span.clone() {
+            if let Some(collectors) = collectors {
+                for collector in collectors.iter() {
+                    collector.track_function(FunctionId(span.clone().span_id.to_string()));
+                }
+            }
+        }
+
+        let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id)) {
             Ok(rctx) => {
                 self.inner
-                    .call_function_impl(function_name, params, rctx)
+                    .call_function_impl(function_name.clone(), params, rctx)
                     .await
             }
             Err(e) => Err(e),
@@ -396,14 +422,16 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,
             params,
             self.tracer.clone(),
-            ctx.create_ctx(tb, cb)?,
+            ctx.create_ctx(tb, cb, None)?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
+            collectors.unwrap_or_else(|| vec![]),
         )
     }
 
@@ -415,7 +443,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
-        let ctx = context_manager.create_ctx(tb, cb)?;
+        let ctx = context_manager.create_ctx(tb, cb, None)?;
 
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
 
@@ -459,7 +487,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
     ) -> Result<ResponseBamlValue> {
-        let ctx = ctx.create_ctx(tb, cb)?;
+        let ctx = ctx.create_ctx(tb, cb, None)?;
 
         let renderer = PromptRenderer::from_function(
             &self.inner.get_function(&function_name, &ctx)?,
@@ -653,6 +681,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         }
     }
 
+    // For non-LLM calls -- used by FFI boundary like with @trace in python
     #[cfg(not(target_arch = "wasm32"))]
     fn finish_span(
         &self,

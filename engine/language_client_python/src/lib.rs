@@ -3,11 +3,11 @@ mod parse_py_type;
 mod runtime;
 mod types;
 
+use ctrlc;
 use pyo3::prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyModuleMethods;
 use pyo3::{wrap_pyfunction, Bound, Python};
 use tracing_subscriber::{self, EnvFilter};
-use ctrlc;
 
 #[pyfunction]
 fn invoke_runtime_cli(py: Python) -> PyResult<()> {
@@ -43,7 +43,8 @@ fn invoke_runtime_cli(py: Python) -> PyResult<()> {
         // Notify the main thread through the channel
         // Using ok() to ignore send errors if the receiver is already dropped
         interrupt_send.send(()).ok();
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     // Monitor for interrupt signals in a separate thread
     // This is necessary because we can't directly exit from the signal handler.
@@ -120,7 +121,11 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<runtime::BamlLogEvent>()?;
     m.add_class::<runtime::LogEventMetadata>()?;
-
+    m.add_class::<types::Collector>()?;
+    m.add_class::<types::FunctionLog>()?;
+    m.add_class::<types::LLMCall>()?;
+    m.add_class::<types::Timing>()?;
+    m.add_class::<types::Usage>()?;
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 
     errors::errors(&m)?;

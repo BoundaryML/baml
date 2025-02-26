@@ -360,7 +360,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
         let locked = self.b.read().await;
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref())
+            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None)
             .await;
 
         match result {
@@ -455,6 +455,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 &ctx_mgr,
                 None,
                 client_registry.as_ref(),
+                Some(vec![]),
             );
 
             match result_stream {

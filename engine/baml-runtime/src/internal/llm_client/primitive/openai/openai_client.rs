@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
@@ -88,7 +89,12 @@ impl WithClient for OpenAIClient {
 impl WithNoCompletion for OpenAIClient {}
 
 impl WithChat for OpenAIClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
         let model_name = self
             .request_options()
             .get("model")
@@ -100,6 +106,8 @@ impl WithChat for OpenAIClient {
             either::Either::Right(prompt),
             false,
             self.properties.client_response_type.clone(),
+            ctx,
+            http_request_id,
         )
         .await
     }
@@ -183,8 +191,9 @@ impl RequestBuilder for OpenAIClient {
 impl WithStreamChat for OpenAIClient {
     async fn stream_chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         let model_name = self
             .request_options()
@@ -196,6 +205,8 @@ impl WithStreamChat for OpenAIClient {
             either::Either::Right(prompt),
             model_name,
             ResponseType::OpenAI,
+            ctx,
+            http_request_id,
         )
         .await
     }

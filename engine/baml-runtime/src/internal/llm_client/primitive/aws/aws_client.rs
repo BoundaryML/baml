@@ -9,6 +9,7 @@ use anyhow::{Context, Result};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_types::Blob;
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::{BamlMap, BamlMediaContent};
 use baml_types::{BamlMedia, BamlMediaType};
 use futures::stream;
@@ -20,7 +21,7 @@ use internal_llm_client::{
 };
 use secrecy::ExposeSecret;
 use serde::Deserialize;
-use serde_json::Map;
+use serde_json::{json, Map};
 use web_time::Instant;
 use web_time::SystemTime;
 
@@ -35,7 +36,6 @@ use crate::internal::llm_client::{
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     ModelFeatures, ResolveMediaUrls,
 };
-
 use crate::{RenderCurlSettings, RuntimeContext};
 
 // represents client that interacts with the Bedrock API
@@ -380,6 +380,7 @@ impl WithStreamChat for AwsClient {
         &self,
         ctx: &RuntimeContext,
         chat_messages: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         let client = self.context.name.to_string();
         let model = Some(self.properties.model.clone());
@@ -672,6 +673,7 @@ impl WithChat for AwsClient {
         &self,
         _ctx: &RuntimeContext,
         chat_messages: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> LLMResponse {
         let client = self.context.name.to_string();
         let model = Some(self.properties.model.clone());

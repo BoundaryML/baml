@@ -32,12 +32,14 @@ libc = "0.2"
 jsonish = { path = "../baml-lib/jsonish" }
 log.workspace = true
 ctrlc = "3.4"
+either = "1.13.0"
 # Consult https://pyo3.rs/main/migration for migration instructions
 pyo3 = { version = "0.23.3", default-features = false, features = [
   "abi3-py38",
   "extension-module",
   "generate-import-lib",
   "serde",
+  "either",
 ] }
 pyo3-async-runtimes = { version = "0.23", features = [
   "attributes",
@@ -54,6 +56,7 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "valuable",
 ] }
+uuid.workspace = true
 
 [build-dependencies]
 pyo3-build-config = "0.21.2"

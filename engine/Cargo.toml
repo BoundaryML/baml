@@ -5,7 +5,6 @@ members = [
   "baml-runtime",
   "baml-schema-wasm",
   "bstd",
-  "btrace",
   "cli",
   "language_client_codegen",
   "language_client_python",
@@ -22,7 +21,6 @@ default-members = [
   # also have something to do with resolver=2 and how duplicate dep builds are handled)
   # "baml-schema-wasm",
   "bstd",
-  "btrace",
   "cli",
   "language_client_codegen",
   "language_client_python",
@@ -38,7 +36,6 @@ baml-cli = { path = "cli" }
 baml-types = { path = "baml-lib/baml-types" }
 base64 = "0.22.1"
 bstd = { path = "bstd" }
-btrace = { path = "btrace" }
 bytes = "1.6.0"
 cfg-if = "1.0.0"
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
@@ -103,7 +100,10 @@ url = "2.5.2"
 uuid = { version = "1.8.0", features = ["v4", "v7", "serde"] }
 walkdir = "2.5.0"
 web-time = "1.1.0"
-
+tokio = { version = "1", default-features = false, features = [
+  "macros",
+  "time",
+] }
 
 [workspace.package]
 version = "0.77.0"

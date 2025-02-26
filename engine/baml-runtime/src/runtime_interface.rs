@@ -9,6 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
 use crate::tracing::{BamlTracer, TracingSpan};
+use crate::tracingv2::storage::storage::Collector;
 use crate::type_builder::TypeBuilder;
 use crate::types::on_log_event::LogEventCallbackSync;
 use crate::{
@@ -46,6 +47,7 @@ pub trait RuntimeInterface {
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
+        collectors: Vec<Arc<Collector>>,
     ) -> Result<FunctionResultStream>;
 }
 

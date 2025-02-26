@@ -6,6 +6,7 @@ authors.workspace = true
 description.workspace = true
 license-file.workspace = true
 
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -27,21 +28,21 @@ internal-baml-codegen.workspace = true
 internal-baml-core.workspace = true
 jsonish = { path = "../baml-lib/jsonish" }
 internal-llm-client = { path = "../baml-lib/llm-client" }
-js-sys = "=0.3.69"
+js-sys = "=0.3.77"
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde-wasm-bindgen = "0.4"
+serde-wasm-bindgen = "0.6.5"
 time.workspace = true
 url.workspace = true
 uuid = { version = "1.8", features = ["v4", "js"] }
-wasm-bindgen = "=0.2.92"
+wasm-bindgen = "=0.2.100"
 wasm-bindgen-futures = "0.4.42"
 wasm-logger = { version = "0.2.0" }
 web-time.workspace = true
 either = "1.8.1"
 itertools = "0.13.0"
-
+once_cell.workspace = true
 [dependencies.web-sys]
 version = "0.3.69"
 features = [
@@ -59,9 +60,12 @@ dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
-wasm-bindgen-test = "0.3.42"
+wasm-bindgen-test = "0.3.50"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
+wasmtimer = "0.4.1"
+futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
+
 
 # [profile.release]
 # debug = true
