@@ -1467,3 +1467,62 @@ test_partial_deserializer_streaming!(
       "prop2": 1
     }
 );
+
+
+test_deserializer!(
+  test_string_in_object_with_unescaped_quotes,
+  r#"class Foo {
+      rec_one string
+      rec_two string
+      also_rec_one string
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: "and then i said \"hi\", and also \"bye\"", rec_two: "and then i said "hi", and also "bye"", "also_rec_one": ok },
+
+    Anything else I can help with?
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": "and then i said \"hi\", and also \"bye\"",
+    "rec_two": "and then i said \"hi\", and also \"bye\"",
+    "also_rec_one": "ok"
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_string_in_object_with_unescaped_quotes_2,
+  r#"class Foo {
+      rec_one string
+      rec_two string
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: "and then i said \"hi\"
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": "and then i said \"hi\"\n  ",
+    "rec_two": null
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_string_in_object_with_unescaped_quotes_3,
+  r#"class Foo {
+      rec_one string
+      rec_two string
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: "and then i said "hi", and also "bye""
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": "and then i said \"hi\", and also \"bye\"",
+    "rec_two": null
+  }
+);

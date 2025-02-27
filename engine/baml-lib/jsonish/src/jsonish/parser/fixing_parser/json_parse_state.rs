@@ -1,8 +1,8 @@
 use std::iter::Peekable;
 
 use crate::jsonish::{value::Fixes, Value};
-use baml_types::CompletionState;
 use anyhow::Result;
+use baml_types::CompletionState;
 
 use super::json_collection::JsonCollection;
 
@@ -54,7 +54,7 @@ impl JsonParseState {
                 JsonCollection::Object(keys, values, _) => {
                     if keys.len() == values.len() {
                         match value {
-                            Value::String(s,_) => keys.push(s),
+                            Value::String(s, _) => keys.push(s),
                             Value::AnyOf(_, s) => keys.push(s),
                             _ => keys.push(value.to_string()),
                         }
@@ -91,7 +91,9 @@ impl JsonParseState {
             | JsonCollection::BlockComment(s, _)
             | JsonCollection::SingleQuotedString(s, _)
             | JsonCollection::BacktickString(s, _)
-            | JsonCollection::TripleBacktickString { content: (s, _), .. }
+            | JsonCollection::TripleBacktickString {
+                content: (s, _), ..
+            }
             | JsonCollection::UnquotedString(s, _)
             | JsonCollection::TrailingComment(s, _) => {
                 // println!("Consuming: {s} + {:?}", token);
@@ -152,7 +154,9 @@ impl JsonParseState {
                     counter = idx;
                     match c {
                         // If at some point we find a valid json character, we'll close the string
-                        '{' | '[' => return CloseStringResult::Close(idx, CompletionState::Complete),
+                        '{' | '[' => {
+                            return CloseStringResult::Close(idx, CompletionState::Complete)
+                        }
                         x => {
                             let _ = self.consume(x);
                         }
@@ -200,12 +204,18 @@ impl JsonParseState {
                                 match next_c {
                                     '\n' => {
                                         log::debug!("Closing due to: newline after comma");
-                                        return CloseStringResult::Close(idx, CompletionState::Complete);
+                                        return CloseStringResult::Close(
+                                            idx,
+                                            CompletionState::Complete,
+                                        );
                                     }
                                     ' ' => {
                                         log::debug!("Testing for comment after space + comma");
                                         if is_possible_value {
-                                            return CloseStringResult::Close(idx, CompletionState::Complete);
+                                            return CloseStringResult::Close(
+                                                idx,
+                                                CompletionState::Complete,
+                                            );
                                         }
                                         // If after the space we have "//" or "/*" or the beginning of a key, we'll close the string
                                         let mut buffer = ",".to_string();
@@ -222,17 +232,26 @@ impl JsonParseState {
                                                         // Likely end of the key as the LLM generated a ", " token by mistake instead of a ","
                                                         // so drop the comma
                                                         log::debug!("Closing due to: newline after comma + space");
-                                                        return CloseStringResult::Close(idx, CompletionState::Complete);
+                                                        return CloseStringResult::Close(
+                                                            idx,
+                                                            CompletionState::Complete,
+                                                        );
                                                     }
                                                 }
                                                 '/' => match next.peek() {
                                                     Some((_, '/')) => {
                                                         // This is likely a comment
-                                                        return CloseStringResult::Close(idx, CompletionState::Complete);
+                                                        return CloseStringResult::Close(
+                                                            idx,
+                                                            CompletionState::Complete,
+                                                        );
                                                     }
                                                     Some((_, '*')) => {
                                                         // This is likely a comment
-                                                        return CloseStringResult::Close(idx, CompletionState::Complete);
+                                                        return CloseStringResult::Close(
+                                                            idx,
+                                                            CompletionState::Complete,
+                                                        );
                                                     }
                                                     _ => {
                                                         // let _ = self.consume(c);
@@ -241,7 +260,10 @@ impl JsonParseState {
                                                 '"' => {
                                                     // This is likely a new key
                                                     log::debug!("Closing due to: new key after space + comma");
-                                                    return CloseStringResult::Close(idx, CompletionState::Complete);
+                                                    return CloseStringResult::Close(
+                                                        idx,
+                                                        CompletionState::Complete,
+                                                    );
                                                 }
                                                 _x => {
                                                     break;
@@ -314,6 +336,39 @@ impl JsonParseState {
             } else {
                 (false, false, false, false)
             };
+        let closing_char_count = if closing_char == '"' {
+            // count the number of quotes in the string
+            let (last, _) = self.collection_stack.last().unwrap();
+            match last {
+                JsonCollection::QuotedString(s, ..) => {
+                    let mut count = 0;
+                    // Iterate with indices so we can look backwards
+                    for (i, c) in s.char_indices() {
+                        if c == '"' {
+                            // Count consecutive backslashes immediately preceding this quote
+                            let mut backslash_count = 0;
+                            let mut j = i;
+                            while j > 0 {
+                                j -= 1;
+                                if s.as_bytes()[j] == b'\\' {
+                                    backslash_count += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                            // Only count this quote if the number of backslashes is even
+                            if backslash_count % 2 == 0 {
+                                count += 1;
+                            }
+                        }
+                    }
+                    count
+                }
+                _ => 0,
+            }
+        } else {
+            0
+        };
 
         if let Some((idx, next_char)) = next.peek() {
             let _idx = *idx;
@@ -323,12 +378,22 @@ impl JsonParseState {
                     log::debug!("Closing due to: key");
                     true
                 }
-                ',' | '}' if in_object_value => {
+                ',' if in_object_value || in_array => {
+                    if closing_char_count % 2 == 0 {
+                        // We're ready to close the value
+                        log::debug!("Closing due to: value",);
+                        true
+                    } else {
+                        // We're not ready to close the value
+                        false
+                    }
+                }
+                '}' if in_object_value => {
                     // We're ready to close the value
                     log::debug!("Closing due to: value",);
                     true
                 }
-                ',' | ']' if in_array => {
+                ']' if in_array => {
                     // We're ready to close the value
                     log::debug!("Closing due to: array");
                     true
@@ -577,7 +642,9 @@ impl JsonParseState {
                     // - A terminating json character (comma, colon, bracket, space, newline)
                     // - A character
                     let res = self.consume(token);
-                    if let CloseStringResult::Close(count, completion) = self.should_close_unescaped_string(next) {
+                    if let CloseStringResult::Close(count, completion) =
+                        self.should_close_unescaped_string(next)
+                    {
                         self.complete_collection(completion);
                         Ok(count)
                     } else {
@@ -635,12 +702,16 @@ impl JsonParseState {
     ) -> Result<usize> {
         match token {
             '{' => {
-                self.collection_stack
-                    .push((JsonCollection::Object(vec![], vec![], CompletionState::Incomplete), Default::default()));
+                self.collection_stack.push((
+                    JsonCollection::Object(vec![], vec![], CompletionState::Incomplete),
+                    Default::default(),
+                ));
             }
             '[' => {
-                self.collection_stack
-                    .push((JsonCollection::Array(vec![], CompletionState::Incomplete), Default::default()));
+                self.collection_stack.push((
+                    JsonCollection::Array(vec![], CompletionState::Incomplete),
+                    Default::default(),
+                ));
             }
             '"' => {
                 // Peek if next 2 characters are also quotes
@@ -652,7 +723,10 @@ impl JsonParseState {
 
                 if is_triple_quoted {
                     self.collection_stack.push((
-                        JsonCollection::TripleQuotedString(String::new(), CompletionState::Incomplete),
+                        JsonCollection::TripleQuotedString(
+                            String::new(),
+                            CompletionState::Incomplete,
+                        ),
                         Default::default(),
                     ));
                     return Ok(2);
@@ -699,14 +773,20 @@ impl JsonParseState {
                 match next.peek() {
                     Some((_, '/')) => {
                         self.collection_stack.push((
-                            JsonCollection::TrailingComment(String::new(), CompletionState::Incomplete),
+                            JsonCollection::TrailingComment(
+                                String::new(),
+                                CompletionState::Incomplete,
+                            ),
                             Default::default(),
                         ));
                         return Ok(1);
                     }
                     Some((_, '*')) => {
                         self.collection_stack.push((
-                            JsonCollection::BlockComment(String::new(), CompletionState::Incomplete),
+                            JsonCollection::BlockComment(
+                                String::new(),
+                                CompletionState::Incomplete,
+                            ),
                             Default::default(),
                         ));
                         return Ok(1);
@@ -719,7 +799,10 @@ impl JsonParseState {
                             Some((JsonCollection::Object(_, _, _), _))
                         ) {
                             self.collection_stack.push((
-                                JsonCollection::UnquotedString(token.into(), CompletionState::Incomplete),
+                                JsonCollection::UnquotedString(
+                                    token.into(),
+                                    CompletionState::Incomplete,
+                                ),
                                 Default::default(),
                             ));
                             return Ok(0);
@@ -729,9 +812,13 @@ impl JsonParseState {
             }
             x if x.is_whitespace() => {}
             x => {
-                self.collection_stack
-                    .push((JsonCollection::UnquotedString(x.into(), CompletionState::Incomplete), Default::default()));
-                if let CloseStringResult::Close(count, completion) = self.should_close_unescaped_string(next) {
+                self.collection_stack.push((
+                    JsonCollection::UnquotedString(x.into(), CompletionState::Incomplete),
+                    Default::default(),
+                ));
+                if let CloseStringResult::Close(count, completion) =
+                    self.should_close_unescaped_string(next)
+                {
                     self.complete_collection(completion);
                     return Ok(count);
                 }
@@ -745,5 +832,5 @@ impl JsonParseState {
 #[derive(Debug, PartialEq)]
 enum CloseStringResult {
     Close(usize, CompletionState),
-    Continue
+    Continue,
 }
