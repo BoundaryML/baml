@@ -1526,3 +1526,57 @@ test_partial_deserializer_streaming!(
     "rec_two": null
   }
 );
+
+test_deserializer!(
+  test_array_in_object,
+  r#"class Foo {
+      rec_one string[]
+      rec_two string[]
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: ["first with "quotes", and also "more"", "second"], rec_two: ["third", "fourth"] },
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": vec!["first with \"quotes\", and also \"more\"", "second"],
+    "rec_two": vec!["third", "fourth"]
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_partial_array_in_object,
+  r#"class Foo {
+      rec_one string[]
+      rec_two string[]
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: ["first", "second"
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": vec!["first", "second"],
+    "rec_two": []
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_array_with_unescaped_quotes,
+  r#"class Foo {
+      rec_one string[]
+      rec_two string[]
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: ["and then i said "hi", "and also "bye"]
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": vec!["and then i said \"hi\", \"and also \"bye"],
+    "rec_two": []
+  }
+);
