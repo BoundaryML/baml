@@ -1224,14 +1224,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "boundary-collector"
-version = "0.77.0"
-dependencies = [
- "anyhow",
- "baml-runtime",
-]
-
-[[package]]
 name = "bstd"
 version = "0.77.0"
 dependencies = [

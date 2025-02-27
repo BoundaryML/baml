@@ -15,7 +15,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     tracing::BamlTracer,
-    tracingv2::storage::storage::{Collector, BAML_TRACER},
+    tracingv2::storage::storage::{FunctionTrackerTrait, BAML_TRACER},
     type_builder::TypeBuilder,
     FunctionResult, RuntimeContextManager,
 };
@@ -34,7 +34,7 @@ pub struct FunctionResultStream {
     pub(crate) tracer: Arc<BamlTracer>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
-    pub(crate) collectors: Vec<Arc<Collector>>,
+    pub(crate) collectors: Vec<Arc<Box<dyn FunctionTrackerTrait>>>,
 }
 
 impl Drop for FunctionResultStream {

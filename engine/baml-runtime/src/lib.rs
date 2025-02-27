@@ -38,10 +38,8 @@ use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
-use serde_json::json;
+use tracingv2::storage::storage::FunctionTrackerTrait;
 use std::sync::OnceLock;
-use tracingv2::storage::storage::Collector;
-use tracingv2::storage::storage::BAML_TRACER;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
@@ -226,7 +224,7 @@ impl BamlRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
-        collector: Option<Arc<Collector>>,
+        collector: Option<Arc<Box<dyn FunctionTrackerTrait>>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
@@ -333,7 +331,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-        collectors: Option<Vec<Arc<Collector>>>,
+        collectors: Option<Vec<Arc<Box<dyn FunctionTrackerTrait>>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         let fut = self.call_function(function_name, params, ctx, tb, cb, collectors);
         self.async_runtime.block_on(fut)
@@ -346,7 +344,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-        collectors: Option<Vec<Arc<Collector>>>,
+        collectors: Option<Vec<Arc<Box<dyn FunctionTrackerTrait>>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
@@ -391,7 +389,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-        collectors: Option<Vec<Arc<Collector>>>,
+        collectors: Option<Vec<Arc<Box<dyn FunctionTrackerTrait>>>>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,

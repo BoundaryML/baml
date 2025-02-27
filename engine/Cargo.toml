@@ -10,7 +10,6 @@ members = [
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
-  "boundary-collector",
   "sandbox",
 ]
 default-members = [
@@ -27,7 +26,6 @@ default-members = [
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
-  "boundary-collector",
 ]
 
 [workspace.dependencies]

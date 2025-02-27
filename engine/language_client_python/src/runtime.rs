@@ -8,6 +8,8 @@ use crate::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::types::type_builder::TypeBuilder;
 use crate::types::{ClientRegistry, Collector};
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
+use baml_runtime::tracingv2::collectors::InProcessCollector;
+use baml_runtime::tracingv2::storage::storage::FunctionTrackerTrait;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::types::{PyAnyMethods, PyList};
@@ -144,12 +146,17 @@ impl BamlRuntime {
         let cb = cb.map(|cb| cb.inner.clone());
 
         let collector_list = collectors
-            .into_iter()
-            .map(|c| {
-                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
-                collector.inner.clone()
-            })
-            .collect::<Vec<_>>();
+        .into_iter()
+        .map(|c| {
+            let collector: PyRef<Collector> =
+                c.extract().expect("Failed to extract collector");
+            // Dereference the Arc to get the Box, then clone the Box (which performs the unsizing conversion)
+            let boxed_inproc: Box<InProcessCollector> = (*collector.inner).clone();
+            // Coerce the Box<InProcessCollector> to a Box<dyn FunctionTrackerTrait>
+            let trait_box: Box<dyn FunctionTrackerTrait> = boxed_inproc;
+            Arc::new(trait_box)
+        })
+        .collect::<Vec<Arc<Box<dyn FunctionTrackerTrait>>>>();
 
         // let collector = collector.map(|c| c.inner.clone());
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -198,12 +205,17 @@ impl BamlRuntime {
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
         let collector_list = collectors
-            .into_iter()
-            .map(|c| {
-                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
-                collector.inner.clone()
-            })
-            .collect::<Vec<_>>();
+        .into_iter()
+        .map(|c| {
+            let collector: PyRef<Collector> =
+                c.extract().expect("Failed to extract collector");
+            // Dereference the Arc to get the Box, then clone the Box (which performs the unsizing conversion)
+            let boxed_inproc: Box<InProcessCollector> = (*collector.inner).clone();
+            // Coerce the Box<InProcessCollector> to a Box<dyn FunctionTrackerTrait>
+            let trait_box: Box<dyn FunctionTrackerTrait> = boxed_inproc;
+            Arc::new(trait_box)
+        })
+        .collect::<Vec<Arc<Box<dyn FunctionTrackerTrait>>>>();
 
         let (result, _event_id) = Python::with_gil(|py| {
             py.allow_threads(|| {
@@ -247,12 +259,17 @@ impl BamlRuntime {
 
         let ctx = ctx.inner.clone();
         let collector_list = collectors
-            .into_iter()
-            .map(|c| {
-                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
-                collector.inner.clone()
-            })
-            .collect::<Vec<_>>();
+        .into_iter()
+        .map(|c| {
+            let collector: PyRef<Collector> =
+                c.extract().expect("Failed to extract collector");
+            // Dereference the Arc to get the Box, then clone the Box (which performs the unsizing conversion)
+            let boxed_inproc: Box<InProcessCollector> = (*collector.inner).clone();
+            // Coerce the Box<InProcessCollector> to a Box<dyn FunctionTrackerTrait>
+            let trait_box: Box<dyn FunctionTrackerTrait> = boxed_inproc;
+            Arc::new(trait_box)
+        })
+        .collect::<Vec<Arc<Box<dyn FunctionTrackerTrait>>>>();
         let stream = self
             .inner
             .stream_function(
@@ -297,12 +314,17 @@ impl BamlRuntime {
 
         let ctx = ctx.inner.clone();
         let collector_list = collectors
-            .into_iter()
-            .map(|c| {
-                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
-                collector.inner.clone()
-            })
-            .collect::<Vec<_>>();
+        .into_iter()
+        .map(|c| {
+            let collector: PyRef<Collector> =
+                c.extract().expect("Failed to extract collector");
+            // Dereference the Arc to get the Box, then clone the Box (which performs the unsizing conversion)
+            let boxed_inproc: Box<InProcessCollector> = (*collector.inner).clone();
+            // Coerce the Box<InProcessCollector> to a Box<dyn FunctionTrackerTrait>
+            let trait_box: Box<dyn FunctionTrackerTrait> = boxed_inproc;
+            Arc::new(trait_box)
+        })
+        .collect::<Vec<Arc<Box<dyn FunctionTrackerTrait>>>>();
         let stream = self
             .inner
             .stream_function(

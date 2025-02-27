@@ -16,6 +16,23 @@ macro_rules! lang_wrapper {
             }
         }
     };
+    ($name:ident, $type:ty, clone_safe_box $(, $attr_name:ident : $attr_type:ty = $default:expr)*) => {
+        #[pyo3::prelude::pyclass(module = "baml_py.baml_py")]
+        pub struct $name {
+            pub(crate) inner: std::sync::Arc<Box<$type>>,
+            $($attr_name: $attr_type),*
+        }
+
+        impl From<$type> for $name {
+            fn from(inner: $type) -> Self {
+                Self {
+                    inner: std::sync::Arc::new(Box::new(inner)),
+                    $($attr_name: $default),*
+                }
+            }
+        }
+    };
+
 
     ($name:ident, $type:ty, thread_safe $(, $attr_name:ident : $attr_type:ty)*) => {
         #[pyo3::prelude::pyclass(module = "baml_py.baml_py")]

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
+use baml_runtime::tracingv2::{collectors::InProcessCollector, storage::storage::BAML_TRACER};
 use either::Either;
 use pyo3::{
     prelude::*,
@@ -9,10 +9,11 @@ use pyo3::{
 };
 use serde_json::Value as JsonValue;
 
+
 crate::lang_wrapper!(
     Collector,
-    baml_runtime::tracingv2::storage::storage::Collector,
-    clone_safe
+    InProcessCollector,
+    clone_safe_box
 );
 
 #[pymethods]
@@ -20,9 +21,9 @@ impl Collector {
     #[new]
     #[pyo3(signature = (name=None))]
     pub fn new(name: Option<String>) -> Self {
-        let collector = baml_runtime::tracingv2::storage::storage::Collector::new(name);
+        let collector = InProcessCollector::new(name);
         Self {
-            inner: Arc::new(collector),
+            inner: Arc::new(Box::new(collector)),
         }
     }
 
@@ -89,7 +90,7 @@ impl Collector {
 
 crate::lang_wrapper!(
     FunctionLog,
-    baml_runtime::tracingv2::storage::storage::FunctionLog,
+    baml_runtime::tracingv2::collectors::in_process::FunctionLog,
     sync_thread_safe
 );
 
@@ -148,12 +149,12 @@ impl FunctionLog {
         Ok(calls
             .into_iter()
             .map(|inner| match inner {
-                baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
+                baml_runtime::tracingv2::collectors::in_process::models::LLMCallKind::Basic(inner) => {
                     Either::Left(LLMCall {
                         inner: inner.clone(),
                     })
                 }
-                baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
+                baml_runtime::tracingv2::collectors::in_process::models::LLMCallKind::Stream(inner) => {
                     Either::Right(LLMStreamCall {
                         inner: inner.clone(),
                     })
@@ -190,14 +191,14 @@ impl FunctionLog {
     pub fn selected_call(&self) -> Option<Either<LLMCall, LLMStreamCall>> {
         let calls = self.inner.lock().unwrap().calls();
         calls.into_iter().find_map(|call| match call {
-            baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
+            baml_runtime::tracingv2::collectors::in_process::models::LLMCallKind::Basic(inner) => {
                 if inner.selected {
                     Some(Either::Left(LLMCall { inner }))
                 } else {
                     None
                 }
             }
-            baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
+            baml_runtime::tracingv2::collectors::in_process::models::LLMCallKind::Stream(inner) => {
                 if inner.selected {
                     Some(Either::Right(LLMStreamCall { inner }))
                 } else {
@@ -208,20 +209,20 @@ impl FunctionLog {
     }
 }
 
-crate::lang_wrapper!(Timing, baml_runtime::tracingv2::storage::storage::Timing);
+crate::lang_wrapper!(Timing, baml_runtime::tracingv2::collectors::in_process::models::Timing);
 
 crate::lang_wrapper!(
     StreamTiming,
-    baml_runtime::tracingv2::storage::storage::StreamTiming
+    baml_runtime::tracingv2::collectors::in_process::models::StreamTiming
 );
 
-crate::lang_wrapper!(Usage, baml_runtime::tracingv2::storage::storage::Usage);
+crate::lang_wrapper!(Usage, baml_runtime::tracingv2::collectors::in_process::models::Usage);
 
-crate::lang_wrapper!(LLMCall, baml_runtime::tracingv2::storage::storage::LLMCall);
+crate::lang_wrapper!(LLMCall, baml_runtime::tracingv2::collectors::in_process::models::LLMCall);
 
 crate::lang_wrapper!(
     LLMStreamCall,
-    baml_runtime::tracingv2::storage::storage::LLMStreamCall
+    baml_runtime::tracingv2::collectors::in_process::models::LLMStreamCall
 );
 
 #[pymethods]
