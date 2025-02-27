@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use baml_runtime::tracingv2::{collectors::InProcessCollector, storage::storage::BAML_TRACER};
+use baml_runtime::tracingv2::{collectors::InProcessCollector, storage::storage::{FunctionTrackerTrait, BAML_TRACER}};
 use either::Either;
 use pyo3::{
     prelude::*,

@@ -39,6 +39,10 @@ impl FunctionTrackerTrait for Collector {
             BAML_TRACER.lock().unwrap().dec_ref(fid);
         }
     }
+
+    fn name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 impl Collector {
@@ -47,10 +51,6 @@ impl Collector {
             name: name.unwrap_or("collector".to_string()),
             tracked_ids: Mutex::new(IndexSet::new()),
         }
-    }
-
-    pub fn name(&self) -> String {
-        self.name.clone()
     }
 
     pub fn function_logs(&self) -> Vec<FunctionLog> {

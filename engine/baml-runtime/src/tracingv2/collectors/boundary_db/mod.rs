@@ -1,14 +1,19 @@
+mod boundary_api;
+
+use anyhow::Result;
+use boundary_api::ApiClient;
+use dashmap::DashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use dashmap::DashMap;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{sleep, timeout};
 
-use baml_types::tracing::events::{FunctionId, TraceData, TraceEvent}; // Assuming TraceEvent is defined
+use crate::TOKIO_SINGLETON;
 use crate::{
     tracingv2::storage::storage::{FunctionTrackerTrait, BAML_TRACER},
     BamlRuntime,
 };
+use baml_types::tracing::events::{FunctionId, TraceData, TraceEvent}; // Assuming TraceEvent is defined
 
 /// Messages sent to the collector task.
 pub enum CollectorMsg {
@@ -27,12 +32,14 @@ enum NetworkMsg {
 pub struct Collector {
     tracked_ids: Arc<DashMap<FunctionId, usize>>,
     shutdown_tx: mpsc::Sender<CollectorMsg>,
-    // Handle for the main collector task.
-    join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
     // Channel to send events to the S3 pusher task.
     s3_tx: mpsc::Sender<NetworkMsg>,
     // Handle for the S3 pusher task.
+    config: Arc<Mutex<BoundaryStudioConfig>>,
+
+    // Handle for the main collector task.
     s3_join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
 }
 
 impl FunctionTrackerTrait for Collector {
@@ -47,13 +54,67 @@ impl FunctionTrackerTrait for Collector {
     fn untrack_function(&self, fid: &FunctionId) {
         self.tracked_ids.remove(fid);
     }
+
+    fn name(&self) -> String {
+        format!("")
+    }
 }
 
+pub struct BoundaryStudioConfigBuilder {
+    /// The base URL for the Boundary Studio API.
+    pub base_url: Option<String>,
+    /// The project id for the Boundary Studio project.
+    pub project_id: String,
+    /// The API key for the Boundary Studio project.
+    pub api_key: String,
+    /// How often to push events to the backend.
+    /// Slower == bigger batches
+    /// Faster == smaller batches (more network calls)
+    pub update_interval: Duration,
+}
+
+#[derive(Debug, Clone)]
+struct BoundaryStudioConfig {
+    project_name: String,
+    api_client: ApiClient,
+}
+
+impl BoundaryStudioConfigBuilder {
+    async fn build(self, runtime: &BamlRuntime) -> Result<BoundaryStudioConfig> {
+        let api_client = ApiClient::new(
+            self.base_url
+                .as_deref()
+                .unwrap_or("https://api.boundaryml.com"),
+            &self.project_id,
+            Some(self.api_key),
+        );
+        let data = boundary_api::SourceCodeHandshakeRequest {
+            source_hash: runtime.create_hash(),
+        };
+        let project_info = api_client
+            .post(boundary_api::SourceHandshake, &data)
+            .await?;
+
+        if !project_info.source_exists {
+            // TODO: upload source code to boundary
+            log::warn!("Source code not found in Boundary Studio. Uploading... <TODO>");
+        }
+
+        Ok(BoundaryStudioConfig {
+            project_name: project_info.project_name,
+            api_client,
+        })
+    }
+}
 impl Collector {
     /// Creates a new collector and spawns its background tasks.
     /// `tps` sets the number of update ticks per second.
-    pub async fn new(tps: u32, runtime: &BamlRuntime) -> Arc<Self> {
-        let hash = runtime.create_hash();
+    pub async fn new(
+        runtime: &BamlRuntime,
+        config: BoundaryStudioConfigBuilder,
+    ) -> Result<Arc<Self>> {
+        let update_interval = config.update_interval;
+        let config = config.build(runtime).await?;
 
         // Channel for shutdown signaling to the collector task.
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
@@ -66,33 +127,33 @@ impl Collector {
             join_handle: Mutex::new(None),
             s3_tx,
             s3_join_handle: Mutex::new(None),
+            config: Arc::new(Mutex::new(config)),
         });
 
         // Spawn the main collector task.
-        let main_handle = Self::start(Arc::clone(&collector), tps, shutdown_rx);
+        let main_handle = Self::start(Arc::clone(&collector), update_interval, shutdown_rx);
         {
             let mut join_lock = futures::executor::block_on(collector.join_handle.lock());
             *join_lock = Some(main_handle);
         }
 
         // Spawn the S3 pusher task.
-        let s3_handle = Self::start_s3_pusher(s3_rx);
+        let s3_handle = Self::start_s3_pusher(s3_rx, collector.config.clone());
         {
             let mut s3_join_lock = futures::executor::block_on(collector.s3_join_handle.lock());
             *s3_join_lock = Some(s3_handle);
         }
 
-        collector
+        Ok(collector)
     }
 
     /// Spawns the main collector async task which ticks at the given TPS.
     /// It checks for a shutdown signal on every tick.
     fn start(
         collector: Arc<Self>,
-        tps: u32,
+        update_interval: Duration,
         mut shutdown_rx: mpsc::Receiver<CollectorMsg>,
     ) -> tokio::task::JoinHandle<()> {
-        let interval = Duration::from_secs(1) / tps;
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -102,7 +163,7 @@ impl Collector {
                         break;
                     },
                     // Regular tick: process events.
-                    _ = sleep(interval) => {
+                    _ = sleep(update_interval) => {
                         collector.update_events().await;
                     }
                 }
@@ -113,13 +174,14 @@ impl Collector {
     /// Spawns the S3 pusher task that listens for batches of events to push.
     fn start_s3_pusher(
         mut s3_rx: mpsc::Receiver<NetworkMsg>,
+        config: Arc<Mutex<BoundaryStudioConfig>>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             while let Some(msg) = s3_rx.recv().await {
                 match msg {
                     NetworkMsg::SendEvents(events) => {
                         // Call the async function to push events to S3.
-                        if let Err(e) = push_events_to_s3(events).await {
+                        if let Err(e) = push_events_to_s3(events, &config).await {
                             log::error!("Failed to push events to S3: {:?}", e);
                         }
                     }
@@ -183,7 +245,10 @@ impl Collector {
             log::error!("Failed to send shutdown signal: {:?}", e);
         }
         // Wait for the main collector task to finish.
-        if let Some(handle) = { let mut guard = self.join_handle.lock().await; guard.take() } {
+        if let Some(handle) = {
+            let mut guard = self.join_handle.lock().await;
+            guard.take()
+        } {
             match timeout(timeout_duration, handle).await {
                 Ok(result) => {
                     if let Err(e) = result {
@@ -199,7 +264,10 @@ impl Collector {
         // Signal the S3 pusher to shut down by closing its channel.
         self.s3_tx.send(NetworkMsg::Shutdown).await.unwrap();
         // Wait for the S3 pusher task to finish.
-        if let Some(s3_handle) = { let mut guard = self.s3_join_handle.lock().await; guard.take() } {
+        if let Some(s3_handle) = {
+            let mut guard = self.s3_join_handle.lock().await;
+            guard.take()
+        } {
             match timeout(timeout_duration, s3_handle).await {
                 Ok(result) => {
                     if let Err(e) = result {
@@ -220,10 +288,29 @@ impl Collector {
 
 /// A placeholder async function simulating pushing events to S3.
 /// Replace this with your actual S3 upload logic.
-async fn push_events_to_s3(events: Vec<Arc<TraceEvent>>) -> Result<(), Box<dyn std::error::Error>> {
+async fn push_events_to_s3(
+    events: Vec<Arc<TraceEvent>>,
+    config: &Arc<Mutex<BoundaryStudioConfig>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Pushing {} events to S3", events.len());
     // Simulate network delay.
     sleep(Duration::from_millis(100)).await;
     // TODO: implement real S3 push logic here.
     Ok(())
+}
+
+impl Drop for Collector {
+    fn drop(&mut self) {
+        // Wait up to 5 seconds for the shutdown to complete.
+        let fut = self.shutdown(Duration::from_secs(5));
+        // Get the current runtime
+        match TOKIO_SINGLETON.get().unwrap() {
+            Ok(runtime) => {
+                runtime.block_on(fut);
+            }
+            Err(e) => {
+                log::error!("Failed to get tokio runtime: {:?}", e);
+            }
+        }
+    }
 }

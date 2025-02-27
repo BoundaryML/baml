@@ -140,4 +140,6 @@ pub trait FunctionTrackerTrait: Send + Sync {
     fn track_function(&self, fid: FunctionId);
     /// Untrack a function (this object will no longer hold a reference to it)
     fn untrack_function(&self, fid: &FunctionId);
+
+    fn name(&self) -> String;
 }

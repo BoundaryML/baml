@@ -21,7 +21,7 @@ mod types;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-
+use std::sync::Mutex;
 use anyhow::Context;
 use anyhow::Result;
 
@@ -38,6 +38,8 @@ use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
+use tracingv2::collectors::BoundaryStudioCollector;
+use tracingv2::collectors::BoundaryStudioConfigBuilder;
 use tracingv2::storage::storage::FunctionTrackerTrait;
 use std::sync::OnceLock;
 
@@ -77,11 +79,19 @@ pub struct BamlRuntime {
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
     pub async_runtime: Arc<tokio::runtime::Runtime>,
+    pub boundary_collector: Arc<Mutex<Option<Arc<BoundaryStudioCollector>>>>,
 }
 
 impl BamlRuntime {
     pub fn create_hash(&self) -> String {
         self.inner.create_hash()
+    }
+
+    pub fn create_boundary_collector(&self, config: BoundaryStudioConfigBuilder) -> Result<()> {
+        let fut = BoundaryStudioCollector::new(&self, config);
+        let collector = self.async_runtime.block_on(fut)?;
+        self.boundary_collector.lock().unwrap().replace(collector);
+        Ok(())
     }
 
     pub fn env_vars(&self) -> &HashMap<String, String> {
@@ -148,6 +158,7 @@ impl BamlRuntime {
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: Self::get_tokio_singleton()?,
+            boundary_collector: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -167,6 +178,7 @@ impl BamlRuntime {
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: Self::get_tokio_singleton()?,
+            boundary_collector: Arc::new(Mutex::new(None)),
         })
     }
 

@@ -18,7 +18,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
+crate::lang_wrapper!(
+    BamlRuntime, CoreBamlRuntime, clone_safe
+);
 
 #[derive(Debug, Clone)]
 #[pyclass]
@@ -97,6 +99,7 @@ impl BamlRuntime {
         )
     }
 
+
     #[pyo3()]
     fn reset(
         &mut self,
@@ -115,6 +118,17 @@ impl BamlRuntime {
         self.inner
             .create_ctx_manager(baml_types::BamlValue::String("python".to_string()), None)
             .into()
+    }
+
+    #[pyo3()]
+    fn configure_boundary_uploader(&self, project_id: String, api_key: String) -> PyResult<()> {
+        let config = baml_runtime::tracingv2::collectors::BoundaryStudioConfigBuilder {
+            base_url: None,
+            project_id,
+            api_key,
+            update_interval: std::time::Duration::from_secs(5),
+        };
+        self.inner.create_boundary_collector(config).map_err(BamlError::from_anyhow)
     }
 
     #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors))]
