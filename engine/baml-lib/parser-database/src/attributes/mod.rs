@@ -81,7 +81,7 @@ impl Attributes {
         self.skip.replace(true);
     }
 
-    /// Combine two attributes.
+    /// Combine two attributes, preferring `self`'s fields when both are present.
     pub fn combine(&self, other: &Attributes) -> Attributes {
         Attributes {
             description: self
