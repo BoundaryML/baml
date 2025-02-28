@@ -152,7 +152,7 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -175,7 +175,7 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
@@ -236,6 +236,8 @@ impl RequestBuilder for AnthropicClient {
                 body_obj.extend(self.chat_to_message(messages)?);
             }
         }
+
+        log::trace!("request body: {:?}", body_obj);
 
         if stream {
             body_obj.insert("stream".into(), true.into());
@@ -304,10 +306,12 @@ impl ToProviderMessage for AnthropicClient {
                     "BAML internal error (Anthropic): file should have been resolved to base64"
                 )
             }
-            BamlMediaContent::Url(_) => {
-                anyhow::bail!(
-                    "BAML internal error (Anthropic): media URL should have been resolved to base64"
-                )
+            BamlMediaContent::Url(url) => {
+                content.insert("type".into(), media.media_type.to_string().into());
+                let mut source = serde_json::Map::new();
+                source.insert("type".into(), "url".into());
+                source.insert("url".into(), url.url.clone().into());
+                content.insert("source".into(), source.into());
             }
         }
         Ok(content)
