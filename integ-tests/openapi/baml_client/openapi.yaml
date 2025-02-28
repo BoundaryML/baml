@@ -6095,13 +6095,13 @@ components:
         education:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/Education'
         email:
           type: string
         experience:
           type: array
           items:
-            $ref: '#/components/schemas/Education'
+            type: string
         name:
           type: string
         phone:

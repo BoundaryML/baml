@@ -344,8 +344,8 @@ class Resume(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    experience: List["Education"]
-    education: List[str]
+    experience: List[str]
+    education: List["Education"]
     skills: List[str]
 
 class Schema(BaseModel):
