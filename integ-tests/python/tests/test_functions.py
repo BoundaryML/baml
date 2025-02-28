@@ -2089,3 +2089,43 @@ def test_parse_llm_response_sync():
             ),
         ),
     )
+
+def test_parse_llm_stream():
+    stream = """
+    ```json
+    {
+        "name": "John Doe",
+        "email": "john.doe@example.com",
+    ```
+    """
+
+    parsed = b.parse_stream.ExtractResume(stream)
+
+    assert parsed == partial_types.Resume(
+        name="John Doe",
+        email="john.doe@example.com",
+        phone=None,
+        experience=[],
+        education=[],
+        skills=[]
+    )
+
+def test_parse_llm_stream_sync():
+    stream = """
+    ```json
+    {
+        "name": "John Doe",
+        "email": "john.doe@example.com",
+    ```
+    """
+
+    parsed = sync_b.parse_stream.ExtractResume(stream)
+
+    assert parsed == partial_types.Resume(
+        name="John Doe",
+        email="john.doe@example.com",
+        phone=None,
+        experience=[],
+        education=[],
+        skills=[]
+    )

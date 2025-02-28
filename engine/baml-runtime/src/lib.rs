@@ -483,6 +483,7 @@ impl BamlRuntime {
         &self,
         function_name: String,
         llm_response: String,
+        allow_partials: bool,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
@@ -495,7 +496,7 @@ impl BamlRuntime {
             &ctx,
         )?;
 
-        renderer.parse(&self.inner.ir(), &llm_response, false)
+        renderer.parse(&self.inner.ir(), &llm_response, allow_partials)
     }
 
     #[cfg(not(target_arch = "wasm32"))]

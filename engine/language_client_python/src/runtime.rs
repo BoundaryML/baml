@@ -442,6 +442,7 @@ impl BamlRuntime {
             .parse_llm_response(
                 function_name,
                 llm_response,
+                allow_partials,
                 &ctx_mng,
                 tb.as_ref(),
                 cb.as_ref(),

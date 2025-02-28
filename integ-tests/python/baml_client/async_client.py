@@ -24,7 +24,7 @@ from . import partial_types, types
 from .types import Checked, Check
 from .type_builder import TypeBuilder
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
-from .parser import LlmResponseParser
+from .parser import LlmResponseParser, LlmStreamParser
 
 OutputType = TypeVar('OutputType')
 
@@ -34,6 +34,8 @@ class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
     collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
+
+
 class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
@@ -47,6 +49,7 @@ class BamlAsyncClient:
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
       self.__prompt_body = PromptBody(self.__runtime, self.__ctx_manager)
       self.__llm_response_parser = LlmResponseParser(self.__runtime, self.__ctx_manager)
+      self.__llm_stream_parser = LlmStreamParser(self.__runtime, self.__ctx_manager)
 
     @property
     def stream(self):
@@ -59,6 +62,10 @@ class BamlAsyncClient:
     @property
     def parse(self):
       return self.__llm_response_parser
+
+    @property
+    def parse_stream(self):
+      return self.__llm_stream_parser
 
     
     async def AaaSamOutputFormat(
