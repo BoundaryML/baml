@@ -87,7 +87,6 @@ impl FunctionResultStream {
     where
         F: Fn(FunctionResult),
     {
-        log::info!("### FunctionResultStream::run");
         let mut local_orchestrator = Vec::new();
         std::mem::swap(&mut local_orchestrator, &mut self.orchestrator);
 

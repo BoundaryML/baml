@@ -258,14 +258,12 @@ impl BamlRuntime {
                 vec![],
             )?;
             let (response_res, span_uuid) = stream.run(on_event, ctx, None, None).await;
-            log::info!("response_res: {:#?}", response_res);
             let res = response_res?;
             let (_, llm_resp, val) = res
                 .event_chain()
                 .iter()
                 .last()
                 .context("Expected non-empty event chain")?;
-            log::info!("llm_resp: {:#?}", llm_resp);
             let complete_resp = match llm_resp {
                 LLMResponse::Success(complete_llm_response) => Ok(complete_llm_response),
                 LLMResponse::InternalFailure(e) => Err(anyhow::anyhow!("{}", e)),

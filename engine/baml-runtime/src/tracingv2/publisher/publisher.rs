@@ -65,7 +65,7 @@ impl TracePublisher {
                             }
                         },
                         PublisherMessage::Flush(flush_ack) => {
-                            log::info!("Got a flush event");
+                            // log::info!("Got a flush event");
                             // Flush the current buffer if it has any pending events.
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
@@ -150,7 +150,7 @@ impl TracePublisher {
 // but that's ok since noone uses our wasm build in node for logging.
 // https://github.com/whizsid/wasmtimer-rs/issues/26
 pub async fn flush() {
-    log::info!("flushing");
+    // log::info!("flushing");
     let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
     if let Err(e) = PUBLISHING_CHANNEL.send(PublisherMessage::Flush(ack_tx)) {
         log::error!("Failed to send flush request: {:?}", e);
