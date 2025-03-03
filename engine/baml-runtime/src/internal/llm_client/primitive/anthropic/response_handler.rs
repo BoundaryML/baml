@@ -47,8 +47,6 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
         Err(e) => return LLMResponse::LLMFailure(e),
     };
 
-    println!("response: {:?}", response.content);
-
     let content = response
         .content
         .iter()
@@ -146,14 +144,12 @@ pub fn scan_anthropic_response_stream(
             inner.output_tokens = Some(body.usage.output_tokens);
             inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
         }
-        MessageChunk::ContentBlockDelta(event) => {
-            match event.delta {
-                super::types::ContentBlockDelta::TextDelta { text } => {
-                    inner.content += &text;
-                }
-                _ => (),
+        MessageChunk::ContentBlockDelta(event) => match event.delta {
+            super::types::ContentBlockDelta::TextDelta { text } => {
+                inner.content += &text;
             }
-        }
+            _ => (),
+        },
         MessageChunk::ContentBlockStart(_) => (),
         MessageChunk::ContentBlockStop(_) => (),
         MessageChunk::Ping => (),
