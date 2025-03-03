@@ -570,6 +570,11 @@ async fn process_media(
                 (ResolveMediaUrls::Always, _) => {}
                 (ResolveMediaUrls::EnsureMime, Some("")) | (ResolveMediaUrls::EnsureMime, None) => {
                 }
+                (ResolveMediaUrls::IfMatchesGoogleFileUri, _) => {
+                    if media_url.url.starts_with("gs://") {
+                        return Ok(part.clone());
+                    }
+                }
                 (ResolveMediaUrls::Never, _) | (ResolveMediaUrls::EnsureMime, _) => {
                     return Ok(part.clone());
                 }

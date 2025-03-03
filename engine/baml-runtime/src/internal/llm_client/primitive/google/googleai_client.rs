@@ -138,7 +138,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client

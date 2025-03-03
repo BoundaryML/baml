@@ -87,10 +87,11 @@ pub enum ResolveMediaUrls {
 
     // aws: supports b64 w mime
     // anthropic: supports b64 w mime
-    // google: supports b64 w mime
+    // google: supports b64 w mime, url if its a google file uri (gs://)
     // openai: supports URLs w/o mime (b64 data URLs also work here)
     // vertex: supports URLs w/ mime, b64 w/ mime
     Always,
+    IfMatchesGoogleFileUri,
     EnsureMime,
     Never,
 }
