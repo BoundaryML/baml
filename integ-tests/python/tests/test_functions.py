@@ -1911,3 +1911,24 @@ async def test_client_response_type():
     cr.set_primary("temp_client")
     with pytest.raises(errors.BamlClientError):
         _ = await b.TestOpenAI("test", baml_options={ "client_registry": cr })
+
+@pytest.mark.asyncio
+async def test_thinking():
+    res = await b.TestThinking("a world without horses, should be titled 'A World Without Horses'")
+    assert len(res.title) > 0, "title should be non-empty"
+    assert len(res.content) > 0, "content should be non-empty"
+    assert len(res.characters) > 0, "characters should be non-empty"
+
+
+@pytest.mark.asyncio
+async def test_thinking_streaming():
+    stream = b.stream.TestThinking("a world without horses, should be titled 'A World Without Horses'")
+    async for msg in stream:
+        print(msg)
+    
+    res = await stream.get_final_response()
+    assert len(res.title) > 0, "title should be non-empty"
+    assert len(res.content) > 0, "content should be non-empty"
+    assert len(res.characters) > 0, "characters should be non-empty"
+
+

@@ -2,9 +2,30 @@ use serde::{Deserialize, Serialize};
 
 // https://docs.anthropic.com/claude/reference/messages_post
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AnthropicMessageContent {
-    pub r#type: String,
-    pub text: String,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AnthropicMessageContent {
+    // type: text
+    Text {
+        text: String,
+    },
+    // // type: tool_use
+    ToolUse {
+        id: Option<String>,
+        input: serde_json::Value,
+        name: String,
+    },
+    // // type: thinking
+    // Thinking {
+    //     signature: Option<String>,
+    //     thinking: String,
+    // },
+    // type: redacted_thinking
+    RedactedThinking {
+        data: String,
+    },
+    // fallback for unknown types
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -98,6 +119,9 @@ pub enum MessageChunk {
     /// Message stop chunk.
     MessageStop,
     Error(AnthropicErrorInner),
+    /// Fallback for unknown types
+    #[serde(other)]
+    Other,
 }
 
 /// The message start chunk.
@@ -122,7 +146,16 @@ pub struct ContentBlockDeltaChunk {
     /// The index.
     pub index: u32,
     /// The text delta content block.
-    pub delta: TextDeltaContentBlock,
+    pub delta: ContentBlockDelta,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBlockDelta {
+    TextDelta { text: String },
+    SignatureDelta { signature: String },
+    ThinkingDelta { thinking: String },
+    Other,
 }
 
 /// The content block stop chunk.
@@ -178,8 +211,7 @@ mod tests {
 
         let chunk = MessageChunk::ContentBlockDelta(ContentBlockDeltaChunk {
             index: 0,
-            delta: TextDeltaContentBlock {
-                _type: ContentType::TextDelta,
+            delta: ContentBlockDelta::TextDelta {
                 text: "Hello".to_string(),
             },
         });

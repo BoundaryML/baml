@@ -274,6 +274,13 @@ export interface ContactInfo {
   
 }
 
+export interface CustomStory {
+  title: string
+  characters: string[]
+  content: string
+  
+}
+
 export interface CustomTaskResult {
   bookOrder?: BookOrder | null | null
   flightConfirmation?: FlightConfirmation | null | null

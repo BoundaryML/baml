@@ -108,6 +108,11 @@ class ContactInfo(BaseModel):
     primary: Optional[Union["PhoneNumber", "EmailAddress"]] = None
     secondary: Optional[Union["PhoneNumber", "EmailAddress", None]] = None
 
+class CustomStory(BaseModel):
+    title: Optional[str] = None
+    characters: List[str]
+    content: Optional[str] = None
+
 class CustomTaskResult(BaseModel):
     bookOrder: Optional[Union["BookOrder", Optional[None]]] = None
     flightConfirmation: Optional[Union["FlightConfirmation", Optional[None]]] = None

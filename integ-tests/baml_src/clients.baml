@@ -265,6 +265,20 @@ client<llm> Sonnet {
   }
 }
 
+
+client<llm> SonnetThinking {
+  provider anthropic
+  options {
+    model "claude-3-7-sonnet-20250219"
+    api_key env.ANTHROPIC_API_KEY
+    max_tokens 2048
+    thinking {
+      type "enabled"
+      budget_tokens 1024
+    }
+  }
+}
+
 client<llm> Claude {
   provider anthropic
   options {

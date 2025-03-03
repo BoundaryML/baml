@@ -1,8 +1,11 @@
 use anyhow::Result;
 use baml_types::BamlMap;
 
-use super::types::{AnthropicMessageResponse, MessageChunk, StopReason};
-use crate::internal::llm_client::{primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse};
+use super::types::{AnthropicMessageContent, AnthropicMessageResponse, MessageChunk, StopReason};
+use crate::internal::llm_client::{
+    primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
+    LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+};
 use anyhow::Context;
 use serde::Deserialize;
 use serde_json::Value;
@@ -24,11 +27,13 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
     instant_now: web_time::Instant,
     model_name: Option<String>,
 ) -> LLMResponse {
-    let response = match AnthropicMessageResponse::deserialize(&response_body).context(format!(
-        "Failed to parse into a response accepted by {}: {}",
-        std::any::type_name::<AnthropicMessageResponse>(),
-        response_body
-    )).map_err(|e| LLMErrorResponse {
+    let response = match AnthropicMessageResponse::deserialize(&response_body)
+        .context(format!(
+            "Failed to parse into a response accepted by {}: {}",
+            std::any::type_name::<AnthropicMessageResponse>(),
+            response_body
+        ))
+        .map_err(|e| LLMErrorResponse {
             client: client.context().name.to_string(),
             model: model_name.clone(),
             prompt: to_prompt(prompt),
@@ -37,14 +42,25 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: format!("{:?}", e),
             code: ErrorCode::Other(2),
-        })
-    {
+        }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
     };
 
+    println!("response: {:?}", response.content);
 
-    if response.content.len() != 1 {
+    let content = response
+        .content
+        .iter()
+        .filter_map(|v| match v {
+            AnthropicMessageContent::Text { text } => Some(text),
+            _ => None,
+        })
+        .next();
+
+    let content = if let Some(content) = content {
+        content
+    } else {
         return LLMResponse::LLMFailure(LLMErrorResponse {
             client: client.context().name.to_string(),
             model: model_name.clone(),
@@ -52,18 +68,15 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!(
-                "Expected exactly one content block, got {}",
-                response.content.len()
-            ),
-            code: ErrorCode::Other(200),
+            message: "Anthropic response contains no text".to_string(),
+            code: ErrorCode::Other(2),
         });
-    }
+    };
 
     LLMResponse::Success(LLMCompleteResponse {
         client: client.context().name.to_string(),
         prompt: to_prompt(prompt),
-        content: response.content[0].text.clone(),
+        content: content.to_string(),
         start_time: system_now,
         latency: instant_now.elapsed(),
         request_options: client.request_options().clone(),
@@ -84,7 +97,6 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
     })
 }
 
-
 pub fn scan_anthropic_response_stream(
     client_name: &str,
     request_options: &BamlMap<String, serde_json::Value>,
@@ -98,14 +110,16 @@ pub fn scan_anthropic_response_stream(
     let inner = match accumulated {
         Ok(accumulated) => accumulated,
         // We'll just keep the first error and return it
-        Err(e) => return Ok(())
+        Err(e) => return Ok(()),
     };
 
-    let event = match MessageChunk::deserialize(&event_body).context(format!(
-        "Failed to parse into a response accepted by {}: {}",
-        std::any::type_name::<MessageChunk>(),
-        event_body
-    )).map_err(|e| LLMErrorResponse {
+    let event = match MessageChunk::deserialize(&event_body)
+        .context(format!(
+            "Failed to parse into a response accepted by {}: {}",
+            std::any::type_name::<MessageChunk>(),
+            event_body
+        ))
+        .map_err(|e| LLMErrorResponse {
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
@@ -114,8 +128,7 @@ pub fn scan_anthropic_response_stream(
             latency: instant_now.elapsed(),
             message: format!("{:?}", e),
             code: ErrorCode::Other(2),
-        })
-    {
+        }) {
         Ok(response) => response,
         Err(e) => return Err(e),
     };
@@ -128,15 +141,18 @@ pub fn scan_anthropic_response_stream(
                 body.stop_reason,
                 Some(StopReason::StopSequence) | Some(StopReason::EndTurn)
             );
-            inner.finish_reason =
-                body.stop_reason.as_ref().map(ToString::to_string);
+            inner.finish_reason = body.stop_reason.as_ref().map(ToString::to_string);
             inner.prompt_tokens = Some(body.usage.input_tokens);
             inner.output_tokens = Some(body.usage.output_tokens);
-            inner.total_tokens =
-                Some(body.usage.input_tokens + body.usage.output_tokens);
+            inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
         }
         MessageChunk::ContentBlockDelta(event) => {
-            inner.content += &event.delta.text;
+            match event.delta {
+                super::types::ContentBlockDelta::TextDelta { text } => {
+                    inner.content += &text;
+                }
+                _ => (),
+            }
         }
         MessageChunk::ContentBlockStart(_) => (),
         MessageChunk::ContentBlockStop(_) => (),
@@ -154,25 +170,22 @@ pub fn scan_anthropic_response_stream(
                 .as_ref()
                 .map(|r| serde_json::to_string(r).unwrap_or("".into()));
             inner.output_tokens = Some(body.usage.output_tokens);
-            inner.total_tokens = Some(
-                inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens,
-            );
+            inner.total_tokens = Some(inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens);
         }
         MessageChunk::MessageStop => (),
         MessageChunk::Error(err) => {
-            return Err(
-                LLMErrorResponse {
-                    client: client_name.to_string(),
-                    model: model_name.clone(),
-                    prompt: prompt.clone(),
-                    request_options: request_options.clone(),
-                    start_time: system_now.clone(),
-                    latency: instant_now.elapsed(),
-                    message: err.message,
-                    code: ErrorCode::Other(2),
-                }
-            );
+            return Err(LLMErrorResponse {
+                client: client_name.to_string(),
+                model: model_name.clone(),
+                prompt: prompt.clone(),
+                request_options: request_options.clone(),
+                start_time: system_now.clone(),
+                latency: instant_now.elapsed(),
+                message: err.message,
+                code: ErrorCode::Other(2),
+            });
         }
+        MessageChunk::Other => (),
     };
 
     inner.latency = instant_now.elapsed();

@@ -26,3 +26,21 @@ function TestCaching(input: string, not_cached: string) -> string {
     {{ not_cached }}
   "#
 }
+
+class CustomStory {
+  title string
+  characters string[]
+  content string
+}
+
+function TestThinking(input: string) -> CustomStory {
+  client SonnetThinking
+  prompt #"
+    {{ _.role('system') }}
+    Generate the following story
+    {{ ctx.output_format }}
+
+    {{ _.role('user') }}
+    {{ input }}
+  "#
+}

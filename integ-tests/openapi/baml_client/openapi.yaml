@@ -2146,6 +2146,19 @@ paths:
                 title: TestSingleFallbackClientResponse
                 type: string
       operationId: TestSingleFallbackClient
+  /call/TestThinking:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestThinking'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestThinkingResponse
+                $ref: '#/components/schemas/CustomStory'
+      operationId: TestThinking
   /call/TestUniverseQuestion:
     post:
       requestBody:
@@ -4797,6 +4810,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestThinking:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestThinkingRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestUniverseQuestion:
       required: true
       content:
@@ -5238,6 +5267,22 @@ components:
           - $ref: '#/components/schemas/EmailAddress'
       required:
       - primary
+      additionalProperties: false
+    CustomStory:
+      type: object
+      properties:
+        characters:
+          type: array
+          items:
+            type: string
+        content:
+          type: string
+        title:
+          type: string
+      required:
+      - characters
+      - content
+      - title
       additionalProperties: false
     CustomTaskResult:
       type: object
