@@ -92,6 +92,15 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         collector: Optional[Collector],
     ) -> FunctionResult: ...
+    def call_function_sync(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+        collector: Optional[Collector],
+    ) -> FunctionResult: ...
     @staticmethod
     def from_files(
         root_path: str, files: Dict[str, str], env_vars: Dict[str, str]
