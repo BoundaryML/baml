@@ -9,22 +9,28 @@ mod function;
 mod type_alias;
 #[cfg(test)]
 mod test;
-
+mod retry_policy;
+mod runtime;
+pub use runtime::{MerkleTree};
 /// Used to identify unique signatures of types.
 
-pub(super) trait Signature {
+trait Signature {
     fn type_name(&self) -> &'static str;
+    // Returns the interface of the type and its named-dependencies
     fn interface(&self) -> Option<String>;
+    // Returns the impl of the type and its named-dependencies
     fn impl_(&self) -> Option<String> {
         None
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct BamlHash {
     type_name: &'static str,
     interface_hash: Option<u64>,
     impl_hash: Option<u64>,
 }
+
 
 pub trait ProvideBamlHash {
     fn to_baml_hash(&self) -> BamlHash;

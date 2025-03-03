@@ -93,6 +93,27 @@ pub enum FieldType {
     },
 }
 
+impl FieldType {
+    pub fn names(&self) -> std::collections::HashSet<String> {
+        match self {
+            FieldType::Enum(name) => std::collections::HashSet::from([name.clone()]),
+            FieldType::Class(name) => std::collections::HashSet::from([name.clone()]),
+            FieldType::Primitive(_) => std::collections::HashSet::new(),
+            FieldType::Literal(_) => std::collections::HashSet::new(),
+            FieldType::List(field_type) => field_type.names(),
+            FieldType::Map(field_type, field_type1) => {
+                let mut names = field_type.names();
+                names.extend(field_type1.names());
+                names
+            }
+            FieldType::Union(field_types) => field_types.iter().flat_map(FieldType::names).collect(),
+            FieldType::Tuple(field_types) => field_types.iter().flat_map(FieldType::names).collect(),
+            FieldType::Optional(field_type) => field_type.names(),
+            FieldType::RecursiveTypeAlias(name) => std::collections::HashSet::from([name.clone()]),
+            FieldType::WithMetadata { base, .. } => base.names(),
+        }
+    }
+}
 // Impl display for FieldType
 impl std::fmt::Display for FieldType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

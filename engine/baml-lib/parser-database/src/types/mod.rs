@@ -287,7 +287,7 @@ pub(super) struct Types {
     /// `SomeClass | AnotherClass`, which does not even exist in the AST. That's
     /// why we need to store the resolution here.
     ///
-    /// Contents would be `AliasThree -> SomeClass`.
+    /// Contents would be `AliasThree -> AnotherClass`.
     pub(super) resolved_type_aliases: HashMap<ast::TypeAliasId, FieldType>,
 
     /// Strongly connected components of the dependency graph.

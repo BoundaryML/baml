@@ -57,6 +57,19 @@ impl<Meta: Clone> UnresolvedFallback<Meta> {
 
         Ok(Self { strategy })
     }
+
+    pub fn names(&self) -> HashSet<String> {
+        self.strategy.iter().flat_map(|(strategy, _)| match strategy {
+            either::Either::Left(s) => {
+                match s {
+                    StringOr::JinjaExpression(_) | StringOr::EnvVar(_) => Default::default(),
+                    StringOr::Value(s) => HashSet::from([s.clone()]),
+                }
+            },
+            either::Either::Right(ClientSpec::Named(s)) => HashSet::from([s.clone()]),
+            either::Either::Right(ClientSpec::Shorthand(..)) => Default::default(),
+        }).collect()
+    }
 }
 
 impl<Meta> super::StrategyClientProperty<Meta> for UnresolvedFallback<Meta> {

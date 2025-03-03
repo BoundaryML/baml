@@ -22,21 +22,21 @@ use internal_baml_schema_ast::ast::{
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
-use crate::Configuration;
 use crate::ir::signature::{BamlHash, ProvideBamlHash};
+use crate::Configuration;
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
 /// raw BAML AST, and should include all information necessary to generate
 /// code in any target language.
 #[derive(Debug)]
 pub struct IntermediateRepr {
-    enums: Vec<Node<Enum>>,
-    classes: Vec<Node<Class>>,
-    type_aliases: Vec<Node<TypeAlias>>,
-    functions: Vec<Node<Function>>,
-    clients: Vec<Node<Client>>,
-    retry_policies: Vec<Node<RetryPolicy>>,
-    template_strings: Vec<Node<TemplateString>>,
+    pub(super) enums: Vec<Node<Enum>>,
+    pub(super) classes: Vec<Node<Class>>,
+    pub(super) type_aliases: Vec<Node<TypeAlias>>,
+    pub(super) functions: Vec<Node<Function>>,
+    pub(super) clients: Vec<Node<Client>>,
+    pub(super) retry_policies: Vec<Node<RetryPolicy>>,
+    pub(super) template_strings: Vec<Node<TemplateString>>,
 
     /// Strongly connected components of the dependency graph (finite cycles).
     finite_recursive_cycles: Vec<IndexSet<String>>,
@@ -330,23 +330,6 @@ impl IntermediateRepr {
             recursive_classes,
             recursive_aliases,
         ))
-    }
-
-    pub fn create_baml_hash(&self) -> String {
-        // hash everything we can based on the IR
-        let enum_names = self
-            .enums
-            .iter()
-            .map(|e| {
-                let hash = e.to_baml_hash();
-
-                (
-                    e.elem.name.as_str(),
-                    hash,
-                )
-            })
-            .collect::<IndexMap<_, _>>();
-        return "TODO".to_string();
     }
 }
 
@@ -1262,6 +1245,32 @@ pub struct Client {
     pub provider: ClientProvider,
     pub retry_policy_id: Option<String>,
     pub options: UnresolvedClientProperty<()>,
+}
+
+impl Client {
+    pub fn names(&self) -> std::collections::HashSet<String> {
+        let mut names = std::collections::HashSet::new();
+
+        self.retry_policy_id.as_ref().map(|id| {
+            names.insert(id.clone());
+        });
+
+        match &self.options {
+            UnresolvedClientProperty::OpenAI(..)
+            | UnresolvedClientProperty::Anthropic(..)
+            | UnresolvedClientProperty::AWSBedrock(..)
+            | UnresolvedClientProperty::Vertex(..)
+            | UnresolvedClientProperty::GoogleAI(..) => {}
+            UnresolvedClientProperty::RoundRobin(options) => {
+                names.extend(options.names());
+            }
+            UnresolvedClientProperty::Fallback(options) => {
+                names.extend(options.names());
+            }
+        }
+
+        names
+    }
 }
 
 impl WithRepr<Client> for ClientWalker<'_> {
