@@ -61,7 +61,7 @@ pub struct Walker<'ir, I> {
 
 impl IntermediateRepr {
     pub fn create_hash(&self) -> String {
-        todo!("create hash");
+        "PLACE_HOLDER_HASH".to_string()
     }
 
     pub fn create_empty() -> IntermediateRepr {

@@ -97,7 +97,7 @@ pub trait ExperimentalTracingInterface {
         ctx: &RuntimeContextManager,
     ) -> Result<Option<uuid::Uuid>>;
 
-    fn flush(&self) -> Result<()>;
+    fn flush(&self, timeout_duration: std::time::Duration) -> Result<()>;
     fn drain_stats(&self) -> crate::InnerTraceStats;
 
     #[cfg(not(target_arch = "wasm32"))]

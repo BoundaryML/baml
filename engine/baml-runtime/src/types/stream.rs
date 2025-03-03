@@ -34,7 +34,6 @@ pub struct FunctionResultStream {
     pub(crate) tracer: Arc<BamlTracer>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
-    pub(crate) collectors: Vec<Arc<Box<dyn FunctionTrackerTrait>>>,
 }
 
 impl Drop for FunctionResultStream {
@@ -104,9 +103,7 @@ impl FunctionResultStream {
             .tracer
             .start_span(&self.function_name, ctx, &local_params);
         if let Some(span) = span.clone() {
-            for collector in self.collectors.iter() {
-                collector.track_function(FunctionId(span.clone().span_id.to_string()));
-            }
+            // TODO: Collector stuff
             let trace_event = TraceEvent {
                 span_id: FunctionId(span.span_id.to_string()),
                 event_id: ContentId(uuid::Uuid::new_v4().to_string()),

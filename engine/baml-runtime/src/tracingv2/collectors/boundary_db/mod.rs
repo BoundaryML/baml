@@ -19,6 +19,12 @@ use baml_types::tracing::events::{FunctionId, TraceData, TraceEvent}; // Assumin
 pub enum CollectorMsg {
     /// Instruct the collector to gracefully shutdown.
     Shutdown,
+    Flush,
+}
+
+pub enum CollectorMsgReply {
+    /// Reply to a shutdown signal.
+    Done,
 }
 
 enum NetworkMsg {
@@ -32,10 +38,12 @@ enum NetworkMsg {
 pub struct Collector {
     tracked_ids: Arc<DashMap<FunctionId, usize>>,
     shutdown_tx: mpsc::Sender<CollectorMsg>,
+    shutdown_rx2: Arc<Mutex<mpsc::Receiver<CollectorMsgReply>>>,
+
     // Channel to send events to the S3 pusher task.
     s3_tx: mpsc::Sender<NetworkMsg>,
     // Handle for the S3 pusher task.
-    config: Arc<Mutex<BoundaryStudioConfig>>,
+    config: Arc<std::sync::Mutex<BoundaryStudioConfig>>,
 
     // Handle for the main collector task.
     s3_join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -44,7 +52,7 @@ pub struct Collector {
 
 impl FunctionTrackerTrait for Collector {
     fn track_function(&self, fid: FunctionId) {
-        log::trace!("Tracking function: {:?}", fid);
+        log::info!("Tracking function: {:?}", fid);
         // Increment the global ref count.
         BAML_TRACER.lock().unwrap().inc_ref(&fid);
         // Add to our set.
@@ -52,11 +60,13 @@ impl FunctionTrackerTrait for Collector {
     }
 
     fn untrack_function(&self, fid: &FunctionId) {
+        log::info!("Untracking function: {:?}", fid);
         self.tracked_ids.remove(fid);
     }
 
     fn name(&self) -> String {
-        format!("")
+        let config = self.config.lock().unwrap();
+        format!("BoundaryStudioCollector({})", config.project_name)
     }
 }
 
@@ -88,6 +98,11 @@ impl BoundaryStudioConfigBuilder {
             &self.project_id,
             Some(self.api_key),
         );
+        return Ok(BoundaryStudioConfig {
+            project_name: "PLACEHOLDER".to_string(),
+            api_client,
+        });
+
         let data = boundary_api::SourceCodeHandshakeRequest {
             source_hash: runtime.create_hash(),
         };
@@ -118,20 +133,27 @@ impl Collector {
 
         // Channel for shutdown signaling to the collector task.
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
+        let (shutdown_tx2, shutdown_rx2) = mpsc::channel(1);
         // Channel for sending event batches to the S3 pusher.
         let (s3_tx, s3_rx) = mpsc::channel(100);
 
         let collector = Arc::new(Self {
             tracked_ids: Arc::new(DashMap::new()),
             shutdown_tx,
+            shutdown_rx2: Arc::new(Mutex::new(shutdown_rx2)),
             join_handle: Mutex::new(None),
             s3_tx,
             s3_join_handle: Mutex::new(None),
-            config: Arc::new(Mutex::new(config)),
+            config: Arc::new(std::sync::Mutex::new(config)),
         });
 
         // Spawn the main collector task.
-        let main_handle = Self::start(Arc::clone(&collector), update_interval, shutdown_rx);
+        let main_handle = Self::start(
+            Arc::clone(&collector),
+            update_interval,
+            shutdown_rx,
+            shutdown_tx2,
+        );
         {
             let mut join_lock = futures::executor::block_on(collector.join_handle.lock());
             *join_lock = Some(main_handle);
@@ -153,14 +175,29 @@ impl Collector {
         collector: Arc<Self>,
         update_interval: Duration,
         mut shutdown_rx: mpsc::Receiver<CollectorMsg>,
+        shutdown_tx: mpsc::Sender<CollectorMsgReply>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             loop {
                 tokio::select! {
                     // Listen for a shutdown signal.
-                    _ = shutdown_rx.recv() => {
-                        collector.update_events().await;
-                        break;
+                    event = shutdown_rx.recv() => {
+                        match event {
+                            Some(CollectorMsg::Shutdown) => {
+                                collector.update_events().await;
+                                break;
+                            },
+                            Some(CollectorMsg::Flush) => {
+                                collector.update_events().await;
+                                match shutdown_tx.send(CollectorMsgReply::Done).await {
+                                    Ok(_) => {},
+                                    Err(e) => {
+                                        log::error!("Failed to send finished acknowledgement: {:?}", e);
+                                    }
+                                }
+                            },
+                            None => todo!(),
+                        }
                     },
                     // Regular tick: process events.
                     _ = sleep(update_interval) => {
@@ -174,7 +211,7 @@ impl Collector {
     /// Spawns the S3 pusher task that listens for batches of events to push.
     fn start_s3_pusher(
         mut s3_rx: mpsc::Receiver<NetworkMsg>,
-        config: Arc<Mutex<BoundaryStudioConfig>>,
+        config: Arc<std::sync::Mutex<BoundaryStudioConfig>>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             while let Some(msg) = s3_rx.recv().await {
@@ -237,9 +274,24 @@ impl Collector {
         }
     }
 
+    pub async fn flush(&self, timeout_duration: Duration) {
+        if let Err(e) = self.shutdown_tx.send(CollectorMsg::Flush).await {
+            log::error!("Failed to send flush signal: {:?}", e);
+        };
+        let mut shutdown_rx = self.shutdown_rx2.lock().await;
+        tokio::select! {
+            _ = shutdown_rx.recv() => {
+                log::info!("Flush completed.");
+            },
+            _ = sleep(timeout_duration) => {
+                log::warn!("Timeout while waiting for the flush to complete.");
+            }
+        }
+    }
+
     /// Initiates a graceful shutdown of both the collector and S3 pusher tasks.
     /// Sends a shutdown signal and awaits task completion with a timeout.
-    pub async fn shutdown(&self, timeout_duration: Duration) {
+    async fn shutdown(&self, timeout_duration: Duration) {
         // Send the shutdown signal to the main collector task.
         if let Err(e) = self.shutdown_tx.send(CollectorMsg::Shutdown).await {
             log::error!("Failed to send shutdown signal: {:?}", e);
@@ -290,7 +342,7 @@ impl Collector {
 /// Replace this with your actual S3 upload logic.
 async fn push_events_to_s3(
     events: Vec<Arc<TraceEvent>>,
-    config: &Arc<Mutex<BoundaryStudioConfig>>,
+    config: &Arc<std::sync::Mutex<BoundaryStudioConfig>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     log::info!("Pushing {} events to S3", events.len());
     // Simulate network delay.
@@ -301,6 +353,7 @@ async fn push_events_to_s3(
 
 impl Drop for Collector {
     fn drop(&mut self) {
+        log::info!("Dropping boudary studio collector: {}", self.name());
         // Wait up to 5 seconds for the shutdown to complete.
         let fut = self.shutdown(Duration::from_secs(5));
         // Get the current runtime

@@ -31,7 +31,7 @@ class CtxManager:
         self.ctx = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]](
             "baml_ctx", default={current_thread_id(): rt.create_context_manager()}
         )
-        atexit.register(self.rt.flush)
+        atexit.register(self.rt.flush, 5)
 
     def __ctx(self) -> RuntimeContextManager:
         ctx = self.ctx.get()
@@ -87,7 +87,7 @@ class CtxManager:
         span.finish(response, self.__ctx())
 
     def flush(self) -> None:
-        self.rt.flush()
+        self.rt.flush(5)
 
     def on_log_event(
         self, handler: typing.Optional[typing.Callable[[BamlLogEvent], None]]

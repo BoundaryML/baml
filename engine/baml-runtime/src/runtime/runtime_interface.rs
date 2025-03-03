@@ -516,7 +516,6 @@ impl RuntimeInterface for InternalBamlRuntime {
             renderer,
             #[cfg(not(target_arch = "wasm32"))]
             tokio_runtime,
-            collectors,
         })
     }
 }

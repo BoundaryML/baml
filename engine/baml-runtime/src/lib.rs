@@ -18,12 +18,12 @@ pub mod tracingv2;
 pub mod type_builder;
 mod types;
 
+use anyhow::Context;
+use anyhow::Result;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use anyhow::Context;
-use anyhow::Result;
 
 use baml_types::tracing::events::FunctionId;
 use baml_types::BamlMap;
@@ -38,10 +38,10 @@ use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
+use std::sync::OnceLock;
 use tracingv2::collectors::BoundaryStudioCollector;
 use tracingv2::collectors::BoundaryStudioConfigBuilder;
 use tracingv2::storage::storage::FunctionTrackerTrait;
-use std::sync::OnceLock;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
@@ -79,7 +79,7 @@ pub struct BamlRuntime {
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
     pub async_runtime: Arc<tokio::runtime::Runtime>,
-    pub boundary_collector: Arc<Mutex<Option<Arc<BoundaryStudioCollector>>>>,
+    boundary_collector: Arc<Mutex<Option<Arc<BoundaryStudioCollector>>>>,
 }
 
 impl BamlRuntime {
@@ -92,6 +92,19 @@ impl BamlRuntime {
         let collector = self.async_runtime.block_on(fut)?;
         self.boundary_collector.lock().unwrap().replace(collector);
         Ok(())
+    }
+
+    fn track_function(
+        &self,
+        collectors: &Vec<Arc<Box<dyn FunctionTrackerTrait>>>,
+        span: FunctionId,
+    ) {
+        for collector in collectors.iter() {
+            collector.track_function(span.clone());
+        }
+        if let Some(collector) = self.boundary_collector.lock().unwrap().clone() {
+            collector.track_function(span);
+        }
     }
 
     pub fn env_vars(&self) -> &HashMap<String, String> {
@@ -249,9 +262,13 @@ impl BamlRuntime {
             .unwrap();
 
         if let Some(span) = span.clone() {
-            if let Some(collector) = collector {
-                collector.track_function(FunctionId(span.clone().span_id.to_string()));
-            }
+            self.track_function(
+                &match collector {
+                    Some(c) => vec![c],
+                    None => vec![],
+                },
+                FunctionId(span.span_id.to_string()),
+            );
         }
 
         let run_to_response = || async {
@@ -268,7 +285,7 @@ impl BamlRuntime {
                 rctx_stream,
                 #[cfg(not(target_arch = "wasm32"))]
                 self.async_runtime.clone(),
-                // TODO: collectors here?
+                // TODO: Collectors?
                 vec![],
             )?;
             let (response_res, span_uuid) = stream.run(on_event, ctx, None, None).await;
@@ -362,11 +379,10 @@ impl BamlRuntime {
         let span = self.tracer.start_span(&function_name, ctx, params);
 
         if let Some(span) = span.clone() {
-            if let Some(collectors) = collectors {
-                for collector in collectors.iter() {
-                    collector.track_function(FunctionId(span.clone().span_id.to_string()));
-                }
-            }
+            self.track_function(
+                &collectors.unwrap_or_default(),
+                FunctionId(span.span_id.to_string()),
+            );
         }
 
         let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id)) {
@@ -612,8 +628,12 @@ impl ExperimentalTracingInterface for BamlRuntime {
         }
     }
 
-    fn flush(&self) -> Result<()> {
-        self.tracer.flush()
+    fn flush(&self, timeout_duration: std::time::Duration) -> Result<()> {
+        self.tracer.flush()?;
+        match self.boundary_collector.lock().unwrap().clone() {
+            Some(c) => Ok(self.async_runtime.block_on(c.flush(timeout_duration))),
+            None => Ok(()),
+        }
     }
 
     fn drain_stats(&self) -> InnerTraceStats {
