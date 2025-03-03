@@ -18,6 +18,11 @@ impl<'db> TypeAliasWalker<'db> {
         self.db.ast[self.id].identifier.span()
     }
 
+    /// Identifier of the type alias.
+    pub fn identifier(&self) -> &Identifier {
+        &self.db.ast[self.id].identifier
+    }
+
     /// Returns the field type that the alias points to.
     pub fn target(&self) -> &'db FieldType {
         &self.db.ast[self.id].value
