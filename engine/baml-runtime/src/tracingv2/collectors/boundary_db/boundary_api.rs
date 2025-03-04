@@ -34,13 +34,13 @@ impl ApiEndpoint for SourceHandshake {
 
 pub struct GetBamlSrcUploadStatus;
 
-/// GET /v1/baml-src/upload
+/// POST /v1/baml-src/get-upload-status
 impl ApiEndpoint for GetBamlSrcUploadStatus {
     type Request = GetBamlSrcUploadStatusRequest;
     type Response = GetBamlSrcUploadStatusResponse;
 
     fn path(&self) -> String {
-        format!("v1/baml-src/upload")
+        format!("v1/baml-src/get-upload-status")
     }
 }
 
