@@ -83,10 +83,6 @@ pub struct BamlRuntime {
 }
 
 impl BamlRuntime {
-    pub fn create_hash(&self) -> String {
-        self.inner.create_hash()
-    }
-
     pub fn create_boundary_collector(&self, config: BoundaryStudioConfigBuilder) -> Result<()> {
         let fut = BoundaryStudioCollector::new(&self, config);
         let collector = self.async_runtime.block_on(fut)?;
@@ -197,6 +193,11 @@ impl BamlRuntime {
 
     #[cfg(feature = "internal")]
     pub fn internal(&self) -> &impl InternalRuntimeInterface {
+        &self.inner
+    }
+
+    #[cfg(feature = "internal")]
+    pub fn boundary_cloud_interface(&self) -> &impl runtime_interface::BoundaryCloudInterface {
         &self.inner
     }
 

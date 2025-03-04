@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
 use crate::internal::llm_client::LLMResponse;
+use crate::runtime_interface::BoundaryCloudInterface;
 use crate::tracingv2::storage::storage::{FunctionTrackerTrait, BAML_TRACER};
 use crate::type_builder::TypeBuilder;
 use crate::RuntimeContextManager;
@@ -124,6 +125,12 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 .or_try_insert_with(inserter)?;
             Ok(policy_ref.value().clone())
         }
+    }
+}
+
+impl BoundaryCloudInterface for InternalBamlRuntime {
+    fn to_boundary_upload_request(&self, project_id: String) -> baml_types::rpc::upload_baml_src::UploadBamlSrcRequest {
+        self.ir.to_boundary_upload_request(project_id)
     }
 }
 

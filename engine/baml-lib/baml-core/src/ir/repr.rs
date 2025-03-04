@@ -60,10 +60,6 @@ pub struct Walker<'ir, I> {
 }
 
 impl IntermediateRepr {
-    pub fn create_hash(&self) -> String {
-        "PLACE_HOLDER_HASH".to_string()
-    }
-
     pub fn create_empty() -> IntermediateRepr {
         IntermediateRepr {
             enums: vec![],

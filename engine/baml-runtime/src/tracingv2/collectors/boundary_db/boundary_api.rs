@@ -11,26 +11,6 @@ use thiserror::Error;
 // ------------------------------------------------------------
 use serde::Deserialize;
 
-#[derive(Debug, Deserialize)]
-pub struct SourceHandshakeResponse {
-    pub project_name: String,
-    pub source_exists: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SourceCodeHandshakeRequest {
-    pub source_hash: String,
-}
-
-pub struct SourceHandshake;
-
-impl ApiEndpoint for SourceHandshake {
-    type Request = SourceCodeHandshakeRequest;
-    type Response = SourceHandshakeResponse;
-    fn path(&self) -> String {
-        format!("project/handshake")
-    }
-}
 
 pub struct GetBamlSrcUploadStatus;
 

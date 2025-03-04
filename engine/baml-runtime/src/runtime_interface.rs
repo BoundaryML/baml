@@ -177,3 +177,7 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContextManager,
     ) -> Result<Option<TypeBuilder>>;
 }
+
+pub trait BoundaryCloudInterface {
+    fn to_boundary_upload_request(&self, project_id: String) -> baml_types::rpc::upload_baml_src::UploadBamlSrcRequest;
+}

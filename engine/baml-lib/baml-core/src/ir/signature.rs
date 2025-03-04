@@ -7,11 +7,8 @@ mod test_case;
 mod client;
 mod function;
 mod type_alias;
-#[cfg(test)]
-mod test;
 mod retry_policy;
 mod runtime;
-pub use runtime::{MerkleTree};
 /// Used to identify unique signatures of types.
 
 trait Signature {

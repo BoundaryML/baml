@@ -361,7 +361,7 @@ impl BamlRuntime {
 
     #[napi]
     pub fn flush(&mut self, _env: Env) -> napi::Result<()> {
-        self.inner.flush().map_err(from_anyhow_error)
+        self.inner.flush(std::time::Duration::from_secs(10)).map_err(from_anyhow_error)
     }
 
     #[napi]

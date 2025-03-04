@@ -23,8 +23,8 @@ fn compute_signature(src: &str) -> Result<(MerkleTree, HashMap<String, MerkleTre
 
 #[test]
 fn test_signature() -> Result<()> {
-    const BAML_SRC_BEFORE: &str = include_str!("test_data/test_before.baml");
-    const BAML_SRC_AFTER: &str = include_str!("test_data/test_after.baml");
+    const BAML_SRC_BEFORE: &str = include_str!("../test_data/test_before.baml");
+    const BAML_SRC_AFTER: &str = include_str!("../test_data/test_after.baml");
 
     // compute the signature for the before and after
     let before_signature = compute_signature(BAML_SRC_BEFORE)?;

@@ -1,6 +1,7 @@
 mod boundary_api;
 
 use anyhow::Result;
+use baml_types::rpc;
 use boundary_api::ApiClient;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -8,6 +9,7 @@ use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
 use tokio::time::{sleep, timeout};
 
+use crate::runtime_interface::BoundaryCloudInterface;
 use crate::TOKIO_SINGLETON;
 use crate::{
     tracingv2::storage::storage::{FunctionTrackerTrait, BAML_TRACER},
@@ -98,25 +100,20 @@ impl BoundaryStudioConfigBuilder {
             &self.project_id,
             Some(self.api_key),
         );
-        return Ok(BoundaryStudioConfig {
-            project_name: "PLACEHOLDER".to_string(),
-            api_client,
-        });
 
-        let data = boundary_api::SourceCodeHandshakeRequest {
-            source_hash: runtime.create_hash(),
-        };
+        let baml_src_blob = runtime.boundary_cloud_interface().to_boundary_upload_request(self.project_id.clone());
+
+        
         let project_info = api_client
-            .post(boundary_api::SourceHandshake, &data)
+            .post(boundary_api::GetBamlSrcUploadStatus, &baml_src_blob.to_get_baml_src_upload_status_request())
             .await?;
 
-        if !project_info.source_exists {
-            // TODO: upload source code to boundary
-            log::warn!("Source code not found in Boundary Studio. Uploading... <TODO>");
+        if matches!(project_info.status, rpc::upload_baml_src::BamlSrcUploadStatus::DoesNotExist) {
+            api_client.post(boundary_api::UploadBamlSrc, &baml_src_blob).await?;
         }
 
         Ok(BoundaryStudioConfig {
-            project_name: project_info.project_name,
+            project_name: "PLACEHOLDER_PROJECT_NAME".to_string(),
             api_client,
         })
     }
