@@ -423,14 +423,14 @@ impl RuntimeInterface for InternalBamlRuntime {
                 callsite: function_name.clone(),
                 verbosity: TraceLevel::Info,
                 content: TraceData::FunctionStart(FunctionStart {
-                    name: function_name.clone(),
-                    // TODO:
+                    function_id: format!("{}#123abc456", function_name),
+                    function_display_name: function_name.clone(),
                     args: vec![],
                     //  TODO!
-                    options: BamlOptions {
+                    options: Some(BamlOptions {
                         type_builder: None,
                         client_registry: None,
-                    },
+                    }),
                 }),
                 // TODO: send separately?
                 tags: Default::default(),
@@ -463,6 +463,8 @@ impl RuntimeInterface for InternalBamlRuntime {
                 callsite: function_name.clone(),
                 verbosity: TraceLevel::Info,
                 content: TraceData::FunctionEnd(FunctionEnd {
+                    function_id: format!("{}#123abc456", function_name),
+                    function_display_name: function_name.clone(),
                     // TODO: add the result here
                     result: Ok(baml_types::BamlValue::Null),
                 }),

@@ -1,11 +1,14 @@
 use std::{collections::HashMap, sync::Arc};
 
-use baml_types::tracing::events::{FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse, TraceData};
+use baml_types::tracing::events::{
+    FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest,
+    LoggedLLMResponse, TraceData,
+};
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
 
-use crate::tracingv2::storage::TraceStorage;
 use super::models::*;
+use crate::tracingv2::storage::TraceStorage;
 
 /// Global (singleton) trace storage.
 static FUNCTION_LOG_INNER_CACHE: Lazy<Mutex<FunctionLogInnerCache>> =
@@ -25,9 +28,11 @@ struct FunctionLogInnerCache {
     storage: Arc<Mutex<TraceStorage>>,
 }
 
-
 pub fn drop_function_log_inner(id: &FunctionId) {
-    FUNCTION_LOG_INNER_CACHE.lock().unwrap().drop_function_id(id);
+    FUNCTION_LOG_INNER_CACHE
+        .lock()
+        .unwrap()
+        .drop_function_id(id);
 }
 
 /// Convert a `web_time::SystemTime` to i64 milliseconds since UNIX epoch.
@@ -38,14 +43,12 @@ fn system_time_to_utc_ms(st: &web_time::SystemTime) -> i64 {
     dur.as_millis() as i64
 }
 
-
 fn parse_llm_client_and_provider(req: Option<&Arc<LoggedLLMRequest>>) -> (String, String) {
     match req {
         Some(r) => (r.client_name.clone(), r.client_provider.clone()),
         None => ("".into(), "".into()),
     }
 }
-
 
 /// A helper structure for building an LLM call from multiple events sharing the same request_id.
 #[derive(Default, Debug)]
@@ -58,7 +61,6 @@ struct CallAccumulator {
     pub timestamp_first_seen: Option<i64>,
     pub timestamp_last_seen: Option<i64>,
 }
-
 
 impl FunctionLogInnerCache {
     pub fn drop_function_id(&self, id: &FunctionId) {
@@ -163,7 +165,7 @@ impl FunctionLogInnerCache {
 
         // If we never found a FunctionStart, skip building a log.
         let start_ev = function_start.as_ref()?;
-        let fname = start_ev.name.clone();
+        let fname = start_ev.function_display_name.clone();
 
         let start_ms = function_start_time.unwrap_or(0);
         let end_ms = function_end_time;

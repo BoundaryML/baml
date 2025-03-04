@@ -112,14 +112,14 @@ impl FunctionResultStream {
                 callsite: self.function_name.clone(),
                 verbosity: TraceLevel::Info,
                 content: TraceData::FunctionStart(FunctionStart {
-                    name: self.function_name.clone(),
-                    // TODO:
+                    function_id: format!("{}#123abc456", self.function_name),
+                    function_display_name: self.function_name.clone(),
                     args: vec![],
                     //  TODO!
-                    options: BamlOptions {
+                    options: Some(BamlOptions {
                         type_builder: None,
                         client_registry: None,
-                    },
+                    }),
                 }),
                 // TODO: send separately?
                 tags: Default::default(),
@@ -175,6 +175,8 @@ impl FunctionResultStream {
                         callsite: self.function_name.clone(),
                         verbosity: TraceLevel::Info,
                         content: TraceData::FunctionEnd(FunctionEnd {
+                            function_id: format!("{}#123abc456", self.function_name),
+                            function_display_name: self.function_name.clone(),
                             result: Ok(baml_types::BamlValue::Null),
                         }),
                         tags: Default::default(),
@@ -196,6 +198,8 @@ impl FunctionResultStream {
                         callsite: self.function_name.clone(),
                         verbosity: TraceLevel::Info,
                         content: TraceData::FunctionEnd(FunctionEnd {
+                            function_id: format!("{}#123abc456", self.function_name),
+                            function_display_name: self.function_name.clone(),
                             result: Err(anyhow::anyhow!("{}", e)),
                         }),
                         tags: Default::default(),

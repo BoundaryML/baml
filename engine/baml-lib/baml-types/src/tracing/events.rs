@@ -92,13 +92,16 @@ pub struct BamlOptions {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FunctionStart {
-    pub name: String,
-    pub args: Vec<BamlValue>,
-    pub options: BamlOptions,
+    pub function_id: String,
+    pub function_display_name: String,
+    pub args: Vec<(String, BamlValue)>,
+    pub options: Option<BamlOptions>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FunctionEnd {
+    pub function_id: String,
+    pub function_display_name: String,
     #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
     pub result: Result<BamlValue, anyhow::Error>,
     // Everything below is duplicated from the start event

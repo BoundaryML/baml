@@ -6,7 +6,8 @@ use serde::{Deserialize, Serialize};
 use crate::tracing::events::TraceEvent;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TraceEventBatch {
+pub struct StudioTraceEventBatch {
+    pub project_id: String,
     pub events: Vec<Arc<TraceEvent>>,
 }
 
@@ -78,8 +79,7 @@ pub enum BamlSrcBlob {
 #[serde(tag = "version")]
 pub enum TraceEventUploadRequest {
     V1 {
-        project_id: String,
-        trace_event_batch: TraceEventBatch,
+        trace_event_batch: StudioTraceEventBatch,
     },
 }
 

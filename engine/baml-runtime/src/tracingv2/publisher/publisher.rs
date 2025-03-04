@@ -1,4 +1,4 @@
-use baml_types::rpc::{TraceEventBatch, TraceEventUploadRequest};
+use baml_types::rpc::{StudioTraceEventBatch, TraceEventUploadRequest};
 use baml_types::tracing::events::TraceEvent;
 use core::time::Duration;
 use futures::StreamExt;
@@ -91,59 +91,7 @@ impl TracePublisher {
     ///   1. Serialize the events into JSON.
     ///   2. Append the JSON to a file (using async file I/O on macOS).
     ///   3. Post the JSON to an HTTP API with up to 3 retries.
-    async fn process_batch(&self, batch: Vec<Arc<TraceEvent>>) {
-        // log::info!("Processing batch {:#?}", batch);
-        // Assemble the upload request structure.
-        let upload_request = TraceEventUploadRequest::V1 {
-            project_id: "project123".to_string(),
-            trace_event_batch: TraceEventBatch {
-                events: batch.iter().map(|e| e.clone()).collect(),
-            },
-        };
-
-        // Serialize to JSON.
-        #[cfg(not(target_arch = "wasm32"))]
-        if let Ok(json) = serde_json::to_string(&upload_request) {
-            // Write the batch to a file asynchronously.
-            use tokio::fs::OpenOptions;
-            if let Ok(mut file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/trace_events.json")
-                .await
-            {
-                use tokio::io::AsyncWriteExt;
-                if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
-                    log::error!("Failed to write to trace file: {}", e);
-                }
-            }
-        }
-
-        // Upload via HTTP with retry logic.
-        // TODO watch out with time crate
-        // let client = reqwest::Client::new();
-        // let mut retries = 3;
-        // while retries > 0 {
-        //     match client
-        //         .post("https://3vwc8vlts7.execute-api.us-east-1.amazonaws.com/v1/baml-traces")
-        //         .json(&upload_request)
-        //         .send()
-        //         .await
-        //     {
-        //         Ok(response) => {
-        //             log::info!("Upload completed with status {}", response.status());
-        //             break;
-        //         }
-        //         Err(e) => {
-        //             log::error!("Upload failed: {}", e);
-        //             retries -= 1;
-        //             if retries > 0 {
-        //                 time::sleep(Duration::from_secs(1)).await;
-        //             }
-        //         }
-        //     }
-        // }
-    }
+    async fn process_batch(&self, _batch: Vec<Arc<TraceEvent>>) {}
 }
 
 // Note, the library we are using doesnt seem to work well for flushing in Node
