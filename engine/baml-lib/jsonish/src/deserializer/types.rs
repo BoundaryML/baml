@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use baml_types::{
-    BamlMap, BamlMedia, BamlValue, BamlValueWithMeta, Constraint, FieldType, JinjaExpression,
-    TypeValue,
+    BamlMap, BamlMedia, BamlValue, BamlValueWithConcreteType, BamlValueWithMeta, Constraint,
+    FieldType, JinjaExpression, TypeValue,
 };
 use serde_json::json;
 use strsim::jaro;
@@ -558,6 +558,54 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<(String, JinjaExpression
                 c,
             ),
             Null(_) => BamlValueWithMeta::Null(c),
+        }
+    }
+}
+
+impl Into<BamlValueWithConcreteType> for BamlValueWithFlags {
+    fn into(self) -> BamlValueWithConcreteType {
+        match self {
+            BamlValueWithFlags::String(v) => BamlValueWithConcreteType::String {
+                r#type: FieldType::string(),
+                data: v.value,
+            },
+            BamlValueWithFlags::Int(v) => BamlValueWithConcreteType::Int {
+                r#type: FieldType::int(),
+                data: v.value,
+            },
+            BamlValueWithFlags::Float(v) => BamlValueWithConcreteType::Float {
+                r#type: FieldType::float(),
+                data: v.value,
+            },
+            BamlValueWithFlags::Bool(v) => BamlValueWithConcreteType::Bool {
+                r#type: FieldType::bool(),
+                data: v.value,
+            },
+            BamlValueWithFlags::List(_, concrete_type, v) => BamlValueWithConcreteType::List {
+                r#type: concrete_type,
+                data: v.into_iter().map(|v| v.into()).collect(),
+            },
+            BamlValueWithFlags::Map { map, r#type, .. } => BamlValueWithConcreteType::Map {
+                r#type,
+                data: map.into_iter().map(|(k, (_, v))| (k, v.into())).collect(),
+            },
+            BamlValueWithFlags::Enum(enum_name, v) => BamlValueWithConcreteType::Enum {
+                r#type: FieldType::r#enum(&enum_name),
+                data: v.value,
+            },
+            BamlValueWithFlags::Class(class_name, _, fields) => BamlValueWithConcreteType::Class {
+                r#type: FieldType::class(&class_name),
+                data: fields.into_iter().map(|(k, v)| (k, v.into())).collect(),
+            },
+            BamlValueWithFlags::Null(v) => BamlValueWithConcreteType::Null {
+                r#type: FieldType::null(),
+                data: (),
+            },
+            BamlValueWithFlags::Media(v) => BamlValueWithConcreteType::Media {
+                // TODO: media type serialization does not yet work
+                r#type: FieldType::string(),
+                data: "media-placeholder".to_string(),
+            },
         }
     }
 }

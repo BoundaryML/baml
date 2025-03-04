@@ -4,13 +4,12 @@ use anyhow::Result;
 
 use crate::{
     deserializer::{
-        coercer::TypeReifier,
         deserialize_flags::{DeserializerConditions, Flag},
         types::BamlValueWithFlags,
     },
     jsonish,
 };
-use baml_types::{BamlMap, CompletionState, FieldType, LiteralValue, TypeValue};
+use baml_types::{BamlMap, CompletionState, FieldType, LiteralValue, TypeReifier, TypeValue};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 

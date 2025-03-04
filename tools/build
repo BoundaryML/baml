@@ -194,7 +194,8 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
       # command="${command} && BAML_LOG=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_aws_bedrock_invalid_region"
-      command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
+      command="${command} && BAML_LOG=trace infisical run --env=test -- uv run pytest -s tests/test_boundary_studio.py"
+      # command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

@@ -1,8 +1,11 @@
 use anyhow::Result;
 
-use baml_types::tracing::events::{
-    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
-    TraceLevel,
+use baml_types::{
+    tracing::events::{
+        BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
+        TraceLevel,
+    },
+    BamlValueWithConcreteType,
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
@@ -114,8 +117,15 @@ impl FunctionResultStream {
                 content: TraceData::FunctionStart(FunctionStart {
                     function_id: format!("{}#123abc456", self.function_name),
                     function_display_name: self.function_name.clone(),
-                    args: vec![],
-                    //  TODO!
+                    args: local_params
+                        .iter()
+                        .map(|(k, v)| -> (String, BamlValueWithConcreteType) {
+                            (k.clone(), v.clone().into())
+                        })
+                        .map(|(k, v)| -> (String, serde_json::Value) {
+                            (k, serde_json::to_value(v).unwrap())
+                        })
+                        .collect::<Vec<_>>(),
                     options: Some(BamlOptions {
                         type_builder: None,
                         client_registry: None,
@@ -177,7 +187,12 @@ impl FunctionResultStream {
                         content: TraceData::FunctionEnd(FunctionEnd {
                             function_id: format!("{}#123abc456", self.function_name),
                             function_display_name: self.function_name.clone(),
-                            result: Ok(baml_types::BamlValue::Null),
+                            result: if let Some(Ok(result)) = result.parsed() {
+                                let ok: BamlValueWithConcreteType = result.clone().0.value().into();
+                                Ok(serde_json::to_value(ok).expect("Failed to serialize result"))
+                            } else {
+                                Err(anyhow::anyhow!("Function failed - known error type"))
+                            },
                         }),
                         tags: Default::default(),
                     };

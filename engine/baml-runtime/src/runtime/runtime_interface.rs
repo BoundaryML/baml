@@ -32,7 +32,7 @@ use baml_types::tracing::events::{
     TraceLevel,
 };
 
-use baml_types::{BamlMap, BamlValue, Constraint, EvaluationContext};
+use baml_types::{BamlMap, BamlValue, BamlValueWithConcreteType, Constraint, EvaluationContext};
 use internal_baml_core::ir::repr::TypeBuilderEntry;
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
@@ -41,6 +41,7 @@ use internal_baml_core::{
 };
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use serde_json::json;
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
     // Gets a top-level client/strategy by name
@@ -425,8 +426,18 @@ impl RuntimeInterface for InternalBamlRuntime {
                 content: TraceData::FunctionStart(FunctionStart {
                     function_id: format!("{}#123abc456", function_name),
                     function_display_name: function_name.clone(),
-                    args: vec![],
-                    //  TODO!
+                    args: match baml_args.as_map() {
+                        Some(args) => args
+                            .iter()
+                            .map(|(k, v)| -> (String, BamlValueWithConcreteType) {
+                                (k.clone(), v.clone().into())
+                            })
+                            .map(|(k, v)| -> (String, serde_json::Value) {
+                                (k, serde_json::to_value(v).unwrap())
+                            })
+                            .collect::<Vec<_>>(),
+                        None => vec![],
+                    },
                     options: Some(BamlOptions {
                         type_builder: None,
                         client_registry: None,
@@ -466,7 +477,17 @@ impl RuntimeInterface for InternalBamlRuntime {
                     function_id: format!("{}#123abc456", function_name),
                     function_display_name: function_name.clone(),
                     // TODO: add the result here
-                    result: Ok(baml_types::BamlValue::Null),
+                    result: match history.last() {
+                        Some((_, _, result)) => {
+                            if let Some(Ok(result)) = result {
+                                let ok: BamlValueWithConcreteType = result.clone().0.value().into();
+                                Ok(serde_json::to_value(ok).expect("Failed to serialize result"))
+                            } else {
+                                Err(anyhow::anyhow!("Function failed - known error type"))
+                            }
+                        }
+                        None => Err(anyhow::anyhow!("Function failed - no orchestrator output")),
+                    },
                 }),
                 tags: Default::default(),
             }));

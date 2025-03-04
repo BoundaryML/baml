@@ -1,10 +1,9 @@
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
 
-use baml_types::CompletionState;
+use baml_types::{CompletionState, TypeReifier};
 
 use crate::deserializer::{
-    coercer::TypeReifier,
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };

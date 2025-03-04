@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::BamlValue;
 use anyhow::Result;
 use serde::{Deserialize, Serialize, Serializer};
 
@@ -94,7 +93,7 @@ pub struct BamlOptions {
 pub struct FunctionStart {
     pub function_id: String,
     pub function_display_name: String,
-    pub args: Vec<(String, BamlValue)>,
+    pub args: Vec<(String, serde_json::Value)>,
     pub options: Option<BamlOptions>,
 }
 
@@ -103,7 +102,7 @@ pub struct FunctionEnd {
     pub function_id: String,
     pub function_display_name: String,
     #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
-    pub result: Result<BamlValue, anyhow::Error>,
+    pub result: Result<serde_json::Value, anyhow::Error>,
     // Everything below is duplicated from the start event
     // to deal with the case where the log is dropped.
     // P2: as we can for now assume logs are not dropped,
