@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::{FieldType, LiteralValue, TypeValue};
+
 // TODO: version handling should be non-exhaustive for all of these
 // clients need to say "i can only handle v1 responses"
 
@@ -38,10 +40,10 @@ pub struct UploadBamlSrcResponse {
 
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BamlTypeId(pub String);
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BamlTypeReference {
     Null,
@@ -72,12 +74,56 @@ pub enum BamlTypeReference {
     Literal(BamlLiteralTypeReference),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl From<FieldType> for BamlTypeReference {
+    fn from(value: FieldType) -> Self {
+        match value {
+            FieldType::Primitive(TypeValue::Null) => BamlTypeReference::Null,
+            FieldType::Primitive(TypeValue::String) => BamlTypeReference::String,
+            FieldType::Primitive(TypeValue::Int) => BamlTypeReference::Int,
+            FieldType::Primitive(TypeValue::Float) => BamlTypeReference::Float,
+            FieldType::Primitive(TypeValue::Bool) => BamlTypeReference::Bool,
+            FieldType::Class(class_name) => BamlTypeReference::Class {
+                type_id: BamlTypeId(class_name.to_string()),
+            },
+            FieldType::Enum(enum_name) => BamlTypeReference::Enum {
+                type_id: BamlTypeId(enum_name.to_string()),
+            },
+            FieldType::List(inner) => BamlTypeReference::Array {
+                items: Box::new((*inner).into()),
+            },
+            FieldType::Map(key, value) => BamlTypeReference::Map {
+                key: Box::new((*key).into()),
+                value: Box::new((*value).into()),
+            },
+            // TODO: union flattening
+            FieldType::Union(union) => BamlTypeReference::Union {
+                any_of: union.into_iter().map(|t| t.into()).collect(),
+            },
+            FieldType::Literal(literal) => BamlTypeReference::Literal(literal.into()),
+            FieldType::Optional(inner) => BamlTypeReference::Union {
+                any_of: vec![BamlTypeReference::Null, (*inner).into()],
+            },
+            _ => unimplemented!("from(FieldType) not implemented for {:?}", value),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(tag = "literal_type", content = "literal", rename_all = "snake_case")]
 pub enum BamlLiteralTypeReference {
     String(String),
     Int(i64),
     Bool(bool),
+}
+
+impl From<LiteralValue> for BamlLiteralTypeReference {
+    fn from(value: LiteralValue) -> Self {
+        match value {
+            LiteralValue::String(s) => BamlLiteralTypeReference::String(s),
+            LiteralValue::Int(i) => BamlLiteralTypeReference::Int(i),
+            LiteralValue::Bool(b) => BamlLiteralTypeReference::Bool(b),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
