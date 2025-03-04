@@ -1,5 +1,9 @@
+use baml_types::rpc::{
+    GetBamlSrcUploadStatusRequest, GetBamlSrcUploadStatusResponse, UploadBamlSrcRequest,
+    UploadBamlSrcResponse,
+};
 use reqwest::Client;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 use thiserror::Error;
 
 // ------------------------------------------------------------
@@ -28,7 +32,29 @@ impl ApiEndpoint for SourceHandshake {
     }
 }
 
+pub struct GetBamlSrcUploadStatus;
 
+/// GET /v1/baml-src/upload
+impl ApiEndpoint for GetBamlSrcUploadStatus {
+    type Request = GetBamlSrcUploadStatusRequest;
+    type Response = GetBamlSrcUploadStatusResponse;
+
+    fn path(&self) -> String {
+        format!("v1/baml-src/upload")
+    }
+}
+
+pub struct UploadBamlSrc;
+
+/// POST /v1/baml-src/upload
+impl ApiEndpoint for UploadBamlSrc {
+    type Request = UploadBamlSrcRequest;
+    type Response = UploadBamlSrcResponse;
+
+    fn path(&self) -> String {
+        format!("v1/baml-src/upload")
+    }
+}
 
 // ------------------------------------------------------------
 // API Client
@@ -51,7 +77,13 @@ pub struct ApiClient {
 
 impl std::fmt::Debug for ApiClient {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ApiClient(base_url={}, project_id={}, api_key=<exists={}>)", self.base_url, self.project_id, self.api_key.is_some())
+        write!(
+            f,
+            "ApiClient(base_url={}, project_id={}, api_key=<exists={}>)",
+            self.base_url,
+            self.project_id,
+            self.api_key.is_some()
+        )
     }
 }
 
@@ -69,7 +101,6 @@ pub trait ApiEndpoint {
     /// Returns the endpoint path (e.g., "users").
     fn path(&self) -> String;
 }
-
 
 impl ApiClient {
     /// Create a new API client with a base URL and an optional API key.
