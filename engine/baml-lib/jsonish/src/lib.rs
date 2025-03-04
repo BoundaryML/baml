@@ -177,7 +177,7 @@ pub fn from_str(
     allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
     if matches!(target, FieldType::Primitive(TypeValue::String)) {
-        return Ok(BamlValueWithFlags::String(raw_string.to_string().into()));
+        return Ok(BamlValueWithFlags::String((raw_string.to_string(), FieldType::Primitive(TypeValue::String)).into()));
     }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.

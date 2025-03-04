@@ -374,12 +374,14 @@ mod tests {
     fn mk_string(s: &str) -> BamlValueWithFlags {
         BamlValueWithFlags::String(ValueWithFlags {
             value: s.to_string(),
+            r#type: FieldType::Primitive(TypeValue::String),
             flags: DeserializerConditions::default(),
         })
     }
     fn mk_float(s: f64) -> BamlValueWithFlags {
         BamlValueWithFlags::Float(ValueWithFlags {
             value: s,
+            r#type: FieldType::Primitive(TypeValue::Float),
             flags: DeserializerConditions::default(),
         })
     }

@@ -270,6 +270,7 @@ impl BamlValueWithFlags {
 #[derive(Debug, Clone)]
 pub struct ValueWithFlags<T> {
     pub value: T,
+    pub r#type: baml_types::FieldType,
     pub flags: DeserializerConditions,
 }
 
@@ -279,38 +280,40 @@ impl<T> ValueWithFlags<T> {
     }
 }
 
-impl<T> From<T> for ValueWithFlags<T> {
-    fn from(item: T) -> Self {
+impl<T> From<(T, baml_types::FieldType)> for ValueWithFlags<T> {
+    fn from((value, r#type): (T, baml_types::FieldType)) -> Self {
         ValueWithFlags {
-            value: item,
+            value,
+            r#type,
             flags: DeserializerConditions::new(),
         }
     }
 }
 
-impl<T> From<(T, &[Flag])> for ValueWithFlags<T> {
-    fn from((value, flags): (T, &[Flag])) -> Self {
+impl<T> From<((T, baml_types::FieldType), &[Flag])> for ValueWithFlags<T> {
+    fn from(((value, r#type), flags): ((T, baml_types::FieldType), &[Flag])) -> Self {
         let flags = flags
             .iter()
             .fold(DeserializerConditions::new(), |acc, flag| {
                 acc.with_flag(flag.to_owned())
             });
-        ValueWithFlags { value, flags }
+        ValueWithFlags { value, r#type, flags }
     }
 }
 
-impl<T> From<(T, Flag)> for ValueWithFlags<T> {
-    fn from((value, flag): (T, Flag)) -> Self {
+impl<T> From<((T, baml_types::FieldType), Flag)> for ValueWithFlags<T> {
+    fn from(((value, r#type), flag): ((T, baml_types::FieldType), Flag)) -> Self {
         ValueWithFlags {
             value,
+            r#type,
             flags: DeserializerConditions::new().with_flag(flag),
         }
     }
 }
 
-impl<T> From<(T, DeserializerConditions)> for ValueWithFlags<T> {
-    fn from((value, flags): (T, DeserializerConditions)) -> Self {
-        ValueWithFlags { value, flags }
+impl<T> From<((T, baml_types::FieldType), DeserializerConditions)> for ValueWithFlags<T> {
+    fn from(((value, r#type), flags): ((T, baml_types::FieldType), DeserializerConditions)) -> Self {
+        ValueWithFlags { value, r#type, flags }
     }
 }
 

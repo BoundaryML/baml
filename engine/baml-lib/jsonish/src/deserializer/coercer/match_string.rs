@@ -119,7 +119,7 @@ fn try_match_only_once(
         ));
     };
 
-    Ok((string_match.to_string(), flags).into())
+    Ok(((string_match.to_string(), target.clone()), flags).into())
 }
 
 /// Heuristic string match algorithm.
