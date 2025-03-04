@@ -1,10 +1,14 @@
 pub mod upload_baml_src;
-use std::sync::Arc;
 
-use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
+pub use upload_baml_src::{
+    GetBamlSrcUploadStatusRequest, GetBamlSrcUploadStatusResponse, UploadBamlSrcRequest,
+    UploadBamlSrcResponse,
+};
 
 use crate::tracing::events::TraceEvent;
+use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct StudioTraceEventBatch {
@@ -13,32 +17,23 @@ pub struct StudioTraceEventBatch {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version")]
-pub enum BamlSrcCreateUploadUrlRequest {
-    V1 {
-        project_id: String,
-        fingerprint: String,
-    },
+pub struct BamlSrcCreateUploadUrlRequest {
+    pub project_id: String,
+    pub baml_src_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version")]
-pub enum BamlSrcCreateUploadUrlResponse {
-    V1 {
-        project_id: String,
-        fingerprint: String,
-        upload_url: String,
-    },
+pub struct BamlSrcCreateUploadUrlResponse {
+    pub project_id: String,
+    pub baml_src_id: String,
+    pub upload_url: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version")]
-pub enum BamlSrcBlob {
-    V1 {
-        project_id: String,
-        fingerprint: String,
-        baml_src: IndexMap<String, String>,
-    },
+pub struct BamlSrcBlob {
+    pub project_id: String,
+    pub baml_src_id: String,
+    pub baml_src: IndexMap<String, String>,
 }
 
 // ------------------------------------------------------------------------------------------------

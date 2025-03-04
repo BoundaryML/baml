@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BamlSrcUploadStatus {
+    None,
     Pending,
     Completed,
     Failed,
@@ -40,7 +41,7 @@ pub struct UploadBamlSrcResponse {
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BamlTypeId(String);
+pub struct BamlTypeId(pub String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -87,6 +88,16 @@ pub enum BamlTypeDefinition {
     Class(BamlClassDefinition),
     Enum(BamlEnumDefinition),
     TypeAlias(BamlTypeAliasDefinition),
+}
+
+impl BamlTypeDefinition {
+    pub fn type_id(&self) -> &BamlTypeId {
+        match self {
+            BamlTypeDefinition::Class(definition) => &definition.type_id,
+            BamlTypeDefinition::Enum(definition) => &definition.type_id,
+            BamlTypeDefinition::TypeAlias(definition) => &definition.type_id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
