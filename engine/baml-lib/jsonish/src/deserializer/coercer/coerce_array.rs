@@ -3,10 +3,10 @@ use internal_baml_core::ir::FieldType;
 
 use baml_types::CompletionState;
 
-use crate::{deserializer::{
+use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
-}};
+};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 

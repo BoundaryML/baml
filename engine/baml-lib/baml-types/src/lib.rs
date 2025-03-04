@@ -6,6 +6,7 @@ pub mod rpc;
 pub mod tracing;
 
 pub mod baml_value;
+pub mod baml_value_with_concrete_type;
 mod field_type;
 mod generator;
 mod value_expr;

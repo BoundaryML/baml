@@ -3,7 +3,7 @@ use crate::Constraint;
 
 mod builder;
 
-#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 pub enum TypeValue {
     String,
     Int,
@@ -46,7 +46,7 @@ impl std::fmt::Display for TypeValue {
 }
 
 /// Subset of [`crate::BamlValue`] allowed for literal type definitions.
-#[derive(serde::Serialize, Debug, Clone, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(serde::Serialize, Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub enum LiteralValue {
     String(String),
     Int(i64),
@@ -74,7 +74,7 @@ impl std::fmt::Display for LiteralValue {
 }
 
 /// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FieldType {
     Primitive(TypeValue),
     Enum(String),
@@ -106,8 +106,12 @@ impl FieldType {
                 names.extend(field_type1.names());
                 names
             }
-            FieldType::Union(field_types) => field_types.iter().flat_map(FieldType::names).collect(),
-            FieldType::Tuple(field_types) => field_types.iter().flat_map(FieldType::names).collect(),
+            FieldType::Union(field_types) => {
+                field_types.iter().flat_map(FieldType::names).collect()
+            }
+            FieldType::Tuple(field_types) => {
+                field_types.iter().flat_map(FieldType::names).collect()
+            }
             FieldType::Optional(field_type) => field_type.names(),
             FieldType::RecursiveTypeAlias(name) => std::collections::HashSet::from([name.clone()]),
             FieldType::WithMetadata { base, .. } => base.names(),
@@ -194,7 +198,7 @@ impl FieldType {
 }
 
 /// Metadata on a type that determines how it behaves under streaming conditions.
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 pub struct StreamingBehavior {
     /// A type with the `done` property will not be visible in a stream until
     /// we are certain that it is completely available (i.e. the parser did

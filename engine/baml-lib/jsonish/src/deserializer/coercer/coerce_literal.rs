@@ -54,9 +54,14 @@ impl TypeCoercer for LiteralValue {
                 let (key, inner_value) = obj.iter().next().unwrap();
                 // only extract value if it's a primitive (not an object or array, hoping to god its fixed)
                 match inner_value {
-                    jsonish::Value::Number(_, _) | jsonish::Value::Boolean(_) | jsonish::Value::String(_, _) => {
+                    jsonish::Value::Number(_, _)
+                    | jsonish::Value::Boolean(_)
+                    | jsonish::Value::String(_, _) => {
                         let mut result = self.coerce(ctx, target, Some(&inner_value))?;
-                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(obj.clone(), completion_state.clone())));
+                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(
+                            obj.clone(),
+                            completion_state.clone(),
+                        )));
                         return Ok(result);
                     }
                     _ => {}
@@ -66,10 +71,13 @@ impl TypeCoercer for LiteralValue {
 
         match literal {
             LiteralValue::Int(literal_int) => {
-                let BamlValueWithFlags::Int(coerced_int) = coerce_int(ctx, target, Some(value))?
+                let BamlValueWithFlags::Int(mut coerced_int) =
+                    coerce_int(ctx, target, Some(value))?
                 else {
                     unreachable!("coerce_int returned a non-integer value");
                 };
+
+                coerced_int.flags.literal_type = Some(self.clone());
 
                 if coerced_int.value() == literal_int {
                     Ok(BamlValueWithFlags::Int(coerced_int))
@@ -79,10 +87,13 @@ impl TypeCoercer for LiteralValue {
             }
 
             LiteralValue::Bool(literal_bool) => {
-                let BamlValueWithFlags::Bool(coerced_bool) = coerce_bool(ctx, target, Some(value))?
+                let BamlValueWithFlags::Bool(mut coerced_bool) =
+                    coerce_bool(ctx, target, Some(value))?
                 else {
                     unreachable!("coerce_bool returned a non-boolean value");
                 };
+
+                coerced_bool.flags.literal_type = Some(self.clone());
 
                 if coerced_bool.value() == literal_bool {
                     Ok(BamlValueWithFlags::Bool(coerced_bool))
@@ -95,7 +106,9 @@ impl TypeCoercer for LiteralValue {
                 // second element is the list of aliases.
                 let candidates = vec![(literal_str.as_str(), vec![literal_str.clone()])];
 
-                let literal_match = match_string(ctx, target, Some(value), &candidates)?;
+                let mut literal_match = match_string(ctx, target, Some(value), &candidates)?;
+
+                literal_match.flags.literal_type = Some(self.clone());
 
                 Ok(BamlValueWithFlags::String(literal_match))
             }
