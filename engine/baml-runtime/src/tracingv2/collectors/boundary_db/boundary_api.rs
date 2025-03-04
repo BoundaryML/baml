@@ -58,7 +58,7 @@ impl ApiEndpoint for UploadBamlSrc {
 
 pub struct UploadTraceEvent;
 
-/// POST /v1/trace-event/upload
+/// POST /v1/baml-trace
 impl ApiEndpoint for UploadTraceEvent {
     type Request = TraceEventUploadRequest;
     type Response = TraceEventUploadResponse;
