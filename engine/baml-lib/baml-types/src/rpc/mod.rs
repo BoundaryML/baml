@@ -39,15 +39,11 @@ pub struct BamlSrcBlob {
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version")]
-pub enum TraceEventUploadRequest {
-    V1 {
-        trace_event_batch: StudioTraceEventBatch,
-    },
+pub struct TraceEventUploadRequest {
+    pub trace_event_batch: StudioTraceEventBatch,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "version")]
-pub enum TraceEventUploadResponse {
-    V1 { project_id: String },
+pub struct TraceEventUploadResponse {
+    pub project_id: String,
 }

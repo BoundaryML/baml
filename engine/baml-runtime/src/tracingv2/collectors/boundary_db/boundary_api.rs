@@ -1,6 +1,6 @@
 use baml_types::rpc::{
-    GetBamlSrcUploadStatusRequest, GetBamlSrcUploadStatusResponse, UploadBamlSrcRequest,
-    UploadBamlSrcResponse,
+    GetBamlSrcUploadStatusRequest, GetBamlSrcUploadStatusResponse, TraceEventUploadRequest,
+    TraceEventUploadResponse, UploadBamlSrcRequest, UploadBamlSrcResponse,
 };
 use reqwest::Client;
 use serde::{de::DeserializeOwned, Serialize};
@@ -53,6 +53,18 @@ impl ApiEndpoint for UploadBamlSrc {
 
     fn path(&self) -> String {
         format!("v1/baml-src/upload")
+    }
+}
+
+pub struct UploadTraceEvent;
+
+/// POST /v1/trace-event/upload
+impl ApiEndpoint for UploadTraceEvent {
+    type Request = TraceEventUploadRequest;
+    type Response = TraceEventUploadResponse;
+
+    fn path(&self) -> String {
+        format!("v1/baml-trace")
     }
 }
 
