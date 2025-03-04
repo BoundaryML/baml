@@ -5,10 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum BamlSrcUploadStatus {
-    None,
-    Pending,
-    Completed,
-    Failed,
+    DoesNotExist,
+    Exists,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
