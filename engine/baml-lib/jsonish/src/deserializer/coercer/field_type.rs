@@ -37,7 +37,10 @@ impl TypeCoercer for FieldType {
                     self.coerce(
                         ctx,
                         target,
-                        Some(&crate::jsonish::Value::String(primitive.clone(), CompletionState::Incomplete)),
+                        Some(&crate::jsonish::Value::String(
+                            primitive.clone(),
+                            CompletionState::Incomplete,
+                        )),
                     )
                 } else {
                     array_helper::coerce_array_to_singular(
@@ -174,17 +177,26 @@ impl DefaultValue for FieldType {
             FieldType::Literal(_) => None,
             FieldType::Class(_) => None,
             FieldType::RecursiveTypeAlias(_) => None,
-            FieldType::List(_) => Some(BamlValueWithFlags::List(get_flags(), Vec::new())),
+            FieldType::List(_) => Some(BamlValueWithFlags::List(
+                get_flags(),
+                self.clone(),
+                Vec::new(),
+            )),
             FieldType::Union(items) => items.iter().find_map(|i| i.default_value(error)),
             FieldType::Primitive(TypeValue::Null) | FieldType::Optional(_) => {
                 Some(BamlValueWithFlags::Null(get_flags()))
             }
-            FieldType::Map(_, _) => Some(BamlValueWithFlags::Map(get_flags(), BamlMap::new())),
+            FieldType::Map(_, _) => Some(BamlValueWithFlags::Map {
+                conditions: get_flags(),
+                r#type: self.clone(),
+                map: BamlMap::new(),
+            }),
             FieldType::Tuple(v) => {
                 let default_values: Vec<_> = v.iter().map(|f| f.default_value(error)).collect();
                 if default_values.iter().all(Option::is_some) {
                     Some(BamlValueWithFlags::List(
                         get_flags(),
+                        self.clone(),
                         default_values.into_iter().map(Option::unwrap).collect(),
                     ))
                 } else {

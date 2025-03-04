@@ -78,6 +78,7 @@ impl TypeCoercer for LiteralValue {
                 };
 
                 coerced_int.flags.literal_type = Some(self.clone());
+                coerced_int.r#type = FieldType::Literal(self.clone());
 
                 if coerced_int.value() == literal_int {
                     Ok(BamlValueWithFlags::Int(coerced_int))
@@ -94,6 +95,7 @@ impl TypeCoercer for LiteralValue {
                 };
 
                 coerced_bool.flags.literal_type = Some(self.clone());
+                coerced_bool.r#type = FieldType::Literal(self.clone());
 
                 if coerced_bool.value() == literal_bool {
                     Ok(BamlValueWithFlags::Bool(coerced_bool))
@@ -109,6 +111,7 @@ impl TypeCoercer for LiteralValue {
                 let mut literal_match = match_string(ctx, target, Some(value), &candidates)?;
 
                 literal_match.flags.literal_type = Some(self.clone());
+                literal_match.r#type = FieldType::Literal(self.clone());
 
                 Ok(BamlValueWithFlags::String(literal_match))
             }

@@ -4,6 +4,7 @@ use anyhow::Result;
 
 use crate::{
     deserializer::{
+        coercer::TypeReifier,
         deserialize_flags::{DeserializerConditions, Flag},
         types::BamlValueWithFlags,
     },
@@ -65,7 +66,9 @@ pub(super) fn coerce_map(
 
     match &value {
         jsonish::Value::Object(obj, completion_state) => {
+            let mut key_types = vec![];
             let mut items = BamlMap::new();
+
             for (idx, (key, value)) in obj.iter().enumerate() {
                 let coerced_value =
                     match value_type.coerce(&ctx.enter_scope(key), value_type, Some(value)) {
@@ -86,11 +89,15 @@ pub(super) fn coerce_map(
                 // is also checked at `coerce_arg` in
                 // baml-lib/baml-core/src/ir/ir_helpers/to_baml_arg.rs
                 // TODO: Is it Ok that we assume keys are complete?
-                let key_as_jsonish = jsonish::Value::String(key.to_owned(), CompletionState::Complete);
+                let key_as_jsonish =
+                    jsonish::Value::String(key.to_owned(), CompletionState::Complete);
                 match key_type.coerce(ctx, key_type, Some(&key_as_jsonish)) {
-                    Ok(_) => {
+                    Ok(resolved_key) => {
+                        key_types.push(resolved_key.concrete_type().clone());
                         // Hack to avoid cloning the key twice.
-                        let jsonish::Value::String(owned_key, CompletionState::Complete) = key_as_jsonish else {
+                        let jsonish::Value::String(owned_key, CompletionState::Complete) =
+                            key_as_jsonish
+                        else {
                             unreachable!("key_as_jsonish is defined as jsonish::Value::String");
                         };
 
@@ -104,10 +111,30 @@ pub(super) fn coerce_map(
                     Err(e) => flags.add_flag(Flag::MapKeyParseError(idx, e)),
                 }
             }
+
+            let concrete_key_type =
+                match key_types.into_iter().collect::<TypeReifier>().reified_type {
+                    Some(t) => Box::new(t),
+                    None => key_type.clone(),
+                };
+            let concrete_value_type = match items
+                .values()
+                .map(|(_, v)| v.concrete_type())
+                .collect::<TypeReifier>()
+                .reified_type
+            {
+                Some(t) => Box::new(t),
+                None => value_type.clone(),
+            };
+
             if *completion_state == CompletionState::Incomplete {
                 flags.add_flag(Flag::Incomplete);
             }
-            Ok(BamlValueWithFlags::Map(flags, items))
+            Ok(BamlValueWithFlags::Map {
+                conditions: flags,
+                r#type: FieldType::Map(concrete_key_type, concrete_value_type),
+                map: items,
+            })
         }
         // TODO: first map in an array that matches
         _ => Err(ctx.error_unexpected_type(map_target, value)),

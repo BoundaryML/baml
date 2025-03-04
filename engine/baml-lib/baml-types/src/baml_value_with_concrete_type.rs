@@ -7,6 +7,9 @@ pub type BamlValueWithConcreteType = BamlValueWithMeta<FieldType>;
 impl From<BamlValue> for BamlValueWithConcreteType {
     fn from(value: BamlValue) -> Self {
         match value {
+            BamlValue::Null => {
+                BamlValueWithConcreteType::Null(FieldType::Primitive(TypeValue::Null))
+            }
             BamlValue::String(s) => {
                 BamlValueWithConcreteType::String(s, FieldType::Primitive(TypeValue::String))
             }
@@ -84,9 +87,64 @@ impl From<BamlValue> for BamlValueWithConcreteType {
                     FieldType::Class(class_name),
                 )
             }
-            BamlValue::Null => {
-                BamlValueWithConcreteType::Null(FieldType::Primitive(TypeValue::Null))
-            }
         }
     }
 }
+
+// mod baml_value_with_concrete_type_serde {
+//     use super::*;
+
+//     pub fn serialize<S>(from: &BamlValueWithConcreteType, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         match from {
+//             BamlValueWithConcreteType::Null(_) => {
+//                 let map = serializer.serialize_map(None)?;
+//                 map.end()
+//             }
+//             BamlValueWithConcreteType::String(s, _) => serializer.serialize_str(s),
+//             BamlValueWithConcreteType::Int(i, _) => serializer.serialize_i64(*i),
+//             BamlValueWithConcreteType::Float(f, _) => serializer.serialize_f64(*f),
+//             BamlValueWithConcreteType::Bool(b, _) => serializer.serialize_bool(*b),
+//             BamlValueWithConcreteType::Map(m, _) => {
+//                 // comment
+//                 todo!()
+//                 // serializer.serialize_map(m.iter())
+//             }
+//             BamlValueWithConcreteType::List(l, _) => serializer.serialize_seq(l.iter()),
+//             // TODO: serialize media types
+//             BamlValueWithConcreteType::Media(m, _) => serializer.serialize_unit(),
+//             BamlValueWithConcreteType::Enum(e, v, _) => {
+//                 serializer.serialize_str(&format!("{}.{}", e, v))
+//             }
+//             BamlValueWithConcreteType::Class(c, f, _) => {
+//                 let s = serializer.serialize_struct(c, f.len())?;
+//                 for (k, v) in f {
+//                     s.serialize_field(k, v)?;
+//                 }
+//                 s.end();
+//                 todo!()
+//             }
+//         }
+//     }
+// }
+
+// mod concrete_type_serde {
+//     use super::*;
+
+//     pub fn serialize<S>(from: &FieldType, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         match from {
+//             FieldType::Null => {
+//                 let map = serializer.serialize_map(Some(2))?;
+//                 map.serialize_entry("type", "null")?;
+//                 map.serialize_entry("value", "null")?;
+//                 map.end()
+//             }
+//             FieldType::Primitive(TypeValue::String) => {
+//         }
+//     }
+// }

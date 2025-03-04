@@ -14,6 +14,7 @@ use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 
 use baml_types::{BamlValue, Constraint, JinjaExpression};
+use indexmap::IndexSet;
 use internal_baml_jinja::types::OutputFormatContent;
 
 use internal_baml_core::ir::{jinja_helpers::evaluate_predicate, FieldType};
@@ -279,5 +280,27 @@ pub fn run_user_checks(
             })
             .collect::<Result<Vec<_>>>(),
         _ => Ok(vec![]),
+    }
+}
+
+pub struct TypeReifier {
+    pub reified_type: Option<FieldType>,
+}
+
+impl FromIterator<FieldType> for TypeReifier {
+    fn from_iter<T>(iter: T) -> Self
+    where
+        T: IntoIterator<Item = FieldType>,
+    {
+        let type_set = iter.into_iter().collect::<IndexSet<_>>();
+        match type_set.len() {
+            0 => TypeReifier { reified_type: None },
+            1 => TypeReifier {
+                reified_type: Some(type_set.into_iter().next().unwrap()),
+            },
+            _ => TypeReifier {
+                reified_type: Some(FieldType::Union(type_set.into_iter().collect())),
+            },
+        }
     }
 }

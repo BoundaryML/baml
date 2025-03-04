@@ -4,6 +4,7 @@ use internal_baml_core::ir::FieldType;
 use baml_types::CompletionState;
 
 use crate::deserializer::{
+    coercer::TypeReifier,
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
@@ -55,5 +56,15 @@ pub(super) fn coerce_array(
         None => {}
     };
 
-    Ok(BamlValueWithFlags::List(flags, items))
+    let concrete_list_type = match items
+        .iter()
+        .map(|i| i.concrete_type())
+        .collect::<TypeReifier>()
+        .reified_type
+    {
+        Some(t) => t.as_list(),
+        None => list_target.clone(),
+    };
+
+    Ok(BamlValueWithFlags::List(flags, concrete_list_type, items))
 }

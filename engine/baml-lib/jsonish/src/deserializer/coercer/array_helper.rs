@@ -50,7 +50,7 @@ pub(super) fn pick_best(
                 i,
                 score,
                 match r {
-                    BamlValueWithFlags::List(flags, items) => {
+                    BamlValueWithFlags::List(flags, _, items) => {
                         items.is_empty()
                             && flags.flags.iter().any(|f| matches!(f, Flag::SingleToArray))
                     }
@@ -68,8 +68,8 @@ pub(super) fn pick_best(
             // TODO: This is a bit of a hack. We should likely use some is_subtype_of logic here
             // to ensure that we're accepting the "best" type.
             // E.g. if a is a subtype of b, we should prefer a over b. (empty list is a subtype of any list)
-            if matches!(a_val, BamlValueWithFlags::List(_, _))
-                && matches!(b_val, BamlValueWithFlags::List(_, _))
+            if matches!(a_val, BamlValueWithFlags::List(_, _, _))
+                && matches!(b_val, BamlValueWithFlags::List(_, _, _))
             {
                 let a_is_single = a_val
                     .conditions()
@@ -89,8 +89,8 @@ pub(super) fn pick_best(
                     (false, true) => return std::cmp::Ordering::Less,
                     _ => {
                         if let (
-                            BamlValueWithFlags::List(_, items_a),
-                            BamlValueWithFlags::List(_, items_b),
+                            BamlValueWithFlags::List(_, _, items_a),
+                            BamlValueWithFlags::List(_, _, items_b),
                         ) = (a_val, b_val)
                         {
                             let unparseables_a = a_val
