@@ -84,17 +84,14 @@ impl UploadBamlSrcRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UploadBamlSrcResponse {
     pub project_id: String,
-    pub baml_src_id: String,
+    pub baml_src_id: UniqueId,
 }
 
 // ------------------------------------------------------------------------------------------------
 
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum BamlTypeId {
-    UniqueId(UniqueId),
-    Ref(String),
-}
+pub struct BamlTypeId(pub UniqueId);
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BamlFunctionId(pub UniqueId);
@@ -107,7 +104,7 @@ impl From<UniqueId> for BamlFunctionId {
 
 impl From<UniqueId> for BamlTypeId {
     fn from(value: UniqueId) -> Self {
-        BamlTypeId::UniqueId(value)
+        BamlTypeId(value)
     }
 }
 
@@ -128,13 +125,13 @@ pub enum BamlTypeReference {
     String,
     Media(BamlMediaType),
     Class {
-        type_id: BamlTypeId,
+        type_id: String,
     },
     Enum {
-        type_id: BamlTypeId,
+        type_id: String,
     },
     TypeAlias {
-        type_id: BamlTypeId,
+        type_id: String,
     },
     Array {
         items: Box<BamlTypeReference>,
@@ -163,10 +160,10 @@ impl From<FieldType> for BamlTypeReference {
             FieldType::Primitive(TypeValue::Float) => BamlTypeReference::Float,
             FieldType::Primitive(TypeValue::Bool) => BamlTypeReference::Bool,
             FieldType::Class(class_name) => BamlTypeReference::Class {
-                type_id: BamlTypeId::Ref(class_name.to_string()),
+                type_id: class_name.to_string(),
             },
             FieldType::Enum(enum_name) => BamlTypeReference::Enum {
-                type_id: BamlTypeId::Ref(enum_name.to_string()),
+                type_id: enum_name.to_string(),
             },
             FieldType::List(inner) => BamlTypeReference::Array {
                 items: Box::new((*inner).into()),
@@ -281,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_baml_type_id() {
-        let id = BamlTypeId::UniqueId(UniqueId { type_name: "test".to_string(), name: "test".to_string(), interface_hash: Some(1), impl_hash: Some(2) });
+        let id = BamlTypeId(UniqueId { type_name: "test".to_string(), name: "test".to_string(), interface_hash: Some(1), impl_hash: Some(2) });
         let id_as_string = serde_json::to_string(&id).unwrap();
         println!("id_as_string: {}", id_as_string);
         let id_str = serde_json::to_string(&id.0).unwrap();

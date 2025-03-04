@@ -106,10 +106,12 @@ impl BoundaryStudioConfigBuilder {
         
         let project_info = api_client
             .post(boundary_api::GetBamlSrcUploadStatus, &baml_src_blob.to_get_baml_src_upload_status_request())
-            .await?;
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to get project info: {:?}", e))?;
 
         if matches!(project_info.status, rpc::upload_baml_src::BamlSrcUploadStatus::DoesNotExist) {
-            api_client.post(boundary_api::UploadBamlSrc, &baml_src_blob).await?;
+            api_client.post(boundary_api::UploadBamlSrc, &baml_src_blob).await
+                .map_err(|e| anyhow::anyhow!("Failed to upload baml src: {:?}", e))?;
         }
 
         Ok(BoundaryStudioConfig {
