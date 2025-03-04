@@ -80,7 +80,31 @@ impl Attributes {
     pub fn set_skip(&mut self) {
         self.skip.replace(true);
     }
+
+    /// Combine two attributes, preferring `self`'s fields when both are present.
+    pub fn combine(&self, other: &Attributes) -> Attributes {
+        Attributes {
+            description: self
+                .description
+                .as_ref()
+                .or(other.description.as_ref())
+                .cloned(),
+            alias: self.alias.as_ref().or(other.alias.as_ref()).cloned(),
+            dynamic_type: self.dynamic_type.or(other.dynamic_type).clone(),
+            skip: self.skip.or(other.skip).clone(),
+            constraints: self
+                .constraints
+                .iter()
+                .chain(other.constraints.iter())
+                .cloned()
+                .collect(),
+            streaming_done: self.streaming_done.or(other.streaming_done).clone(),
+            streaming_needed: self.streaming_needed.or(other.streaming_needed).clone(),
+            streaming_state: self.streaming_state.or(other.streaming_state).clone(),
+        }
+    }
 }
+
 pub(super) fn resolve_attributes(ctx: &mut Context<'_>) {
     for top in ctx.ast.iter_tops() {
         match top {
@@ -137,9 +161,12 @@ fn resolve_type_exp_block_attributes<'db>(
 
             // Now validate the class attributes.
             ctx.assert_all_attributes_processed(type_id.into());
-            class_attributes.serilizer = to_string_attribute::visit(ctx, &span, true);
-            ctx.validate_visited_attributes();
 
+            for _ in 0..ast_typexpr.attributes.len() {
+                let attrs = to_string_attribute::visit(ctx, &span, true);
+                class_attributes.extend_serializer(&attrs);
+            }
+            ctx.validate_visited_attributes();
             ctx.types.class_attributes.insert(type_id, class_attributes);
         }
 

@@ -37,12 +37,6 @@ pub struct FunctionResultStream {
     pub(crate) collectors: Vec<Arc<Collector>>,
 }
 
-impl Drop for FunctionResultStream {
-    fn drop(&mut self) {
-        log::info!("Dropping FunctionResultStream: {}", self.function_name);
-    }
-}
-
 #[cfg(target_arch = "wasm32")]
 // JsFuture is !Send, so when building for WASM, we have to drop that requirement from StreamCallback
 static_assertions::assert_impl_all!(FunctionResultStream: Send);
@@ -93,7 +87,6 @@ impl FunctionResultStream {
     where
         F: Fn(FunctionResult),
     {
-        log::info!("### FunctionResultStream::run");
         let mut local_orchestrator = Vec::new();
         std::mem::swap(&mut local_orchestrator, &mut self.orchestrator);
 

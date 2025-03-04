@@ -4093,6 +4093,32 @@ class LlmResponseParser:
 
       return cast(str, parsed)
     
+    def TestThinking(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.CustomStory:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestThinking",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        False,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast(types.CustomStory, parsed)
+    
     def TestUniverseQuestion(
         self,
         llm_response: str,
@@ -8341,6 +8367,32 @@ class LlmStreamParser:
       )
 
       return cast(Optional[str], parsed)
+    
+    def TestThinking(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> partial_types.CustomStory:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestThinking",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        True,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast(partial_types.CustomStory, parsed)
     
     def TestUniverseQuestion(
         self,

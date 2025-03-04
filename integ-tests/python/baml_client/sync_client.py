@@ -4123,6 +4123,32 @@ class BamlSyncClient:
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
+    def TestThinking(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.CustomStory:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.call_function_sync(
+        "TestThinking",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(types.CustomStory, raw.cast_to(types, types, partial_types, False))
+    
     def TestUniverseQuestion(
         self,
         question: types.UniverseQuestionInput,
@@ -9468,6 +9494,39 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def TestThinking(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.CustomStory, types.CustomStory]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.stream_function_sync(
+        "TestThinking",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.CustomStory, types.CustomStory](
+        raw,
+        lambda x: cast(partial_types.CustomStory, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.CustomStory, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
     def TestUniverseQuestion(
         self,
         question: types.UniverseQuestionInput,
@@ -13445,6 +13504,30 @@ class PromptBody:
         "TestSingleFallbackClient",
         {
           
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return raw.to_dict()
+    
+    def TestThinking(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.CustomStory:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      raw = self.__runtime.prompt_to_provider_body_sync(
+        "TestThinking",
+        {
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,

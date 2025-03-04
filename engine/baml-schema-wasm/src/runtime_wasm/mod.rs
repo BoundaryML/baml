@@ -1252,6 +1252,11 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
+    pub fn is_valid_type_alias(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_type_alias(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
     pub fn is_valid_function(&self, symbol: &str) -> bool {
         self.runtime.internal().ir().find_function(symbol).is_ok()
     }
@@ -1262,6 +1267,48 @@ impl WasmRuntime {
             .internal()
             .ir()
             .find_class_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_enum_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_type_alias_locations(symbol)
             .into_iter()
             .map(|span| {
                 let ((start_line, start_character), (end_line, end_character)) =

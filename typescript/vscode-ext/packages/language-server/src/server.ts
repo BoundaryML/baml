@@ -46,6 +46,7 @@ import { getWordAtPosition } from './lib/ast'
 import BamlProjectManager, { GeneratorDisabledReason, GeneratorStatus, GeneratorType } from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
 import { BamlWasm } from './lib/wasm'
+import { SymbolLocation } from '@gloo-ai/baml-schema-wasm-node'
 
 try {
   // only required on vscode versions 1.89 and below.
@@ -761,20 +762,33 @@ export function startServer(options?: LSOptions): void {
 
     const symbol = getWordAtPosition(doc, params.position)
 
-    // TODO: Enums, type aliases, etc.
-    if (project.runtime().is_valid_enum(symbol)) {
-      throw new ResponseError(ErrorCodes.InvalidRequest, `Enum renaming is not yet supported: '${symbol}'`)
-    }
+    // TODO: type alias renaming, class field renaming, etc.
     if (project.runtime().is_valid_function(symbol)) {
       throw new ResponseError(ErrorCodes.InvalidRequest, `Function renaming is not yet supported: '${symbol}'`)
     }
-    if (!project.runtime().is_valid_class(symbol)) {
+
+    const is_valid_class = project.runtime().is_valid_class(symbol)
+    const is_valid_enum = project.runtime().is_valid_enum(symbol)
+    const is_valid_type_alias = project.runtime().is_valid_type_alias(symbol)
+
+    // Only classes and enums can be renamed for now.
+    if (!is_valid_class && !is_valid_enum && !is_valid_type_alias) {
       throw new ResponseError(ErrorCodes.InvalidRequest, `Cannot rename symbol '${symbol}'`)
     }
 
     const changes: { [uri: string]: TextEdit[] } = {}
 
-    for (const location of project.runtime().search_for_class_locations(symbol)) {
+    let locations: SymbolLocation[] = []
+
+    if (is_valid_class) {
+      locations = project.runtime().search_for_class_locations(symbol)
+    } else if (is_valid_enum) {
+      locations = project.runtime().search_for_enum_locations(symbol)
+    } else if (is_valid_type_alias) {
+      locations = project.runtime().search_for_type_alias_locations(symbol)
+    }
+
+    for (const location of locations) {
       if (!changes[location.uri]) {
         changes[location.uri] = []
       }

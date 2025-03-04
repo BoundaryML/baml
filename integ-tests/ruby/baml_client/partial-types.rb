@@ -37,6 +37,7 @@ module Baml
     class ComplexMemoryObject < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
     class ContactInfo < T::Struct; end
+    class CustomStory < T::Struct; end
     class CustomTaskResult < T::Struct; end
     class DummyOutput < T::Struct; end
     class DynInputOutput < T::Struct; end
@@ -356,6 +357,22 @@ module Baml
         super(
           primary: props[:primary],
           secondary: props[:secondary],
+        )
+
+        @props = props
+      end
+    end
+    class CustomStory < T::Struct
+      include Baml::Sorbet::Struct
+      const :title, T.nilable(String)
+      const :characters, T::Array[T.nilable(String)]
+      const :content, T.nilable(String)
+
+      def initialize(props)
+        super(
+          title: props[:title],
+          characters: props[:characters],
+          content: props[:content],
         )
 
         @props = props

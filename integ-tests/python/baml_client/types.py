@@ -229,6 +229,11 @@ class ContactInfo(BaseModel):
     primary: Union["PhoneNumber", "EmailAddress"]
     secondary: Union["PhoneNumber", "EmailAddress", None] = None
 
+class CustomStory(BaseModel):
+    title: str
+    characters: List[str]
+    content: str
+
 class CustomTaskResult(BaseModel):
     bookOrder: Union["BookOrder", Optional[None]] = None
     flightConfirmation: Union["FlightConfirmation", Optional[None]] = None

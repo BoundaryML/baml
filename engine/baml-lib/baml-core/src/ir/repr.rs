@@ -1012,6 +1012,7 @@ impl WithRepr<TypeAlias> for TypeAliasWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
             ..Default::default() // TODO: Rest of attributes.
         }
     }
