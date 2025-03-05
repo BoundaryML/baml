@@ -1,4 +1,4 @@
-use crate::{rpc::upload_baml_src::BamlTypeReference, BamlValue, FieldType, TypeValue};
+use crate::{rpc::upload_baml_src::BamlTypeReference, BamlMedia, BamlValue, FieldType, TypeValue};
 use indexmap::IndexSet;
 use serde::Serialize;
 
@@ -63,8 +63,9 @@ pub enum BamlValueWithConcreteType {
     Media {
         #[serde(rename = "@type")]
         r#type: BamlTypeReference,
+        // TODO: media type serialization format needs to be decoupled from the runtime-internal repr!
         #[serde(rename = "@data")]
-        data: String,
+        data: BamlMedia,
     },
     // TODO: literals
 }
@@ -297,7 +298,7 @@ impl From<BamlValue> for BamlValueWithConcreteType {
             // TODO: we don't have a media
             BamlValue::Media(m) => BamlValueWithConcreteType::Media {
                 r#type: FieldType::Primitive(TypeValue::Media(m.media_type)).into(),
-                data: "media-placeholder".to_string(),
+                data: m,
             },
             BamlValue::Enum(enum_name, enum_value) => BamlValueWithConcreteType::Enum {
                 r#type: FieldType::Enum(enum_name).into(),
