@@ -182,6 +182,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+      - uses: jetli/wasm-bindgen-action@v0.2.0
+        with:
+          version: '0.2.100'
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
