@@ -1,9 +1,10 @@
 mod boundary_api;
 
 use anyhow::Result;
-use baml_types::rpc;
+use baml_types::rpc::{self, StudioTraceEventBatch};
 use boundary_api::ApiClient;
 use dashmap::DashMap;
+use serde_json::json;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
@@ -45,7 +46,7 @@ pub struct Collector {
     // Channel to send events to the S3 pusher task.
     s3_tx: mpsc::Sender<NetworkMsg>,
     // Handle for the S3 pusher task.
-    config: Arc<std::sync::Mutex<BoundaryStudioConfig>>,
+    config: Arc<tokio::sync::Mutex<BoundaryStudioConfig>>,
 
     // Handle for the main collector task.
     s3_join_handle: Mutex<Option<tokio::task::JoinHandle<()>>>,
@@ -67,8 +68,9 @@ impl FunctionTrackerTrait for Collector {
     }
 
     fn name(&self) -> String {
-        let config = self.config.lock().unwrap();
-        format!("BoundaryStudioCollector({})", config.project_name)
+        // let config = self.config.lock().unwrap();
+        // format!("BoundaryStudioCollector({})", config.project_name)
+        "BoundaryStudioCollector(project name unknown, needs async lock)".to_string()
     }
 }
 
@@ -102,16 +104,25 @@ impl BoundaryStudioConfigBuilder {
             Some(self.api_key),
         );
 
-        let baml_src_blob = runtime.boundary_cloud_interface().to_boundary_upload_request(self.project_id.clone());
+        let baml_src_blob = runtime
+            .boundary_cloud_interface()
+            .to_boundary_upload_request(self.project_id.clone());
 
-        
         let project_info = api_client
-            .post(boundary_api::GetBamlSrcUploadStatus, &baml_src_blob.to_get_baml_src_upload_status_request())
+            .post(
+                boundary_api::GetBamlSrcUploadStatus,
+                &baml_src_blob.to_get_baml_src_upload_status_request(),
+            )
             .await
             .map_err(|e| anyhow::anyhow!("Failed to get project info: {:?}", e))?;
 
-        if matches!(project_info.status, rpc::upload_baml_src::BamlSrcUploadStatus::DoesNotExist) {
-            api_client.post(boundary_api::UploadBamlSrc, &baml_src_blob).await
+        if matches!(
+            project_info.status,
+            rpc::upload_baml_src::BamlSrcUploadStatus::DoesNotExist
+        ) {
+            api_client
+                .post(boundary_api::UploadBamlSrc, &baml_src_blob)
+                .await
                 .map_err(|e| anyhow::anyhow!("Failed to upload baml src: {:?}", e))?;
         }
 
@@ -145,7 +156,7 @@ impl Collector {
             join_handle: Mutex::new(None),
             s3_tx,
             s3_join_handle: Mutex::new(None),
-            config: Arc::new(std::sync::Mutex::new(config)),
+            config: Arc::new(tokio::sync::Mutex::new(config)),
         });
 
         // Spawn the main collector task.
@@ -212,8 +223,9 @@ impl Collector {
     /// Spawns the S3 pusher task that listens for batches of events to push.
     fn start_s3_pusher(
         mut s3_rx: mpsc::Receiver<NetworkMsg>,
-        config: Arc<std::sync::Mutex<BoundaryStudioConfig>>,
+        config: Arc<tokio::sync::Mutex<BoundaryStudioConfig>>,
     ) -> tokio::task::JoinHandle<()> {
+        // let local = tokio::task::LocalSet::new();
         tokio::spawn(async move {
             while let Some(msg) = s3_rx.recv().await {
                 match msg {
@@ -343,15 +355,114 @@ impl Collector {
 /// Replace this with your actual S3 upload logic.
 async fn push_events_to_s3(
     events: Vec<Arc<TraceEvent>>,
-    config: &Arc<std::sync::Mutex<BoundaryStudioConfig>>,
+    config: &Arc<tokio::sync::Mutex<BoundaryStudioConfig>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // TODO: Convert from TraceEvent to the JSON format expected by the Boundary Studio API.
-    let baml_src_lookups = config.lock().unwrap().baml_src_lookups;
+    let locked_config = config.lock().await;
+    let baml_src_lookups = &locked_config.baml_src_lookups;
     // lookups contains all the unique ids for the functions, classes, enums, and type aliases in the BAML src.
     // can find my name match.
     log::info!("Pushing {} events to S3", events.len());
     // Simulate network delay.
-    sleep(Duration::from_millis(100)).await;
+    let request = rpc::TraceEventUploadRequest {
+        trace_event_batch: StudioTraceEventBatch {
+            project_id: locked_config.project_name.clone(),
+            events: events
+                .into_iter()
+                .filter_map(|e| match &e.content {
+                    TraceData::FunctionStart(start) => Some(baml_types::tracing::rpc::TraceEvent {
+                        span_chain: e.span_chain.clone(),
+                        tags: e.tags.clone(),
+                        timestamp: e.timestamp.clone(),
+                        callsite: e.callsite.clone(),
+                        verbosity: e.verbosity.clone(),
+                        span_id: e.span_id.clone(),
+                        event_id: e.event_id.clone(),
+                        content: baml_types::tracing::rpc::TraceData::FunctionStart(
+                            baml_types::tracing::rpc::FunctionStart {
+                                function_id: FunctionId(
+                                    baml_src_lookups
+                                        .function_definitions
+                                        .iter()
+                                        .find(|f| {
+                                            f.function_id
+                                                .0
+                                                .name
+                                                .starts_with(&start.function_display_name)
+                                        })
+                                        .expect(
+                                            format!(
+                                                "function ID not found: {}",
+                                                start.function_display_name
+                                            )
+                                            .as_str(),
+                                        )
+                                        .function_id
+                                        .0
+                                        .to_string(),
+                                ),
+                                function_display_name: start.function_display_name.clone(),
+                                args: start.args.clone(),
+                                options: (),
+                            },
+                        ),
+                    }),
+                    TraceData::FunctionEnd(end) => Some(baml_types::tracing::rpc::TraceEvent {
+                        span_chain: e.span_chain.clone(),
+                        tags: e.tags.clone(),
+                        timestamp: e.timestamp.clone(),
+                        callsite: e.callsite.clone(),
+                        verbosity: e.verbosity.clone(),
+                        span_id: e.span_id.clone(),
+                        event_id: e.event_id.clone(),
+                        content: baml_types::tracing::rpc::TraceData::FunctionEnd(
+                            baml_types::tracing::rpc::FunctionEnd {
+                                function_id: FunctionId(
+                                    baml_src_lookups
+                                        .function_definitions
+                                        .iter()
+                                        .find(|f| {
+                                            f.function_id
+                                                .0
+                                                .name
+                                                .starts_with(&end.function_display_name)
+                                        })
+                                        .expect(
+                                            format!(
+                                                "function ID not found: {}",
+                                                end.function_display_name
+                                            )
+                                            .as_str(),
+                                        )
+                                        .function_id
+                                        .0
+                                        .to_string(),
+                                ),
+                                function_display_name: end.function_display_name.clone(),
+                                result: match &end.result {
+                                    Ok(result) => Ok(result.clone()),
+                                    Err(e) => {
+                                        Err(anyhow::anyhow!("error occurred inside LLM: {:?}", e))
+                                    }
+                                },
+                            },
+                        ),
+                    }),
+                    other => {
+                        tracing::warn!(
+                            "Dropping event type: {:?}",
+                            std::mem::discriminant(&e.content)
+                        );
+                        None
+                    }
+                })
+                .collect(),
+        },
+    };
+    locked_config
+        .api_client
+        .post(boundary_api::UploadTraceEvent, &request)
+        .await?;
     // TODO: implement real S3 push logic here.
     Ok(())
 }

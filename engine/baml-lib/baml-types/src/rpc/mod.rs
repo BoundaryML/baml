@@ -5,15 +5,14 @@ pub use upload_baml_src::{
     UploadBamlSrcResponse,
 };
 
-use crate::tracing::events::TraceEvent;
+use crate::tracing;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct StudioTraceEventBatch {
     pub project_id: String,
-    pub events: Vec<Arc<TraceEvent>>,
+    pub events: Vec<tracing::rpc::TraceEvent>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,7 +37,7 @@ pub struct BamlSrcBlob {
 
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TraceEventUploadRequest {
     pub trace_event_batch: StudioTraceEventBatch,
 }

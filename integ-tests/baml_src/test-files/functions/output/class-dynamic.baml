@@ -16,7 +16,7 @@ enum Color {
 }
 
 function ExtractPeople(text: string?) -> Person[] {
-  client Ollama
+  client "openai/gpt-4o-mini"
   prompt #"
      {{ _.role('system') }}
 		 You are an expert extraction algorithm. Only extract relevant information from the text. If you do not know the value of an attribute asked to extract, return null for the attribute's value.
