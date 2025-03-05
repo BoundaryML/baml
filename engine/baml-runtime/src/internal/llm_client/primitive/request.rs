@@ -31,7 +31,7 @@ pub struct LoggedHttpResponse {
 }
 
 impl LoggedHttpResponse {
-    pub async fn new_from_reqwest(mut resp: reqwest::Response) -> Result<Self, reqwest::Error> {
+    pub async fn new_from_reqwest(resp: reqwest::Response) -> Result<Self, reqwest::Error> {
         let status = resp.status();
         let url = resp.url().to_string();
         let headers = resp.headers().clone();

@@ -283,3 +283,68 @@ impl LLMPrimitiveProvider {
         match_llm_provider!(self, request_options)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::internal::llm_client::traits::WithClient;
+
+    use super::request::RequestBuilder;
+    use anyhow::Result;
+
+    pub struct MockClient {
+        model_features: crate::internal::llm_client::ModelFeatures,
+        context: internal_baml_jinja::RenderContext_Client,
+        request_options: baml_types::BamlMap<String, serde_json::Value>,
+    }
+
+    impl MockClient {
+        pub fn new() -> Self {
+            Self {
+                model_features: crate::internal::llm_client::ModelFeatures {
+                    completion: false,
+                    chat: false,
+                    max_one_system_prompt: false,
+                    resolve_media_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
+                    allowed_metadata: crate::internal::llm_client::AllowedRoleMetadata::All,
+                },
+                context: internal_baml_jinja::RenderContext_Client {
+                    name: "mock".to_string(),
+                    provider: "mock".to_string(),
+                    default_role: "user".to_string(),
+                    allowed_roles: vec![],
+                },
+                request_options: baml_types::BamlMap::new(),
+            }
+        }
+    }
+
+    impl WithClient for MockClient {
+        fn model_features(&self) -> &crate::internal::llm_client::ModelFeatures {
+            &self.model_features
+        }
+
+        fn context(&self) -> &internal_baml_jinja::RenderContext_Client {
+            &self.context
+        }
+    }
+
+    impl RequestBuilder for MockClient {
+        async fn build_request(
+            &self,
+            prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
+            allow_proxy: bool,
+            stream: bool,
+            expose_secrets: bool,
+        ) -> Result<reqwest::RequestBuilder> {
+            unimplemented!("Not used in tests")
+        }
+    
+        fn request_options(&self) -> &baml_types::BamlMap<String, serde_json::Value> {
+            &self.request_options
+        }
+    
+        fn http_client(&self) -> &reqwest::Client {
+            unimplemented!("Not used in tests")
+        }
+    }
+}

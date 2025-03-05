@@ -96,7 +96,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             finish_reason: response.candidates[0]
                 .finish_reason
                 .as_ref()
-                .map(|r| serde_json::to_string(r).unwrap_or("".into())),
+                .map(|r| r.to_string()),
             prompt_tokens: usage_metadata.prompt_token_count,
             output_tokens: usage_metadata.candidates_token_count,
             total_tokens: usage_metadata.total_token_count,

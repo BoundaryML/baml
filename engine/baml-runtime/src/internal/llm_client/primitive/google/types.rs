@@ -222,7 +222,7 @@ pub enum HarmSeverity {
 pub struct Candidate {
     pub index: Option<i32>,
     pub content: Option<Content>,
-    pub finish_reason: Option<FinishReason>,
+    pub finish_reason: Option<String>,
     pub safety_ratings: Option<Vec<SafetyRating>>,
     // pub citation_metadata: Option<CitationMetadata>,
     pub grounding_metadata: Option<GroundingMetadata>,
@@ -289,28 +289,6 @@ pub struct VideoMetadata {
 pub struct Duration {
     pub seconds: i64,
     pub nanos: i32,
-}
-
-#[derive(Serialize, Deserialize, Debug, strum_macros::Display)]
-pub enum FinishReason {
-    #[serde(rename = "FINISH_REASON_UNSPECIFIED")]
-    Unspecified,
-    #[serde(rename = "STOP")]
-    Stop,
-    #[serde(rename = "MAX_TOKENS")]
-    MaxTokens,
-    #[serde(rename = "SAFETY")]
-    Safety,
-    #[serde(rename = "RECITATION")]
-    Recitation,
-    #[serde(rename = "OTHER")]
-    Other,
-    #[serde(rename = "BLOCKLIST")]
-    Blocklist,
-    #[serde(rename = "PROHIBITED_CONTENT")]
-    ProhibitedContent,
-    #[serde(rename = "SPII")]
-    Spii,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

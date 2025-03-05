@@ -143,3 +143,53 @@ pub fn scan_openai_response_stream(
 
     Ok(())
 }
+
+
+#[cfg(test)]
+mod tests {
+    use crate::internal::llm_client::primitive::tests::MockClient;
+
+    use super::*;
+
+    const RESPONSE: &str = r#"
+{"id":"msg_01TmchHftFKihgeV7Zy9vCvZ","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"{\n  \"isCompanyPost\": false,\n  \"companyName\": null,\n  \"stage\": null,\n  \"engineeringAssessment\": \"UNKNOWN\",\n  \"teamMembers\": [],\n  \"technicalHighlights\": []\n}\n\nNotes:\n- This is a general discussion post asking for programming book recommendations\n- Not a company/startup related post\n- No technical signals or team information can be extracted\n- Cannot make engineering assessment as this is just a question\n\nThis appears to be a learning/discussion oriented post rather than a startup/company related post, so most of the structured fields are null or empty. The post doesn't contain any analyzable technical due diligence information."}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":321,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":158}}
+    "#;
+
+    #[test]
+    fn test_parse_openai_response() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::from_str(RESPONSE.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+        let model_name = "gpt-4o-mini".to_string();
+
+        let result = parse_openai_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            Some(model_name.clone()),
+        );
+
+        let expected = LLMCompleteResponse {
+        client: "mock".to_string(),
+        prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+        content: "{\n  \"isCompanyPost\": false,\n  \"companyName\": null,\n  \"stage\": null,\n  \"engineeringAssessment\": \"UNKNOWN\",\n  \"teamMembers\": [],\n  \"technicalHighlights\": []\n}\n\nNotes:\n- This is a general discussion post asking for programming book recommendations\n- Not a company/startup related post\n- No technical signals or team information can be extracted\n- Cannot make engineering assessment as this is just a question\n\nThis appears to be a learning/discussion oriented post rather than a startup/company related post, so most of the structured fields are null or empty. The post doesn't contain any analyzable technical due diligence information.".to_string(),
+        start_time: system_now,
+        latency: instant_now.elapsed(),
+        model: model_name,
+        request_options: client.request_options().clone(),
+        metadata: LLMCompleteResponseMetadata {
+            baml_is_complete: true,
+            finish_reason: Some("end_turn".to_string()),
+            prompt_tokens: Some(321),
+            output_tokens: Some(158),
+            total_tokens: Some(479),
+        },
+    };
+
+        assert!(matches!(result, LLMResponse::Success(response)));
+    }
+}
