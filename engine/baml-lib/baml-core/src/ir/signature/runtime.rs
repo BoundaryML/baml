@@ -164,20 +164,20 @@ impl IntermediateRepr {
     ) -> rpc::upload_baml_src::BamlTypeReference {
         use rpc::upload_baml_src::BamlTypeReference;
         match field_type {
-            baml_types::FieldType::Primitive(type_value) => {
-                match type_value {
-                    baml_types::TypeValue::String => BamlTypeReference::String,
-                    baml_types::TypeValue::Int => BamlTypeReference::Int,
-                    baml_types::TypeValue::Float => BamlTypeReference::Float,
-                    baml_types::TypeValue::Bool => BamlTypeReference::Bool,
-                    baml_types::TypeValue::Null => BamlTypeReference::Null,
-                    baml_types::TypeValue::Media(baml_media_type) => {
-                        match baml_media_type {
-                            baml_types::BamlMediaType::Image => BamlTypeReference::Media(rpc::upload_baml_src::BamlMediaType::Image),
-                            baml_types::BamlMediaType::Audio => BamlTypeReference::Media(rpc::upload_baml_src::BamlMediaType::Audio),
-                        }
-                    },
-                }
+            baml_types::FieldType::Primitive(type_value) => match type_value {
+                baml_types::TypeValue::String => BamlTypeReference::String,
+                baml_types::TypeValue::Int => BamlTypeReference::Int,
+                baml_types::TypeValue::Float => BamlTypeReference::Float,
+                baml_types::TypeValue::Bool => BamlTypeReference::Bool,
+                baml_types::TypeValue::Null => BamlTypeReference::Null,
+                baml_types::TypeValue::Media(baml_media_type) => match baml_media_type {
+                    baml_types::BamlMediaType::Image => {
+                        BamlTypeReference::Media(rpc::upload_baml_src::BamlMediaType::Image)
+                    }
+                    baml_types::BamlMediaType::Audio => {
+                        BamlTypeReference::Media(rpc::upload_baml_src::BamlMediaType::Audio)
+                    }
+                },
             },
             baml_types::FieldType::Enum(e) => BamlTypeReference::Enum {
                 type_id: all_nodes
@@ -188,7 +188,7 @@ impl IntermediateRepr {
             },
             baml_types::FieldType::Literal(literal_value) => {
                 BamlTypeReference::Literal(literal_value.into())
-            },
+            }
             baml_types::FieldType::Class(c) => BamlTypeReference::Class {
                 type_id: all_nodes
                     .get(c)
@@ -196,45 +196,43 @@ impl IntermediateRepr {
                     .unique_hashed_id(&all_nodes)
                     .into(),
             },
-            baml_types::FieldType::List(field_type) =>  {
-                BamlTypeReference::Array {
-                    items: Box::new(self.to_baml_type_reference(field_type, &all_nodes)),
-                }
+            baml_types::FieldType::List(field_type) => BamlTypeReference::Array {
+                items: Box::new(self.to_baml_type_reference(field_type, &all_nodes)),
             },
-            baml_types::FieldType::Map(field_type, field_type1) => {
-                BamlTypeReference::Map {
-                    key: Box::new(self.to_baml_type_reference(field_type, &all_nodes)),
-                    value: Box::new(self.to_baml_type_reference(field_type1, &all_nodes)),
-                }
+            baml_types::FieldType::Map(field_type, field_type1) => BamlTypeReference::Map {
+                key: Box::new(self.to_baml_type_reference(field_type, &all_nodes)),
+                value: Box::new(self.to_baml_type_reference(field_type1, &all_nodes)),
             },
-            baml_types::FieldType::Union(field_types) => {
-                BamlTypeReference::Union {
-                    any_of: field_types.iter().map(|f| self.to_baml_type_reference(f, &all_nodes)).collect(),
-                }
+            baml_types::FieldType::Union(field_types) => BamlTypeReference::Union {
+                any_of: field_types
+                    .iter()
+                    .map(|f| self.to_baml_type_reference(f, &all_nodes))
+                    .collect(),
             },
-            baml_types::FieldType::Tuple(field_types) => {
-                BamlTypeReference::Tuple {
-                    items: field_types.iter().map(|f| self.to_baml_type_reference(f, &all_nodes)).collect(),
-                }
+            baml_types::FieldType::Tuple(field_types) => BamlTypeReference::Tuple {
+                items: field_types
+                    .iter()
+                    .map(|f| self.to_baml_type_reference(f, &all_nodes))
+                    .collect(),
             },
-            baml_types::FieldType::Optional(field_type) => {
-                BamlTypeReference::Union {
-                    any_of: vec![
-                        self.to_baml_type_reference(field_type, &all_nodes),
-                        BamlTypeReference::Null,
-                    ],
-                }
+            baml_types::FieldType::Optional(field_type) => BamlTypeReference::Union {
+                any_of: vec![
+                    self.to_baml_type_reference(field_type, &all_nodes),
+                    BamlTypeReference::Null,
+                ],
             },
             baml_types::FieldType::WithMetadata {
                 base,
                 constraints,
                 streaming_behavior,
-            } => {
-                self.to_baml_type_reference(base, &all_nodes)
-            }
+            } => self.to_baml_type_reference(base, &all_nodes),
             baml_types::FieldType::RecursiveTypeAlias(recursive_type_alias) => {
                 BamlTypeReference::TypeAlias {
-                    type_id: all_nodes.get(recursive_type_alias.as_str()).unwrap().unique_hashed_id(&all_nodes).into(),
+                    type_id: all_nodes
+                        .get(recursive_type_alias.as_str())
+                        .unwrap()
+                        .unique_hashed_id(&all_nodes)
+                        .into(),
                 }
             }
         }
@@ -263,7 +261,7 @@ impl IntermediateRepr {
                                 },
                             )
                             .collect(),
-                        output: rpc::upload_baml_src::BamlTypeReference::Null,
+                        output: self.to_baml_type_reference(&f.elem.output(), &all_nodes),
                     }
                 })
             })
