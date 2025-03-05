@@ -84,6 +84,54 @@ impl BamlValueWithConcreteType {
             BamlValueWithConcreteType::Media { r#type, .. } => r#type,
         }
     }
+
+    pub fn rewrite_references_to_include_id(
+        &mut self,
+        id_rewrite: &impl Fn(&mut BamlTypeReference) -> (),
+    ) -> &mut Self {
+        match self {
+            BamlValueWithConcreteType::Class { r#type, data } => {
+                id_rewrite(r#type);
+                for (_, v) in data {
+                    v.rewrite_references_to_include_id(id_rewrite);
+                }
+            }
+            BamlValueWithConcreteType::Enum { r#type, .. } => {
+                id_rewrite(r#type);
+            }
+            BamlValueWithConcreteType::List { r#type, data } => {
+                id_rewrite(r#type);
+                for v in data {
+                    v.rewrite_references_to_include_id(id_rewrite);
+                }
+            }
+            BamlValueWithConcreteType::Map { r#type, data } => {
+                id_rewrite(r#type);
+                for (_, v) in data {
+                    v.rewrite_references_to_include_id(id_rewrite);
+                }
+            }
+            BamlValueWithConcreteType::Null { r#type, .. } => {
+                id_rewrite(r#type);
+            }
+            BamlValueWithConcreteType::Bool { r#type, .. } => {
+                id_rewrite(r#type);
+            }
+            BamlValueWithConcreteType::String { r#type, .. } => {
+                id_rewrite(r#type);
+            }
+            BamlValueWithConcreteType::Int { r#type, .. } => {
+                id_rewrite(r#type);
+            }
+            BamlValueWithConcreteType::Float { r#type, .. } => {
+                id_rewrite(r#type);
+            }
+            BamlValueWithConcreteType::Media { r#type, .. } => {
+                id_rewrite(r#type);
+            }
+        }
+        self
+    }
 }
 // #[derive(Debug, Clone, Serialize)]
 // pub enum BamlLiteralWithConcreteType {

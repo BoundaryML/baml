@@ -129,7 +129,10 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
 }
 
 impl BoundaryCloudInterface for InternalBamlRuntime {
-    fn to_boundary_upload_request(&self, project_id: String) -> baml_types::rpc::upload_baml_src::UploadBamlSrcRequest {
+    fn to_boundary_upload_request(
+        &self,
+        project_id: String,
+    ) -> baml_types::rpc::upload_baml_src::UploadBamlSrcRequest {
         self.ir.to_boundary_upload_request(project_id)
     }
 }
@@ -438,9 +441,6 @@ impl RuntimeInterface for InternalBamlRuntime {
                             .iter()
                             .map(|(k, v)| -> (String, BamlValueWithConcreteType) {
                                 (k.clone(), v.clone().into())
-                            })
-                            .map(|(k, v)| -> (String, serde_json::Value) {
-                                (k, serde_json::to_value(v).unwrap())
                             })
                             .collect::<Vec<_>>(),
                         None => vec![],

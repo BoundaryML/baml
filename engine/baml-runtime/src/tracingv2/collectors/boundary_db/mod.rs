@@ -1,10 +1,12 @@
 mod boundary_api;
 
 use anyhow::Result;
+use baml_types::rpc::upload_baml_src::{BamlTypeDefinition, BamlTypeId, BamlTypeReference};
 use baml_types::rpc::{self, StudioTraceEventBatch};
 use boundary_api::ApiClient;
 use dashmap::DashMap;
 use serde_json::json;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{mpsc, Mutex};
@@ -351,6 +353,80 @@ impl Collector {
     }
 }
 
+struct IdRewriter {
+    type_id_map: HashMap<String, BamlTypeId>,
+}
+
+impl IdRewriter {
+    fn new(baml_src_lookups: &rpc::UploadBamlSrcRequest) -> Self {
+        let mut type_id_map: HashMap<String, BamlTypeId> = HashMap::new();
+        for td in baml_src_lookups.type_definitions.iter() {
+            match td {
+                BamlTypeDefinition::Class(cd) => {
+                    type_id_map.insert(cd.type_id.0.to_string(), cd.type_id.clone());
+                }
+                BamlTypeDefinition::Enum(ed) => {
+                    type_id_map.insert(ed.type_id.0.to_string(), ed.type_id.clone());
+                }
+                BamlTypeDefinition::TypeAlias(td) => {
+                    type_id_map.insert(td.type_id.0.to_string(), td.type_id.clone());
+                }
+            }
+        }
+        Self { type_id_map }
+    }
+
+    fn rewrite(&self, t: &mut BamlTypeReference) {
+        match t {
+            BamlTypeReference::Class { type_id } => {
+                if let Some(id) = self.type_id_map.get(type_id) {
+                    *t = BamlTypeReference::Class {
+                        type_id: id.0.to_string(),
+                    };
+                }
+            }
+            BamlTypeReference::Enum { type_id } => {
+                if let Some(id) = self.type_id_map.get(type_id) {
+                    *t = BamlTypeReference::Enum {
+                        type_id: id.0.to_string(),
+                    };
+                }
+            }
+            BamlTypeReference::TypeAlias { type_id } => {
+                if let Some(id) = self.type_id_map.get(type_id) {
+                    *t = BamlTypeReference::TypeAlias {
+                        type_id: id.0.to_string(),
+                    };
+                }
+            }
+            BamlTypeReference::Array { items } => {
+                self.rewrite(items);
+            }
+            BamlTypeReference::Map { key, value } => {
+                self.rewrite(key);
+                self.rewrite(value);
+            }
+            BamlTypeReference::Union { any_of } => {
+                for item in any_of {
+                    self.rewrite(item);
+                }
+            }
+            BamlTypeReference::Tuple { items } => {
+                for item in items {
+                    self.rewrite(item);
+                }
+            }
+            BamlTypeReference::Null => {}
+            BamlTypeReference::Int => {}
+            BamlTypeReference::Bool => {}
+            BamlTypeReference::Float => {}
+            BamlTypeReference::String => {}
+            BamlTypeReference::Media(m) => {}
+            BamlTypeReference::Literal(l) => {}
+        }
+    }
+}
+
 /// A placeholder async function simulating pushing events to S3.
 /// Replace this with your actual S3 upload logic.
 async fn push_events_to_s3(
@@ -363,6 +439,9 @@ async fn push_events_to_s3(
     // lookups contains all the unique ids for the functions, classes, enums, and type aliases in the BAML src.
     // can find my name match.
     log::info!("Pushing {} events to S3", events.len());
+
+    let id_rewriter = IdRewriter::new(baml_src_lookups);
+
     // Simulate network delay.
     let request = rpc::TraceEventUploadRequest {
         trace_event_batch: StudioTraceEventBatch {
@@ -402,7 +481,24 @@ async fn push_events_to_s3(
                                         .to_string(),
                                 ),
                                 function_display_name: start.function_display_name.clone(),
-                                args: start.args.clone(),
+                                args: {
+                                    start
+                                        .args
+                                        .clone()
+                                        .into_iter()
+                                        .map(|(k, v)| {
+                                            (
+                                                k,
+                                                serde_json::to_value(
+                                                    v.rewrite_references_to_include_id(&|t| {
+                                                        id_rewriter.rewrite(t)
+                                                    }),
+                                                )
+                                                .expect("failed to rewrite type reference"),
+                                            )
+                                        })
+                                        .collect()
+                                },
                                 options: (),
                             },
                         ),
@@ -440,7 +536,12 @@ async fn push_events_to_s3(
                                 ),
                                 function_display_name: end.function_display_name.clone(),
                                 result: match &end.result {
-                                    Ok(result) => Ok(result.clone()),
+                                    Ok(result) => Ok(serde_json::to_value(
+                                        result.clone().rewrite_references_to_include_id(&|t| {
+                                            id_rewriter.rewrite(t)
+                                        }),
+                                    )
+                                    .expect("failed to rewrite type reference")),
                                     Err(e) => {
                                         Err(anyhow::anyhow!("error occurred inside LLM: {:?}", e))
                                     }

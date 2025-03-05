@@ -18,7 +18,7 @@ pub struct HttpRequestId(pub SpanId);
 pub type TraceTags = serde_json::Map<String, serde_json::Value>;
 
 // THESE ARE NOT CLONEABLE!!
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct TraceEvent {
     /*
      * (span_id, content_span_id) is a unique identifier for a log event
@@ -50,7 +50,7 @@ pub struct TraceEvent {
     pub tags: TraceTags,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 #[serde(tag = "type", content = "data")]
 pub enum TraceData {
     LogMessage {
@@ -89,20 +89,20 @@ pub struct BamlOptions {
     pub client_registry: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct FunctionStart {
     pub function_id: String,
     pub function_display_name: String,
-    pub args: Vec<(String, serde_json::Value)>,
+    pub args: Vec<(String, BamlValueWithConcreteType)>,
     pub options: Option<BamlOptions>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize)]
 pub struct FunctionEnd {
     pub function_id: String,
     pub function_display_name: String,
     #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
-    pub result: Result<serde_json::Value, anyhow::Error>,
+    pub result: Result<BamlValueWithConcreteType, anyhow::Error>,
     // Everything below is duplicated from the start event
     // to deal with the case where the log is dropped.
     // P2: as we can for now assume logs are not dropped,
@@ -192,6 +192,9 @@ pub struct LLMUsage {
 /// (If you need to support error variants, you will have to expand this logic.)
 ///
 use serde::Deserializer;
+
+use crate::BamlValueWithConcreteType;
+#[allow(dead_code)]
 fn deserialize_ok<'de, D, T>(deserializer: D) -> Result<Result<T, anyhow::Error>, D::Error>
 where
     D: Deserializer<'de>,
@@ -227,6 +230,7 @@ mod timestamp_serde {
         serializer.serialize_i64(millis)
     }
 
+    #[allow(dead_code)]
     pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
     where
         D: Deserializer<'de>,
@@ -249,6 +253,7 @@ mod level_serde {
         serializer.serialize_u32(*level as u32)
     }
 
+    #[allow(dead_code)]
     pub fn deserialize<'de, D>(deserializer: D) -> Result<TraceLevel, D::Error>
     where
         D: Deserializer<'de>,
