@@ -10,7 +10,7 @@ pub enum BamlValueWithConcreteType {
         #[serde(rename = "@type")]
         r#type: BamlTypeReference,
         #[serde(rename = "@data")]
-        data: Vec<(String, BamlValueWithConcreteType)>,
+        data: Vec<BamlValueClassEntryWithConcreteType>,
     },
     Enum {
         #[serde(rename = "@type")]
@@ -28,7 +28,7 @@ pub enum BamlValueWithConcreteType {
         #[serde(rename = "@type")]
         r#type: BamlTypeReference,
         #[serde(rename = "@data")]
-        data: Vec<(String, BamlValueWithConcreteType)>,
+        data: Vec<BamlValueMapEntryWithConcreteType>,
     },
     Null {
         #[serde(rename = "@type")]
@@ -69,6 +69,18 @@ pub enum BamlValueWithConcreteType {
     // TODO: literals
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct BamlValueClassEntryWithConcreteType {
+    pub field: String,
+    pub value: BamlValueWithConcreteType,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct BamlValueMapEntryWithConcreteType {
+    pub key: String,
+    pub value: BamlValueWithConcreteType,
+}
+
 impl BamlValueWithConcreteType {
     pub fn r#type(&self) -> &BamlTypeReference {
         match self {
@@ -92,8 +104,8 @@ impl BamlValueWithConcreteType {
         match self {
             BamlValueWithConcreteType::Class { r#type, data } => {
                 id_rewrite(r#type);
-                for (_, v) in data {
-                    v.rewrite_references_to_include_id(id_rewrite);
+                for v in data {
+                    v.value.rewrite_references_to_include_id(id_rewrite);
                 }
             }
             BamlValueWithConcreteType::Enum { r#type, .. } => {
@@ -107,8 +119,8 @@ impl BamlValueWithConcreteType {
             }
             BamlValueWithConcreteType::Map { r#type, data } => {
                 id_rewrite(r#type);
-                for (_, v) in data {
-                    v.rewrite_references_to_include_id(id_rewrite);
+                for v in data {
+                    v.value.rewrite_references_to_include_id(id_rewrite);
                 }
             }
             BamlValueWithConcreteType::Null { r#type, .. } => {
@@ -240,12 +252,15 @@ impl From<BamlValue> for BamlValueWithConcreteType {
             BamlValue::Map(m) => {
                 let m = m
                     .into_iter()
-                    .map(|(k, v)| (k, v.into()))
+                    .map(|(k, v)| BamlValueMapEntryWithConcreteType {
+                        key: k,
+                        value: v.into(),
+                    })
                     .collect::<Vec<_>>();
                 // TODO: this should be a union of all key types, but is hardcoded to just being a string right now
                 let concrete_value_type = match m
                     .iter()
-                    .map(|(_, v): &(String, BamlValueWithConcreteType)| v.r#type().clone())
+                    .map(|v: &BamlValueMapEntryWithConcreteType| v.value.r#type().clone())
                     .collect::<TypeReifier2>()
                     .reified_type
                 {
@@ -291,7 +306,10 @@ impl From<BamlValue> for BamlValueWithConcreteType {
             BamlValue::Class(class_name, fields) => {
                 let fields_with_concrete_type = fields
                     .into_iter()
-                    .map(|(k, v)| (k, v.into()))
+                    .map(|(k, v)| BamlValueClassEntryWithConcreteType {
+                        field: k,
+                        value: v.into(),
+                    })
                     .collect::<Vec<_>>();
                 BamlValueWithConcreteType::Class {
                     r#type: FieldType::Class(class_name).into(),
