@@ -8,7 +8,7 @@ function TestAnthropic(input: string) -> string {
 function TestAnthropicShorthand(input: string) -> string {
   client "anthropic/claude-3-haiku-20240307"
   prompt #"
-    Write a nice short story about {{ input }}
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
 
