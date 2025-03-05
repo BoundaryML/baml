@@ -638,12 +638,12 @@ export const ExtractNames = async (
  * This server action calls the underlying BAML function "ExtractPeople"
  * with the specified parameters.
  *
- * @param { string } text - Input parameter.
+ * @param { string | null } text (optional) - Input parameter.
  *
  * @returns {Promise<Person[]>} A promise that resolves with the result of the action.
  */
 export const ExtractPeople = async (
-  text: string,
+  text?: string | null,
 ): Promise<Person[]> => {
   return b.ExtractPeople(
     text,

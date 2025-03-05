@@ -2004,7 +2004,7 @@ export function useExtractNames(
  *
  * **Input Types:**
  *
- * - text: string
+ * - text (optional): string | null
  *
  *
  * **Return Type:**

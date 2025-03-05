@@ -706,14 +706,14 @@ export class BamlAsyncClient {
   }
   
   async ExtractPeople(
-      text: string,
+      text?: string | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<Person[]> {
     try {
       const raw = await this.runtime.callFunction(
         "ExtractPeople",
         {
-          "text": text
+          "text": text?? null
         },
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -4130,14 +4130,14 @@ class BamlStreamClient {
   }
   
   ExtractPeople(
-      text: string,
+      text?: string | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BamlStream<(partial_types.Person | null)[], Person[]> {
     try {
       const raw = this.runtime.streamFunction(
         "ExtractPeople",
         {
-          "text": text
+          "text": text ?? null
         },
         undefined,
         this.ctx_manager.cloneContext(),

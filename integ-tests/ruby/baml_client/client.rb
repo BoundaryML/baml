@@ -1117,7 +1117,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        text: String,
+        text: T.nilable(String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::Person])
     }
@@ -6381,7 +6381,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        text: String,
+        text: T.nilable(String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::Person]])
     }

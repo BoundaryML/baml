@@ -877,7 +877,7 @@ class BamlAsyncClient:
     
     async def ExtractPeople(
         self,
-        text: str,
+        text: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> List[types.Person]:
       __tb__ = baml_options.get("tb", None)
@@ -5147,7 +5147,7 @@ class BamlStreamClient:
     
     def ExtractPeople(
         self,
-        text: str,
+        text: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[partial_types.Person], List[types.Person]]:
       __tb__ = baml_options.get("tb", None)

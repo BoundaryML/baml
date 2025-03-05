@@ -671,12 +671,12 @@ export const ExtractNames = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { string } text - Input parameter.
+ * @param { string | null } text (optional) - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const ExtractPeople = async (
-  text: string,
+  text?: string | null,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.ExtractPeople(
     text,

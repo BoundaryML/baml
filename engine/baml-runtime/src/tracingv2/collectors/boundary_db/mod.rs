@@ -89,6 +89,7 @@ pub struct BoundaryStudioConfigBuilder {
 struct BoundaryStudioConfig {
     project_name: String,
     api_client: ApiClient,
+    baml_src_lookups: rpc::UploadBamlSrcRequest,
 }
 
 impl BoundaryStudioConfigBuilder {
@@ -117,6 +118,7 @@ impl BoundaryStudioConfigBuilder {
         Ok(BoundaryStudioConfig {
             project_name: "PLACEHOLDER_PROJECT_NAME".to_string(),
             api_client,
+            baml_src_lookups: baml_src_blob,
         })
     }
 }
@@ -343,6 +345,10 @@ async fn push_events_to_s3(
     events: Vec<Arc<TraceEvent>>,
     config: &Arc<std::sync::Mutex<BoundaryStudioConfig>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: Convert from TraceEvent to the JSON format expected by the Boundary Studio API.
+    let baml_src_lookups = config.lock().unwrap().baml_src_lookups;
+    // lookups contains all the unique ids for the functions, classes, enums, and type aliases in the BAML src.
+    // can find my name match.
     log::info!("Pushing {} events to S3", events.len());
     // Simulate network delay.
     sleep(Duration::from_millis(100)).await;

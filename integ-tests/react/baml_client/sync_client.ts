@@ -707,14 +707,14 @@ export class BamlSyncClient {
   }
   
   ExtractPeople(
-      text: string,
+      text?: string | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Person[] {
     try {
     const raw = this.runtime.callFunctionSync(
       "ExtractPeople",
       {
-        "text": text
+        "text": text?? null
       },
       this.ctx_manager.cloneContext(),
       __baml_options__?.tb?.__tb(),
