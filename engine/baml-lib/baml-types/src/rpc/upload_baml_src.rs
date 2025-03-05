@@ -13,7 +13,14 @@ pub struct UniqueId {
 
 impl std::fmt::Display for UniqueId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}##{}##{}##{}", self.type_name, self.name, self.interface_hash.unwrap_or(0), self.impl_hash.unwrap_or(0))
+        write!(
+            f,
+            "{}##{}##{}##{}",
+            self.type_name,
+            self.name,
+            self.interface_hash.unwrap_or(0),
+            self.impl_hash.unwrap_or(0)
+        )
     }
 }
 
@@ -25,7 +32,12 @@ impl std::str::FromStr for UniqueId {
         if parts.len() != 4 {
             return Err(anyhow::anyhow!("Invalid unique id: {}", s));
         }
-        Ok(UniqueId { type_name: parts[0].to_string(), name: parts[1].to_string(), interface_hash: parts[2].parse().ok(), impl_hash: parts[3].parse().ok() })
+        Ok(UniqueId {
+            type_name: parts[0].to_string(),
+            name: parts[1].to_string(),
+            interface_hash: parts[2].parse().ok(),
+            impl_hash: parts[3].parse().ok(),
+        })
     }
 }
 
@@ -40,7 +52,6 @@ impl From<String> for UniqueId {
         value.parse().expect("Failed to parse UniqueId from string")
     }
 }
-
 
 // TODO: version handling should be non-exhaustive for all of these
 // clients need to say "i can only handle v1 responses"
@@ -88,7 +99,6 @@ pub struct UploadBamlSrcResponse {
 }
 
 // ------------------------------------------------------------------------------------------------
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct BamlTypeId(pub UniqueId);
@@ -159,41 +169,39 @@ impl From<FieldType> for BamlTypeReference {
             FieldType::Primitive(TypeValue::Int) => BamlTypeReference::Int,
             FieldType::Primitive(TypeValue::Float) => BamlTypeReference::Float,
             FieldType::Primitive(TypeValue::Bool) => BamlTypeReference::Bool,
-            FieldType::Primitive(TypeValue::Media(media_type)) => BamlTypeReference::Media(
-                match media_type {
+            FieldType::Primitive(TypeValue::Media(media_type)) => {
+                BamlTypeReference::Media(match media_type {
                     crate::BamlMediaType::Image => BamlMediaType::Image,
                     crate::BamlMediaType::Audio => BamlMediaType::Audio,
-                }
-            ),
+                })
+            }
             FieldType::Class(class_name) => BamlTypeReference::Class {
-                        type_id: class_name.to_string(),
-                    },
+                type_id: class_name.to_string(),
+            },
             FieldType::Enum(enum_name) => BamlTypeReference::Enum {
-                        type_id: enum_name.to_string(),
-                    },
+                type_id: enum_name.to_string(),
+            },
             FieldType::List(inner) => BamlTypeReference::Array {
-                        items: Box::new((*inner).into()),
-                    },
+                items: Box::new((*inner).into()),
+            },
             FieldType::Map(key, value) => BamlTypeReference::Map {
-                        key: Box::new((*key).into()),
-                        value: Box::new((*value).into()),
-                    },
+                key: Box::new((*key).into()),
+                value: Box::new((*value).into()),
+            },
             FieldType::Union(union) => BamlTypeReference::Union {
-                        any_of: union.into_iter().map(|t| t.into()).collect(),
-                    },
+                any_of: union.into_iter().map(|t| t.into()).collect(),
+            },
             FieldType::Literal(literal) => BamlTypeReference::Literal(literal.into()),
             FieldType::Optional(inner) => BamlTypeReference::Union {
-                        any_of: vec![BamlTypeReference::Null, (*inner).into()],
-                    },
+                any_of: vec![BamlTypeReference::Null, (*inner).into()],
+            },
             FieldType::Tuple(field_types) => BamlTypeReference::Tuple {
-                        items: field_types.into_iter().map(|t| t.into()).collect(),
-                    },
+                items: field_types.into_iter().map(|t| t.into()).collect(),
+            },
             FieldType::RecursiveTypeAlias(name) => BamlTypeReference::TypeAlias {
-                        type_id: name.to_string(),
+                type_id: name.to_string(),
             },
-            FieldType::WithMetadata { base, .. } => {
-                (*base).into()
-            },
+            FieldType::WithMetadata { base, .. } => (*base).into(),
         }
     }
 }
@@ -280,10 +288,15 @@ pub struct BamlFunctionInput {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_unique_id() {
-        let id = UniqueId { type_name: "test".to_string(), name: "test".to_string(), interface_hash: Some(1), impl_hash: Some(2) };
+        let id = UniqueId {
+            type_name: "test".to_string(),
+            name: "test".to_string(),
+            interface_hash: Some(1),
+            impl_hash: Some(2),
+        };
         let id_str = serde_json::to_string(&id).unwrap();
         let id_from_str = serde_json::from_str::<UniqueId>(&id_str).unwrap();
         assert_eq!(id, id_from_str);
@@ -291,7 +304,12 @@ mod tests {
 
     #[test]
     fn test_baml_type_id() {
-        let id = BamlTypeId(UniqueId { type_name: "test".to_string(), name: "test".to_string(), interface_hash: Some(1), impl_hash: Some(2) });
+        let id = BamlTypeId(UniqueId {
+            type_name: "test".to_string(),
+            name: "test".to_string(),
+            interface_hash: Some(1),
+            impl_hash: Some(2),
+        });
         let id_as_string = serde_json::to_string(&id).unwrap();
         println!("id_as_string: {}", id_as_string);
         let id_str = serde_json::to_string(&id.0).unwrap();
