@@ -175,6 +175,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -207,4 +214,3 @@ jobs:
       #   with:
       #     name: baml-vscode-extension
       #     path: typescript/vscode-ext/packages/vscode/*.vsix
-
