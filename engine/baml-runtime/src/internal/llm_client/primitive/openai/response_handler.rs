@@ -2,7 +2,10 @@ use anyhow::Result;
 use baml_types::BamlMap;
 
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta};
-use crate::internal::llm_client::{primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse};
+use crate::internal::llm_client::{
+    primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
+    LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+};
 use anyhow::Context;
 use serde::Deserialize;
 use serde_json::Value;
@@ -24,11 +27,13 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
     instant_now: web_time::Instant,
     model_name: Option<String>,
 ) -> LLMResponse {
-    let response = match ChatCompletionResponse::deserialize(&response_body).context(format!(
-        "Failed to parse into a response accepted by {}: {}",
-        std::any::type_name::<ChatCompletionResponse>(),
-        response_body
-    )).map_err(|e| LLMErrorResponse {
+    let response = match ChatCompletionResponse::deserialize(&response_body)
+        .context(format!(
+            "Failed to parse into a response accepted by {}: {}",
+            std::any::type_name::<ChatCompletionResponse>(),
+            response_body
+        ))
+        .map_err(|e| LLMErrorResponse {
             client: client.context().name.to_string(),
             model: model_name.clone(),
             prompt: to_prompt(prompt),
@@ -37,8 +42,7 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
             latency: instant_now.elapsed(),
             message: format!("{:?}", e),
             code: ErrorCode::Other(2),
-        })
-    {
+        }) {
         Ok(response) => response,
         Err(e) => return LLMResponse::LLMFailure(e),
     };
@@ -90,7 +94,6 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
     })
 }
 
-
 pub fn scan_openai_response_stream(
     client_name: &str,
     request_options: &BamlMap<String, serde_json::Value>,
@@ -104,14 +107,16 @@ pub fn scan_openai_response_stream(
     let inner = match accumulated {
         Ok(accumulated) => accumulated,
         // We'll just keep the first error and return it
-        Err(e) => return Ok(())
+        Err(e) => return Ok(()),
     };
 
-    let event = match ChatCompletionResponseDelta::deserialize(&event_body).context(format!(
-        "Failed to parse into a response accepted by {}: {}",
-        std::any::type_name::<ChatCompletionResponseDelta>(),
-        event_body
-    )).map_err(|e| LLMErrorResponse {
+    let event = match ChatCompletionResponseDelta::deserialize(&event_body)
+        .context(format!(
+            "Failed to parse into a response accepted by {}: {}",
+            std::any::type_name::<ChatCompletionResponseDelta>(),
+            event_body
+        ))
+        .map_err(|e| LLMErrorResponse {
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
@@ -120,8 +125,7 @@ pub fn scan_openai_response_stream(
             latency: instant_now.elapsed(),
             message: format!("{:?}", e),
             code: ErrorCode::Other(2),
-        })
-    {
+        }) {
         Ok(response) => response,
         Err(e) => return Err(e),
     };
@@ -144,15 +148,50 @@ pub fn scan_openai_response_stream(
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::internal::llm_client::primitive::tests::MockClient;
 
     use super::*;
-
+    use pretty_assertions::assert_eq;
+    use web_time::Duration;
     const RESPONSE: &str = r#"
-{"id":"msg_01TmchHftFKihgeV7Zy9vCvZ","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"{\n  \"isCompanyPost\": false,\n  \"companyName\": null,\n  \"stage\": null,\n  \"engineeringAssessment\": \"UNKNOWN\",\n  \"teamMembers\": [],\n  \"technicalHighlights\": []\n}\n\nNotes:\n- This is a general discussion post asking for programming book recommendations\n- Not a company/startup related post\n- No technical signals or team information can be extracted\n- Cannot make engineering assessment as this is just a question\n\nThis appears to be a learning/discussion oriented post rather than a startup/company related post, so most of the structured fields are null or empty. The post doesn't contain any analyzable technical due diligence information."}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":321,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":158}}
+{
+  "id": "chatcmpl-B7rcnRIX2lh1okEeeIrCtzLppkaSw",
+  "object": "chat.completion",
+  "created": 1741214129,
+  "model": "gpt-4o-2024-08-06",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "```json\n{\n  \"name\": \"John Doe\",\n  \"education\": [\n    {\n      \"school\": \"University of California, Berkeley\",\n      \"degree\": \"B.S. in Computer Science\",\n      \"year\": 2020\n    }\n  ],\n  \"skills\": [\"Python\", \"Java\", \"C++\"]\n}\n```",
+        "refusal": null
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 128,
+    "completion_tokens": 71,
+    "total_tokens": 199,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "audio_tokens": 0
+    },
+    "completion_tokens_details": {
+      "reasoning_tokens": 0,
+      "audio_tokens": 0,
+      "accepted_prediction_tokens": 0,
+      "rejected_prediction_tokens": 0
+    }
+  },
+  "service_tier": "default",
+  "system_fingerprint": "fp_eb9dce56a8"
+}
+
     "#;
 
     #[test]
@@ -174,22 +213,27 @@ mod tests {
         );
 
         let expected = LLMCompleteResponse {
-        client: "mock".to_string(),
-        prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
-        content: "{\n  \"isCompanyPost\": false,\n  \"companyName\": null,\n  \"stage\": null,\n  \"engineeringAssessment\": \"UNKNOWN\",\n  \"teamMembers\": [],\n  \"technicalHighlights\": []\n}\n\nNotes:\n- This is a general discussion post asking for programming book recommendations\n- Not a company/startup related post\n- No technical signals or team information can be extracted\n- Cannot make engineering assessment as this is just a question\n\nThis appears to be a learning/discussion oriented post rather than a startup/company related post, so most of the structured fields are null or empty. The post doesn't contain any analyzable technical due diligence information.".to_string(),
-        start_time: system_now,
-        latency: instant_now.elapsed(),
-        model: model_name,
-        request_options: client.request_options().clone(),
-        metadata: LLMCompleteResponseMetadata {
-            baml_is_complete: true,
-            finish_reason: Some("end_turn".to_string()),
-            prompt_tokens: Some(321),
-            output_tokens: Some(158),
-            total_tokens: Some(479),
-        },
-    };
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "```json\n{\n  \"name\": \"John Doe\",\n  \"education\": [\n    {\n      \"school\": \"University of California, Berkeley\",\n      \"degree\": \"B.S. in Computer Science\",\n      \"year\": 2020\n    }\n  ],\n  \"skills\": [\"Python\", \"Java\", \"C++\"]\n}\n```".to_string(),
+            start_time: system_now,
+            latency: Duration::ZERO,
+            model: "gpt-4o-2024-08-06".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("stop".to_string()),
+                prompt_tokens: Some(128),
+                output_tokens: Some(71),
+                total_tokens: Some(199),
+            },
+        };
 
-        assert!(matches!(result, LLMResponse::Success(response)));
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {:?}", result);
+        }
     }
 }

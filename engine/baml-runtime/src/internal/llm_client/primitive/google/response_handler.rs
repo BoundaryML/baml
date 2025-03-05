@@ -175,11 +175,14 @@ pub fn scan_google_response_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::llm_client::primitive::{google::types::{
-        Candidate, Content, Part, UsageMetaData,
-    }, tests::MockClient};
+    use crate::internal::llm_client::primitive::{
+        google::types::{Candidate, Content, Part, UsageMetaData},
+        tests::MockClient,
+    };
 
     use super::*;
+    use pretty_assertions::assert_eq;
+    use web_time::Duration;
 
     const RESPONSE: &str = r#"
 {
@@ -219,7 +222,7 @@ mod tests {
         "#;
 
     #[test]
-    fn test_parsing_google_response() {
+    fn test_json_deserialization() {
         let response: GoogleResponse = serde_json::from_str(RESPONSE).unwrap();
         let expected = GoogleResponse {
             candidates: vec![Candidate {
@@ -276,7 +279,7 @@ mod tests {
             prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
             content: "```json\n{\n  name: {\n    first: null,\n    last: null\n  },\n  email: null,\n  experience: []\n}\n```\n".to_string(),
             start_time: system_now,
-            latency: instant_now.elapsed(),
+            latency: Duration::ZERO,
             model: "gemini-1.5-flash".to_string(),
             request_options: client.request_options().clone(),
             metadata: LLMCompleteResponseMetadata {
@@ -288,6 +291,11 @@ mod tests {
             },
         };
 
-        assert!(matches!(result, LLMResponse::Success(response)));
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {:?}", result);
+        }
     }
 }

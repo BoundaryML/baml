@@ -112,7 +112,7 @@ pub struct RetryLLMResponse {
     pub failed: Vec<LLMResponse>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum LLMResponse {
     /// BAML was able to successfully make the HTTP request and got a 2xx
     /// response from the model provider
@@ -176,7 +176,7 @@ impl LLMResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
@@ -191,7 +191,7 @@ pub struct LLMErrorResponse {
     pub code: ErrorCode,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum ErrorCode {
     InvalidAuthentication, // 401
     NotSupported,          // 403
@@ -256,7 +256,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
@@ -269,7 +269,7 @@ pub struct LLMCompleteResponse {
     pub metadata: LLMCompleteResponseMetadata,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct LLMCompleteResponseMetadata {
     pub baml_is_complete: bool,
     pub finish_reason: Option<String>,
