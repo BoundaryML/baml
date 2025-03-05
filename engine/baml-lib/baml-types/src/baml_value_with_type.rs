@@ -295,7 +295,6 @@ impl From<BamlValue> for BamlValueWithConcreteType {
                     data: l,
                 }
             }
-            // TODO: we don't have a media
             BamlValue::Media(m) => BamlValueWithConcreteType::Media {
                 r#type: FieldType::Primitive(TypeValue::Media(m.media_type)).into(),
                 data: m,

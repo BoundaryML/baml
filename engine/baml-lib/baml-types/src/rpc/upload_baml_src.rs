@@ -159,28 +159,41 @@ impl From<FieldType> for BamlTypeReference {
             FieldType::Primitive(TypeValue::Int) => BamlTypeReference::Int,
             FieldType::Primitive(TypeValue::Float) => BamlTypeReference::Float,
             FieldType::Primitive(TypeValue::Bool) => BamlTypeReference::Bool,
+            FieldType::Primitive(TypeValue::Media(media_type)) => BamlTypeReference::Media(
+                match media_type {
+                    crate::BamlMediaType::Image => BamlMediaType::Image,
+                    crate::BamlMediaType::Audio => BamlMediaType::Audio,
+                }
+            ),
             FieldType::Class(class_name) => BamlTypeReference::Class {
-                type_id: class_name.to_string(),
-            },
+                        type_id: class_name.to_string(),
+                    },
             FieldType::Enum(enum_name) => BamlTypeReference::Enum {
-                type_id: enum_name.to_string(),
-            },
+                        type_id: enum_name.to_string(),
+                    },
             FieldType::List(inner) => BamlTypeReference::Array {
-                items: Box::new((*inner).into()),
-            },
+                        items: Box::new((*inner).into()),
+                    },
             FieldType::Map(key, value) => BamlTypeReference::Map {
-                key: Box::new((*key).into()),
-                value: Box::new((*value).into()),
-            },
-            // TODO: union flattening
+                        key: Box::new((*key).into()),
+                        value: Box::new((*value).into()),
+                    },
             FieldType::Union(union) => BamlTypeReference::Union {
-                any_of: union.into_iter().map(|t| t.into()).collect(),
-            },
+                        any_of: union.into_iter().map(|t| t.into()).collect(),
+                    },
             FieldType::Literal(literal) => BamlTypeReference::Literal(literal.into()),
             FieldType::Optional(inner) => BamlTypeReference::Union {
-                any_of: vec![BamlTypeReference::Null, (*inner).into()],
+                        any_of: vec![BamlTypeReference::Null, (*inner).into()],
+                    },
+            FieldType::Tuple(field_types) => BamlTypeReference::Tuple {
+                        items: field_types.into_iter().map(|t| t.into()).collect(),
+                    },
+            FieldType::RecursiveTypeAlias(name) => BamlTypeReference::TypeAlias {
+                        type_id: name.to_string(),
             },
-            _ => unimplemented!("from(FieldType) not implemented for {:?}", value),
+            FieldType::WithMetadata { base, .. } => {
+                (*base).into()
+            },
         }
     }
 }

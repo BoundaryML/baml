@@ -129,7 +129,6 @@ impl ApiClient {
         body: &E::Request,
     ) -> Result<E::Response, ApiError> {
         let url = format!("{}/{}", self.base_url, endpoint.path());
-        println!("request url: {} -> {:?}", url, serde_json::to_string(body).unwrap());
         let request = self.client.post(&url).json(body);
         let request = self.add_headers(request);
         let response = request.send().await.map_err(|e| ApiError::Http(e))?;

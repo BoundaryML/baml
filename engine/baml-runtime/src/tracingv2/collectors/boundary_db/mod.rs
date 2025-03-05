@@ -550,7 +550,7 @@ async fn push_events_to_s3(
                         ),
                     }),
                     other => {
-                        tracing::warn!(
+                        tracing::debug!(
                             "Dropping event type: {:?}",
                             std::mem::discriminant(&e.content)
                         );
