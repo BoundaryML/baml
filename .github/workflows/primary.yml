@@ -170,3 +170,41 @@ jobs:
         with:
           name: baml-cli-${{ matrix.target }}
           path: engine/target/release/baml-cli*
+  build-vscode:
+    needs: build-cli
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+      - name: Download all CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-cli-*
+          path: cli-artifacts
+      - name: Copy binaries to language server
+        run: |
+          mkdir -p typescript/vscode-ext/packages/vscode/language-server/server
+          cp cli-artifacts/baml-cli-x86_64-unknown-linux-gnu/baml-cli typescript/vscode-ext/packages/vscode/language-server/server/baml-cli
+          cp cli-artifacts/baml-cli-x86_64-apple-darwin/baml-cli typescript/vscode-ext/packages/vscode/language-server/server/baml-cli
+          cp cli-artifacts/baml-cli-x86_64-pc-windows-msvc/baml-cli.exe typescript/vscode-ext/packages/vscode/language-server/server/baml-cli.exe
+          chmod +x typescript/vscode-ext/packages/vscode/language-server/server/baml-cli*
+      - name: Install dependencies
+        run: pnpm install
+        working-directory: typescript/vscode-ext
+      - name: Build VSCode extension
+        run: pnpm build
+        working-directory: typescript/vscode-ext/packages/vscode
+      - name: Package VSIX
+        run: pnpm vscode:prepublish && npx @vscode/vsce package
+        working-directory: typescript/vscode-ext/packages/vscode
+      # - name: Upload VSIX artifact
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: baml-vscode-extension
+      #     path: typescript/vscode-ext/packages/vscode/*.vsix
+
