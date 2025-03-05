@@ -488,7 +488,7 @@ impl RuntimeInterface for InternalBamlRuntime {
                         Some((_, _, result)) => {
                             if let Some(Ok(result)) = result {
                                 let ok: BamlValueWithConcreteType = result.clone().0.value().into();
-                                Ok(serde_json::to_value(ok).expect("Failed to serialize result"))
+                                Ok(ok)
                             } else {
                                 Err(anyhow::anyhow!("Function failed - known error type"))
                             }

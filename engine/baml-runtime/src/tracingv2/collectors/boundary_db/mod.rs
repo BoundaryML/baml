@@ -129,7 +129,7 @@ impl BoundaryStudioConfigBuilder {
         }
 
         Ok(BoundaryStudioConfig {
-            project_name: "PLACEHOLDER_PROJECT_NAME".to_string(),
+            project_name: "project123".to_string(),
             api_client,
             baml_src_lookups: baml_src_blob,
         })
@@ -486,7 +486,7 @@ async fn push_events_to_s3(
                                         .args
                                         .clone()
                                         .into_iter()
-                                        .map(|(k, v)| {
+                                        .map(|(k, mut v)| {
                                             (
                                                 k,
                                                 serde_json::to_value(
