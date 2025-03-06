@@ -19,6 +19,7 @@
   ],
   "main": "./out/extension.js",
   "scripts": {
+    "server:build": "mkdir -p server && cd ../../../../engine && cargo build --bin baml-cli --release && cp target/release/baml-cli ../typescript/vscode-ext/packages/vscode/server/",
     "vscode:prepublish": "pnpm run esbuild-base --minify",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node ",
     "esbuild-build": "pnpm run esbuild-base --sourcemap",
