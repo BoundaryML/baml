@@ -528,6 +528,19 @@ paths:
                 title: ExtractResume2Response
                 $ref: '#/components/schemas/Resume'
       operationId: ExtractResume2
+  /call/ExtractResumeClaude:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractResumeClaude'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractResumeClaudeResponse
+                $ref: '#/components/schemas/Resume'
+      operationId: ExtractResumeClaude
   /call/FnClassOptionalOutput:
     post:
       requestBody:
@@ -2897,6 +2910,22 @@ components:
         application/json:
           schema:
             title: ExtractResume2Request
+            type: object
+            properties:
+              resume:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - resume
+            additionalProperties: false
+    ExtractResumeClaude:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractResumeClaudeRequest
             type: object
             properties:
               resume:

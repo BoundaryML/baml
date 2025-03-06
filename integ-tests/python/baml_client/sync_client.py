@@ -1029,6 +1029,32 @@ class BamlSyncClient:
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
+    def ExtractResumeClaude(
+        self,
+        resume: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Resume:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.call_function_sync(
+        "ExtractResumeClaude",
+        {
+          "resume": resume,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
+    
     def FnClassOptionalOutput(
         self,
         input: str,
@@ -5552,6 +5578,39 @@ class BamlStreamClient:
 
       raw = self.__runtime.stream_function_sync(
         "ExtractResume2",
+        {
+          "resume": resume,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.Resume, types.Resume](
+        raw,
+        lambda x: cast(partial_types.Resume, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.Resume, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def ExtractResumeClaude(
+        self,
+        resume: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.Resume, types.Resume]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.stream_function_sync(
+        "ExtractResumeClaude",
         {
           "resume": resume,
         },
@@ -10574,6 +10633,28 @@ class HttpRequest:
 
       return self.__runtime.build_request_sync(
         "ExtractResume2",
+        {
+          "resume": resume,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+    
+    def ExtractResumeClaude(
+        self,
+        resume: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "ExtractResumeClaude",
         {
           "resume": resume,
         },

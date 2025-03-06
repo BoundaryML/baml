@@ -711,6 +711,24 @@ export const ExtractResume2 = async (
 };
 
 /**
+ * Executes the "ExtractResumeClaude" BAML action.
+ *
+ * This server action calls the underlying BAML function "ExtractResumeClaude"
+ * with the specified parameters.
+ *
+ * @param { string } resume - Input parameter.
+ *
+ * @returns {Promise<Resume>} A promise that resolves with the result of the action.
+ */
+export const ExtractResumeClaude = async (
+  resume: string,
+): Promise<Resume> => {
+  return b.ExtractResumeClaude(
+    resume,
+  );
+};
+
+/**
  * Executes the "FnClassOptionalOutput" BAML action.
  *
  * This server action calls the underlying BAML function "FnClassOptionalOutput"
