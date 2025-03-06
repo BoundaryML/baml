@@ -35,7 +35,7 @@ async def test_expose_request_gemini():
         },
         'contents': [
             {
-                'parts': [{'text': 'Write a nice short story about Dr. Pepper'}],
+                'parts': [{'text': 'Write a nice short story about Dr. Pepper. Keep it to 15 words or less.'}],
                 'role': 'user'
             },
         ],
