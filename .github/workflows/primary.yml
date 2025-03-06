@@ -163,57 +163,10 @@ jobs:
         with:
           workspaces: engine
       - name: Build CLI
-        run: cargo build --release --bin baml-cli
+        run: cargo build --release --bin baml-cli --target ${{ matrix.target }}
         working-directory: engine
       - name: Upload CLI artifact
         uses: actions/upload-artifact@v4
         with:
           name: baml-cli-${{ matrix.target }}
           path: engine/target/release/baml-cli*
-  build-vscode:
-    needs: build-cli
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-      - uses: jetli/wasm-bindgen-action@v0.2.0
-        with:
-          version: '0.2.100'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.12.0
-      - name: Download all CLI artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: baml-cli-*
-          path: cli-artifacts
-      - name: Copy binaries to language server
-        run: |
-          mkdir -p typescript/vscode-ext/packages/vscode/language-server/server
-          cp cli-artifacts/baml-cli-x86_64-unknown-linux-gnu/baml-cli typescript/vscode-ext/packages/vscode/language-server/server/baml-cli
-          cp cli-artifacts/baml-cli-x86_64-apple-darwin/baml-cli typescript/vscode-ext/packages/vscode/language-server/server/baml-cli
-          cp cli-artifacts/baml-cli-x86_64-pc-windows-msvc/baml-cli.exe typescript/vscode-ext/packages/vscode/language-server/server/baml-cli.exe
-          chmod +x typescript/vscode-ext/packages/vscode/language-server/server/baml-cli*
-      - name: Install dependencies
-        run: pnpm install && pnpm build
-        working-directory: typescript
-      - name: Build VSCode extension
-        run: pnpm build
-        working-directory: typescript/vscode-ext/packages/vscode
-      - name: Package VSIX
-        run: npm upgrade && pnpm vscode:prepublish && npx @vscode/vsce package
-        working-directory: typescript/vscode-ext/packages/vscode
-      # - name: Upload VSIX artifact
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: baml-vscode-extension
-      #     path: typescript/vscode-ext/packages/vscode/*.vsix
