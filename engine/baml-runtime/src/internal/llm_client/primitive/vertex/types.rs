@@ -233,7 +233,7 @@ pub enum HarmSeverity {
 pub struct Candidate {
     pub index: Option<i32>,
     pub content: Option<Content>,
-    pub finish_reason: Option<FinishReason>,
+    pub finish_reason: Option<String>,
     pub safety_ratings: Option<Vec<SafetyRating>>,
     pub citation_metadata: Option<CitationMetadata>,
     pub grounding_metadata: Option<GroundingMetadata>,
@@ -300,28 +300,6 @@ pub struct VideoMetadata {
 pub struct Duration {
     pub seconds: i64,
     pub nanos: i32,
-}
-
-#[derive(Serialize, Deserialize, Debug, strum_macros::Display)]
-pub enum FinishReason {
-    #[serde(rename = "FINISH_REASON_UNSPECIFIED")]
-    Unspecified,
-    #[serde(rename = "STOP")]
-    Stop,
-    #[serde(rename = "MAX_TOKENS")]
-    MaxTokens,
-    #[serde(rename = "SAFETY")]
-    Safety,
-    #[serde(rename = "RECITATION")]
-    Recitation,
-    #[serde(rename = "OTHER")]
-    Other,
-    #[serde(rename = "BLOCKLIST")]
-    Blocklist,
-    #[serde(rename = "PROHIBITED_CONTENT")]
-    ProhibitedContent,
-    #[serde(rename = "SPII")]
-    Spii,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -431,16 +409,70 @@ mod tests {
         "#;
 
         let parsed: Result<VertexResponse, Error> = serde_json::from_str(data);
+        let expected = VertexResponse {
+            candidates: vec![Candidate {
+                index: None,
+                content: Some(Content {
+                    role: Some("model".to_string()),
+                    parts: vec![Part {
+                        text: "The air in Donkey Kong's treehouse was thick with frustration. Scattered banana peels littered the floor, evidence of a temper tantrum of Kong-sized proportions. Donkey Kong himself sat slumped against a wall, his furry brow furrowed. Today was the annual Jungle Jamboree, and Donkey Kong, reigning champion of the Banana Eating Contest, couldn't participate. \n\nHis dentist, a nervous little monkey named Marvin, had fitted him with braces. \"No more chomping whole bananas for a while, big guy,\" Marvin had chirped, tapping a metal bracket. \"These babies need soft food.\"\n\nDonkey Kong sighed. Soft food. What was the point of a jungle jamboree if you couldn't even enjoy a proper banana?\n\nSuddenly, a sweet, nutty aroma wafted in from the open window. Donkey Kong's nose twitched. He followed the scent to find Diddy Kong, his little buddy, happily munching on something spread on a banana slice.\n\n\"What's that you got there, little buddy?\" Donkey Kong grumbled, trying not to sound too interested.\n\n\"Peanut butter sandwiches!\" chirped Diddy Kong, offering Donkey Kong a bite. \"Want one? It's the best thing ever!\"\n\nDonkey Kong hesitated. Could he? He took a tentative bite and his eyes widened. The creamy peanut butter coated his mouth, the salty-sweet taste a revelation. It was soft, delicious, and didn't require any chewing!\n\n\"Diddy,\" Donkey Kong said, a slow grin spreading across his face, \"You're a genius!\"\n\nThat afternoon, Donkey Kong entered the Jungle Jamboree, his head held high. He might not be the Banana Eating Champion this year, but he was determined to become the Peanut Butter Sandwich Eating Champion. And with a determined glint in his eye and a stack of peanut butter sandwiches, Donkey Kong knew he had this one in the bag. From then on, peanut butter became a staple in Donkey Kong's diet, braces or no braces. After all, who needed chomping when you had creamy, delicious peanut butter? \n".to_string(),
+                        inline_data: None,
+                        file_data: None,
+                        function_call: None,
+                        function_response: None,
+                        video_metadata: None,
+                    }],
+                }),
+                finish_reason: Some("STOP".to_string()),
+                safety_ratings: Some(vec![
+                    SafetyRating {
+                        category: Some(HarmCategory::HateSpeech),
+                        probability: Some(HarmProbability::Negligible),
+                        probability_score: Some(0.12085322),
+                        severity: Some(HarmSeverity::Negligible),
+                        severity_score: Some(0.11616109),
+                        blocked: None,
+                    },
+                    SafetyRating {
+                        category: Some(HarmCategory::DangerousContent),
+                        probability: Some(HarmProbability::Negligible),
+                        probability_score: Some(0.07356305),
+                        severity: Some(HarmSeverity::Negligible),
+                        severity_score: Some(0.037750278),
+                        blocked: None,
+                    },
+                    SafetyRating {
+                        category: Some(HarmCategory::Harassment),
+                        probability: Some(HarmProbability::Negligible),
+                        probability_score: Some(0.24926445),
+                        severity: Some(HarmSeverity::Negligible),
+                        severity_score: Some(0.108566426),
+                        blocked: None,
+                    },
+                    SafetyRating {
+                        category: Some(HarmCategory::SexuallyExplicit),
+                        probability: Some(HarmProbability::Negligible),
+                        probability_score: Some(0.08137363),
+                        severity: Some(HarmSeverity::Negligible),
+                        severity_score: Some(0.1301748),
+                        blocked: None,
+                    },
+                ]),
+                citation_metadata: None,
+                grounding_metadata: None,
+                finish_message: None,
+            }],
+            prompt_feedback: None,
+            usage_metadata: Some(UsageMetaData {
+                prompt_token_count: Some(11),
+                candidates_token_count: Some(433),
+                total_token_count: Some(444),
+            }),
+        };
 
-        match parsed {
-            Ok(response) => println!("Parsed successfully: {:?}", response),
-            Err(e) => {
-                println!("Failed to parse: {}", e);
-                println!("Error line: {}", e.line());
-                println!("Error column: {}", e.column());
-                println!("Error cause: {:?}", e.classify());
-                panic!("Deserialization failed");
-            }
-        }
+        let parsed = parsed.expect("Failed to parse json");
+        let parsed_json = serde_json::to_string(&parsed).unwrap();
+        let expected_json = serde_json::to_string(&expected).unwrap();
+        assert_eq!(parsed_json, expected_json);
     }
 }

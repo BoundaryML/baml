@@ -12,7 +12,7 @@ use crate::{
     internal::llm_client::{
         primitive::{
             request::{make_parsed_request, make_request, RequestBuilder},
-            vertex::types::{FinishReason, VertexResponse},
+            vertex::types::VertexResponse,
         },
         traits::{
             SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,

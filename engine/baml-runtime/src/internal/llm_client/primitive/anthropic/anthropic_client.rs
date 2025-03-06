@@ -25,7 +25,7 @@ use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
         primitive::{
-            anthropic::types::{AnthropicMessageResponse, StopReason},
+            anthropic::types::AnthropicMessageResponse,
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
