@@ -30,7 +30,7 @@ pub struct LoggedHttpResponse {
 }
 
 impl LoggedHttpResponse {
-    pub async fn new_from_reqwest(mut resp: reqwest::Response) -> Result<Self, reqwest::Error> {
+    pub async fn new_from_reqwest(resp: reqwest::Response) -> Result<Self, reqwest::Error> {
         let status = resp.status();
         let url = resp.url().to_string();
         let headers = resp.headers().clone();
@@ -83,7 +83,7 @@ pub enum JsonBodyInput<'a> {
     String(String),
 }
 
-fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
+pub(crate) fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
     let string_to_parse = match input {
         JsonBodyInput::ReqwestBody(maybe_body) => {
             if let Some(b) = maybe_body {
@@ -108,7 +108,7 @@ fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
     Ok(serde_json::Value::String(string_to_parse))
 }
 
-fn json_headers(headers: &HeaderMap) -> serde_json::Value {
+pub(crate) fn json_headers(headers: &HeaderMap) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (key, value) in headers.iter() {
         let value_str = value.to_str().unwrap_or_default().to_string();

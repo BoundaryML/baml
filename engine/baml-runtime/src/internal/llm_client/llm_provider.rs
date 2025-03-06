@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
+use baml_types::tracing::events::HttpRequestId;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::RenderedChatMessage;
 
@@ -16,6 +17,7 @@ use super::{
     primitive::LLMPrimitiveProvider,
     strategy::LLMStrategyProvider,
     traits::WithRetryPolicy,
+    LLMResponse,
 };
 
 pub enum LLMProvider {
@@ -113,6 +115,37 @@ impl LLMProvider {
                     .ok_or(anyhow::anyhow!("Strategy provider is empty: {}", provider))?
                     .provider
                     .completion_to_provider_body(prompt)
+            }
+        }
+    }
+
+    pub async fn build_request<'a>(
+        &self,
+        prompt: either::Either<&String, &[RenderedChatMessage]>,
+        allow_proxy: bool,
+        stream: bool,
+        ctx: &RuntimeContext,
+        client_lookup: &'a impl InternalClientLookup<'a>,
+    ) -> Result<reqwest::RequestBuilder> {
+        match self {
+            LLMProvider::Primitive(provider) => {
+                provider.build_request(prompt, allow_proxy, stream).await
+            }
+
+            LLMProvider::Strategy(provider) => {
+                let orchestrator = provider.iter_orchestrator(
+                    &mut Default::default(),
+                    Default::default(),
+                    ctx,
+                    client_lookup,
+                )?;
+
+                orchestrator
+                    .first()
+                    .ok_or(anyhow::anyhow!("Strategy provider is empty: {}", provider))?
+                    .provider
+                    .build_request(prompt, allow_proxy, stream)
+                    .await
             }
         }
     }

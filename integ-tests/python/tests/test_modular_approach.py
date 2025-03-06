@@ -13,7 +13,7 @@ from ..baml_client import types
 async def test_modular_openai_gpt4():
     client = AsyncOpenAI()
 
-    prompt = await b.prompt.ExtractResume2("""
+    req = await b.request.ExtractResume2("""
         John Doe
         johndoe@example.com
         (123) 456-7890
@@ -29,7 +29,7 @@ async def test_modular_openai_gpt4():
 
     """)
 
-    response = await client.chat.completions.create(model="gpt-4o", messages=prompt["messages"])
+    response = await client.chat.completions.create(**req.body)
 
     parsed = b.parse.ExtractResume(response.choices[0].message.content)
 

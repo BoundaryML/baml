@@ -2,11 +2,10 @@ use crate::errors::{BamlError, BamlInvalidArgumentError};
 use crate::parse_py_type::parse_py_type;
 use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
 use crate::types::function_results::{pythonize_strict, FunctionResult};
-use crate::types::prompt::PyPrompt;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::types::trace_stats::TraceStats;
 use crate::types::type_builder::TypeBuilder;
-use crate::types::{ClientRegistry, Collector};
+use crate::types::{ClientRegistry, Collector, HTTPRequest};
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
@@ -322,16 +321,8 @@ impl BamlRuntime {
         ))
     }
 
-    /// Expose the prompt of a function.
-    ///
-    /// This is NOT the same as "rendering" the prompt since it returns a JSON
-    /// object that represents the prompt as understood by the LLM provider.
-    ///
-    /// Prompt rendering in the context of Baml source means building a
-    /// [`baml_runtime::RenderedPrompt`] object. We take that object and pass
-    /// it to the LLM provider implementation to get the JSON out of it.
     #[pyo3(signature = (function_name, args, ctx, tb, cb))]
-    fn prompt_to_provider_body(
+    fn build_request(
         &self,
         py: Python<'_>,
         function_name: String,
@@ -357,31 +348,32 @@ impl BamlRuntime {
         let client_registry = cb.map(|cb| cb.inner.clone());
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let body = baml_runtime
-                .prompt_to_provider_body(
+            baml_runtime
+                .build_request(
                     function_name,
                     &args_map,
                     &ctx_manager,
                     type_builder.as_ref(),
                     client_registry.as_ref(),
+                    false,
                 )
                 .await
-                .map_err(BamlError::from_anyhow)?;
-
-            Ok(PyPrompt::from(body))
+                .map(HTTPRequest::from)
+                .map_err(BamlError::from_anyhow)
         })
         .map(pyo3::Bound::into)
     }
 
     #[pyo3(signature = (function_name, args, ctx, tb, cb))]
-    fn prompt_to_provider_body_sync(
+    fn build_request_sync(
         &self,
+        py: Python<'_>,
         function_name: String,
         args: PyObject,
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-    ) -> PyResult<PyPrompt> {
+    ) -> PyResult<HTTPRequest> {
         let Some(args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
@@ -393,25 +385,26 @@ impl BamlRuntime {
             ));
         };
 
-        let ctx_mng = ctx.inner.clone();
-        let tb = tb.map(|tb| tb.inner.clone());
-        let cb = cb.map(|cb| cb.inner.clone());
+        let context_manager = ctx.inner.clone();
+        let type_builder = tb.map(|tb| tb.inner.clone());
+        let client_registry = cb.map(|cb| cb.inner.clone());
 
         // TODO: Figure out if this will be async or not (images, media, etc).
         // If it's not async then skip gil and threads.
-        let result = Python::with_gil(|py| {
-            py.allow_threads(|| {
-                self.inner.prompt_to_provider_body_sync(
-                    function_name,
-                    &args_map,
-                    &ctx_mng,
-                    tb.as_ref(),
-                    cb.as_ref(),
-                )
-            })
+        let result = py.allow_threads(|| {
+            self.inner.build_request_sync(
+                function_name,
+                &args_map,
+                &context_manager,
+                type_builder.as_ref(),
+                client_registry.as_ref(),
+                false,
+            )
         });
 
-        result.map(PyPrompt::from).map_err(BamlError::from_anyhow)
+        result
+            .map(HTTPRequest::from)
+            .map_err(BamlError::from_anyhow)
     }
 
     #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb))]

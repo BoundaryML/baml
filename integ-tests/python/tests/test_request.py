@@ -7,10 +7,10 @@ from ..baml_client.sync_client import b as sync_b
 
 
 @pytest.mark.asyncio
-async def test_expose_prompt_gpt4():
-    prompt = await b.prompt.ExtractReceiptInfo("test@email.com", "curiosity")
+async def test_expose_request_gpt4():
+    request = await b.request.ExtractReceiptInfo("test@email.com", "curiosity")
 
-    assert prompt == {
+    assert request.body == {
         'messages': [
             {
                 'role': 'system',
@@ -21,14 +21,15 @@ async def test_expose_prompt_gpt4():
                     }
                 ]
             }
-        ]
+        ],
+        'model': 'gpt-4o'
     }
 
 @pytest.mark.asyncio
-async def test_expose_prompt_gemini():
-    prompt = await b.prompt.TestGeminiSystemAsChat("Dr. Pepper")
+async def test_expose_request_gemini():
+    request = await b.request.TestGeminiSystemAsChat("Dr. Pepper")
 
-    assert prompt == {
+    assert request.body == {
         'system_instruction': {
             'parts': [{'text': 'You are a helpful assistant'}]
         },
@@ -37,15 +38,19 @@ async def test_expose_prompt_gemini():
                 'parts': [{'text': 'Write a nice short story about Dr. Pepper'}],
                 'role': 'user'
             },
-        ]
+        ],
+        'safetySettings': {
+            'category': 'HARM_CATEGORY_HATE_SPEECH',
+            'threshold': 'BLOCK_LOW_AND_ABOVE',
+        }
     }
 
 @pytest.mark.asyncio
-async def test_expose_prompt_fallback():
+async def test_expose_request_fallback():
     # First client in strategy is GPT4Turbo
-    prompt = await b.prompt.TestFallbackStrategy("Dr. Pepper")
+    request = await b.request.TestFallbackStrategy("Dr. Pepper")
 
-    assert prompt == {
+    assert request.body == {
         'messages': [
             {
                 'role': 'system',
@@ -61,15 +66,16 @@ async def test_expose_prompt_fallback():
                     'text': 'Write a nice short story about Dr. Pepper'
                 }]
             }
-        ]
+        ],
+        'model': 'gpt-4-turbo'
     }
 
 @pytest.mark.asyncio
-async def test_expose_prompt_round_robin():
+async def test_expose_request_round_robin():
     # First client in strategy is Claude
-    prompt = await b.prompt.TestRoundRobinStrategy("Dr. Pepper")
+    request = await b.request.TestRoundRobinStrategy("Dr. Pepper")
 
-    assert prompt == {
+    assert request.body == {
         'messages': [
             {
                 'role': 'user',
@@ -86,14 +92,16 @@ async def test_expose_prompt_round_robin():
                 'type': 'text',
                 'text': 'You are a helpful assistant.'
             }
-        ]
+        ],
+        'model': 'claude-3-haiku-20240307',
+        'max_tokens': 1000,
     }
 
 @pytest.mark.asyncio
-async def test_expose_prompt_gpt4_sync():
-    prompt = sync_b.prompt.ExtractReceiptInfo("test@email.com", "curiosity")
+async def test_expose_request_gpt4_sync():
+    request = sync_b.request.ExtractReceiptInfo("test@email.com", "curiosity")
 
-    assert prompt == {
+    assert request.body == {
         'messages': [
             {
                 'role': 'system',
@@ -104,5 +112,6 @@ async def test_expose_prompt_gpt4_sync():
                     }
                 ]
             }
-        ]
+        ],
+        'model': 'gpt-4o'
     }

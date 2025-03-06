@@ -250,7 +250,7 @@ class LLMCall:
 
 
 class LLMStreamCall(LLMCall):
-    def __init__(self, client_name: str, provider: str, timing: StreamTiming, request: Dict[str, Any], response: Dict[str, Any], 
+    def __init__(self, client_name: str, provider: str, timing: StreamTiming, request: Dict[str, Any], response: Dict[str, Any],
     usage: Usage) -> None: ...
     # TODO: add chunks
     # def chunks(self) -> List[str]: ...
