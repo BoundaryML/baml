@@ -26,6 +26,7 @@ class BamlAsyncClient:
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
     __http_request: "HttpRequest"
+    __http_stream_request: "HttpStreamRequest"
     __llm_response_parser: LlmResponseParser
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
@@ -33,6 +34,7 @@ class BamlAsyncClient:
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
       self.__http_request = HttpRequest(self.__runtime, self.__ctx_manager)
+      self.__http_stream_request = HttpStreamRequest(self.__runtime, self.__ctx_manager)
       self.__llm_response_parser = LlmResponseParser(self.__runtime, self.__ctx_manager)
       self.__llm_stream_parser = LlmStreamParser(self.__runtime, self.__ctx_manager)
 
@@ -43,6 +45,10 @@ class BamlAsyncClient:
     @property
     def request(self):
       return self.__http_request
+
+    @property
+    def stream_request(self):
+      return self.__http_stream_request
 
     @property
     def parse(self):
@@ -164,6 +170,45 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
+      )
+    {% endfor %}
+
+
+class HttpStreamRequest:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+
+    {% for fn in funcs %}
+    async def {{ fn.name }}(
+        self,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "{{fn.name}}",
+        {
+          {%- for (name, _) in fn.args %}
+          "{{name}}": {{name}},
+          {%- endfor %}
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
       )
     {% endfor %}
 

@@ -41,6 +41,7 @@ class BamlAsyncClient:
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
     __http_request: "HttpRequest"
+    __http_stream_request: "HttpStreamRequest"
     __llm_response_parser: LlmResponseParser
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
@@ -48,6 +49,7 @@ class BamlAsyncClient:
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
       self.__http_request = HttpRequest(self.__runtime, self.__ctx_manager)
+      self.__http_stream_request = HttpStreamRequest(self.__runtime, self.__ctx_manager)
       self.__llm_response_parser = LlmResponseParser(self.__runtime, self.__ctx_manager)
       self.__llm_stream_parser = LlmStreamParser(self.__runtime, self.__ctx_manager)
 
@@ -58,6 +60,10 @@ class BamlAsyncClient:
     @property
     def request(self):
       return self.__http_request
+
+    @property
+    def stream_request(self):
+      return self.__http_stream_request
 
     @property
     def parse(self):
@@ -9517,6 +9523,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AliasThatPointsToRecursiveType(
@@ -9539,6 +9546,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AliasWithMultipleAttrs(
@@ -9561,6 +9569,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AliasedInputClass(
@@ -9583,6 +9592,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AliasedInputClass2(
@@ -9605,6 +9615,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AliasedInputClassNested(
@@ -9627,6 +9638,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AliasedInputEnum(
@@ -9649,6 +9661,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AliasedInputList(
@@ -9671,6 +9684,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AllowedOptionals(
@@ -9693,6 +9707,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AssertFn(
@@ -9715,6 +9730,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def AudioInput(
@@ -9737,6 +9753,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def BuildLinkedList(
@@ -9759,6 +9776,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def BuildTree(
@@ -9781,6 +9799,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ClassThatPointsToRecursiveClassThroughAlias(
@@ -9803,6 +9822,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ClassifyDynEnumTwo(
@@ -9825,6 +9845,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ClassifyMessage(
@@ -9847,6 +9868,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ClassifyMessage2(
@@ -9869,6 +9891,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ClassifyMessage3(
@@ -9891,6 +9914,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def Completion(
@@ -9915,6 +9939,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def CustomTask(
@@ -9937,6 +9962,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DescribeImage(
@@ -9959,6 +9985,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DescribeImage2(
@@ -9982,6 +10009,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DescribeImage3(
@@ -10005,6 +10033,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DescribeImage4(
@@ -10028,6 +10057,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DifferentiateUnions(
@@ -10049,6 +10079,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DummyOutputFunction(
@@ -10071,6 +10102,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DynamicFunc(
@@ -10093,6 +10125,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DynamicInputOutput(
@@ -10115,6 +10148,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def DynamicListInputOutput(
@@ -10137,6 +10171,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExpectFailure(
@@ -10158,6 +10193,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractContactInfo(
@@ -10180,6 +10216,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractHobby(
@@ -10202,6 +10239,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractNames(
@@ -10224,6 +10262,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractPeople(
@@ -10246,6 +10285,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractReceiptInfo(
@@ -10269,6 +10309,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractResume(
@@ -10292,6 +10333,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractResume2(
@@ -10314,6 +10356,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ExtractResumeClaude(
@@ -10336,6 +10379,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnClassOptionalOutput(
@@ -10358,6 +10402,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnClassOptionalOutput2(
@@ -10380,6 +10425,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnEnumListOutput(
@@ -10402,6 +10448,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnEnumOutput(
@@ -10424,6 +10471,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnLiteralClassInputOutput(
@@ -10446,6 +10494,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnLiteralUnionClassInputOutput(
@@ -10468,6 +10517,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnNamedArgsSingleStringOptional(
@@ -10490,6 +10540,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputBool(
@@ -10512,6 +10563,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputClass(
@@ -10534,6 +10586,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputClassList(
@@ -10556,6 +10609,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputClassNested(
@@ -10578,6 +10632,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputClassWithEnum(
@@ -10600,6 +10655,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputInt(
@@ -10622,6 +10678,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputLiteralBool(
@@ -10644,6 +10701,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputLiteralInt(
@@ -10666,6 +10724,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputLiteralString(
@@ -10688,6 +10747,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnOutputStringList(
@@ -10710,6 +10770,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnTestAliasedEnumOutput(
@@ -10732,6 +10793,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnTestClassAlias(
@@ -10754,6 +10816,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def FnTestNamedArgsSingleEnum(
@@ -10776,6 +10839,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def GetDataType(
@@ -10798,6 +10862,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def GetOrderInfo(
@@ -10820,6 +10885,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def GetQuery(
@@ -10842,6 +10908,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def InOutEnumMapKey(
@@ -10865,6 +10932,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def InOutLiteralStringUnionMapKey(
@@ -10888,6 +10956,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def InOutSingleLiteralStringMapKey(
@@ -10910,6 +10979,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def JsonTypeAliasCycle(
@@ -10932,6 +11002,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def LiteralUnionsTest(
@@ -10954,6 +11025,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def MakeBlockConstraint(
@@ -10975,6 +11047,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def MakeNestedBlockConstraint(
@@ -10996,6 +11069,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def MakeSemanticContainer(
@@ -11017,6 +11091,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def MapAlias(
@@ -11039,6 +11114,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def MergeAliasAttributes(
@@ -11061,6 +11137,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def MyFunc(
@@ -11083,6 +11160,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def NestedAlias(
@@ -11105,6 +11183,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def NullLiteralClassHello(
@@ -11127,6 +11206,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def OptionalTest_Function(
@@ -11149,6 +11229,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PredictAge(
@@ -11171,6 +11252,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PredictAgeBare(
@@ -11193,6 +11275,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PrimitiveAlias(
@@ -11215,6 +11298,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PromptTestClaude(
@@ -11237,6 +11321,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PromptTestClaudeChat(
@@ -11259,6 +11344,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PromptTestClaudeChatNoSystem(
@@ -11281,6 +11367,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PromptTestOpenAI(
@@ -11303,6 +11390,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PromptTestOpenAIChat(
@@ -11325,6 +11413,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PromptTestOpenAIChatNoSystem(
@@ -11347,6 +11436,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def PromptTestStreaming(
@@ -11369,6 +11459,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def RecursiveAliasCycle(
@@ -11391,6 +11482,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def RecursiveClassWithAliasIndirection(
@@ -11413,6 +11505,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ReturnAliasWithMergedAttributes(
@@ -11435,6 +11528,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ReturnFailingAssert(
@@ -11457,6 +11551,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ReturnJsonEntry(
@@ -11479,6 +11574,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def ReturnMalformedConstraints(
@@ -11501,6 +11597,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def SchemaDescriptions(
@@ -11523,6 +11620,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def SimpleRecursiveListAlias(
@@ -11545,6 +11643,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def SimpleRecursiveMapAlias(
@@ -11567,6 +11666,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def StreamBigNumbers(
@@ -11589,6 +11689,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def StreamFailingAssertion(
@@ -11612,6 +11713,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def StreamOneBigNumber(
@@ -11634,6 +11736,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def StreamUnionIntegers(
@@ -11656,6 +11759,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def StreamingCompoundNumbers(
@@ -11679,6 +11783,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TakeRecAliasDep(
@@ -11701,6 +11806,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TellStory(
@@ -11723,6 +11829,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAnthropic(
@@ -11745,6 +11852,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAnthropicShorthand(
@@ -11767,6 +11875,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAws(
@@ -11789,6 +11898,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAwsInvalidAccessKey(
@@ -11811,6 +11921,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAwsInvalidProfile(
@@ -11833,6 +11944,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAwsInvalidRegion(
@@ -11855,6 +11967,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAwsInvalidSessionToken(
@@ -11877,6 +11990,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzure(
@@ -11899,6 +12013,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzureFailure(
@@ -11921,6 +12036,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzureO1NoMaxTokens(
@@ -11943,6 +12059,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzureO1WithMaxCompletionTokens(
@@ -11965,6 +12082,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzureO1WithMaxTokens(
@@ -11987,6 +12105,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzureO3NoMaxTokens(
@@ -12009,6 +12128,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzureO3WithMaxCompletionTokens(
@@ -12031,6 +12151,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestAzureWithMaxTokens(
@@ -12053,6 +12174,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestCaching(
@@ -12076,6 +12198,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFallbackClient(
@@ -12097,6 +12220,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFallbackStrategy(
@@ -12119,6 +12243,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFallbackToShorthand(
@@ -12141,6 +12266,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleBool(
@@ -12163,6 +12289,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleClass(
@@ -12185,6 +12312,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleEnumList(
@@ -12207,6 +12335,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleFloat(
@@ -12229,6 +12358,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleInt(
@@ -12251,6 +12381,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleMapStringToClass(
@@ -12273,6 +12404,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleMapStringToMap(
@@ -12295,6 +12427,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleMapStringToString(
@@ -12317,6 +12450,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleString(
@@ -12339,6 +12473,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleStringArray(
@@ -12361,6 +12496,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestFnNamedArgsSingleStringList(
@@ -12383,6 +12519,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestGemini(
@@ -12405,6 +12542,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestGeminiOpenAiGeneric(
@@ -12426,6 +12564,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestGeminiSystem(
@@ -12448,6 +12587,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestGeminiSystemAsChat(
@@ -12470,6 +12610,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestImageInput(
@@ -12492,6 +12633,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestImageInputAnthropic(
@@ -12514,6 +12656,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestImageListInput(
@@ -12536,6 +12679,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestMemory(
@@ -12558,6 +12702,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestMulticlassNamedArgs(
@@ -12581,6 +12726,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestNamedArgsLiteralBool(
@@ -12603,6 +12749,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestNamedArgsLiteralInt(
@@ -12625,6 +12772,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestNamedArgsLiteralString(
@@ -12647,6 +12795,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOllama(
@@ -12669,6 +12818,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAI(
@@ -12691,6 +12841,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAIGPT4oMini(
@@ -12713,6 +12864,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAILegacyProvider(
@@ -12735,6 +12887,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAIO1NoMaxTokens(
@@ -12757,6 +12910,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAIO1WithMaxCompletionTokens(
@@ -12779,6 +12933,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAIO1WithMaxTokens(
@@ -12801,6 +12956,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAIShorthand(
@@ -12823,6 +12979,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAIWithMaxTokens(
@@ -12845,6 +13002,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestOpenAIWithNullMaxTokens(
@@ -12867,6 +13025,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestRetryConstant(
@@ -12888,6 +13047,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestRetryExponential(
@@ -12909,6 +13069,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestRoundRobinStrategy(
@@ -12931,6 +13092,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestSingleFallbackClient(
@@ -12952,6 +13114,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestThinking(
@@ -12974,6 +13137,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestUniverseQuestion(
@@ -12996,6 +13160,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestVertex(
@@ -13018,6 +13183,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def TestVertexWithSystemInstructions(
@@ -13039,6 +13205,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def UnionTest_Function(
@@ -13061,6 +13228,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def UseBlockConstraint(
@@ -13083,6 +13251,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def UseMalformedConstraints(
@@ -13105,6 +13274,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
       )
     
     async def UseNestedBlockConstraint(
@@ -13127,6 +13297,3815 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        False,
+      )
+    
+
+
+class HttpStreamRequest:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+
+    
+    async def AaaSamOutputFormat(
+        self,
+        recipe: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AaaSamOutputFormat",
+        {
+          "recipe": recipe,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AliasThatPointsToRecursiveType(
+        self,
+        list: types.LinkedListAliasNode,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AliasThatPointsToRecursiveType",
+        {
+          "list": list,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AliasWithMultipleAttrs(
+        self,
+        money: Checked[int,types.Literal["gt_ten"]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AliasWithMultipleAttrs",
+        {
+          "money": money,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AliasedInputClass(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AliasedInputClass",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AliasedInputClass2(
+        self,
+        input: types.InputClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AliasedInputClass2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AliasedInputClassNested(
+        self,
+        input: types.InputClassNested,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AliasedInputClassNested",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AliasedInputEnum(
+        self,
+        input: types.AliasedEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AliasedInputEnum",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AliasedInputList(
+        self,
+        input: List[types.AliasedEnum],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AliasedInputList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AllowedOptionals(
+        self,
+        optionals: types.OptionalListAndMap,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AllowedOptionals",
+        {
+          "optionals": optionals,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AssertFn(
+        self,
+        a: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AssertFn",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def AudioInput(
+        self,
+        aud: baml_py.Audio,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "AudioInput",
+        {
+          "aud": aud,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def BuildLinkedList(
+        self,
+        input: List[int],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "BuildLinkedList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def BuildTree(
+        self,
+        input: types.BinaryNode,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "BuildTree",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ClassThatPointsToRecursiveClassThroughAlias(
+        self,
+        cls: types.ClassToRecAlias,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ClassThatPointsToRecursiveClassThroughAlias",
+        {
+          "cls": cls,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ClassifyDynEnumTwo(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ClassifyDynEnumTwo",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ClassifyMessage(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ClassifyMessage",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ClassifyMessage2(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ClassifyMessage2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ClassifyMessage3(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ClassifyMessage3",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def Completion(
+        self,
+        prefix: str,suffix: str,language: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "Completion",
+        {
+          "prefix": prefix,
+          "suffix": suffix,
+          "language": language,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def CustomTask(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "CustomTask",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DescribeImage(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DescribeImage",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DescribeImage2(
+        self,
+        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DescribeImage2",
+        {
+          "classWithImage": classWithImage,
+          "img2": img2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DescribeImage3(
+        self,
+        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DescribeImage3",
+        {
+          "classWithImage": classWithImage,
+          "img2": img2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DescribeImage4(
+        self,
+        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DescribeImage4",
+        {
+          "classWithImage": classWithImage,
+          "img2": img2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DifferentiateUnions(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DifferentiateUnions",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DummyOutputFunction(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DummyOutputFunction",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DynamicFunc(
+        self,
+        input: types.DynamicClassOne,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DynamicFunc",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DynamicInputOutput(
+        self,
+        input: types.DynInputOutput,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DynamicInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def DynamicListInputOutput(
+        self,
+        input: List[types.DynInputOutput],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "DynamicListInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExpectFailure(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExpectFailure",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractContactInfo(
+        self,
+        document: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractContactInfo",
+        {
+          "document": document,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractHobby(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractHobby",
+        {
+          "text": text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractNames(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractNames",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractPeople(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractPeople",
+        {
+          "text": text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractReceiptInfo(
+        self,
+        email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractReceiptInfo",
+        {
+          "email": email,
+          "reason": reason,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractResume(
+        self,
+        resume: str,img: Optional[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractResume",
+        {
+          "resume": resume,
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractResume2(
+        self,
+        resume: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractResume2",
+        {
+          "resume": resume,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ExtractResumeClaude(
+        self,
+        resume: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ExtractResumeClaude",
+        {
+          "resume": resume,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnClassOptionalOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnClassOptionalOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnClassOptionalOutput2(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnClassOptionalOutput2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnEnumListOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnEnumListOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnEnumOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnEnumOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnLiteralClassInputOutput(
+        self,
+        input: types.LiteralClassHello,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnLiteralClassInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnLiteralUnionClassInputOutput(
+        self,
+        input: Union[types.LiteralClassOne, types.LiteralClassTwo],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnLiteralUnionClassInputOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnNamedArgsSingleStringOptional(
+        self,
+        myString: Optional[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputBool(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputBool",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputClass(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputClass",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputClassList(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputClassList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputClassNested(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputClassNested",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputClassWithEnum(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputClassWithEnum",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputInt(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputInt",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputLiteralBool(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputLiteralBool",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputLiteralInt(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputLiteralInt",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputLiteralString(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputLiteralString",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnOutputStringList(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnOutputStringList",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnTestAliasedEnumOutput(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnTestAliasedEnumOutput",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnTestClassAlias(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnTestClassAlias",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def FnTestNamedArgsSingleEnum(
+        self,
+        myArg: types.NamedArgsSingleEnum,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def GetDataType(
+        self,
+        text: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "GetDataType",
+        {
+          "text": text,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def GetOrderInfo(
+        self,
+        email: types.Email,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "GetOrderInfo",
+        {
+          "email": email,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def GetQuery(
+        self,
+        query: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "GetQuery",
+        {
+          "query": query,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def InOutEnumMapKey(
+        self,
+        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "InOutEnumMapKey",
+        {
+          "i1": i1,
+          "i2": i2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def InOutLiteralStringUnionMapKey(
+        self,
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "InOutLiteralStringUnionMapKey",
+        {
+          "i1": i1,
+          "i2": i2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def InOutSingleLiteralStringMapKey(
+        self,
+        m: Dict[Literal["key"], str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "InOutSingleLiteralStringMapKey",
+        {
+          "m": m,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def JsonTypeAliasCycle(
+        self,
+        input: types.JsonValue,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "JsonTypeAliasCycle",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def LiteralUnionsTest(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "LiteralUnionsTest",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def MakeBlockConstraint(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "MakeBlockConstraint",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def MakeNestedBlockConstraint(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "MakeNestedBlockConstraint",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def MakeSemanticContainer(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "MakeSemanticContainer",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def MapAlias(
+        self,
+        m: Dict[str, List[str]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "MapAlias",
+        {
+          "m": m,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def MergeAliasAttributes(
+        self,
+        money: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "MergeAliasAttributes",
+        {
+          "money": money,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def MyFunc(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "MyFunc",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def NestedAlias(
+        self,
+        c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "NestedAlias",
+        {
+          "c": c,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def NullLiteralClassHello(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "NullLiteralClassHello",
+        {
+          "s": s,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def OptionalTest_Function(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "OptionalTest_Function",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PredictAge(
+        self,
+        name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PredictAge",
+        {
+          "name": name,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PredictAgeBare(
+        self,
+        inp: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PredictAgeBare",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PrimitiveAlias(
+        self,
+        p: Union[int, str, bool, float],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PrimitiveAlias",
+        {
+          "p": p,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PromptTestClaude(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PromptTestClaude",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PromptTestClaudeChat(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PromptTestClaudeChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PromptTestClaudeChatNoSystem(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PromptTestClaudeChatNoSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PromptTestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PromptTestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PromptTestOpenAIChat(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PromptTestOpenAIChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PromptTestOpenAIChatNoSystem(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def PromptTestStreaming(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "PromptTestStreaming",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def RecursiveAliasCycle(
+        self,
+        input: types.RecAliasOne,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "RecursiveAliasCycle",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def RecursiveClassWithAliasIndirection(
+        self,
+        cls: types.NodeWithAliasIndirection,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "RecursiveClassWithAliasIndirection",
+        {
+          "cls": cls,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ReturnAliasWithMergedAttributes(
+        self,
+        money: Checked[int,types.Literal["gt_ten"]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ReturnAliasWithMergedAttributes",
+        {
+          "money": money,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ReturnFailingAssert(
+        self,
+        inp: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ReturnFailingAssert",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ReturnJsonEntry(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ReturnJsonEntry",
+        {
+          "s": s,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def ReturnMalformedConstraints(
+        self,
+        a: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "ReturnMalformedConstraints",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def SchemaDescriptions(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "SchemaDescriptions",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def SimpleRecursiveListAlias(
+        self,
+        input: types.RecursiveListAlias,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "SimpleRecursiveListAlias",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def SimpleRecursiveMapAlias(
+        self,
+        input: types.RecursiveMapAlias,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "SimpleRecursiveMapAlias",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def StreamBigNumbers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "StreamBigNumbers",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def StreamFailingAssertion(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,
+          "length": length,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def StreamOneBigNumber(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "StreamOneBigNumber",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def StreamUnionIntegers(
+        self,
+        digits: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "StreamUnionIntegers",
+        {
+          "digits": digits,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def StreamingCompoundNumbers(
+        self,
+        digits: int,yapping: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "StreamingCompoundNumbers",
+        {
+          "digits": digits,
+          "yapping": yapping,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TakeRecAliasDep(
+        self,
+        input: types.RecursiveAliasDependency,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TakeRecAliasDep",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TellStory(
+        self,
+        story: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TellStory",
+        {
+          "story": story,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAnthropic(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAnthropic",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAnthropicShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAnthropicShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAws(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAws",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAwsInvalidAccessKey(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAwsInvalidAccessKey",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAwsInvalidProfile(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAwsInvalidProfile",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAwsInvalidRegion(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAwsInvalidRegion",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAwsInvalidSessionToken(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAwsInvalidSessionToken",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzure(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzure",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzureFailure(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzureFailure",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzureO1NoMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzureO1NoMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzureO1WithMaxCompletionTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzureO1WithMaxCompletionTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzureO1WithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzureO1WithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzureO3NoMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzureO3NoMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzureO3WithMaxCompletionTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzureO3WithMaxCompletionTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestAzureWithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestAzureWithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestCaching(
+        self,
+        input: str,not_cached: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestCaching",
+        {
+          "input": input,
+          "not_cached": not_cached,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFallbackClient(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFallbackClient",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFallbackStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFallbackStrategy",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFallbackToShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFallbackToShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleBool(
+        self,
+        myBool: bool,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleClass(
+        self,
+        myArg: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleEnumList(
+        self,
+        myArg: List[types.NamedArgsSingleEnumList],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleFloat(
+        self,
+        myFloat: float,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleInt(
+        self,
+        myInt: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleMapStringToClass(
+        self,
+        myMap: Dict[str, types.StringToClassEntry],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          "myMap": myMap,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleMapStringToMap(
+        self,
+        myMap: Dict[str, Dict[str, str]],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          "myMap": myMap,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleMapStringToString(
+        self,
+        myMap: Dict[str, str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          "myMap": myMap,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleString(
+        self,
+        myString: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleString",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleStringArray(
+        self,
+        myStringArray: List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestFnNamedArgsSingleStringList(
+        self,
+        myArg: List[str],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestGemini(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestGemini",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestGeminiOpenAiGeneric(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestGeminiOpenAiGeneric",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestGeminiSystem(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestGeminiSystem",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestGeminiSystemAsChat(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestGeminiSystemAsChat",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestImageInput(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestImageInput",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestImageInputAnthropic(
+        self,
+        img: baml_py.Image,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestImageInputAnthropic",
+        {
+          "img": img,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestImageListInput(
+        self,
+        imgs: List[baml_py.Image],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestImageListInput",
+        {
+          "imgs": imgs,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestMemory(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestMemory",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestMulticlassNamedArgs(
+        self,
+        myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg": myArg,
+          "myArg2": myArg2,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestNamedArgsLiteralBool(
+        self,
+        myBool: Literal[True],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestNamedArgsLiteralBool",
+        {
+          "myBool": myBool,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestNamedArgsLiteralInt(
+        self,
+        myInt: Literal[1],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestNamedArgsLiteralInt",
+        {
+          "myInt": myInt,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestNamedArgsLiteralString(
+        self,
+        myString: Literal["My String"],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestNamedArgsLiteralString",
+        {
+          "myString": myString,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOllama(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOllama",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAI(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAIGPT4oMini(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAIGPT4oMini",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAILegacyProvider(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAIO1NoMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAIO1NoMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAIO1WithMaxCompletionTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAIO1WithMaxCompletionTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAIO1WithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAIO1WithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAIShorthand(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAIShorthand",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAIWithMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAIWithMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestOpenAIWithNullMaxTokens(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestOpenAIWithNullMaxTokens",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestRetryConstant(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestRetryConstant",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestRetryExponential(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestRetryExponential",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestRoundRobinStrategy(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestRoundRobinStrategy",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestSingleFallbackClient(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestSingleFallbackClient",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestThinking(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestThinking",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestUniverseQuestion(
+        self,
+        question: types.UniverseQuestionInput,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestUniverseQuestion",
+        {
+          "question": question,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestVertex(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestVertex",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def TestVertexWithSystemInstructions(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "TestVertexWithSystemInstructions",
+        {
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def UnionTest_Function(
+        self,
+        input: Union[str, bool],
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "UnionTest_Function",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def UseBlockConstraint(
+        self,
+        inp: types.BlockConstraintForParam,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "UseBlockConstraint",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def UseMalformedConstraints(
+        self,
+        a: types.MalformedConstraints2,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "UseMalformedConstraints",
+        {
+          "a": a,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    async def UseNestedBlockConstraint(
+        self,
+        inp: types.NestedBlockConstraintForParam,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return await self.__runtime.build_request(
+        "UseNestedBlockConstraint",
+        {
+          "inp": inp,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
       )
     
 

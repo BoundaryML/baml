@@ -1,7 +1,8 @@
 import pytest
-
+import typing
 import anthropic
 from openai import AsyncOpenAI
+from openai.types.chat import ChatCompletion
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -30,7 +31,8 @@ async def test_modular_openai_gpt4():
 
     """)
 
-    response = await client.chat.completions.create(**req.body)
+    # Needs cast because of **req.body
+    response = typing.cast(ChatCompletion, await client.chat.completions.create(**req.body))
 
     parsed = b.parse.ExtractResume2(response.choices[0].message.content)
 

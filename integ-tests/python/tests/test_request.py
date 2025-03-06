@@ -97,8 +97,7 @@ async def test_expose_request_round_robin():
         'max_tokens': 1000,
     }
 
-@pytest.mark.asyncio
-async def test_expose_request_gpt4_sync():
+def test_expose_request_gpt4_sync():
     request = sync_b.request.ExtractReceiptInfo("test@email.com", "curiosity")
 
     assert request.body == {
@@ -114,4 +113,49 @@ async def test_expose_request_gpt4_sync():
             }
         ],
         'model': 'gpt-4o'
+    }
+
+@pytest.mark.asyncio
+async def test_expose_request_gpt4_stream():
+    request = await b.stream_request.ExtractReceiptInfo("test@email.com", "curiosity")
+
+    assert request.body == {
+        'messages': [
+            {
+                'role': 'system',
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': 'Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: "barisa" or "ox_burger",\n}'
+                    }
+                ]
+            }
+        ],
+        'model': 'gpt-4o',
+        'stream': True,
+        'stream_options': {
+            'include_usage': True,
+        }
+    }
+
+def test_expose_request_gpt4_stream_sync():
+    request = sync_b.stream_request.ExtractReceiptInfo("test@email.com", "curiosity")
+
+    assert request.body == {
+        'messages': [
+            {
+                'role': 'system',
+                'content': [
+                    {
+                        'type': 'text',
+                        'text': 'Given the receipt below:\n\n```\ntest@email.com\n```\n\nAnswer in JSON using this schema:\n{\n  items: [\n    {\n      name: string,\n      description: string or null,\n      quantity: int,\n      price: float,\n    }\n  ],\n  total_cost: float or null,\n  venue: "barisa" or "ox_burger",\n}'
+                    }
+                ]
+            }
+        ],
+        'model': 'gpt-4o',
+        'stream': True,
+        'stream_options': {
+            'include_usage': True,
+        }
     }

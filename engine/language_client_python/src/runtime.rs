@@ -321,7 +321,7 @@ impl BamlRuntime {
         ))
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, stream))]
     fn build_request(
         &self,
         py: Python<'_>,
@@ -330,6 +330,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        stream: bool,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -355,7 +356,7 @@ impl BamlRuntime {
                     &ctx_manager,
                     type_builder.as_ref(),
                     client_registry.as_ref(),
-                    false,
+                    stream,
                 )
                 .await
                 .map(HTTPRequest::from)
@@ -364,7 +365,7 @@ impl BamlRuntime {
         .map(pyo3::Bound::into)
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, stream))]
     fn build_request_sync(
         &self,
         py: Python<'_>,
@@ -373,6 +374,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        stream: bool,
     ) -> PyResult<HTTPRequest> {
         let Some(args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -398,7 +400,7 @@ impl BamlRuntime {
                 &context_manager,
                 type_builder.as_ref(),
                 client_registry.as_ref(),
-                false,
+                stream,
             )
         });
 
