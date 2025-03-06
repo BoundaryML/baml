@@ -25,14 +25,14 @@ class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
-    __prompt_body: "PromptBody"
+    __http_request: "HttpRequest"
     __llm_response_parser: LlmResponseParser
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
-      self.__prompt_body = PromptBody(self.__runtime, self.__ctx_manager)
+      self.__http_request = HttpRequest(self.__runtime, self.__ctx_manager)
       self.__llm_response_parser = LlmResponseParser(self.__runtime, self.__ctx_manager)
       self.__llm_stream_parser = LlmStreamParser(self.__runtime, self.__ctx_manager)
 
@@ -41,8 +41,8 @@ class BamlAsyncClient:
       return self.__stream_client
 
     @property
-    def prompt(self):
-      return self.__prompt_body
+    def request(self):
+      return self.__http_request
 
     @property
     def parse(self):
@@ -131,7 +131,7 @@ class BamlStreamClient:
     {% endfor %}
 
 
-class PromptBody:
+class HttpRequest:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
 
@@ -146,7 +146,7 @@ class PromptBody:
         {{name}}: {{type}},
         {%- endfor %}
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -154,7 +154,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "{{fn.name}}",
         {
           {%- for (name, _) in fn.args %}
@@ -165,8 +165,6 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     {% endfor %}
 
 

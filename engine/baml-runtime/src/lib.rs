@@ -26,6 +26,8 @@ use anyhow::Context;
 use anyhow::Result;
 
 use baml_types::tracing::events::FunctionId;
+use baml_types::tracing::events::HTTPRequest;
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::BamlMap;
 use baml_types::BamlValue;
 use baml_types::Constraint;
@@ -34,6 +36,9 @@ use client_registry::ClientRegistry;
 use indexmap::IndexMap;
 use internal::llm_client::llm_provider::LLMProvider;
 use internal::llm_client::orchestrator::OrchestrationScope;
+use internal::llm_client::primitive::json_body;
+use internal::llm_client::primitive::json_headers;
+use internal::llm_client::primitive::JsonBodyInput;
 use internal::llm_client::retry_policy::CallablePolicy;
 use internal::prompt_renderer::PromptRenderer;
 use internal_baml_core::configuration::CloudProject;
@@ -433,14 +438,15 @@ impl BamlRuntime {
         )
     }
 
-    pub async fn prompt_to_provider_body(
+    pub async fn build_request(
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
         context_manager: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        stream: bool,
+    ) -> Result<HTTPRequest> {
         let ctx = context_manager.create_ctx(tb, cb, None)?;
 
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
@@ -450,27 +456,44 @@ impl BamlRuntime {
             .await
             .map(|(prompt, ..)| prompt)?;
 
-        match prompt {
-            RenderedPrompt::Chat(chat) => provider.chat_to_message(&chat, &ctx, self),
+        let request = match prompt {
+            RenderedPrompt::Chat(chat) => provider
+                .build_request(either::Either::Right(&chat), true, stream, &ctx, self)
+                .await?
+                .build()?,
 
-            RenderedPrompt::Completion(completion) => {
-                provider.completion_to_provider_body(&completion, &ctx, self)
-            }
-        }
+            RenderedPrompt::Completion(completion) => provider
+                .build_request(either::Either::Left(&completion), true, stream, &ctx, self)
+                .await?
+                .build()?,
+        };
+
+        // TODO: Too much work to get the requeset body, we're building a serde
+        // map and then serialize it into bytes and then parse it back again
+        // into a map. We can extract the initial map directly if we refactor
+        // the `build_request` method.
+        //
+        // Would also be nice if RequestBuilder had getters so we didn't have to
+        // call .build()? above to get
+        Ok(HTTPRequest {
+            request_id: HttpRequestId(uuid::Uuid::new_v4().to_string()),
+            url: request.url().to_string(),
+            method: request.method().to_string(),
+            headers: json_headers(request.headers()),
+            body: json_body(JsonBodyInput::ReqwestBody(request.body())).unwrap_or_default(),
+        })
     }
 
-    pub fn prompt_to_provider_body_sync(
+    pub fn build_request_sync(
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
         context_manager: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-    ) -> Result<serde_json::Map<String, serde_json::Value>> {
-        let fut = self.prompt_to_provider_body(function_name, params, context_manager, tb, cb);
-        // TODO: If no images or media we don't have to "block" anything.
-        // This computation is not usually so expensive that it needs to run
-        // on other threads.
+        stream: bool,
+    ) -> Result<HTTPRequest> {
+        let fut = self.build_request(function_name, params, context_manager, tb, cb, stream);
         self.async_runtime.block_on(fut)
     }
 

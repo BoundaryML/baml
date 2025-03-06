@@ -28,6 +28,8 @@ use super::{
     LLMResponse,
 };
 
+pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
+
 mod anthropic;
 mod aws;
 mod google;
@@ -230,6 +232,39 @@ impl LLMPrimitiveProvider {
                 anyhow::bail!("Prompt exposure for AWS client is not supported")
             }
         })
+    }
+
+    pub async fn build_request(
+        &self,
+        prompt: either::Either<&String, &[RenderedChatMessage]>,
+        allow_proxy: bool,
+        stream: bool,
+    ) -> Result<reqwest::RequestBuilder> {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Anthropic(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Google(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Vertex(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        }
     }
 }
 

@@ -40,14 +40,14 @@ class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
-    __prompt_body: "PromptBody"
+    __http_request: "HttpRequest"
     __llm_response_parser: LlmResponseParser
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
-      self.__prompt_body = PromptBody(self.__runtime, self.__ctx_manager)
+      self.__http_request = HttpRequest(self.__runtime, self.__ctx_manager)
       self.__llm_response_parser = LlmResponseParser(self.__runtime, self.__ctx_manager)
       self.__llm_stream_parser = LlmStreamParser(self.__runtime, self.__ctx_manager)
 
@@ -56,8 +56,8 @@ class BamlAsyncClient:
       return self.__stream_client
 
     @property
-    def prompt(self):
-      return self.__prompt_body
+    def request(self):
+      return self.__http_request
 
     @property
     def parse(self):
@@ -9431,7 +9431,7 @@ class BamlStreamClient:
     
 
 
-class PromptBody:
+class HttpRequest:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
 
@@ -9444,7 +9444,7 @@ class PromptBody:
         self,
         recipe: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9452,7 +9452,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AaaSamOutputFormat",
         {
           "recipe": recipe,
@@ -9461,14 +9461,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AliasThatPointsToRecursiveType(
         self,
         list: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9476,7 +9474,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AliasThatPointsToRecursiveType",
         {
           "list": list,
@@ -9485,14 +9483,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AliasWithMultipleAttrs(
         self,
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9500,7 +9496,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AliasWithMultipleAttrs",
         {
           "money": money,
@@ -9509,14 +9505,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AliasedInputClass(
         self,
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9524,7 +9518,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AliasedInputClass",
         {
           "input": input,
@@ -9533,14 +9527,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AliasedInputClass2(
         self,
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9548,7 +9540,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AliasedInputClass2",
         {
           "input": input,
@@ -9557,14 +9549,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AliasedInputClassNested(
         self,
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9572,7 +9562,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AliasedInputClassNested",
         {
           "input": input,
@@ -9581,14 +9571,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AliasedInputEnum(
         self,
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9596,7 +9584,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AliasedInputEnum",
         {
           "input": input,
@@ -9605,14 +9593,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AliasedInputList(
         self,
         input: List[types.AliasedEnum],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9620,7 +9606,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AliasedInputList",
         {
           "input": input,
@@ -9629,14 +9615,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AllowedOptionals(
         self,
         optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9644,7 +9628,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AllowedOptionals",
         {
           "optionals": optionals,
@@ -9653,14 +9637,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AssertFn(
         self,
         a: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9668,7 +9650,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AssertFn",
         {
           "a": a,
@@ -9677,14 +9659,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def AudioInput(
         self,
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9692,7 +9672,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "AudioInput",
         {
           "aud": aud,
@@ -9701,14 +9681,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def BuildLinkedList(
         self,
         input: List[int],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9716,7 +9694,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "BuildLinkedList",
         {
           "input": input,
@@ -9725,14 +9703,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def BuildTree(
         self,
         input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9740,7 +9716,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "BuildTree",
         {
           "input": input,
@@ -9749,14 +9725,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ClassThatPointsToRecursiveClassThroughAlias(
         self,
         cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9764,7 +9738,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
           "cls": cls,
@@ -9773,14 +9747,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ClassifyDynEnumTwo(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9788,7 +9760,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ClassifyDynEnumTwo",
         {
           "input": input,
@@ -9797,14 +9769,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ClassifyMessage(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9812,7 +9782,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ClassifyMessage",
         {
           "input": input,
@@ -9821,14 +9791,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ClassifyMessage2(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9836,7 +9804,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ClassifyMessage2",
         {
           "input": input,
@@ -9845,14 +9813,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ClassifyMessage3(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9860,7 +9826,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ClassifyMessage3",
         {
           "input": input,
@@ -9869,14 +9835,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def Completion(
         self,
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9884,7 +9848,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "Completion",
         {
           "prefix": prefix,
@@ -9895,14 +9859,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def CustomTask(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9910,7 +9872,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "CustomTask",
         {
           "input": input,
@@ -9919,14 +9881,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DescribeImage(
         self,
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9934,7 +9894,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DescribeImage",
         {
           "img": img,
@@ -9943,14 +9903,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DescribeImage2(
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9958,7 +9916,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DescribeImage2",
         {
           "classWithImage": classWithImage,
@@ -9968,14 +9926,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DescribeImage3(
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9983,7 +9939,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DescribeImage3",
         {
           "classWithImage": classWithImage,
@@ -9993,14 +9949,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DescribeImage4(
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10008,7 +9962,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DescribeImage4",
         {
           "classWithImage": classWithImage,
@@ -10018,14 +9972,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DifferentiateUnions(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10033,7 +9985,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DifferentiateUnions",
         {
         },
@@ -10041,14 +9993,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DummyOutputFunction(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10056,7 +10006,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DummyOutputFunction",
         {
           "input": input,
@@ -10065,14 +10015,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DynamicFunc(
         self,
         input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10080,7 +10028,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DynamicFunc",
         {
           "input": input,
@@ -10089,14 +10037,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DynamicInputOutput(
         self,
         input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10104,7 +10050,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DynamicInputOutput",
         {
           "input": input,
@@ -10113,14 +10059,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def DynamicListInputOutput(
         self,
         input: List[types.DynInputOutput],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10128,7 +10072,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "DynamicListInputOutput",
         {
           "input": input,
@@ -10137,14 +10081,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExpectFailure(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10152,7 +10094,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExpectFailure",
         {
         },
@@ -10160,14 +10102,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExtractContactInfo(
         self,
         document: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10175,7 +10115,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExtractContactInfo",
         {
           "document": document,
@@ -10184,14 +10124,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExtractHobby(
         self,
         text: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10199,7 +10137,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExtractHobby",
         {
           "text": text,
@@ -10208,14 +10146,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExtractNames(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10223,7 +10159,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExtractNames",
         {
           "input": input,
@@ -10232,14 +10168,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExtractPeople(
         self,
         text: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10247,7 +10181,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExtractPeople",
         {
           "text": text,
@@ -10256,14 +10190,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExtractReceiptInfo(
         self,
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10271,7 +10203,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExtractReceiptInfo",
         {
           "email": email,
@@ -10281,14 +10213,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExtractResume(
         self,
         resume: str,img: Optional[baml_py.Image],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10296,7 +10226,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExtractResume",
         {
           "resume": resume,
@@ -10306,14 +10236,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ExtractResume2(
         self,
         resume: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10321,7 +10249,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ExtractResume2",
         {
           "resume": resume,
@@ -10330,14 +10258,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnClassOptionalOutput(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10345,7 +10271,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnClassOptionalOutput",
         {
           "input": input,
@@ -10354,14 +10280,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnClassOptionalOutput2(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10369,7 +10293,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnClassOptionalOutput2",
         {
           "input": input,
@@ -10378,14 +10302,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnEnumListOutput(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10393,7 +10315,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnEnumListOutput",
         {
           "input": input,
@@ -10402,14 +10324,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnEnumOutput(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10417,7 +10337,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnEnumOutput",
         {
           "input": input,
@@ -10426,14 +10346,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnLiteralClassInputOutput(
         self,
         input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10441,7 +10359,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnLiteralClassInputOutput",
         {
           "input": input,
@@ -10450,14 +10368,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnLiteralUnionClassInputOutput(
         self,
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10465,7 +10381,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnLiteralUnionClassInputOutput",
         {
           "input": input,
@@ -10474,14 +10390,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnNamedArgsSingleStringOptional(
         self,
         myString: Optional[str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10489,7 +10403,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnNamedArgsSingleStringOptional",
         {
           "myString": myString,
@@ -10498,14 +10412,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputBool(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10513,7 +10425,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputBool",
         {
           "input": input,
@@ -10522,14 +10434,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputClass(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10537,7 +10447,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputClass",
         {
           "input": input,
@@ -10546,14 +10456,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputClassList(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10561,7 +10469,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputClassList",
         {
           "input": input,
@@ -10570,14 +10478,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputClassNested(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10585,7 +10491,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputClassNested",
         {
           "input": input,
@@ -10594,14 +10500,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputClassWithEnum(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10609,7 +10513,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputClassWithEnum",
         {
           "input": input,
@@ -10618,14 +10522,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputInt(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10633,7 +10535,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputInt",
         {
           "input": input,
@@ -10642,14 +10544,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputLiteralBool(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10657,7 +10557,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputLiteralBool",
         {
           "input": input,
@@ -10666,14 +10566,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputLiteralInt(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10681,7 +10579,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputLiteralInt",
         {
           "input": input,
@@ -10690,14 +10588,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputLiteralString(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10705,7 +10601,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputLiteralString",
         {
           "input": input,
@@ -10714,14 +10610,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnOutputStringList(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10729,7 +10623,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnOutputStringList",
         {
           "input": input,
@@ -10738,14 +10632,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnTestAliasedEnumOutput(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10753,7 +10645,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnTestAliasedEnumOutput",
         {
           "input": input,
@@ -10762,14 +10654,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnTestClassAlias(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10777,7 +10667,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnTestClassAlias",
         {
           "input": input,
@@ -10786,14 +10676,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def FnTestNamedArgsSingleEnum(
         self,
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10801,7 +10689,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "FnTestNamedArgsSingleEnum",
         {
           "myArg": myArg,
@@ -10810,14 +10698,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def GetDataType(
         self,
         text: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10825,7 +10711,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "GetDataType",
         {
           "text": text,
@@ -10834,14 +10720,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def GetOrderInfo(
         self,
         email: types.Email,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10849,7 +10733,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "GetOrderInfo",
         {
           "email": email,
@@ -10858,14 +10742,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def GetQuery(
         self,
         query: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10873,7 +10755,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "GetQuery",
         {
           "query": query,
@@ -10882,14 +10764,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def InOutEnumMapKey(
         self,
         i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10897,7 +10777,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "InOutEnumMapKey",
         {
           "i1": i1,
@@ -10907,14 +10787,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def InOutLiteralStringUnionMapKey(
         self,
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10922,7 +10800,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "InOutLiteralStringUnionMapKey",
         {
           "i1": i1,
@@ -10932,14 +10810,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def InOutSingleLiteralStringMapKey(
         self,
         m: Dict[Literal["key"], str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10947,7 +10823,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "InOutSingleLiteralStringMapKey",
         {
           "m": m,
@@ -10956,14 +10832,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def JsonTypeAliasCycle(
         self,
         input: types.JsonValue,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10971,7 +10845,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "JsonTypeAliasCycle",
         {
           "input": input,
@@ -10980,14 +10854,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def LiteralUnionsTest(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10995,7 +10867,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "LiteralUnionsTest",
         {
           "input": input,
@@ -11004,14 +10876,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def MakeBlockConstraint(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11019,7 +10889,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "MakeBlockConstraint",
         {
         },
@@ -11027,14 +10897,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def MakeNestedBlockConstraint(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11042,7 +10910,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "MakeNestedBlockConstraint",
         {
         },
@@ -11050,14 +10918,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def MakeSemanticContainer(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11065,7 +10931,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "MakeSemanticContainer",
         {
         },
@@ -11073,14 +10939,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def MapAlias(
         self,
         m: Dict[str, List[str]],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11088,7 +10952,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "MapAlias",
         {
           "m": m,
@@ -11097,14 +10961,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def MergeAliasAttributes(
         self,
         money: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11112,7 +10974,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "MergeAliasAttributes",
         {
           "money": money,
@@ -11121,14 +10983,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def MyFunc(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11136,7 +10996,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "MyFunc",
         {
           "input": input,
@@ -11145,14 +11005,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def NestedAlias(
         self,
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11160,7 +11018,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "NestedAlias",
         {
           "c": c,
@@ -11169,14 +11027,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def NullLiteralClassHello(
         self,
         s: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11184,7 +11040,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "NullLiteralClassHello",
         {
           "s": s,
@@ -11193,14 +11049,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def OptionalTest_Function(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11208,7 +11062,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "OptionalTest_Function",
         {
           "input": input,
@@ -11217,14 +11071,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PredictAge(
         self,
         name: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11232,7 +11084,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PredictAge",
         {
           "name": name,
@@ -11241,14 +11093,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PredictAgeBare(
         self,
         inp: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11256,7 +11106,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PredictAgeBare",
         {
           "inp": inp,
@@ -11265,14 +11115,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PrimitiveAlias(
         self,
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11280,7 +11128,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PrimitiveAlias",
         {
           "p": p,
@@ -11289,14 +11137,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PromptTestClaude(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11304,7 +11150,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PromptTestClaude",
         {
           "input": input,
@@ -11313,14 +11159,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PromptTestClaudeChat(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11328,7 +11172,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PromptTestClaudeChat",
         {
           "input": input,
@@ -11337,14 +11181,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PromptTestClaudeChatNoSystem(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11352,7 +11194,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PromptTestClaudeChatNoSystem",
         {
           "input": input,
@@ -11361,14 +11203,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PromptTestOpenAI(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11376,7 +11216,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PromptTestOpenAI",
         {
           "input": input,
@@ -11385,14 +11225,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PromptTestOpenAIChat(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11400,7 +11238,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PromptTestOpenAIChat",
         {
           "input": input,
@@ -11409,14 +11247,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PromptTestOpenAIChatNoSystem(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11424,7 +11260,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PromptTestOpenAIChatNoSystem",
         {
           "input": input,
@@ -11433,14 +11269,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def PromptTestStreaming(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11448,7 +11282,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "PromptTestStreaming",
         {
           "input": input,
@@ -11457,14 +11291,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def RecursiveAliasCycle(
         self,
         input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11472,7 +11304,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "RecursiveAliasCycle",
         {
           "input": input,
@@ -11481,14 +11313,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def RecursiveClassWithAliasIndirection(
         self,
         cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11496,7 +11326,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "RecursiveClassWithAliasIndirection",
         {
           "cls": cls,
@@ -11505,14 +11335,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ReturnAliasWithMergedAttributes(
         self,
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11520,7 +11348,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ReturnAliasWithMergedAttributes",
         {
           "money": money,
@@ -11529,14 +11357,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ReturnFailingAssert(
         self,
         inp: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11544,7 +11370,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ReturnFailingAssert",
         {
           "inp": inp,
@@ -11553,14 +11379,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ReturnJsonEntry(
         self,
         s: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11568,7 +11392,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ReturnJsonEntry",
         {
           "s": s,
@@ -11577,14 +11401,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def ReturnMalformedConstraints(
         self,
         a: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11592,7 +11414,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "ReturnMalformedConstraints",
         {
           "a": a,
@@ -11601,14 +11423,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def SchemaDescriptions(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11616,7 +11436,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "SchemaDescriptions",
         {
           "input": input,
@@ -11625,14 +11445,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def SimpleRecursiveListAlias(
         self,
         input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11640,7 +11458,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "SimpleRecursiveListAlias",
         {
           "input": input,
@@ -11649,14 +11467,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def SimpleRecursiveMapAlias(
         self,
         input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11664,7 +11480,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "SimpleRecursiveMapAlias",
         {
           "input": input,
@@ -11673,14 +11489,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def StreamBigNumbers(
         self,
         digits: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11688,7 +11502,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "StreamBigNumbers",
         {
           "digits": digits,
@@ -11697,14 +11511,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def StreamFailingAssertion(
         self,
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11712,7 +11524,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "StreamFailingAssertion",
         {
           "theme": theme,
@@ -11722,14 +11534,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def StreamOneBigNumber(
         self,
         digits: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11737,7 +11547,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "StreamOneBigNumber",
         {
           "digits": digits,
@@ -11746,14 +11556,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def StreamUnionIntegers(
         self,
         digits: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11761,7 +11569,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "StreamUnionIntegers",
         {
           "digits": digits,
@@ -11770,14 +11578,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def StreamingCompoundNumbers(
         self,
         digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11785,7 +11591,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "StreamingCompoundNumbers",
         {
           "digits": digits,
@@ -11795,14 +11601,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TakeRecAliasDep(
         self,
         input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11810,7 +11614,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TakeRecAliasDep",
         {
           "input": input,
@@ -11819,14 +11623,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TellStory(
         self,
         story: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11834,7 +11636,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TellStory",
         {
           "story": story,
@@ -11843,14 +11645,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAnthropic(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11858,7 +11658,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAnthropic",
         {
           "input": input,
@@ -11867,14 +11667,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAnthropicShorthand(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11882,7 +11680,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAnthropicShorthand",
         {
           "input": input,
@@ -11891,14 +11689,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAws(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11906,7 +11702,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAws",
         {
           "input": input,
@@ -11915,14 +11711,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAwsInvalidAccessKey(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11930,7 +11724,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAwsInvalidAccessKey",
         {
           "input": input,
@@ -11939,14 +11733,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAwsInvalidProfile(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11954,7 +11746,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAwsInvalidProfile",
         {
           "input": input,
@@ -11963,14 +11755,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAwsInvalidRegion(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -11978,7 +11768,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAwsInvalidRegion",
         {
           "input": input,
@@ -11987,14 +11777,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAwsInvalidSessionToken(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12002,7 +11790,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAwsInvalidSessionToken",
         {
           "input": input,
@@ -12011,14 +11799,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzure(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12026,7 +11812,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzure",
         {
           "input": input,
@@ -12035,14 +11821,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzureFailure(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12050,7 +11834,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzureFailure",
         {
           "input": input,
@@ -12059,14 +11843,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzureO1NoMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12074,7 +11856,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzureO1NoMaxTokens",
         {
           "input": input,
@@ -12083,14 +11865,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzureO1WithMaxCompletionTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12098,7 +11878,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzureO1WithMaxCompletionTokens",
         {
           "input": input,
@@ -12107,14 +11887,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzureO1WithMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12122,7 +11900,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzureO1WithMaxTokens",
         {
           "input": input,
@@ -12131,14 +11909,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzureO3NoMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12146,7 +11922,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzureO3NoMaxTokens",
         {
           "input": input,
@@ -12155,14 +11931,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzureO3WithMaxCompletionTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12170,7 +11944,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzureO3WithMaxCompletionTokens",
         {
           "input": input,
@@ -12179,14 +11953,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestAzureWithMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12194,7 +11966,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestAzureWithMaxTokens",
         {
           "input": input,
@@ -12203,14 +11975,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestCaching(
         self,
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12218,7 +11988,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestCaching",
         {
           "input": input,
@@ -12228,14 +11998,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFallbackClient(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12243,7 +12011,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFallbackClient",
         {
         },
@@ -12251,14 +12019,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFallbackStrategy(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12266,7 +12032,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFallbackStrategy",
         {
           "input": input,
@@ -12275,14 +12041,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFallbackToShorthand(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12290,7 +12054,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFallbackToShorthand",
         {
           "input": input,
@@ -12299,14 +12063,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleBool(
         self,
         myBool: bool,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12314,7 +12076,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleBool",
         {
           "myBool": myBool,
@@ -12323,14 +12085,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleClass(
         self,
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12338,7 +12098,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleClass",
         {
           "myArg": myArg,
@@ -12347,14 +12107,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleEnumList(
         self,
         myArg: List[types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12362,7 +12120,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleEnumList",
         {
           "myArg": myArg,
@@ -12371,14 +12129,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleFloat(
         self,
         myFloat: float,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12386,7 +12142,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleFloat",
         {
           "myFloat": myFloat,
@@ -12395,14 +12151,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleInt(
         self,
         myInt: int,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12410,7 +12164,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleInt",
         {
           "myInt": myInt,
@@ -12419,14 +12173,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleMapStringToClass(
         self,
         myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12434,7 +12186,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleMapStringToClass",
         {
           "myMap": myMap,
@@ -12443,14 +12195,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleMapStringToMap(
         self,
         myMap: Dict[str, Dict[str, str]],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12458,7 +12208,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleMapStringToMap",
         {
           "myMap": myMap,
@@ -12467,14 +12217,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleMapStringToString(
         self,
         myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12482,7 +12230,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleMapStringToString",
         {
           "myMap": myMap,
@@ -12491,14 +12239,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleString(
         self,
         myString: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12506,7 +12252,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleString",
         {
           "myString": myString,
@@ -12515,14 +12261,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleStringArray(
         self,
         myStringArray: List[str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12530,7 +12274,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleStringArray",
         {
           "myStringArray": myStringArray,
@@ -12539,14 +12283,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestFnNamedArgsSingleStringList(
         self,
         myArg: List[str],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12554,7 +12296,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestFnNamedArgsSingleStringList",
         {
           "myArg": myArg,
@@ -12563,14 +12305,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestGemini(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12578,7 +12318,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestGemini",
         {
           "input": input,
@@ -12587,14 +12327,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestGeminiOpenAiGeneric(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12602,7 +12340,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestGeminiOpenAiGeneric",
         {
         },
@@ -12610,14 +12348,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestGeminiSystem(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12625,7 +12361,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestGeminiSystem",
         {
           "input": input,
@@ -12634,14 +12370,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestGeminiSystemAsChat(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12649,7 +12383,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestGeminiSystemAsChat",
         {
           "input": input,
@@ -12658,14 +12392,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestImageInput(
         self,
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12673,7 +12405,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestImageInput",
         {
           "img": img,
@@ -12682,14 +12414,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestImageInputAnthropic(
         self,
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12697,7 +12427,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestImageInputAnthropic",
         {
           "img": img,
@@ -12706,14 +12436,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestImageListInput(
         self,
         imgs: List[baml_py.Image],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12721,7 +12449,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestImageListInput",
         {
           "imgs": imgs,
@@ -12730,14 +12458,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestMemory(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12745,7 +12471,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestMemory",
         {
           "input": input,
@@ -12754,14 +12480,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestMulticlassNamedArgs(
         self,
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12769,7 +12493,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestMulticlassNamedArgs",
         {
           "myArg": myArg,
@@ -12779,14 +12503,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestNamedArgsLiteralBool(
         self,
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12794,7 +12516,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestNamedArgsLiteralBool",
         {
           "myBool": myBool,
@@ -12803,14 +12525,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestNamedArgsLiteralInt(
         self,
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12818,7 +12538,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestNamedArgsLiteralInt",
         {
           "myInt": myInt,
@@ -12827,14 +12547,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestNamedArgsLiteralString(
         self,
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12842,7 +12560,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestNamedArgsLiteralString",
         {
           "myString": myString,
@@ -12851,14 +12569,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOllama(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12866,7 +12582,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOllama",
         {
           "input": input,
@@ -12875,14 +12591,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAI(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12890,7 +12604,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAI",
         {
           "input": input,
@@ -12899,14 +12613,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAIGPT4oMini(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12914,7 +12626,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAIGPT4oMini",
         {
           "input": input,
@@ -12923,14 +12635,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAILegacyProvider(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12938,7 +12648,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAILegacyProvider",
         {
           "input": input,
@@ -12947,14 +12657,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAIO1NoMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12962,7 +12670,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAIO1NoMaxTokens",
         {
           "input": input,
@@ -12971,14 +12679,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAIO1WithMaxCompletionTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -12986,7 +12692,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
           "input": input,
@@ -12995,14 +12701,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAIO1WithMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13010,7 +12714,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAIO1WithMaxTokens",
         {
           "input": input,
@@ -13019,14 +12723,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAIShorthand(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13034,7 +12736,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAIShorthand",
         {
           "input": input,
@@ -13043,14 +12745,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAIWithMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13058,7 +12758,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAIWithMaxTokens",
         {
           "input": input,
@@ -13067,14 +12767,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestOpenAIWithNullMaxTokens(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13082,7 +12780,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestOpenAIWithNullMaxTokens",
         {
           "input": input,
@@ -13091,14 +12789,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestRetryConstant(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13106,7 +12802,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestRetryConstant",
         {
         },
@@ -13114,14 +12810,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestRetryExponential(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13129,7 +12823,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestRetryExponential",
         {
         },
@@ -13137,14 +12831,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestRoundRobinStrategy(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13152,7 +12844,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestRoundRobinStrategy",
         {
           "input": input,
@@ -13161,14 +12853,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestSingleFallbackClient(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13176,7 +12866,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestSingleFallbackClient",
         {
         },
@@ -13184,14 +12874,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestThinking(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13199,7 +12887,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestThinking",
         {
           "input": input,
@@ -13208,14 +12896,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestUniverseQuestion(
         self,
         question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13223,7 +12909,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestUniverseQuestion",
         {
           "question": question,
@@ -13232,14 +12918,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestVertex(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13247,7 +12931,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestVertex",
         {
           "input": input,
@@ -13256,14 +12940,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def TestVertexWithSystemInstructions(
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13271,7 +12953,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "TestVertexWithSystemInstructions",
         {
         },
@@ -13279,14 +12961,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def UnionTest_Function(
         self,
         input: Union[str, bool],
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13294,7 +12974,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "UnionTest_Function",
         {
           "input": input,
@@ -13303,14 +12983,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def UseBlockConstraint(
         self,
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13318,7 +12996,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "UseBlockConstraint",
         {
           "inp": inp,
@@ -13327,14 +13005,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def UseMalformedConstraints(
         self,
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13342,7 +13018,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "UseMalformedConstraints",
         {
           "a": a,
@@ -13351,14 +13027,12 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
     async def UseNestedBlockConstraint(
         self,
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Any]:
+    ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -13366,7 +13040,7 @@ class PromptBody:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      raw = await self.__runtime.prompt_to_provider_body(
+      return await self.__runtime.build_request(
         "UseNestedBlockConstraint",
         {
           "inp": inp,
@@ -13375,8 +13049,6 @@ class PromptBody:
         tb,
         __cr__,
       )
-
-      return raw.to_dict()
     
 
 
