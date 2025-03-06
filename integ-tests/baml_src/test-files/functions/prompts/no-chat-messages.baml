@@ -10,8 +10,9 @@ function PromptTestClaude(input: string) -> string {
 
 function PromptTestStreaming(input: string) -> string {
   client GPT35
+  // Keep this one longer to test streaming performance
   prompt #"
-    Tell me a short story about {{ input }}
+    Tell me a short story about {{ input }}.
   "#
 }
 

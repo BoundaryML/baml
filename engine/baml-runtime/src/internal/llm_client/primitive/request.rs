@@ -22,6 +22,7 @@ use serde_json::json;
 use bytes::Bytes;
 use http::Response as HttpResponse;
 
+#[derive(Debug)]
 pub struct LoggedHttpResponse {
     pub status: StatusCode,
     pub headers: HeaderMap,
@@ -246,6 +247,7 @@ pub async fn execute_request(
                 serde_json::Value::String(format!("No response. Error: {:?}", e)),
             )
             .await;
+
             return Err(LLMResponse::LLMFailure(LLMErrorResponse {
                 client: client.context().name.to_string(),
                 model: None,
@@ -256,10 +258,11 @@ pub async fn execute_request(
                 message: {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        format!("{}", e.to_string())
+                        format!("{:?}", e)
                     }
                     #[cfg(target_arch = "wasm32")]
                     {
+                        // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
                         format!(
                             "{}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)",
                             e.to_string()
@@ -445,7 +448,7 @@ pub async fn make_parsed_request(
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
             message: format!("Failed to parse JSON: {}", e.to_string()),
-            code: ErrorCode::Other(2),
+            code: ErrorCode::from_status(response.status),
         })
     });
 
@@ -460,10 +463,27 @@ pub async fn make_parsed_request(
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
                 message: e.to_string(),
-                code: ErrorCode::Other(2),
+                code: ErrorCode::from_status(response.status),
             })
         }
     };
+
+    if response.status != StatusCode::OK {
+        return LLMResponse::LLMFailure(LLMErrorResponse {
+            client: client.context().name.to_string(),
+            model: None,
+            prompt: to_prompt(prompt),
+            start_time: system_now,
+            request_options: client.request_options().clone(),
+            latency: instant_now.elapsed(),
+            message: format!(
+                "Request failed with status code: {}. {}",
+                response.status,
+                response_body.to_string()
+            ),
+            code: ErrorCode::from_status(response.status),
+        });
+    }
 
     match response_type {
         ResponseType::OpenAI => super::openai::response_handler::parse_openai_response(

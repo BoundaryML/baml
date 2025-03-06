@@ -13,6 +13,10 @@ The way it works is:
 
 It's common for people to think of "function calling" or "tool use" separately from "structured outputs" (even OpenAI has separate parameters for them), but at BAML, we think it's simpler and more impactful to think of them equivalently. This is because, at the end of the day, you are looking to get something processable back from your LLM. Whether it's extracting data from a document or calling the Weather API, you need a standard representation of that output, which is where BAML lives.
 
+<Frame caption="Baml Control Flow">
+  <img src="../../assets/guide/tool-calling.png" alt="Tool-Calling"/>
+</Frame>
+
 In BAML, you can get represent a `tool` or a `function` you want to call as a BAML `class`, and make the function output be that class definition.
 
 ```baml BAML

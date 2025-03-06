@@ -8,7 +8,7 @@ use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
         primitive::{
-            google::types::{FinishReason, GoogleResponse},
+            google::types::GoogleResponse,
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
