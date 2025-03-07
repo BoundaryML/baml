@@ -1,9 +1,11 @@
+'use client'
+
 import { ModeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { GithubIcon } from 'lucide-react'
 import Image from 'next/image'
-import TestClient from '../components/hook-example'
+import { TestClient } from '@/components/test-client'
+import { ExampleSelector } from '@/components/example-selector'
 
 export default function Home() {
   return (
@@ -36,23 +38,7 @@ export default function Home() {
         </header>
 
         <main className='max-w-4xl mx-auto space-y-8'>
-          <div className='text-center space-y-4'>
-            <h1 className='text-4xl font-bold tracking-tight'>BAML + Next.js Integration</h1>
-            <p className='text-lg text-muted-foreground'>Select an example below to get started.</p>
-            <div className='w-[200px] mx-auto'>
-              <Select defaultValue='chat'>
-                <SelectTrigger>
-                  <SelectValue placeholder='Select an example' />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value='chat'>Chat Interface</SelectItem>
-                  <SelectItem value='classification'>Text Classification</SelectItem>
-                  <SelectItem value='extraction'>Data Extraction</SelectItem>
-                  <SelectItem value='summarization'>Text Summarization</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <ExampleSelector />
 
           <div className='flex justify-center gap-4 max-w-xl mx-auto'>
             <TestClient />
