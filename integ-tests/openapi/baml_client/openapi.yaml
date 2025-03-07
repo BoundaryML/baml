@@ -1045,6 +1045,19 @@ paths:
                 title: NullLiteralClassHelloResponse
                 $ref: '#/components/schemas/ClassForNullLiteral'
       operationId: NullLiteralClassHello
+  /call/OpenAIWithAnthropicResponseHello:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/OpenAIWithAnthropicResponseHello'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: OpenAIWithAnthropicResponseHelloResponse
+                type: string
+      operationId: OpenAIWithAnthropicResponseHello
   /call/OptionalTest_Function:
     post:
       requestBody:
@@ -3472,6 +3485,22 @@ components:
         application/json:
           schema:
             title: NullLiteralClassHelloRequest
+            type: object
+            properties:
+              s:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - s
+            additionalProperties: false
+    OpenAIWithAnthropicResponseHello:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: OpenAIWithAnthropicResponseHelloRequest
             type: object
             properties:
               s:

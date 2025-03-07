@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "jest",
+    "test": "node --expose-gc ./node_modules/jest/bin/jest.js",
     "build:debug": "cd ../../engine/language_client_typescript && pnpm run build:debug && cd - && pnpm i",
     "build": "cd ../../engine/language_client_typescript && npm run build && cd - && pnpm i",
     "integ-tests:ci": "pnpm tsc && infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",

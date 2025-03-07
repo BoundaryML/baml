@@ -97,6 +97,7 @@ export type StreamingServerTypes = {
   MyFunc: partial_types.DynamicOutput,
   NestedAlias: (((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null)),
   NullLiteralClassHello: partial_types.ClassForNullLiteral,
+  OpenAIWithAnthropicResponseHello: string,
   OptionalTest_Function: ((partial_types.OptionalTest_ReturnType | null) | null)[],
   PredictAge: partial_types.FooAny,
   PredictAgeBare: Checked<number,"too_big">,

@@ -23,10 +23,10 @@ export declare class BamlRuntime {
   static fromFiles(rootPath: string, files: Record<string, string>, envVars: Record<string, string | undefined | null>): BamlRuntime
   reset(rootPath: string, files: Record<string, string>, envVars: Record<string, string>): void
   createContextManager(): RuntimeContextManager
-  callFunction(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): Promise<FunctionResult>
-  callFunctionSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): FunctionResult
-  streamFunction(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, clientRegistry?: ClientRegistry | undefined | null): FunctionResultStream
-  streamFunctionSync(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, clientRegistry?: ClientRegistry | undefined | null): FunctionResultStream
+  callFunction(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>): Promise<FunctionResult>
+  callFunctionSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResult
+  streamFunction(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResultStream
+  streamFunctionSync(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResultStream
   setLogEventCallback(func?: undefined | ((err: any, param: BamlLogEvent) => void)): void
   flush(): void
   drainStats(): TraceStats
@@ -54,6 +54,17 @@ export declare class ClientRegistry {
   setPrimary(primary: string): void
 }
 
+export declare class Collector {
+  constructor(name?: string | undefined | null)
+  get logs(): Array<FunctionLog>
+  get last(): FunctionLog | null
+  id(functionLogId: string): FunctionLog | null
+  get usage(): Usage
+  toString(): string
+  static __functionSpanCount(): number
+  static __printStorage(): void
+}
+
 export declare class EnumBuilder {
   value(name: string): EnumValueBuilder
   alias(alias?: string | undefined | null): EnumBuilder
@@ -71,6 +82,18 @@ export declare class FieldType {
   optional(): FieldType
 }
 
+export declare class FunctionLog {
+  toString(): string
+  get id(): string
+  get functionName(): string
+  get logType(): string
+  get timing(): Timing
+  get usage(): Usage
+  get calls(): (LLMCall | LLMStreamCall)[]
+  get rawLlmResponse(): string | null
+  get selectedCall(): unknown
+}
+
 export declare class FunctionResult {
   isOk(): boolean
   parsed(allowPartials: boolean): any
@@ -81,10 +104,69 @@ export declare class FunctionResultStream {
   done(rctx: RuntimeContextManager): Promise<FunctionResult>
 }
 
+export declare class HttpRequest {
+  get bodyRaw(): string
+  get body(): any
+  toString(): string
+  get url(): string
+  get method(): string
+  get headers(): object
+}
+export type HTTPRequest = HttpRequest
+
+export declare class HttpResponse {
+  toString(): string
+  get status(): number
+  get headers(): object
+  get body(): any
+}
+export type HTTPResponse = HttpResponse
+
+export declare class LlmCall {
+  get selected(): boolean
+  get httpRequest(): HTTPRequest | null
+  get httpResponse(): HTTPResponse | null
+  get usage(): Usage | null
+  get timing(): Timing
+  get provider(): string
+  get clientName(): string
+  toString(): string
+  toString(): string
+}
+export type LLMCall = LlmCall
+
+export declare class LlmStreamCall {
+  toString(): string
+  get httpRequest(): HTTPRequest | null
+  get httpResponse(): HTTPResponse | null
+  get provider(): string
+  get clientName(): string
+  get selected(): boolean
+  get usage(): Usage | null
+  get timing(): StreamTiming
+  toString(): string
+}
+export type LLMStreamCall = LlmStreamCall
+
 export declare class RuntimeContextManager {
   upsertTags(tags: any): void
   deepClone(): RuntimeContextManager
   contextDepth(): number
+}
+
+export declare class StreamTiming {
+  toString(): string
+  get startTimeUtcMs(): number
+  get durationMs(): number | null
+  get timeToFirstParsedMs(): number | null
+  get timeToFirstTokenMs(): number | null
+}
+
+export declare class Timing {
+  toString(): string
+  get startTimeUtcMs(): number
+  get durationMs(): number | null
+  get timeToFirstParsedMs(): number | null
 }
 
 export declare class TraceStats {
@@ -115,6 +197,12 @@ export declare class TypeBuilder {
   union(types: Array<FieldType>): FieldType
   addBaml(baml: string, rt: BamlRuntime): void
   toString(): string
+}
+
+export declare class Usage {
+  toString(): string
+  get inputTokens(): number | null
+  get outputTokens(): number | null
 }
 
 export interface BamlLogEvent {
