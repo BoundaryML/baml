@@ -14,4 +14,5 @@ jobs:
       - name: Install fern
         run: npm install -g fern-api
       - name: fern check
-        run: fern check
+        working-directory: ./fern
+        run: fern check --strict-broken-links
