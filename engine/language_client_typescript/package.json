@@ -60,7 +60,7 @@
     "build": "pnpm build:napi-release && pnpm build:ts_build",
     "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
     "build:napi-release": "pnpm build:napi-debug --release",
-    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
+    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --target x86_64-unknown-linux-gnu",
     "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./ --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
