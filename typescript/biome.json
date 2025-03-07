@@ -1,40 +1,59 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
   "files": {
-    "ignore": ["*/.next/*", "*.json"]
+    "ignoreUnknown": false
   },
   "formatter": {
     "enabled": true,
-    "formatWithErrors": true,
-    "indentStyle": "space",
-    "indentWidth": 2,
-    "lineEnding": "lf",
-    "lineWidth": 120
-  },
-  "javascript": {
-    "formatter": {
-      "quoteStyle": "single",
-      "jsxQuoteStyle": "single",
-      "semicolons": "asNeeded"
-    }
-  },
-  "json": {
-    "formatter": {
-      "enabled": false
-    }
-  },
-  "linter": {
-    "enabled": true,
-    "rules": {
-      "recommended": false
-    }
+    "indentStyle": "space"
   },
   "organizeImports": {
     "enabled": true
   },
-  "vcs": {
+  "linter": {
     "enabled": true,
-    "clientKind": "git",
-    "useIgnoreFile": true
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "warn",
+        "useExhaustiveDependencies": "warn",
+        "useHookAtTopLevel": "error"
+      },
+      "nursery": {
+        "noCommonJs": "error",
+        "noNestedTernary": "off",
+        "useAtIndex": "error",
+        "useCollapsedIf": "error"
+      },
+      "style": {
+        "noNegationElse": "off",
+        "useNodejsImportProtocol": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "requireAscii": true,
+            "filenameCases": ["kebab-case"]
+          }
+        }
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "trailingCommas": "all",
+      "semicolons": "always"
+    },
+    "globals": ["React"]
   }
 }

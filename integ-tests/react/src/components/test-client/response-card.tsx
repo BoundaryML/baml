@@ -1,127 +1,251 @@
-'use client'
+'use client';
 
-import { NetworkTimeline } from '@/components/network-timeline'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { formatError } from './format-error'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import * as React from 'react'
-import type { FunctionNames, HookOutput } from '../../../baml_client/react/hooks'
+import { NetworkTimeline } from '@/components/network-timeline';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useResponseCardConfigWithQueryParams } from '@/lib/store';
+import { cn } from '@/lib/utils';
+import * as React from 'react';
+import type {
+  FunctionNames,
+  HookOutput,
+} from '../../../baml_client/react/hooks';
+import { formatError } from './format-error';
 
 type ResponseCardProps = {
-  hookResult: HookOutput<FunctionNames>
-  hasStarted: boolean
-}
-export function ResponseCard({ hookResult, hasStarted }: ResponseCardProps) {
-  const { isLoading, error, isError, data, streamData, isPending, isStreaming, isSuccess, finalData } = hookResult
+  hookResult: HookOutput<FunctionNames>;
+  hasStarted: boolean;
+  functionName?: FunctionNames; // Keep this optional since we don't use it anymore
+};
 
-  const dataRef = React.useRef<HTMLPreElement>(null)
-  const streamDataRef = React.useRef<HTMLPreElement>(null)
-  const finalDataRef = React.useRef<HTMLPreElement>(null)
+export function ResponseCard({
+  hookResult,
+  hasStarted,
+  functionName,
+}: ResponseCardProps) {
+  const {
+    isLoading,
+    error,
+    isError,
+    data,
+    streamData,
+    isPending,
+    isStreaming,
+    isSuccess,
+    finalData,
+  } = hookResult;
 
-  // Add state to track the active tab
-  const [activeTab, setActiveTab] = React.useState('data')
+  // Get the configuration from URL query parameters
+  const { config } = useResponseCardConfigWithQueryParams();
+
+  const dataRef = React.useRef<HTMLPreElement>(null);
+  const streamDataRef = React.useRef<HTMLPreElement>(null);
+  const finalDataRef = React.useRef<HTMLPreElement>(null);
+
+  // Initialize active tab from config
+  const [activeTab, setActiveTab] = React.useState<string>(config.defaultTab);
+
+  // Update active tab when config.defaultTab changes
+  React.useEffect(() => {
+    setActiveTab(config.defaultTab);
+  }, [config.defaultTab]);
 
   // Auto-scroll effect for data tab
   React.useEffect(() => {
     if (dataRef.current) {
-      dataRef.current.scrollTop = dataRef.current.scrollHeight
+      dataRef.current.scrollTop = dataRef.current.scrollHeight;
     }
-  }, [data])
+  }, [data]);
 
   // Auto-scroll effect for stream data tab
   React.useEffect(() => {
     if (streamDataRef.current) {
-      streamDataRef.current.scrollTop = streamDataRef.current.scrollHeight
+      streamDataRef.current.scrollTop = streamDataRef.current.scrollHeight;
     }
-  }, [streamData])
+  }, [streamData]);
 
   // Auto-scroll effect for final data tab
   React.useEffect(() => {
     if (finalDataRef.current) {
-      finalDataRef.current.scrollTop = finalDataRef.current.scrollHeight
+      finalDataRef.current.scrollTop = finalDataRef.current.scrollHeight;
     }
-  }, [finalData])
+  }, [finalData]);
 
   React.useEffect(() => {
-    if (error) {
+    if (error && config.showErrorTab) {
       // Automatically switch to the error tab when an error occurs
-      setActiveTab('error')
+      setActiveTab('error');
     }
-  }, [error])
+  }, [error, config.showErrorTab]);
+
+  // Define the visible tabs/sections
+  const visibleSections = [
+    config.showDataTab ? { id: 'data', label: 'Data' } : null,
+    config.showStreamDataTab
+      ? { id: 'streamData', label: 'Stream Data' }
+      : null,
+    config.showFinalDataTab ? { id: 'finalData', label: 'Final Data' } : null,
+    config.showErrorTab ? { id: 'error', label: 'Error' } : null,
+  ].filter(Boolean) as { id: string; label: string }[];
+
+  // Function to render the content for each section
+  const renderSectionContent = (sectionId: string, className?: string) => {
+    switch (sectionId) {
+      case 'data':
+        return (
+          <pre
+            ref={dataRef}
+            className={cn(
+              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
+              className,
+            )}
+          >
+            {data
+              ? typeof data === 'string'
+                ? data
+                : JSON.stringify(data, null, 2)
+              : 'No data available'}
+          </pre>
+        );
+      case 'streamData':
+        return (
+          <pre
+            ref={streamDataRef}
+            className={cn(
+              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
+              className,
+            )}
+          >
+            {streamData
+              ? typeof streamData === 'string'
+                ? streamData
+                : JSON.stringify(streamData, null, 2)
+              : 'No streaming data available'}
+          </pre>
+        );
+      case 'finalData':
+        return (
+          <pre
+            ref={finalDataRef}
+            className={cn(
+              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
+              className,
+            )}
+          >
+            {finalData
+              ? typeof finalData === 'string'
+                ? finalData
+                : JSON.stringify(finalData, null, 2)
+              : 'No final data available'}
+          </pre>
+        );
+      case 'error':
+        return error ? (
+          <div className="h-full space-y-4 overflow-y-auto">
+            <Alert variant="destructive">
+              <AlertDescription>
+                {(() => {
+                  const { title, message, status_code } = formatError(error);
+                  return (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="break-words font-semibold">{title}</div>
+                        {status_code && (
+                          <Badge variant="destructive">{status_code}</Badge>
+                        )}
+                      </div>
+                      <pre className="whitespace-pre-wrap break-words font-mono text-sm">
+                        {message}
+                      </pre>
+                    </div>
+                  );
+                })()}
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : (
+          <pre
+            className={cn(
+              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
+              className,
+            )}
+          >
+            No error available
+          </pre>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
-    <div className='flex flex-col gap-6'>
-      <NetworkTimeline hookResult={hookResult} hasStarted={hasStarted} />
+    <div className="flex w-full flex-col items-center gap-6">
+      {/* Keep the NetworkTimeline at the same width as the form, and only show if configured */}
+      {config.showNetworkTimeline && (
+        <div className="w-full max-w-xl">
+          <NetworkTimeline hookResult={hookResult} hasStarted={hasStarted} />
+        </div>
+      )}
 
-      <div className='space-y-2'>
-        <Tabs value={activeTab} onValueChange={setActiveTab} className='w-full'>
-          <TabsList className='grid w-full grid-cols-4'>
-            <TabsTrigger value='data'>Data</TabsTrigger>
-            <TabsTrigger value='streamData'>Stream Data</TabsTrigger>
-            <TabsTrigger value='finalData'>Final Data</TabsTrigger>
-            <TabsTrigger value='error'>Error</TabsTrigger>
-          </TabsList>
-          <TabsContent value='data'>
-            <pre
-              ref={dataRef}
-              className='whitespace-pre-wrap font-mono text-sm bg-muted p-4 rounded-lg max-h-[60vh] overflow-y-auto'
+      {/* Allow sections/tabs to use full width */}
+      <div className="w-full space-y-4">
+        {visibleSections.length > 0 &&
+          (config.displayMode === 'tabs' ? (
+            // Tabs View
+            <Tabs
+              value={activeTab}
+              onValueChange={(value: string) => setActiveTab(value)}
+              className="mx-auto max-w-xl"
             >
-              {data ? (typeof data === 'string' ? data : JSON.stringify(data, null, 2)) : 'No data available'}
-            </pre>
-          </TabsContent>
-          <TabsContent value='streamData'>
-            <pre
-              ref={streamDataRef}
-              className='whitespace-pre-wrap font-mono text-sm bg-muted p-4 rounded-lg max-h-[60vh] overflow-y-auto'
-            >
-              {streamData
-                ? typeof streamData === 'string'
-                  ? streamData
-                  : JSON.stringify(streamData, null, 2)
-                : 'No streaming data available'}
-            </pre>
-          </TabsContent>
-          <TabsContent value='finalData'>
-            <pre
-              ref={finalDataRef}
-              className='whitespace-pre-wrap font-mono text-sm bg-muted p-4 rounded-lg max-h-[60vh] overflow-y-auto'
-            >
-              {finalData
-                ? typeof finalData === 'string'
-                  ? finalData
-                  : JSON.stringify(finalData, null, 2)
-                : 'No final data available'}
-            </pre>
-          </TabsContent>
-          <TabsContent value='error'>
-            {error ? (
-              <div className='space-y-4 max-h-[60vh] overflow-y-auto'>
-                <Alert variant='destructive'>
-                  <AlertDescription>
-                    {(() => {
-                      const { title, message, status_code } = formatError(error)
-                      return (
-                        <div className='space-y-2'>
-                          <div className='flex items-center gap-2'>
-                            <div className='font-semibold break-words'>{title}</div>
-                            {status_code && <Badge variant='destructive'>{status_code}</Badge>}
-                          </div>
-                          <pre className='whitespace-pre-wrap font-mono text-sm break-words'>{message}</pre>
-                        </div>
-                      )
-                    })()}
-                  </AlertDescription>
-                </Alert>
-              </div>
-            ) : (
-              <pre className='whitespace-pre-wrap font-mono text-sm bg-muted p-4 rounded-lg max-h-[60vh] overflow-y-auto'>
-                No error available
-              </pre>
-            )}
-          </TabsContent>
-        </Tabs>
+              <TabsList className="mb-2 flex w-full">
+                {visibleSections.map((section) => (
+                  <TabsTrigger
+                    key={section.id}
+                    value={section.id}
+                    className="flex-1"
+                  >
+                    {section.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+
+              {visibleSections.map((section) => (
+                <TabsContent
+                  key={section.id}
+                  value={section.id}
+                  className="mt-0"
+                >
+                  {renderSectionContent(section.id)}
+                </TabsContent>
+              ))}
+            </Tabs>
+          ) : (
+            // Sections View - horizontal layout with full width utilization
+            <div className="flex w-full flex-wrap gap-6 pb-4">
+              {visibleSections.map((section, index) => (
+                <div
+                  key={section.id}
+                  className="min-w-[300px] flex-1 overflow-hidden bg-background"
+                  style={{
+                    flex: `1 1 ${Math.min(450, Math.max(300, 100 / Math.min(visibleSections.length, 3)))}px`,
+                    minHeight: '350px',
+                  }}
+                >
+                  <div className="rounded-t-lg border border-border bg-muted/30 px-4 py-2">
+                    <h3 className="font-medium text-md">{section.label}</h3>
+                  </div>
+                  <div className="h-[calc(100%-45px)] overflow-auto">
+                    {renderSectionContent(
+                      section.id,
+                      'rounded-none rounded-b-lg',
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
       </div>
     </div>
-  )
+  );
 }
