@@ -1832,7 +1832,9 @@ paths:
             application/json:
               schema:
                 title: TestFnNamedArgsSingleStringListResponse
-                type: string
+                type: array
+                items:
+                  type: string
       operationId: TestFnNamedArgsSingleStringList
   /call/TestGemini:
     post:

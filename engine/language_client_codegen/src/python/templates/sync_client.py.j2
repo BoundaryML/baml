@@ -35,8 +35,8 @@ class BamlSyncClient:
     {% for fn in funcs %}
     def {{ fn.name }}(
         self,
-        {% for (name, type) in fn.args -%}
-        {{name}}: {{type}},
+        {% for (name, type, default_value) in fn.args -%}
+        {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
         baml_options: BamlCallOptions = {},
     ) -> {{fn.return_type}}:
@@ -52,7 +52,7 @@ class BamlSyncClient:
       raw = self.__runtime.call_function_sync(
         "{{fn.name}}",
         {
-          {% for (name, _) in fn.args -%}
+          {% for (name, _, _) in fn.args -%}
           "{{name}}": {{name}},
           {%- endfor %}
         },
@@ -77,8 +77,8 @@ class BamlStreamClient:
     {% for fn in funcs %}
     def {{ fn.name }}(
         self,
-        {% for (name, type) in fn.args -%}
-        {{name}}: {{type}},
+        {% for (name, type, default_value) in fn.args -%}
+        {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
@@ -94,7 +94,7 @@ class BamlStreamClient:
       raw = self.__runtime.stream_function_sync(
         "{{fn.name}}",
         {
-          {%- for (name, _) in fn.args %}
+          {%- for (name, _, _) in fn.args %}
           "{{name}}": {{name}},
           {%- endfor %}
         },

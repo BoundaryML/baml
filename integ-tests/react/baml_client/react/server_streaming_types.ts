@@ -153,7 +153,7 @@ export type StreamingServerTypes = {
   TestFnNamedArgsSingleMapStringToString: (Record<string, (string | null)> ),
   TestFnNamedArgsSingleString: string,
   TestFnNamedArgsSingleStringArray: string,
-  TestFnNamedArgsSingleStringList: string,
+  TestFnNamedArgsSingleStringList: (string | null)[],
   TestGemini: string,
   TestGeminiOpenAiGeneric: string,
   TestGeminiSystem: string,

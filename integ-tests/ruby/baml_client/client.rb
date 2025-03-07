@@ -4191,7 +4191,7 @@ module Baml
         varargs: T.untyped,
         myArg: T::Array[String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(T::Array[String])
     }
     def TestFnNamedArgsSingleStringList(
         *varargs,
@@ -9807,7 +9807,7 @@ module Baml
         varargs: T.untyped,
         myArg: T::Array[String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::BamlStream[String])
+      ).returns(Baml::BamlStream[T::Array[String]])
     }
     def TestFnNamedArgsSingleStringList(
         *varargs,
@@ -9831,7 +9831,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
       )
-      Baml::BamlStream[T.nilable(String), String].new(
+      Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
