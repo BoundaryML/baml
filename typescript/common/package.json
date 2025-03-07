@@ -13,7 +13,9 @@
     "prebuild": "rimraf dist",
     "dev": "tsup --watch",
     "gen": "ts-node src/cli.ts generate",
-    "build": "tsup && tsc -p tsconfig.build.json",
+    "build:types": "tsc -p tsconfig.build.json",
+    "build:tsup": "tsup",
+    "build": "pnpm run build:types",
     "clean": "rimraf .turbo node_modules dist",
     "prep-test": "pnpm run clean && pnpm install"
   },
