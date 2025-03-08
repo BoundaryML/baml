@@ -161,6 +161,8 @@ pub fn from_str(
         return Ok(BamlValueWithFlags::String(raw_string.to_string().into()));
     }
 
+    log::info!("Parsing JSONish: ---\n{}\n---", raw_string);
+
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
     let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
 
@@ -171,7 +173,7 @@ pub fn from_str(
     // Determine the best way to get the desired schema from the parsed schema.
 
     // Lets try to now coerce the value into the expected schema.
-    let parsed_value: BamlValueWithFlags = match target.coerce(&ctx, target, Some(&value)) {
+    let parsed_value = match target.coerce(&ctx, target, Some(&value)) {
         Ok(v) => {
             if v.conditions()
                 .flags()
@@ -184,9 +186,11 @@ pub fn from_str(
             Ok::<BamlValueWithFlags, anyhow::Error>(v)
         }
         Err(e) => anyhow::bail!("Failed to coerce value: {}", e),
-    }?;
+    };
 
-    Ok(parsed_value)
+    log::debug!("Parsed JSONish (step 2 of parsing): {:#?}", parsed_value);
+
+    parsed_value
 }
 
 impl ResponseBamlValue {

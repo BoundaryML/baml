@@ -71,7 +71,9 @@ where
                 .map(|stream_part| {
                     if let Some(on_event) = on_event.as_ref() {
                         if let LLMResponse::Success(s) = &stream_part {
+                            log::warn!("Stream part: ---\n{}\n---", s.content);
                             let response_value = partial_parse_fn(&s.content);
+                            log::warn!("Response value - with flags: ---\n{:#?}\n---", response_value);
                             // Flags seem to use a ton of memory, so we strip them here.
                             let response_value_without_flags = match response_value {
                                 Ok(baml_value) => Ok(ResponseBamlValue(
@@ -79,6 +81,7 @@ where
                                 )),
                                 Err(e) => Err(e),
                             };
+                            log::warn!("Response value - no flags: ---\n{:#?}\n---", response_value_without_flags);
                             on_event(FunctionResult::new(
                                 node.scope.clone(),
                                 LLMResponse::Success(s.clone()),

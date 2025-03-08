@@ -38,6 +38,7 @@ pub fn parsed_value_to_response(
     field_type: &FieldType,
     allow_partials: bool,
 ) -> Result<ResponseBamlValue> {
+    log::warn!("parsed value to response: ---\n{:#?}\n---", baml_value);
     let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
@@ -59,6 +60,21 @@ pub fn parsed_value_to_response(
     let baml_value_with_streaming =
         validate_streaming_state(ir, &baml_value, field_type, allow_partials)
             .map_err(|s| anyhow::anyhow!("{s:?}"))?;
+
+    log::warn!(
+        "parsed value to response (baml_value_with_streaming): ---\n{:#?}\n---",
+        baml_value_with_streaming
+    );
+
+    log::warn!(
+        "parsed value to response (value_with_response_checks): ---\n{:#?}\n---",
+        value_with_response_checks
+    );
+
+    log::warn!(
+        "parsed value to response (meta_flags): ---\n{:#?}\n---",
+        meta_flags
+    );
 
     // Combine the baml_value, its types, the parser flags, and the streaming state
     // into a final value.
@@ -403,6 +419,81 @@ mod tests {
         "##,
         )
         .expect("Source is valid")
+    }
+
+    #[test]
+    fn test_complex() {
+        let ir = make_test_ir(
+            r##"
+            class Name {
+                first string
+                last string
+            }
+
+            class Response {
+                name Name
+                address string?
+                hair_color string
+                height float
+            }
+            "##,
+        )
+        .expect("Source is valid");
+
+        let val = BamlValueWithFlags::Class(
+            "Response".into(),
+            DeserializerConditions::default(),
+            vec![
+                (
+                    "name".into(),
+                    BamlValueWithFlags::Class(
+                        "Name".into(),
+                        DeserializerConditions::default(),
+                        vec![
+                            (
+                                "first".into(),
+                                BamlValueWithFlags::String(ValueWithFlags {
+                                    value: "Greg".into(),
+                                    flags: DeserializerConditions::default(),
+                                }),
+                            ),
+                            (
+                                "last".into(),
+                                BamlValueWithFlags::String(ValueWithFlags {
+                                    value: "Hale".into(),
+                                    flags: DeserializerConditions::default(),
+                                }),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                ),
+                (
+                    "address".into(),
+                    BamlValueWithFlags::Null(DeserializerConditions::default()),
+                ),
+                (
+                    "hair_color".into(),
+                    BamlValueWithFlags::String(ValueWithFlags {
+                        value: "Grey".into(),
+                        flags: DeserializerConditions::default(),
+                    }),
+                ),
+                (
+                    "height".into(),
+                    BamlValueWithFlags::Float(ValueWithFlags {
+                        value: 1.75,
+                        flags: DeserializerConditions::default(),
+                    }),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+
+        let response = parsed_value_to_response(&ir, val, &FieldType::class("Response"), true);
+        assert!(response.is_ok());
     }
 
     #[test]

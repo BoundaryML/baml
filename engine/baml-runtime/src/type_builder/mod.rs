@@ -444,8 +444,6 @@ pub struct TypeBuilder {
     type_aliases: Arc<Mutex<IndexMap<String, Arc<Mutex<TypeAliasBuilder>>>>>,
     recursive_type_aliases: Arc<Mutex<Vec<IndexMap<String, FieldType>>>>,
     recursive_classes: Arc<Mutex<Vec<IndexSet<String>>>>,
-
-    parser_database: ParserDatabase,
 }
 
 impl Default for TypeBuilder {
@@ -462,7 +460,6 @@ impl TypeBuilder {
             type_aliases: Default::default(),
             recursive_type_aliases: Default::default(),
             recursive_classes: Default::default(),
-            parser_database: Default::default(),
         }
     }
 

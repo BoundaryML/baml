@@ -37,7 +37,7 @@ pub fn validate_streaming_state(
     allow_partials: bool,
 ) -> Result<BamlValueWithMeta<Completion>, StreamingError> {
     let baml_value_with_meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
-    let typed_baml_value: BamlValueWithMeta<(Vec<Flag>, FieldType)> =
+    let typed_baml_value =
         ir.distribute_type_with_meta(baml_value_with_meta_flags, field_type.clone())?;
     let baml_value_with_streaming_state_and_behavior =
         typed_baml_value.map_meta(|(flags, r#type)| (completion_state(&flags), r#type));
@@ -46,7 +46,7 @@ pub fn validate_streaming_state(
         ir,
         baml_value_with_streaming_state_and_behavior,
         allow_partials,
-        0
+        0,
     )?;
     Ok(top_level_node)
 }
@@ -91,15 +91,15 @@ fn process_node(
         BamlValueWithMeta::Int(i, _) => Ok(BamlValueWithMeta::Int(i, new_meta)),
         BamlValueWithMeta::Float(f, _) => Ok(BamlValueWithMeta::Float(f, new_meta)),
         BamlValueWithMeta::Bool(b, _) => Ok(BamlValueWithMeta::Bool(b, new_meta)),
-        BamlValueWithMeta::List(items, _) => {
-            Ok(BamlValueWithMeta::List(
+        BamlValueWithMeta::List(items, _) => Ok(BamlValueWithMeta::List(
             items
                 .into_iter()
-                .filter_map(|item| process_node(ir, item, allow_partials_in_sub_nodes, depth+1).ok())
+                .filter_map(|item| {
+                    process_node(ir, item, allow_partials_in_sub_nodes, depth + 1).ok()
+                })
                 .collect(),
             new_meta,
-        ))
-    },
+        )),
         BamlValueWithMeta::Class(ref class_name, value_fields, _) => {
             let value_field_names: IndexSet<String> = value_fields
                 .keys()
@@ -108,6 +108,11 @@ fn process_node(
                 .collect();
             let needed_fields: HashSet<String> =
                 needed_fields(ir, class_name, allow_partials_in_sub_nodes)?;
+            log::warn!(
+                "needed_fields: for class: {} -- {:?}",
+                class_name,
+                needed_fields
+            );
 
             // The fields that need to be filled in by Null are initially the
             // fields in the Class type that are not present in the input
@@ -157,7 +162,7 @@ fn process_node(
                         .as_ref()
                         .map_or(false, |b| b.state);
                     let completion_state = field_value.meta().0.clone();
-                    match process_node(ir, field_value, allow_partials_in_sub_nodes, depth+1) {
+                    match process_node(ir, field_value, allow_partials_in_sub_nodes, depth + 1) {
                         Ok(res) => Some((field_name, res)),
                         _ => {
                             let state = Completion {
@@ -218,7 +223,7 @@ fn process_node(
             let new_kvs = kvs
                 .into_iter()
                 .filter_map(|(k, v)| {
-                    process_node(ir, v, allow_partials_in_sub_nodes, depth+1)
+                    process_node(ir, v, allow_partials_in_sub_nodes, depth + 1)
                         .ok()
                         .map(|v| (k, v))
                 })
@@ -343,10 +348,7 @@ fn completion_state(flags: &Vec<Flag>) -> CompletionState {
     if flags.iter().any(|f| matches!(f, Flag::Pending)) {
         CompletionState::Pending
     } else {
-        if flags
-            .iter()
-            .any(|f| matches!(f, Flag::Incomplete))
-        {
+        if flags.iter().any(|f| matches!(f, Flag::Incomplete)) {
             CompletionState::Incomplete
         } else {
             CompletionState::Complete
