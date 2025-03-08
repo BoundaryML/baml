@@ -1,0 +1,176 @@
+---
+title: Retrieval-Augmented Generation (RAG)
+---
+
+RAG is a commonly used technique used to improve the quality of LLM-generated responses by
+grounding the model on external sources of knowledge. In this example, we'll use
+BAML to manage the prompts for a RAG pipeline.
+
+The most common way to implement RAG is to use a vector store that contains embeddings of
+the data. First, let's define our BAML model for RAG.
+
+```baml rag.baml
+class Query {
+  query string
+}
+
+class Answer {
+  question string
+  answer string
+}
+
+function RAG(question: string, context: string) -> Answer {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Answer the question in full sentences using the provided context.
+    Do not make up an answer. If the information is not provided in the context, say so clearly.
+    
+    QUESTION: {{ question }}
+    RELEVANT CONTEXT: {{ context }}
+
+    {{ ctx.output_format }}
+
+    RESPONSE:
+  "#
+}
+
+test TestOne {
+  functions [RAG]
+  args {
+    question "When was SpaceX founded?"
+    context #"
+      SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.
+    "#
+  }
+}
+
+test TestTwo {
+  functions [RAG]
+  args {
+    question "Where is Fiji located?"
+    context #"
+      Fiji is a country in the South Pacific known for its rugged landscapes, palm-lined beaches, and coral reefs with clear lagoons.
+    "#
+  }
+}
+
+test TestThree {
+  functions [RAG]
+  args {
+    question "What is the primary product of BoundaryML?"
+    context #"
+      BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs.
+    "#
+  }
+}
+
+test TestMissingContext{
+  functions [RAG]
+  args {
+    question "Who founded SpaceX?"
+    context #"
+      BoundaryML is the company that makes BAML, the best way to get structured with LLMs.
+    "#
+  }
+}
+```
+
+Note how in the `TestMissingContext` test, the model correctly says that it doesn't know the answer
+because it's not provided in the context. The model doesn't make up an answer, because of the way
+we've written the prompt.
+
+You can generate the BAML client code for this prompt by running `baml-cli generate`.
+
+#### Python code
+
+Next, let's create our own minimal vector store and retriever using `scikit-learn`.
+
+```py
+# Install scikit-learn and use its TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+class VectorStore:
+    """
+    Adapted from https://github.com/MadcowD/ell/blob/main/examples/rag/rag.py
+    """
+    def __init__(self, vectorizer, tfidf_matrix, documents):
+        self.vectorizer = vectorizer
+        self.tfidf_matrix = tfidf_matrix
+        self.documents = documents
+
+    @classmethod
+    def from_documents(cls, documents: list[str]) -> "VectorStore":
+        vectorizer = TfidfVectorizer()
+        tfidf_matrix = vectorizer.fit_transform(documents)
+        return cls(vectorizer, tfidf_matrix, documents)
+
+    def retrieve_with_scores(self, query: str, k: int = 2) -> list[dict]:
+        query_vector = self.vectorizer.transform([query])
+        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+        top_k_indices = np.argsort(similarities)[-k:][::-1]
+        return [
+            {"document": self.documents[i], "relevance": float(similarities[i])}
+            for i in top_k_indices
+        ]
+
+    def retrieve_context(self, query: str, k: int = 2) -> str:
+        documents = self.retrieve_with_scores(query, k)
+        return "\n".join([item["document"] for item in documents])
+```
+
+We can then build our RAG application in Python by calling the BAML client.
+
+```py rag.py
+from baml_client import b
+
+# class VectorStore:
+# ...
+
+if __name__ == "__main__":
+    documents = [
+        "SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.",
+        "Fiji is a country in the South Pacific known for its rugged landscapes, palm-lined beaches, and coral reefs with clear lagoons.",
+        "Dunkirk is a 2017 war film depicting the Dunkirk evacuation of World War II, featuring intense aerial combat scenes with Spitfire aircraft.",
+        "BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs."
+    ]
+
+    vector_store = VectorStore.from_documents(documents)
+
+    questions = [
+        "What is BAML?",
+        "Which aircraft was featured in Dunkirk?",
+        "When was SpaceX founded?",
+        "Where is Fiji located?",
+        "What is the capital of Fiji?"
+    ]
+
+    for question in questions:
+        context = vector_store.retrieve_context(question)
+        print(f"{b.RAG(question, context)}")
+        print("-" * 10)
+```
+
+When you run the Python script, you should see output like the following:
+
+```
+question='What is BAML?' answer='BAML is a product made by BoundaryML, and it is described as the best way to get structured outputs with LLMs.'
+----------
+question='Which aircraft was featured in Dunkirk?' answer='The aircraft featured in Dunkirk were Spitfire aircraft.'
+----------
+question='When was SpaceX founded?' answer='SpaceX was founded in 2002.'
+----------
+question='Where is Fiji located?' answer='Fiji is located in the South Pacific.'
+----------
+question='What is the capital of Fiji?' answer='The information about the capital of Fiji is not provided in the context.'
+----------
+```
+
+Once again, in the last question, the model correctly says that it doesn't know the answer because
+it's not provided in the context.
+
+That's it! You can now attempt such a RAG workflow with a vector database on a larger dataset.
+All you have to do is point BAML to the retriever class you've implemented.
+
+
