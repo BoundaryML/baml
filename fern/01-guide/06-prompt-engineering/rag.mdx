@@ -10,16 +10,12 @@ The most common way to implement RAG is to use a vector store that contains embe
 the data. First, let's define our BAML model for RAG.
 
 ```baml rag.baml
-class Query {
-  query string
-}
-
-class Answer {
+class Response {
   question string
   answer string
 }
 
-function RAG(question: string, context: string) -> Answer {
+function RAG(question: string, context: string) -> Response {
   client "openai/gpt-4o-mini"
   prompt #"
     Answer the question in full sentences using the provided context.
@@ -148,7 +144,8 @@ if __name__ == "__main__":
 
     for question in questions:
         context = vector_store.retrieve_context(question)
-        print(f"{b.RAG(question, context)}")
+        response = b.RAG(question, context)
+        print(response)
         print("-" * 10)
 ```
 
