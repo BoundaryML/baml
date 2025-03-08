@@ -59,9 +59,8 @@ impl VertexAuth {
                     Err(e) => {
                         log::error!(
                             "{:?}",
-                            anyhow::Error::from(e).context(
-                                "Failed to auth using MetadataServiceAccount strategy"
-                            )
+                            anyhow::Error::from(e)
+                                .context("Failed to auth using MetadataServiceAccount strategy")
                         );
                     }
                 }
@@ -73,10 +72,11 @@ impl VertexAuth {
                     Err(e) => {
                         log::error!(
                             "{:?}",
-                            anyhow::Error::from(e).context(
-                                "Failed to auth using GCloudAuthorizedUser strategy"
-                            )
+                            anyhow::Error::from(e)
+                                .context("Failed to auth using GCloudAuthorizedUser strategy")
                         );
+                    }
+                }
                 anyhow::bail!(
                     "Failed to auth - system_default strategy did not resolve successfully"
                 )
