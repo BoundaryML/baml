@@ -1,4 +1,4 @@
-import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio } from "@boundaryml/baml"
+import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Collector } from "@boundaryml/baml"
 import { toBamlError, BamlStream } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
@@ -34,9 +34,10 @@ export class BamlAsyncClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): Promise<{{fn.return_type}}> {
     try {
+      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
       const raw = await this.runtime.callFunction(
         "{{fn.name}}",
         {
@@ -47,6 +48,7 @@ export class BamlAsyncClient {
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        collector,
       )
       return raw.parsed(false) as {{fn.return_type}}
     } catch (error) {
@@ -64,9 +66,10 @@ class BamlStreamClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
     try {
+      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
       const raw = this.runtime.streamFunction(
         "{{fn.name}}",
         {
@@ -78,6 +81,7 @@ class BamlStreamClient {
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        collector,
       )
       return new BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}>(
         raw,

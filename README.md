@@ -100,7 +100,7 @@ while True:
     print("Goodbye!")
     break
   else:
-    messages.append(Message(role="assistant", content=tool.reply))
+    messages.append(Message(role="assistant", content=tool.response))
 ```
 
 ### Making prompts easy to find and read

@@ -121,6 +121,9 @@ class TestAllInputs:
         res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
         assert "a" in res and "b" in res and "c" in res
 
+        res = await b.TestFnNamedArgsSingleStringList()
+        assert res == []
+
     @pytest.mark.asyncio
     async def test_return_literal_union(self):
         res = await b.LiteralUnionsTest("a")
@@ -1930,5 +1933,3 @@ async def test_thinking_streaming():
     assert len(res.title) > 0, "title should be non-empty"
     assert len(res.content) > 0, "content should be non-empty"
     assert len(res.characters) > 0, "characters should be non-empty"
-
-

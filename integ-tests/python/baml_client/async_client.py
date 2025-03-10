@@ -251,7 +251,7 @@ class BamlAsyncClient:
     
     async def AliasedInputList(
         self,
-        input: List[types.AliasedEnum],
+        input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -351,7 +351,7 @@ class BamlAsyncClient:
     
     async def BuildLinkedList(
         self,
-        input: List[int],
+        input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedList:
       __tb__ = baml_options.get("tb", None)
@@ -776,7 +776,7 @@ class BamlAsyncClient:
     
     async def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput],
+        input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> List[types.DynInputOutput]:
       __tb__ = baml_options.get("tb", None)
@@ -951,7 +951,7 @@ class BamlAsyncClient:
     
     async def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image],
+        resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
       __tb__ = baml_options.get("tb", None)
@@ -1151,7 +1151,7 @@ class BamlAsyncClient:
     
     async def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str],
+        myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -1576,7 +1576,7 @@ class BamlAsyncClient:
     
     async def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[types.MapKey, str]:
       __tb__ = baml_options.get("tb", None)
@@ -1601,7 +1601,7 @@ class BamlAsyncClient:
     
     async def InOutLiteralStringUnionMapKey(
         self,
-        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]:
       __tb__ = baml_options.get("tb", None)
@@ -1626,7 +1626,7 @@ class BamlAsyncClient:
     
     async def InOutSingleLiteralStringMapKey(
         self,
-        m: Dict[Literal["key"], str],
+        m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[Literal["key"], str]:
       __tb__ = baml_options.get("tb", None)
@@ -1776,7 +1776,7 @@ class BamlAsyncClient:
     
     async def MapAlias(
         self,
-        m: Dict[str, List[str]],
+        m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, List[str]]:
       __tb__ = baml_options.get("tb", None)
@@ -1898,6 +1898,31 @@ class BamlAsyncClient:
         collectors,
       )
       return cast(types.ClassForNullLiteral, raw.cast_to(types, types, partial_types, False))
+    
+    async def OpenAIWithAnthropicResponseHello(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = await self.__runtime.call_function(
+        "OpenAIWithAnthropicResponseHello",
+        {
+          "s": s,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(str, raw.cast_to(types, types, partial_types, False))
     
     async def OptionalTest_Function(
         self,
@@ -3101,7 +3126,7 @@ class BamlAsyncClient:
     
     async def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList],
+        myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -3176,7 +3201,7 @@ class BamlAsyncClient:
     
     async def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
@@ -3201,7 +3226,7 @@ class BamlAsyncClient:
     
     async def TestFnNamedArgsSingleMapStringToMap(
         self,
-        myMap: Dict[str, Dict[str, str]],
+        myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, Dict[str, str]]:
       __tb__ = baml_options.get("tb", None)
@@ -3226,7 +3251,7 @@ class BamlAsyncClient:
     
     async def TestFnNamedArgsSingleMapStringToString(
         self,
-        myMap: Dict[str, str],
+        myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, str]:
       __tb__ = baml_options.get("tb", None)
@@ -3276,7 +3301,7 @@ class BamlAsyncClient:
     
     async def TestFnNamedArgsSingleStringArray(
         self,
-        myStringArray: List[str],
+        myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -3301,9 +3326,9 @@ class BamlAsyncClient:
     
     async def TestFnNamedArgsSingleStringList(
         self,
-        myArg: List[str],
+        myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> List[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3322,7 +3347,7 @@ class BamlAsyncClient:
         __cr__,
         collectors,
       )
-      return cast(str, raw.cast_to(types, types, partial_types, False))
+      return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
     async def TestGemini(
         self,
@@ -3476,7 +3501,7 @@ class BamlAsyncClient:
     
     async def TestImageListInput(
         self,
-        imgs: List[baml_py.Image],
+        imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
@@ -4411,7 +4436,7 @@ class BamlStreamClient:
     
     def AliasedInputList(
         self,
-        input: List[types.AliasedEnum],
+        input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -4539,7 +4564,7 @@ class BamlStreamClient:
     
     def BuildLinkedList(
         self,
-        input: List[int],
+        input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.LinkedList, types.LinkedList]:
       __tb__ = baml_options.get("tb", None)
@@ -5087,7 +5112,7 @@ class BamlStreamClient:
     
     def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput],
+        input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
       __tb__ = baml_options.get("tb", None)
@@ -5311,7 +5336,7 @@ class BamlStreamClient:
     
     def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image],
+        resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
       __tb__ = baml_options.get("tb", None)
@@ -5568,7 +5593,7 @@ class BamlStreamClient:
     
     def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str],
+        myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -6112,7 +6137,7 @@ class BamlStreamClient:
     
     def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[types.MapKey, Optional[str]], Dict[types.MapKey, str]]:
       __tb__ = baml_options.get("tb", None)
@@ -6145,7 +6170,7 @@ class BamlStreamClient:
     
     def InOutLiteralStringUnionMapKey(
         self,
-        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]]:
       __tb__ = baml_options.get("tb", None)
@@ -6178,7 +6203,7 @@ class BamlStreamClient:
     
     def InOutSingleLiteralStringMapKey(
         self,
-        m: Dict[Literal["key"], str],
+        m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[Literal["key"], Optional[str]], Dict[Literal["key"], str]]:
       __tb__ = baml_options.get("tb", None)
@@ -6367,7 +6392,7 @@ class BamlStreamClient:
     
     def MapAlias(
         self,
-        m: Dict[str, List[str]],
+        m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, List[Optional[str]]], Dict[str, List[str]]]:
       __tb__ = baml_options.get("tb", None)
@@ -6522,6 +6547,38 @@ class BamlStreamClient:
         raw,
         lambda x: cast(partial_types.ClassForNullLiteral, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.ClassForNullLiteral, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def OpenAIWithAnthropicResponseHello(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      collector = baml_options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = self.__runtime.stream_function(
+        "OpenAIWithAnthropicResponseHello",
+        {
+          "s": s,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     
@@ -8065,7 +8122,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList],
+        myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -8161,7 +8218,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
       __tb__ = baml_options.get("tb", None)
@@ -8193,7 +8250,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
-        myMap: Dict[str, Dict[str, str]],
+        myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]]:
       __tb__ = baml_options.get("tb", None)
@@ -8225,7 +8282,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToString(
         self,
-        myMap: Dict[str, str],
+        myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, Optional[str]], Dict[str, str]]:
       __tb__ = baml_options.get("tb", None)
@@ -8289,7 +8346,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleStringArray(
         self,
-        myStringArray: List[str],
+        myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)
@@ -8321,9 +8378,9 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleStringList(
         self,
-        myArg: List[str],
+        myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[str], str]:
+    ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8344,10 +8401,10 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlStream[Optional[str], str](
+      return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
-        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        lambda x: cast(List[Optional[str]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(List[str], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     
@@ -8544,7 +8601,7 @@ class BamlStreamClient:
     
     def TestImageListInput(
         self,
-        imgs: List[baml_py.Image],
+        imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
       __tb__ = baml_options.get("tb", None)

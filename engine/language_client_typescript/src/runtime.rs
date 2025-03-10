@@ -3,6 +3,7 @@ use crate::parse_ts_types;
 use crate::types::client_registry::ClientRegistry;
 use crate::types::function_result_stream::FunctionResultStream;
 use crate::types::function_results::FunctionResult;
+use crate::types::log_collector::Collector;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::types::trace_stats::TraceStats;
 use crate::types::type_builder::TypeBuilder;
@@ -103,6 +104,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -119,6 +121,11 @@ impl BamlRuntime {
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
 
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
+
         let fut = async move {
             let result = baml_runtime
                 .call_function(
@@ -127,8 +134,7 @@ impl BamlRuntime {
                     &ctx_mng,
                     tb.as_ref(),
                     cb.as_ref(),
-                    // TODO: wire this
-                    Some(vec![]),
+                    Some(collector_list),
                 )
                 .await;
 
@@ -150,6 +156,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -164,14 +171,17 @@ impl BamlRuntime {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
         let (result, _event_id) = self.inner.call_function_sync(
             function_name,
             &args_map,
             &ctx_mng,
             tb.as_ref(),
             cb.as_ref(),
-            // TODO: wire this
-            Some(vec![]),
+            Some(collector_list),
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -189,6 +199,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -202,6 +213,10 @@ impl BamlRuntime {
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let client_registry = client_registry.map(|cb| cb.inner.clone());
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
         let stream = self
             .inner
             .stream_function(
@@ -210,8 +225,7 @@ impl BamlRuntime {
                 &ctx,
                 tb.as_ref(),
                 client_registry.as_ref(),
-                // TODO: wire this
-                Some(vec![]),
+                Some(collector_list),
             )
             .map_err(from_anyhow_error)?;
 
@@ -235,6 +249,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -248,6 +263,10 @@ impl BamlRuntime {
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let client_registry = client_registry.map(|cb| cb.inner.clone());
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
         let stream = self
             .inner
             .stream_function(
@@ -256,8 +275,7 @@ impl BamlRuntime {
                 &ctx,
                 tb.as_ref(),
                 client_registry.as_ref(),
-                // TODO: wire this
-                Some(vec![]),
+                Some(collector_list),
             )
             .map_err(from_anyhow_error)?;
 

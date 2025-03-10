@@ -1356,6 +1356,24 @@ export const NullLiteralClassHello = async (
 };
 
 /**
+ * Executes the "OpenAIWithAnthropicResponseHello" BAML action.
+ *
+ * This server action calls the underlying BAML function "OpenAIWithAnthropicResponseHello"
+ * with the specified parameters.
+ *
+ * @param { string } s - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const OpenAIWithAnthropicResponseHello = async (
+  s: string,
+): Promise<string> => {
+  return b.OpenAIWithAnthropicResponseHello(
+    s,
+  );
+};
+
+/**
  * Executes the "OptionalTest_Function" BAML action.
  *
  * This server action calls the underlying BAML function "OptionalTest_Function"
@@ -2377,11 +2395,11 @@ export const TestFnNamedArgsSingleStringArray = async (
  *
  * @param { string[] } myArg - Input parameter.
  *
- * @returns {Promise<string>} A promise that resolves with the result of the action.
+ * @returns {Promise<string[]>} A promise that resolves with the result of the action.
  */
 export const TestFnNamedArgsSingleStringList = async (
   myArg: string[],
-): Promise<string> => {
+): Promise<string[]> => {
   return b.TestFnNamedArgsSingleStringList(
     myArg,
   );

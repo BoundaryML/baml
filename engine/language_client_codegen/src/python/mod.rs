@@ -52,7 +52,9 @@ struct PythonFunction {
     name: String,
     partial_return_type: String,
     return_type: String,
-    args: Vec<(String, String)>,
+    // (name, type, default_value). When default_value is "", it will not be
+    // rendered in the template.
+    args: Vec<(String, String, Option<&'static str>)>,
 }
 
 #[derive(askama::Template)]
@@ -186,7 +188,11 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
                                 .inputs()
                                 .iter()
                                 .map(|(name, r#type)| {
-                                    (name.to_string(), r#type.to_type_ref(ir, false))
+                                    (
+                                        name.to_string(),
+                                        r#type.to_type_ref(ir, false),
+                                        default_value_for_parameter_type(r#type),
+                                    )
                                 })
                                 .collect(),
                         })
@@ -317,6 +323,25 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 None => base.to_partial_type_ref(ir, with_checked),
             },
         }
+    }
+}
+
+// The default value to use for parameters of this type:
+// def Foo(x: Optional[int] = None, y: int[] = []):
+//   ...
+fn default_value_for_parameter_type(field_type: &FieldType) -> Option<&'static str> {
+    match field_type {
+        FieldType::Optional(_) => Some("None"),
+        FieldType::List(_) => Some("[]"),
+        FieldType::Map(_, _) => Some("{}"),
+        FieldType::Class(_) => None,
+        FieldType::RecursiveTypeAlias(_) => None,
+        FieldType::Literal(_) => None,
+        FieldType::Enum(_) => None,
+        FieldType::Tuple(_) => None,
+        FieldType::Primitive(_) => None,
+        FieldType::Union(xs) => None,
+        FieldType::WithMetadata { base, .. } => default_value_for_parameter_type(base),
     }
 }
 

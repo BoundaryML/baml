@@ -10,6 +10,9 @@ export {
   invoke_runtime_cli,
   ClientRegistry,
   BamlLogEvent,
+  Collector,
+  FunctionLog,
+  Usage,
 } from "./native";
 
 export { BamlStream } from "./stream";
