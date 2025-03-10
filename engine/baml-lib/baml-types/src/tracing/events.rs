@@ -135,6 +135,9 @@ pub struct HTTPBody {
     raw: Vec<u8>,
 }
 
+// TODO: Cache parsed JSON and UTF-8 text in order to avoid parsing the bytes
+// on every access (not trivial because we'd need &mut self or interior
+// mutability).
 impl HTTPBody {
     pub fn new(body: Vec<u8>) -> Self {
         Self { raw: body }
