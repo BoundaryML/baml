@@ -219,3 +219,71 @@ body, p, ul, h1, h2, h3, h4, h5, h6, span:not(a span) {
   backdrop-filter: blur(12px) !important;
   -webkit-backdrop-filter: blur(12px) !important;
 }
+
+
+/* Styling for the new docs frontend */
+body#fern-docs div.fern-background-image::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  height: 100vh;
+  pointer-events: none;
+  z-index: -1;
+  background: linear-gradient(180deg,
+    rgba(96, 37, 209, 0.15) 0%,
+    rgba(96, 37, 209, 0.05) 20%,
+    rgba(0, 0, 0, 0) 40%
+  );
+}
+.dark body#fern-docs div.fern-background-image::before {
+  z-index: -1;
+  background: linear-gradient(180deg,
+    rgba(183, 148, 255, 0.15) 0%,
+    rgba(183, 148, 255, 0.05) 20%,
+    rgba(0, 0, 0, 0) 40%
+  );
+}
+
+/* Pattern Overlay */
+body#fern-docs div.fern-background-image::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.05;
+  background-size: 60px 60px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 40%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, transparent 40%);
+}
+
+body#fern-docs #fern-header .md\:h-\(--header-height-real\) {
+  background-color: var(--header-background) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+  border-bottom: 1px solid var(--border) !important;
+  z-index: 50 !important;
+}
+.dark body#fern-docs #fern-header .md\:h-\(--header-height-real\) {
+  background: rgba(11, 13, 14, 0.7) !important;
+  border-bottom: 1px solid rgba(46, 46, 46, 0.8) !important;
+}
+
+body#fern-docs .fern-sidebar-link[data-state="active"] span {
+  color: var(--accent-primary) !important;
+  font-weight: 600 !important;
+}
+
+body#fern-docs #fern-sidebar {
+  background:transparent !important;
+}
+
+body#fern-docs #fern-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border) !important;
+  backdrop-filter: blur(12px) !important;
+  -webkit-backdrop-filter: blur(12px) !important;
+}
