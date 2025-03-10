@@ -11,7 +11,7 @@ BAML to manage the prompts for a RAG pipeline.
 The most common way to implement RAG is to use a vector store that contains embeddings of
 the data. First, let's define our BAML model for RAG.
 
-#### BAML Code:
+#### BAML Code
 
 ```baml rag.baml
 class Response {
@@ -85,7 +85,7 @@ You can generate the BAML client code for this prompt by running `baml-cli gener
 
 Next, let's create our own minimal vector store and retriever using `scikit-learn`.
 
-#### Python Code:
+#### Python Code
 
 ```py rag.py
 # Install scikit-learn and use its TfidfVectorizer
@@ -176,7 +176,7 @@ it's not provided in the context.
 That's it! You can now attempt such a RAG workflow with a vector database on a larger dataset.
 All you have to do is point BAML to the retriever class you've implemented.
 
-### Advanced: Creating Citations with LLM
+### Creating Citations with LLM
 
 In this advanced section, we'll explore how to enhance our RAG implementation to include citations for the generated responses. This is particularly useful when you need to track the source of information in the generated responses.
 
@@ -251,5 +251,121 @@ question='What is the capital of Fiji?' answer='The capital of Fiji is not provi
 ```
 
 Notice how each piece of information in the answer is backed by a specific citation from the source context. This makes the responses more transparent and verifiable, which is especially important in applications where the source of information matters.
+
+### Using Pinecone as Vector Database
+
+Instead of using our custom vector store, we can use Pinecone, a production-ready vector database. Here's how to implement the same RAG pipeline using Pinecone:
+
+First, install the required packages:
+
+```bash
+pip install pinecone
+```
+
+Now, let's modify our Python code to use Pinecone:
+
+```py rag_pinecone.py
+import pinecone as pc
+from sentence_transformers import SentenceTransformer
+from pinecone import ServerlessSpec
+from baml_client import b
+
+# Initialize Pinecone
+pc = Pinecone(api_key="YOUR_API_KEY")
+
+class PineconeStore:
+    def __init__(self, index_name: str):
+        self.index_name = index_name
+        self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+        
+        # Create index if it doesn't exist
+        if index_name not in pc.list_indexes().names():
+            pc.create_index(
+                name=index_name,
+                dimension=self.encoder.get_sentence_embedding_dimension(),
+                metric='cosine',
+                spec=ServerlessSpec(
+                    cloud='aws',
+                    region='us-east-1'
+                )
+            )
+        self.index = pc.Index(index_name)
+
+    def add_documents(self, documents: list[str], ids: list[str] = None):
+        if ids is None:
+            ids = [str(i) for i in range(len(documents))]
+        
+        # Create embeddings
+        embeddings = self.encoder.encode(documents)
+        
+        # Create vector records
+        vectors = [(id, emb.tolist(), {"text": doc}) 
+                  for id, emb, doc in zip(ids, embeddings, documents)]
+        
+        # Upsert to Pinecone
+        self.index.upsert(vectors=vectors)
+
+    def retrieve_context(self, query: str, k: int = 2) -> str:
+        # Create query embedding
+        query_embedding = self.encoder.encode(query).tolist()
+        
+        # Query Pinecone
+        results = self.index.query(
+            vector=query_embedding,
+            top_k=k,
+            include_metadata=True
+        )
+        
+        # Extract and join the document texts
+        contexts = [match.metadata["text"] for match in results.matches]
+        return "\n".join(contexts)
+
+if __name__ == "__main__":
+    # Initialize Pinecone store
+    vector_store = PineconeStore("baml-rag-demo")
+    
+    # Sample documents (same as before)
+    documents = [
+        "SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.",
+        "Fiji is a country in the South Pacific known for its rugged landscapes, palm-lined beaches, and coral reefs with clear lagoons.",
+        "Dunkirk is a 2017 war film depicting the Dunkirk evacuation of World War II, featuring intense aerial combat scenes with Spitfire aircraft.",
+        "BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs."
+    ]
+    
+    # Add documents to Pinecone
+    vector_store.add_documents(documents)
+    
+    # Test questions (same as before)
+    questions = [
+        "What is BAML?",
+        "Which aircraft was featured in Dunkirk?",
+        "When was SpaceX founded?",
+        "Where is Fiji located?",
+        "What is the capital of Fiji?"
+    ]
+
+    # Query using the same BAML functions
+    for question in questions:
+        context = vector_store.retrieve_context(question)
+        response = b.RAGWithCitations(question, context)
+        print(response)
+        print("-" * 10)
+```
+
+The key differences when using Pinecone are:
+
+1. Documents are stored in Pinecone's serverless infrastructure on AWS instead of in memory
+2. The similarity search is handled by Pinecone's optimized search engine
+3. We can persist our vector database across sessions
+
+Note that you'll need to:
+1. [Create a Pinecone account](https://www.pinecone.io/)
+2. Get your API key from the Pinecone console
+3. Replace `YOUR_API_KEY` with your actual Pinecone credentials
+4. Make sure you have access to the serverless offering in your Pinecone account
+
+The BAML functions (`RAG` and `RAGWithCitations`) remain exactly the same, demonstrating how BAML cleanly separates the prompt engineering from the implementation details of your vector database.
+
+When you run this code, you'll get the same type of responses as before, but now you're using a production-ready serverless vector database that can scale automatically based on your usage.
 
 
