@@ -130,6 +130,30 @@ pub struct LoggedLLMRequest {
     pub prompt: Prompt,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HTTPBody {
+    raw: Vec<u8>,
+}
+
+impl HTTPBody {
+    pub fn new(body: Vec<u8>) -> Self {
+        Self { raw: body }
+    }
+
+    pub fn raw(&self) -> &[u8] {
+        &self.raw
+    }
+
+    pub fn text(&self) -> anyhow::Result<&str> {
+        std::str::from_utf8(&self.raw).map_err(|e| anyhow::anyhow!("HTTP body is not UTF-8: {}", e))
+    }
+
+    pub fn json(&self) -> anyhow::Result<serde_json::Value> {
+        serde_json::from_str(self.text()?)
+            .map_err(|e| anyhow::anyhow!("HTTP body is not JSON: {}", e))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPRequest {
     // since LLM requests could be made in parallel, we need to match the response to the request
@@ -137,7 +161,7 @@ pub struct HTTPRequest {
     pub url: String,
     pub method: String,
     pub headers: serde_json::Value,
-    pub body: serde_json::Value,
+    pub body: HTTPBody,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

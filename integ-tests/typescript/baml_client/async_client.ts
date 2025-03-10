@@ -785,26 +785,6 @@ export class BamlAsyncClient {
     }
   }
   
-  async ExtractResumeClaude(
-      resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<Resume> {
-    try {
-      const raw = await this.runtime.callFunction(
-        "ExtractResumeClaude",
-        {
-          "resume": resume
-        },
-        this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-      )
-      return raw.parsed(false) as Resume
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
   async FnClassOptionalOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -4294,32 +4274,6 @@ class BamlStreamClient {
     try {
       const raw = this.runtime.streamFunction(
         "ExtractResume2",
-        {
-          "resume": resume
-        },
-        undefined,
-        this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-      )
-      return new BamlStream<partial_types.Resume, Resume>(
-        raw,
-        (a): partial_types.Resume => a,
-        (a): Resume => a,
-        this.ctx_manager.cloneContext(),
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  ExtractResumeClaude(
-      resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): BamlStream<partial_types.Resume, Resume> {
-    try {
-      const raw = this.runtime.streamFunction(
-        "ExtractResumeClaude",
         {
           "resume": resume
         },

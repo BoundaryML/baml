@@ -786,26 +786,6 @@ export class BamlSyncClient {
     }
   }
   
-  ExtractResumeClaude(
-      resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Resume {
-    try {
-    const raw = this.runtime.callFunctionSync(
-      "ExtractResumeClaude",
-      {
-        "resume": resume
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.clientRegistry,
-    )
-    return raw.parsed(false) as Resume
-    } catch (error: any) {
-      throw toBamlError(error);
-    }
-  }
-  
   FnClassOptionalOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }

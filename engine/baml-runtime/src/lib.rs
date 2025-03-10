@@ -26,6 +26,7 @@ use anyhow::Context;
 use anyhow::Result;
 
 use baml_types::tracing::events::FunctionId;
+use baml_types::tracing::events::HTTPBody;
 use baml_types::tracing::events::HTTPRequest;
 use baml_types::tracing::events::HttpRequestId;
 use baml_types::BamlMap;
@@ -480,7 +481,14 @@ impl BamlRuntime {
             url: request.url().to_string(),
             method: request.method().to_string(),
             headers: json_headers(request.headers()),
-            body: json_body(JsonBodyInput::ReqwestBody(request.body())).unwrap_or_default(),
+            body: HTTPBody::new(
+                request
+                    .body()
+                    .map(reqwest::Body::as_bytes)
+                    .flatten()
+                    .unwrap_or_default()
+                    .into(),
+            ),
         })
     }
 

@@ -61,7 +61,6 @@ export type StreamingServerTypes = {
   ExtractReceiptInfo: partial_types.ReceiptInfo,
   ExtractResume: partial_types.Resume,
   ExtractResume2: partial_types.Resume,
-  ExtractResumeClaude: partial_types.Resume,
   FnClassOptionalOutput: ((partial_types.ClassOptionalOutput | null) | null),
   FnClassOptionalOutput2: ((partial_types.ClassOptionalOutput2 | null) | null),
   FnEnumListOutput: (EnumOutput | null)[],

@@ -20,26 +20,6 @@ function ExtractResume2(resume: string) -> Resume {
 }
 
 
-function ExtractResumeClaude(resume: string) -> Resume {
-    client Claude
-    prompt #"
-        {{ _.role('system') }}
-
-        Extract the following information from the resume:
-
-        Resume:
-        <<<<
-        {{ resume }}
-        <<<<
-
-        Output JSON schema:
-        {{ ctx.output_format }}
-
-        JSON:
-    "#
-}
-
-
 class WithReasoning {
   value string
   reasoning string @description(#"

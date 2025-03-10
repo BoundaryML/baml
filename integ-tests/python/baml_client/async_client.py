@@ -999,31 +999,6 @@ class BamlAsyncClient:
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
-    async def ExtractResumeClaude(
-        self,
-        resume: str,
-        baml_options: BamlCallOptions = {},
-    ) -> types.Resume:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
-      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      raw = await self.__runtime.call_function(
-        "ExtractResumeClaude",
-        {
-          "resume": resume,
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-        collectors,
-      )
-      return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
-    
     async def FnClassOptionalOutput(
         self,
         input: str,
@@ -5382,38 +5357,6 @@ class BamlStreamClient:
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
       raw = self.__runtime.stream_function(
         "ExtractResume2",
-        {
-          "resume": resume,
-        },
-        None,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-        collectors,
-      )
-
-      return baml_py.BamlStream[partial_types.Resume, types.Resume](
-        raw,
-        lambda x: cast(partial_types.Resume, x.cast_to(types, types, partial_types, True)),
-        lambda x: cast(types.Resume, x.cast_to(types, types, partial_types, False)),
-        self.__ctx_manager.get(),
-      )
-    
-    def ExtractResumeClaude(
-        self,
-        resume: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
-      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      raw = self.__runtime.stream_function(
-        "ExtractResumeClaude",
         {
           "resume": resume,
         },
@@ -10359,29 +10302,6 @@ class HttpRequest:
         False,
       )
     
-    async def ExtractResumeClaude(
-        self,
-        resume: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.HTTPRequest:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      return await self.__runtime.build_request(
-        "ExtractResumeClaude",
-        {
-          "resume": resume,
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-        False,
-      )
-    
     async def FnClassOptionalOutput(
         self,
         input: str,
@@ -14158,29 +14078,6 @@ class HttpStreamRequest:
 
       return await self.__runtime.build_request(
         "ExtractResume2",
-        {
-          "resume": resume,
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-        True,
-      )
-    
-    async def ExtractResumeClaude(
-        self,
-        resume: str,
-        baml_options: BamlCallOptions = {},
-    ) -> baml_py.HTTPRequest:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      return await self.__runtime.build_request(
-        "ExtractResumeClaude",
         {
           "resume": resume,
         },

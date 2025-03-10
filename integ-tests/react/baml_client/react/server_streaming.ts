@@ -748,25 +748,6 @@ export const ExtractResume2 = async (
 };
 
 /**
- * Executes the streaming variant of the "ExtractResumeClaude" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- * @param { string } resume - Input parameter.
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const ExtractResumeClaude = async (
-  resume: string,
-): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ExtractResumeClaude(
-    resume,
-  );
-  return Promise.resolve(stream.toStreamable());
-};
-
-/**
  * Executes the streaming variant of the "FnClassOptionalOutput" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

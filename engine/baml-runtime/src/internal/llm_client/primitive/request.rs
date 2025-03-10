@@ -8,8 +8,8 @@ use crate::{
 use anyhow::{Context, Result};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use baml_types::tracing::events::{
-    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse,
-    HttpRequestId, TraceData, TraceEvent, TraceLevel,
+    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, HTTPBody, HTTPRequest,
+    HTTPResponse, HttpRequestId, TraceData, TraceEvent, TraceLevel,
 };
 use baml_types::BamlMap;
 use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
@@ -81,6 +81,7 @@ pub(crate) fn to_prompt(
 
 pub enum JsonBodyInput<'a> {
     ReqwestBody(Option<&'a reqwest::Body>),
+    Bytes(&'a [u8]),
     String(String),
 }
 
@@ -94,6 +95,7 @@ pub(crate) fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
                 return Ok(serde_json::Value::Null);
             }
         }
+        JsonBodyInput::Bytes(b) => std::str::from_utf8(b)?.to_string(),
         JsonBodyInput::String(s) => s,
     };
 
@@ -212,7 +214,14 @@ pub(crate) async fn build_and_log_outbound_request(
                 url: built_req.url().to_string(),
                 method: built_req.method().to_string(),
                 headers: json_headers(built_req.headers()),
-                body: json_body(JsonBodyInput::ReqwestBody(built_req.body())).unwrap_or_default(),
+                body: HTTPBody::new(
+                    built_req
+                        .body()
+                        .map(reqwest::Body::as_bytes)
+                        .flatten()
+                        .unwrap_or_default()
+                        .into(),
+                ),
             })),
             tags: Default::default(),
         }));

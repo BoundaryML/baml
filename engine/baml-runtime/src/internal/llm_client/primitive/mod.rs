@@ -408,11 +408,11 @@ mod tests {
         ) -> Result<reqwest::RequestBuilder> {
             unimplemented!("Not used in tests")
         }
-    
+
         fn request_options(&self) -> &baml_types::BamlMap<String, serde_json::Value> {
             &self.request_options
         }
-    
+
         fn http_client(&self) -> &reqwest::Client {
             unimplemented!("Not used in tests")
         }

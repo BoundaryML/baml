@@ -10,7 +10,7 @@ from ..baml_client.sync_client import b as sync_b
 async def test_expose_request_gpt4():
     request = await b.request.ExtractReceiptInfo("test@email.com", "curiosity")
 
-    assert request.body == {
+    assert request.body.json() == {
         'messages': [
             {
                 'role': 'system',
@@ -29,7 +29,7 @@ async def test_expose_request_gpt4():
 async def test_expose_request_gemini():
     request = await b.request.TestGeminiSystemAsChat("Dr. Pepper")
 
-    assert request.body == {
+    assert request.body.json() == {
         'system_instruction': {
             'parts': [{'text': 'You are a helpful assistant'}]
         },
@@ -50,7 +50,7 @@ async def test_expose_request_fallback():
     # First client in strategy is GPT4Turbo
     request = await b.request.TestFallbackStrategy("Dr. Pepper")
 
-    assert request.body == {
+    assert request.body.json() == {
         'messages': [
             {
                 'role': 'system',
@@ -75,7 +75,7 @@ async def test_expose_request_round_robin():
     # First client in strategy is Claude
     request = await b.request.TestRoundRobinStrategy("Dr. Pepper")
 
-    assert request.body == {
+    assert request.body.json() == {
         'messages': [
             {
                 'role': 'user',
@@ -100,7 +100,7 @@ async def test_expose_request_round_robin():
 def test_expose_request_gpt4_sync():
     request = sync_b.request.ExtractReceiptInfo("test@email.com", "curiosity")
 
-    assert request.body == {
+    assert request.body.json() == {
         'messages': [
             {
                 'role': 'system',
@@ -119,7 +119,7 @@ def test_expose_request_gpt4_sync():
 async def test_expose_request_gpt4_stream():
     request = await b.stream_request.ExtractReceiptInfo("test@email.com", "curiosity")
 
-    assert request.body == {
+    assert request.body.json() == {
         'messages': [
             {
                 'role': 'system',
@@ -141,7 +141,7 @@ async def test_expose_request_gpt4_stream():
 def test_expose_request_gpt4_stream_sync():
     request = sync_b.stream_request.ExtractReceiptInfo("test@email.com", "curiosity")
 
-    assert request.body == {
+    assert request.body.json() == {
         'messages': [
             {
                 'role': 'system',
