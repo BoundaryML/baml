@@ -26,7 +26,6 @@ from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
 
 __all__ = [
-    "__version__",
     "BamlRuntime",
     "ClientRegistry",
     "BamlStream",
