@@ -13,14 +13,39 @@
 # flake8: noqa: E501,F401,F821
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from . import types
-from . import tracing
-from . import partial_types
-from .globals import reset_baml_env_vars
+__version__ = "0.78.0"
 
+try:
+  from baml_py.safe_import import EnsureBamlPyImport
+except ImportError:
+  raise ImportError(f"""
+Update to baml-py required.
+generators.baml version: {__version__}
 
-from .async_client import b
+Please upgrade baml-py to version "{__version__}".
 
+$ pip install baml-py=={__version__}
+$ uv add baml-py=={__version__}
+""")
+
+with EnsureBamlPyImport(__version__) as e:
+  from baml_py import __version__ as baml_py_version
+
+  if baml_py_version != __version__:
+    e.raise_version_error(f"""
+Update to baml-py required.
+generators.baml version: {__version__}
+Current baml-py version: {baml_py_version}
+""".strip())
+
+  from . import types
+  from . import tracing
+  from . import partial_types
+  from .globals import reset_baml_env_vars
+
+  
+  from .async_client import b
+  
 
 __all__ = [
   "b",

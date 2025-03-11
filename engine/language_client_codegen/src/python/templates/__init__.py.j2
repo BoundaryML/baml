@@ -1,13 +1,43 @@
-from . import types
-from . import tracing
-from . import partial_types
-from .globals import reset_baml_env_vars
+__version__ = "{{ version }}"
 
-{% if default_client_mode == GeneratorDefaultClientMode::Async %}
-from .async_client import b
-{% else %}
-from .sync_client import b
-{% endif %}
+try:
+  from baml_py.safe_import import EnsureBamlPyImport
+except ImportError:
+  raise ImportError(f"""
+Update to baml-py required.
+generators.baml version: {__version__}
+
+Please upgrade baml-py to version "{__version__}".
+
+$ pip install baml-py=={__version__}
+$ uv add baml-py=={__version__}
+
+If nothing else works, please ask for help:
+
+https://github.com/boundaryml/baml/issues
+https://boundaryml.com/discord
+""")
+
+with EnsureBamlPyImport(__version__) as e:
+  from baml_py import __version__ as baml_py_version
+
+  if baml_py_version != __version__:
+    e.raise_version_error(f"""
+Update to baml-py required.
+generators.baml version: {__version__}
+Current baml-py version: {baml_py_version}
+""".strip())
+
+  from . import types
+  from . import tracing
+  from . import partial_types
+  from .globals import reset_baml_env_vars
+
+  {% if default_client_mode == GeneratorDefaultClientMode::Async %}
+  from .async_client import b
+  {% else %}
+  from .sync_client import b
+  {% endif %}
 
 __all__ = [
   "b",
