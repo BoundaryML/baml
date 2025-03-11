@@ -29,6 +29,7 @@ pub fn render_output_format(
         .build())
 }
 
+#[derive(Debug)]
 enum OverridableValue<T> {
     Unset,
     SetEmpty,

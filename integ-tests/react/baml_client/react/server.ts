@@ -2377,11 +2377,11 @@ export const TestFnNamedArgsSingleStringArray = async (
  *
  * @param { string[] } myArg - Input parameter.
  *
- * @returns {Promise<string>} A promise that resolves with the result of the action.
+ * @returns {Promise<string[]>} A promise that resolves with the result of the action.
  */
 export const TestFnNamedArgsSingleStringList = async (
   myArg: string[],
-): Promise<string> => {
+): Promise<string[]> => {
   return b.TestFnNamedArgsSingleStringList(
     myArg,
   );

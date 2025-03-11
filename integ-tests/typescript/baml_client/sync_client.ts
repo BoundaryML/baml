@@ -2887,7 +2887,7 @@ export class BamlSyncClient {
   TestFnNamedArgsSingleStringList(
       myArg: string[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
-  ): string {
+  ): string[] {
     try {
       const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
       const raw = this.runtime.callFunctionSync(
@@ -2900,7 +2900,7 @@ export class BamlSyncClient {
         __baml_options__?.clientRegistry,
         collector,
       )
-      return raw.parsed(false) as string
+      return raw.parsed(false) as string[]
     } catch (error: any) {
       throw toBamlError(error);
     }

@@ -2886,7 +2886,7 @@ export class BamlAsyncClient {
   async TestFnNamedArgsSingleStringList(
       myArg: string[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
-  ): Promise<string> {
+  ): Promise<string[]> {
     try {
       const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
       const raw = await this.runtime.callFunction(
@@ -2899,7 +2899,7 @@ export class BamlAsyncClient {
         __baml_options__?.clientRegistry,
         collector,
       )
-      return raw.parsed(false) as string
+      return raw.parsed(false) as string[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7252,7 +7252,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleStringList(
       myArg: string[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
-  ): BamlStream<string, string> {
+  ): BamlStream<(string | null)[], string[]> {
     try {
       const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
       const raw = this.runtime.streamFunction(
@@ -7266,10 +7266,10 @@ class BamlStreamClient {
         __baml_options__?.clientRegistry,
         collector,
       )
-      return new BamlStream<string, string>(
+      return new BamlStream<(string | null)[], string[]>(
         raw,
-        (a): string => a,
-        (a): string => a,
+        (a): (string | null)[] => a,
+        (a): string[] => a,
         this.ctx_manager.cloneContext(),
       )
     } catch (error) {

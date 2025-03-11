@@ -3279,7 +3279,7 @@ class BamlAsyncClient:
         self,
         myArg: List[str],
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> List[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3298,7 +3298,7 @@ class BamlAsyncClient:
         __cr__,
         collectors,
       )
-      return cast(str, raw.cast_to(types, types, partial_types, False))
+      return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
     async def TestGemini(
         self,
@@ -8274,7 +8274,7 @@ class BamlStreamClient:
         self,
         myArg: List[str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[str], str]:
+    ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8295,10 +8295,10 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlStream[Optional[str], str](
+      return baml_py.BamlStream[List[Optional[str]], List[str]](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
-        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        lambda x: cast(List[Optional[str]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(List[str], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     

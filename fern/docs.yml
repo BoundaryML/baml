@@ -224,7 +224,7 @@ navigation:
           #   path: 01-guide/introduction.mdx
           - page: Retrieval Augmented Generation
             icon: fa-regular fa-database
-            path: 01-guide/introduction.mdx
+            path: 01-guide/06-prompt-engineering/rag.mdx
       # - section: Python
       #   icon: fa-brands fa-python
       #   contents:

@@ -6814,9 +6814,9 @@ export function useTestFnNamedArgsSingleStringArray(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
+ * - **Non‑streaming:** string[]
+ * - **Streaming Partial:** (string | null)[]
+ * - **Streaming Final:** string[]
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
