@@ -18,8 +18,7 @@ __version__ = "0.78.0"
 try:
   from baml_py.safe_import import EnsureBamlPyImport
 except ImportError:
-  raise ImportError(f"""
-Update to baml-py required.
+  raise ImportError(f"""Update to baml-py required.
 Version from generators.baml: {__version__}
 
 Please upgrade baml-py to version "{__version__}".
