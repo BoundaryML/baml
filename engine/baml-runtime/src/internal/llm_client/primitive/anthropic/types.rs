@@ -41,20 +41,9 @@ pub struct AnthropicMessageResponse {
     pub r#type: String,
     pub content: Vec<AnthropicMessageContent>,
     pub model: String,
-    pub stop_reason: Option<StopReason>, // can be null when streaming
+    pub stop_reason: Option<String>, // can be null when streaming
     pub stop_sequence: Option<StopSequence>,
     pub usage: AnthropicUsage,
-}
-
-#[derive(Clone, Debug, Deserialize, strum_macros::Display, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum StopReason {
-    MaxTokens,
-    StopSequence,
-    EndTurn,
-    #[serde(other)]
-    Unknown,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -188,7 +177,7 @@ pub struct TextDeltaContentBlock {
 #[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
 pub struct StreamStop {
     /// The stop reason of this stream.
-    pub stop_reason: Option<StopReason>,
+    pub stop_reason: Option<String>,
     /// The stop sequence of this stream.
     pub stop_sequence: Option<StopSequence>,
 }

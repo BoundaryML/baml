@@ -129,7 +129,8 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="wasm-pack test --chrome . --features=wasm"
       #command="wasm-pack test --node . --features=wasm"
-      command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
+      # command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
+      command="cargo test --features=internal internal -- --nocapture"
     else
       command="cargo build --features=wasm --target=wasm32-unknown-unknown"
       command="cargo build"

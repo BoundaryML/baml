@@ -1,7 +1,7 @@
 function TestAws(input: string) -> string {
   client AwsBedrock
   prompt #"
-    Write a nice short story about {{ input }}
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
 
@@ -34,27 +34,27 @@ function TestUniverseQuestion(question: UniverseQuestionInput) -> UniverseQuesti
 function TestAwsInvalidRegion(input: string) -> string {
   client AwsBedrockInvalidRegion
   prompt #"
-    Write a nice short story about {{ input }}
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
 
 function TestAwsInvalidAccessKey(input: string) -> string {
   client AwsBedrockInvalidAccessKey
   prompt #"
-    Write a nice short story about {{ input }}
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
 
 function TestAwsInvalidProfile(input: string) -> string {
   client AwsBedrockInvalidProfile
   prompt #"
-    Write a nice short story about {{ input }}
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
 
 function TestAwsInvalidSessionToken(input: string) -> string {
   client AwsBedrockInvalidSessionToken
   prompt #"
-    Write a nice short story about {{ input }}
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
