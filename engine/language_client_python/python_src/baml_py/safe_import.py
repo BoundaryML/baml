@@ -36,7 +36,7 @@ class EnsureBamlPyImport:
         return f"baml-py=={__target_baml_py_version__}"
 
     def ensure_version_compatibility(self, current_version: str):
-        if self._is_version_compatible(current_version, __baml_py_version__):
+        if not self._is_version_compatible(current_version, __baml_py_version__):
             self.raise_version_error(f"""
 baml-py is likely out of date.
                                      
