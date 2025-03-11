@@ -53,15 +53,15 @@ export const AaaSamOutputFormat = async (
  * This server action calls the underlying BAML function "AliasThatPointsToRecursiveType"
  * with the specified parameters.
  *
- * @param { LinkedListAliasNode } list - Input parameter.
+ * @param { LinkedListAliasNode } data - Input parameter.
  *
  * @returns {Promise<LinkedListAliasNode>} A promise that resolves with the result of the action.
  */
 export const AliasThatPointsToRecursiveType = async (
-  list: LinkedListAliasNode,
+  data: LinkedListAliasNode,
 ): Promise<LinkedListAliasNode> => {
   return b.AliasThatPointsToRecursiveType(
-    list,
+    data,
   );
 };
 

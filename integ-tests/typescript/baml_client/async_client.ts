@@ -68,7 +68,7 @@ export class BamlAsyncClient {
   }
   
   async AliasThatPointsToRecursiveType(
-      list: LinkedListAliasNode,
+      data: LinkedListAliasNode,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): Promise<LinkedListAliasNode> {
     try {
@@ -76,7 +76,7 @@ export class BamlAsyncClient {
       const raw = await this.runtime.callFunction(
         "AliasThatPointsToRecursiveType",
         {
-          "list": list
+          "data": data
         },
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -3706,7 +3706,7 @@ class BamlStreamClient {
   }
   
   AliasThatPointsToRecursiveType(
-      list: LinkedListAliasNode,
+      data: LinkedListAliasNode,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.LinkedListAliasNode, LinkedListAliasNode> {
     try {
@@ -3714,7 +3714,7 @@ class BamlStreamClient {
       const raw = this.runtime.streamFunction(
         "AliasThatPointsToRecursiveType",
         {
-          "list": list
+          "data": data
         },
         undefined,
         this.ctx_manager.cloneContext(),

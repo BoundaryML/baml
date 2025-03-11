@@ -1007,4 +1007,30 @@ test RecursiveAliasCycle {
             "##,
         })
     }
+
+    #[test]
+    fn test_class_property_alias() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "Fn",
+            test_name: "Test",
+            baml: r##"
+              class PropertyAlias {
+                  property string? | int @alias("hello")
+              }
+
+              function Fn() -> PropertyAlias {
+                  client "openai/gpt-4o"
+                  prompt #"
+                      {{ctx.output_format}}
+                  "#
+              }
+
+              test Test {
+                functions [Fn]
+                args {
+                }
+              }
+            "##,
+        })
+    }
 }

@@ -398,7 +398,7 @@ export function useAaaSamOutputFormat(
  *
  * **Input Types:**
  *
- * - list: LinkedListAliasNode
+ * - data: LinkedListAliasNode
  *
  *
  * **Return Type:**

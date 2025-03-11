@@ -1,28 +1,18 @@
-import uuid
-import json
-import os
-import time
-from typing import List, Optional
 import pytest
-from assertpy import assert_that
 from dotenv import load_dotenv
-from .base64_test_data import image_b64, audio_b64
 
 # warning -- using this object -- even just instantiating it with dummy values, makes it so some
 # of our pyo3 objects dont get cleaned up until after pytest starts exiting.
 from openai.types.chat import ChatCompletion
 
-load_dotenv()
-import baml_py
-from baml_py import errors
-
 from ..baml_client import b
 from ..baml_client.sync_client import b as b_sync
-from ..baml_client.tracing import trace
-from baml_py import Collector, FunctionLog
+from baml_py import Collector
 import gc
 import sys
 import asyncio
+
+load_dotenv()
 
 
 @pytest.fixture(autouse=True)
