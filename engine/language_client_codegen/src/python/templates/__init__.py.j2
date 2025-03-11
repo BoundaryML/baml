@@ -4,7 +4,7 @@ try:
   from baml_py.safe_import import EnsureBamlPyImport
 except ImportError:
   raise ImportError(f"""Update to baml-py required.
-Version from generators.baml: {__version__}
+Version of baml_client generator (see generators.baml): {__version__}
 
 Please upgrade baml-py to version "{__version__}".
 
@@ -18,7 +18,7 @@ https://boundaryml.com/discord
 """) from None
 
 with EnsureBamlPyImport(__version__) as e:
-  e.ensure_version_compatibility(__version__)
+  e.raise_if_incompatible_version(__version__)
 
   from . import types
   from . import tracing

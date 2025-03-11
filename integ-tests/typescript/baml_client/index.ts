@@ -31,7 +31,7 @@ if (ThrowIfVersionMismatch) {
   // You're probably using a different version of baml.
   // Please upgrade to the version used by generators.baml.
   const errorMessage = `Update to @boundaryml/baml required.
-  Version from generators.baml: ${version}
+  Version of index.ts.j2 (see generators.baml): ${version}
   
   Please upgrade @boundaryml/baml to ${version}.
   

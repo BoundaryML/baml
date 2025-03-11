@@ -35,12 +35,12 @@ class EnsureBamlPyImport:
             return "-U baml-py"
         return f"baml-py=={__target_baml_py_version__}"
 
-    def ensure_version_compatibility(self, current_version: str):
+    def raise_if_incompatible_version(self, current_version: str):
         if not self._is_version_compatible(current_version, __baml_py_version__):
             self.raise_version_error(f"""
 baml-py is likely out of date.
                                      
-Version from generators.baml: {current_version}
+Version of baml_client generator (see generators.baml): {current_version}
 Current version of baml-py: {__baml_py_version__}
 """.strip())
 
