@@ -37,7 +37,7 @@ export function resetBamlEnvVars(envVars: Record<string, string | undefined>) {
   }
 }
 
-const patchedLoad = (originalFn: any, ...args: any[]) => (...args: any[]) => {
+const patchedLoad = (originalFn: any) => (...args: any[]) => {
     const result = originalFn(...args);
     try {
         // Dont fail if env vars fail to reset
