@@ -1,2 +1,3 @@
 api:
-  path: ./openapi/openapi.yaml
+  specs:
+    - openapi: ./openapi/openapi.yaml

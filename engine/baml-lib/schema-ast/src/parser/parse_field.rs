@@ -54,7 +54,7 @@ pub(crate) fn parse_value_expr(
         _ => Err(DatamodelError::new_model_validation_error(
             "This field declaration is invalid. It is either missing a name or a type.",
             container_type,
-            model_name.as_ref().map_or("<unknown>", |f| f.name()),
+            model_name.as_ref().map_or("<unknown>", Identifier::name),
             diagnostics.span(pair_span),
         )),
     }
@@ -219,13 +219,21 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
 
     let mut seen_types = vec![combined_type.clone()];
 
+    // In a union, use the attributes associated with the last type as the
+    // attributes of the union. Example:
+    //
+    // field: string? | int @alias("hello")
+    //
+    // The alias is part of the union.
+    let last_field_attrs = types.last().map(|t| t.attributes().to_vec());
+
     let mut earliest_start = combined_type.span().start;
     let mut latest_end = combined_type.span().end;
 
     for next_type in types.into_iter().skip(1) {
-        seen_types.push(next_type.clone());
+        let span = next_type.span().to_owned();
+        seen_types.push(next_type);
 
-        let span = next_type.span();
         if span.start < earliest_start {
             earliest_start = span.start;
         }
@@ -243,6 +251,11 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
             },
             None,
         );
+    }
+
+    // We know it's a union because it was assigned above in the for loop.
+    if let FieldType::Union(_, _, _, attrs) = &mut combined_type {
+        *attrs = last_field_attrs;
     }
 
     Some(combined_type)
@@ -531,9 +544,9 @@ mod tests {
             name: (value, Span::fake()).into(),
             parenthesized: false,
             arguments: ArgumentsList {
-                arguments: Vec::new()
+                arguments: Vec::new(),
             },
-            span: Span::fake()
+            span: Span::fake(),
         }
     }
 }

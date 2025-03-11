@@ -453,83 +453,85 @@ fn to_ir_attributes(
     db: &ParserDatabase,
     maybe_ast_attributes: Option<&Attributes>,
 ) -> (IndexMap<String, UnresolvedValue<()>>, Vec<Constraint>) {
-    let null_result = (IndexMap::new(), Vec::new());
-    maybe_ast_attributes.map_or(null_result, |attributes| {
-        let Attributes {
-            description,
-            alias,
-            dynamic_type,
-            skip,
-            constraints,
-            streaming_done,
-            streaming_needed,
-            streaming_state,
-        } = attributes;
+    let Some(attributes) = maybe_ast_attributes else {
+        return (IndexMap::new(), Vec::new());
+    };
 
-        let description = description
-            .as_ref()
-            .map(|d| ("description".to_string(), d.without_meta()));
+    let Attributes {
+        description,
+        alias,
+        dynamic_type,
+        skip,
+        constraints,
+        streaming_done,
+        streaming_needed,
+        streaming_state,
+    } = attributes;
 
-        let alias = alias
-            .as_ref()
-            .map(|v| ("alias".to_string(), v.without_meta()));
+    let description = description
+        .as_ref()
+        .map(|d| ("description".to_string(), d.without_meta()));
 
-        let dynamic_type = dynamic_type.as_ref().and_then(|v| {
-            if *v {
-                Some(("dynamic_type".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
-        let skip = skip.as_ref().and_then(|v| {
-            if *v {
-                Some(("skip".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
-        let streaming_done = streaming_done.as_ref().and_then(|v| {
-            if *v {
-                Some(("stream.done".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
-        let streaming_needed = streaming_needed.as_ref().and_then(|v| {
-            if *v {
-                Some((
-                    "stream.not_null".to_string(),
-                    UnresolvedValue::Bool(true, ()),
-                ))
-            } else {
-                None
-            }
-        });
-        let streaming_state = streaming_state.as_ref().and_then(|v| {
-            if *v {
-                Some((
-                    "stream.with_state".to_string(),
-                    UnresolvedValue::Bool(true, ()),
-                ))
-            } else {
-                None
-            }
-        });
+    let alias = alias
+        .as_ref()
+        .map(|v| ("alias".to_string(), v.without_meta()));
 
-        let meta = vec![
-            description,
-            alias,
-            dynamic_type,
-            skip,
-            streaming_done,
-            streaming_needed,
-            streaming_state,
-        ]
-        .into_iter()
-        .filter_map(|s| s)
-        .collect();
-        (meta, constraints.clone())
-    })
+    let dynamic_type = dynamic_type.as_ref().and_then(|v| {
+        if *v {
+            Some(("dynamic_type".to_string(), UnresolvedValue::Bool(true, ())))
+        } else {
+            None
+        }
+    });
+    let skip = skip.as_ref().and_then(|v| {
+        if *v {
+            Some(("skip".to_string(), UnresolvedValue::Bool(true, ())))
+        } else {
+            None
+        }
+    });
+    let streaming_done = streaming_done.as_ref().and_then(|v| {
+        if *v {
+            Some(("stream.done".to_string(), UnresolvedValue::Bool(true, ())))
+        } else {
+            None
+        }
+    });
+    let streaming_needed = streaming_needed.as_ref().and_then(|v| {
+        if *v {
+            Some((
+                "stream.not_null".to_string(),
+                UnresolvedValue::Bool(true, ()),
+            ))
+        } else {
+            None
+        }
+    });
+    let streaming_state = streaming_state.as_ref().and_then(|v| {
+        if *v {
+            Some((
+                "stream.with_state".to_string(),
+                UnresolvedValue::Bool(true, ()),
+            ))
+        } else {
+            None
+        }
+    });
+
+    let meta = vec![
+        description,
+        alias,
+        dynamic_type,
+        skip,
+        streaming_done,
+        streaming_needed,
+        streaming_state,
+    ]
+    .into_iter()
+    .filter_map(|s| s)
+    .collect();
+
+    (meta, constraints.clone())
 }
 
 /// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc

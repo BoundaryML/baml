@@ -1,4 +1,4 @@
-import type { BamlRuntime, FunctionResult, BamlCtxManager, Image, Audio, ClientRegistry } from "@boundaryml/baml"
+import type { BamlRuntime, FunctionResult, BamlCtxManager, Image, Audio, ClientRegistry, Collector } from "@boundaryml/baml"
 import { toBamlError } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type * as types from "./types"
@@ -35,21 +35,23 @@ export class BamlSyncClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): {{fn.return_type}} {
     try {
-    const raw = this.runtime.callFunctionSync(
-      "{{fn.name}}",
-      {
-        {% for (name, optional, type) in fn.args -%}
-        "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
-        {%- endfor %}
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.clientRegistry,
-    )
-    return raw.parsed(false) as {{fn.return_type}}
+      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const raw = this.runtime.callFunctionSync(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as {{fn.return_type}}
     } catch (error: any) {
       throw toBamlError(error);
     }
