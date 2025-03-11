@@ -3,12 +3,13 @@ use std::sync::Arc;
 
 use crate::Result;
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
-use magnus::prelude::*;
+use magnus::scan_args::get_kwargs;
 use magnus::{
     class, function, method, rb_sys::FromRawValue, scan_args::scan_args,
     try_convert::TryConvertOwned, value::ReprValue, Error, IntoValue, IntoValueFromNative, Module,
     Object, RArray, RModule, Ruby, Value,
 };
+use magnus::{prelude::*, RHash};
 
 crate::lang_wrapper!(
     Collector,
@@ -76,8 +77,11 @@ pub(crate) struct LLMStreamCall {
 unsafe impl TryConvertOwned for &FunctionLog {}
 
 impl Collector {
-    pub fn new(arguments: &[Value]) -> Result<Self> {
-        let name = Option::<String>::try_convert(arguments[0])?;
+    pub fn new(args: &[Value]) -> Result<Self> {
+        let args = scan_args::<(), (), (), (), _, ()>(args)?;
+        let kwargs = get_kwargs::<_, (), (Option<String>,), ()>(args.keywords, &[], &["name"])?;
+
+        let name = kwargs.optional.0;
         let collector = baml_runtime::tracingv2::storage::storage::Collector::new(name);
         Ok(Self {
             inner: Arc::new(collector),

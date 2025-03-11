@@ -31,7 +31,7 @@ describe "Ruby Collector Tests" do
   end
 
   it "test_collector_no_stream_success" do
-    collector = Baml::Collector.new("my-collector")
+    collector = Baml::Collector.new(name: "my-collector")
     function_logs = collector.logs
     assert_equal 0, function_logs.length
 
