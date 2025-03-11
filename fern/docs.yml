@@ -198,6 +198,9 @@ navigation:
           - page: Reducing Hallucinations
             icon: fa-regular fa-person-fairy
             path: 01-guide/06-prompt-engineering/hallucinations.mdx
+          - page: Classification
+            icon: fa-regular fa-tags
+            path: 01-guide/06-prompt-engineering/classification.mdx
           - page: Chat
             icon: fa-regular fa-comments
             path: 01-guide/06-prompt-engineering/chat-history.mdx
