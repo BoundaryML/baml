@@ -5,7 +5,7 @@ try:
 except ImportError:
   raise ImportError(f"""
 Update to baml-py required.
-generators.baml version: {__version__}
+Version from generators.baml: {__version__}
 
 Please upgrade baml-py to version "{__version__}".
 
@@ -16,17 +16,10 @@ If nothing else works, please ask for help:
 
 https://github.com/boundaryml/baml/issues
 https://boundaryml.com/discord
-""")
+""") from None
 
 with EnsureBamlPyImport(__version__) as e:
-  from baml_py import __version__ as baml_py_version
-
-  if baml_py_version != __version__:
-    e.raise_version_error(f"""
-Update to baml-py required.
-generators.baml version: {__version__}
-Current baml-py version: {baml_py_version}
-""".strip())
+  e.ensure_version_compatibility(__version__)
 
   from . import types
   from . import tracing

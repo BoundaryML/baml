@@ -21,12 +21,9 @@ from .baml_py import (
     LLMCall,
     Timing,
     Usage,
-    get_version,
 )
 from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
-
-__version__ = get_version()
 
 __all__ = [
     "__version__",

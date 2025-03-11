@@ -1,6 +1,9 @@
 from typing import Optional, Type
+from .baml_py import get_version
 
 __target_baml_py_version__ = None
+
+__baml_py_version__ = get_version()
 
 class EnsureBamlPyImport:
     def __init__(self, target_version: str | None = None):
@@ -10,13 +13,37 @@ class EnsureBamlPyImport:
 
     def __enter__(self):
         return self
-    
+
+    def _is_version_compatible(self, a: str, b: str) -> bool:
+        """
+        Checks if version a is compatible with version b.
+        """
+        # Split the version strings into major, minor, and patch components
+        try:
+            a_major, a_minor, _ = map(int, a.split(".", maxsplit=2))
+            b_major, b_minor, _ = map(int, b.split(".", maxsplit=2))
+        except ValueError:
+            # If the version strings are not valid integers, return False
+            return False
+
+        # Check if the major, minor
+        # We don't care about the patch version
+        return a_major == b_major and a_minor == b_minor
 
     def _target_package_name(self) -> str:
         if __target_baml_py_version__ is None:
             return "-U baml-py"
         return f"baml-py=={__target_baml_py_version__}"
-    
+
+    def ensure_version_compatibility(self, current_version: str):
+        if self._is_version_compatible(current_version, __baml_py_version__):
+            self.raise_version_error(f"""
+baml-py is likely out of date.
+                                     
+Version from generators.baml: {current_version}
+Current version of baml-py: {__baml_py_version__}
+""".strip())
+
     def raise_version_error(self, msg: str):
         target_version = __target_baml_py_version__
         if target_version is None:
