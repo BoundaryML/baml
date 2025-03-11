@@ -30,7 +30,7 @@ rb-sys = { version = "0.9.99", features = [
 ] }
 serde.workspace = true
 serde_json.workspace = true
-serde_magnus = { git = "https://github.com/BoundaryML/serde-magnus.git", branch = "sam/magnus-0.7.1" }
+serde_magnus = { version = "0.9.0" }
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = { version = "0.3.18", features = ["json", "env-filter","valuable"] }
 

@@ -51,7 +51,7 @@ module Baml
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns({{ fn.return_type }})
     }
     def {{fn.name}}(
@@ -65,8 +65,14 @@ module Baml
         {# We rely on sorbet-runtime to give errors about the list of allowed kwargs #}
         raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
       end
 
       raw = @runtime.call_function(
@@ -79,6 +85,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        collector,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -103,7 +110,7 @@ module Baml
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::BamlStream[{{ fn.return_type }}])
     }
     def {{fn.name}}(
@@ -117,8 +124,14 @@ module Baml
         {# We rely on sorbet-runtime to give errors about the list of allowed kwargs #}
         raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
       end
 
       raw = @runtime.stream_function(
@@ -131,6 +144,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        collector,
       )
       Baml::BamlStream[{{fn.partial_return_type}}, {{fn.return_type}}].new(
         ffi_stream: raw,
