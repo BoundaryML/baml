@@ -14,6 +14,7 @@ import {
   type ResponseCardConfig,
   useResponseCardConfigWithQueryParams,
 } from '@/lib/store';
+import type { OutputFormat } from '@/lib/store';
 import { Settings } from 'lucide-react';
 
 export function TabConfigMenu() {
@@ -86,6 +87,13 @@ export function TabConfigMenu() {
     });
   };
 
+  // Function to update output format
+  const toggleOutputFormat = (format: OutputFormat) => {
+    updateConfig({
+      outputFormat: format,
+    });
+  };
+
   // Function to update the default tab
   const setDefaultTab = (tabId: string) => {
     updateConfig({
@@ -131,7 +139,7 @@ export function TabConfigMenu() {
             updateConfig({ isStreamingEnabled: checked })
           }
         >
-          Stream Response
+          Enable Streaming
         </DropdownMenuCheckboxItem>
         <DropdownMenuCheckboxItem
           checked={config.showNetworkTimeline}
@@ -141,6 +149,22 @@ export function TabConfigMenu() {
         >
           Show LLM Timeline
         </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        {/* Output Format Selection */}
+        <DropdownMenuLabel className="font-medium text-muted-foreground text-xs">
+          Output Format
+        </DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={config.outputFormat}
+          onValueChange={toggleOutputFormat as (value: string) => void}
+        >
+          <DropdownMenuRadioItem value="raw">Raw</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="json">JSON</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="yaml">YAML</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="markdown">
+            Markdown
+          </DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
         {/* Visible tabs checkboxes */}
         <DropdownMenuLabel className="font-medium text-muted-foreground text-xs">

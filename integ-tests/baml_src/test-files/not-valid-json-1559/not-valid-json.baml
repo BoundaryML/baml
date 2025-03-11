@@ -20,7 +20,7 @@ class Note1599 {
 }
 
 function DescribeMedia1599(img: image, client_sector: string, client_name: string) -> string {
-  client Sonnet
+  client "openai/gpt-4o-mini"
   prompt #"
     {{_.role("system")}}
     You are an expert at describing media.
@@ -30,7 +30,7 @@ function DescribeMedia1599(img: image, client_sector: string, client_name: strin
 }
 
 function StructureDocument1559(document_txt: string) -> Document1559 {
-  client Sonnet
+  client "openai/gpt-4o-mini"
   prompt #"
     {{_.role("system")}}
     You are an expert in structuring notes.

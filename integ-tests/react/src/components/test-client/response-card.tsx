@@ -12,6 +12,12 @@ import type {
   HookOutput,
 } from '../../../baml_client/react/hooks';
 import { formatError } from './format-error';
+import {
+  JsonRenderer,
+  MarkdownRenderer,
+  RawRenderer,
+  YamlRenderer,
+} from './format-renderers';
 
 type ResponseCardProps = {
   hookResult: HookOutput<FunctionNames>;
@@ -91,91 +97,90 @@ export function ResponseCard({
 
   // Function to render the content for each section
   const renderSectionContent = (sectionId: string, className?: string) => {
-    switch (sectionId) {
-      case 'data':
-        return (
-          <pre
-            ref={dataRef}
-            className={cn(
-              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
-              className,
-            )}
-          >
-            {data
-              ? typeof data === 'string'
-                ? data
-                : JSON.stringify(data, null, 2)
-              : 'No data available'}
-          </pre>
-        );
-      case 'streamData':
-        return (
-          <pre
-            ref={streamDataRef}
-            className={cn(
-              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
-              className,
-            )}
-          >
-            {streamData
-              ? typeof streamData === 'string'
-                ? streamData
-                : JSON.stringify(streamData, null, 2)
-              : 'No streaming data available'}
-          </pre>
-        );
-      case 'finalData':
-        return (
-          <pre
-            ref={finalDataRef}
-            className={cn(
-              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
-              className,
-            )}
-          >
-            {finalData
-              ? typeof finalData === 'string'
-                ? finalData
-                : JSON.stringify(finalData, null, 2)
-              : 'No final data available'}
-          </pre>
-        );
-      case 'error':
-        return error ? (
-          <div className="h-full space-y-4 overflow-y-auto">
-            <Alert variant="destructive">
-              <AlertDescription>
-                {(() => {
-                  const { title, message, status_code } = formatError(error);
-                  return (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <div className="break-words font-semibold">{title}</div>
-                        {status_code && (
-                          <Badge variant="destructive">{status_code}</Badge>
-                        )}
-                      </div>
-                      <pre className="whitespace-pre-wrap break-words font-mono text-sm">
-                        {message}
-                      </pre>
+    // Get the content based on the section ID
+    const getContentForSection = () => {
+      switch (sectionId) {
+        case 'data':
+          return data;
+        case 'streamData':
+          return streamData;
+        case 'finalData':
+          return finalData;
+        case 'error':
+          return error;
+        default:
+          return null;
+      }
+    };
+
+    // Get the content for this section
+    const content = getContentForSection();
+
+    // Render error section differently
+    if (sectionId === 'error') {
+      return error ? (
+        <div className="h-full space-y-4 overflow-y-auto">
+          <Alert variant="destructive" className={className}>
+            <AlertDescription>
+              {(() => {
+                const { title, message, statusCode, clientName } =
+                  formatError(error);
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="break-words font-semibold">{title}</div>
+                      {statusCode && (
+                        <Badge variant="destructive">{statusCode}</Badge>
+                      )}
                     </div>
-                  );
-                })()}
-              </AlertDescription>
-            </Alert>
-          </div>
-        ) : (
-          <pre
-            className={cn(
-              'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
-              className,
-            )}
-          >
-            No error available
-          </pre>
+                    {clientName && (
+                      <Badge variant="destructive">{clientName}</Badge>
+                    )}
+                    <pre className="whitespace-pre-wrap break-words font-mono text-sm">
+                      {message}
+                    </pre>
+                  </div>
+                );
+              })()}
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : (
+        <div className="flex h-full items-center justify-center">
+          <p className="text-muted-foreground">No errors to display</p>
+        </div>
+      );
+    }
+
+    // Get the appropriate class name for the content container
+    const contentClassName = cn(
+      'h-full overflow-y-auto whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm',
+      className,
+    );
+
+    // If no content, show placeholder
+    if (!content) {
+      const placeholderText = `No ${sectionId} available`;
+      return (
+        <div className="flex h-full items-center justify-center">
+          <p className="text-muted-foreground">{placeholderText}</p>
+        </div>
+      );
+    }
+
+    // Render content based on selected format
+    switch (config.outputFormat) {
+      case 'json':
+        return <JsonRenderer content={content} className={contentClassName} />;
+      case 'yaml':
+        return <YamlRenderer content={content} className={contentClassName} />;
+      case 'markdown':
+        return (
+          <MarkdownRenderer content={content} className={contentClassName} />
         );
       default:
-        return null;
+        // Raw format is the default
+        return <RawRenderer content={content} className={contentClassName} />;
     }
   };
 

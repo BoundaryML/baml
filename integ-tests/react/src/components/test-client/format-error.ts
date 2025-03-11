@@ -1,7 +1,8 @@
 export function formatError(error: any): {
   title: string;
   message: string;
-  status_code?: number;
+  statusCode?: number;
+  clientName?: string;
 } {
   if (!error) return { title: 'No error', message: 'No error available' };
 
@@ -22,20 +23,17 @@ export function formatError(error: any): {
     if (message.includes('BamlError:')) {
       // Extract the actual error message from nested structure
       const matches = message.match(/message: Some\(\s*"([^"]+)"\s*\)/);
-      if (matches && matches[1]) {
+      if (matches?.[1]) {
         message = matches[1];
       }
     }
 
-    // Add client name if available
-    if (errorObj.client_name) {
-      message = `${message}\nClient: ${errorObj.client_name}`;
-    }
-
+    console.error('Error', errorObj);
     return {
+      clientName: errorObj.client_name,
       title,
       message,
-      status_code: errorObj.status_code,
+      statusCode: errorObj.status_code,
     };
   } catch (e) {
     // Fallback for any parsing errors

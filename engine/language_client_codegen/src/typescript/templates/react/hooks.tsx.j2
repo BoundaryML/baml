@@ -370,12 +370,10 @@ export function use{{ func.name }}(props?: HookInput<'{{ func.name }}', { stream
 export function use{{ func.name }}(
   props: HookInput<'{{ func.name }}', { stream?: boolean }> = {},
 ): HookOutput<'{{ func.name }}', { stream: true }> | HookOutput<'{{ func.name }}', { stream: false }> {
-  if (isNotStreamingProps(props)) {
-    return useBamlAction(Actions.{{ func.name }}, props)
-  }
+  let action = Actions.{{ func.name }};
   if (isStreamingProps(props)) {
-    return useBamlAction(StreamingActions.{{ func.name }}, props)
+    action = StreamingActions.{{ func.name }};
   }
-  throw new Error('Invalid props')
+  return useBamlAction(action, props)
 }
 {%- endfor %}

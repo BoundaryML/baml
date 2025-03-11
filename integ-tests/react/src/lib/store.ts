@@ -123,10 +123,24 @@ export const hookConfigMap: Partial<
         type: 'image',
         label: 'Upload Image',
         placeholder: 'Choose an image to describe...',
-        key: 'media',
+        key: 'img',
         required: true,
         accept: 'image/*',
         maxSize: 5242880, // 5MB
+      },
+      {
+        type: 'text',
+        label: 'Client Sector',
+        placeholder: 'Enter client sector...',
+        key: 'client_sector',
+        required: true,
+      },
+      {
+        type: 'text',
+        label: 'Client Name',
+        placeholder: 'Enter client name...',
+        key: 'client_name',
+        required: true,
       },
       {
         type: 'text',
@@ -192,6 +206,9 @@ export function getDefaultInputConfig<T extends FunctionNames>(
   return inputs.length > 0 ? inputs[0] : null;
 }
 
+// Define the OutputFormat type
+export type OutputFormat = 'raw' | 'json' | 'yaml' | 'markdown';
+
 // Interface for response card configuration
 export interface ResponseCardConfig {
   showDataTab: boolean;
@@ -202,6 +219,7 @@ export interface ResponseCardConfig {
   displayMode: 'tabs' | 'sections'; // New option to toggle between tabs and sections views
   showNetworkTimeline: boolean; // New option to toggle the NetworkTimeline visibility
   isStreamingEnabled: boolean; // New option to toggle streaming responses
+  outputFormat: OutputFormat; // Format to render response data in
 }
 
 // Default configuration for the response card
@@ -214,6 +232,7 @@ export const defaultResponseCardConfig: ResponseCardConfig = {
   displayMode: 'tabs', // Default to tabs view
   showNetworkTimeline: true, // Default to showing the NetworkTimeline
   isStreamingEnabled: true, // Default to streaming enabled
+  outputFormat: 'raw', // Default output format
 };
 
 // Create nuqs parsers for the response card configuration
@@ -243,6 +262,12 @@ export const displayModeParser = parseAsStringEnum([
   'tabs',
   'sections',
 ] as const).withDefault(defaultResponseCardConfig.displayMode);
+export const outputFormatParser = parseAsStringEnum<OutputFormat>([
+  'raw',
+  'json',
+  'yaml',
+  'markdown',
+] as const).withDefault(defaultResponseCardConfig.outputFormat);
 
 // Custom atom that syncs with nuqs query parameters but starts with our default settings
 export const responseCardConfigAtom = atom<ResponseCardConfig>({
@@ -254,6 +279,7 @@ export const responseCardConfigAtom = atom<ResponseCardConfig>({
   displayMode: 'sections',
   showNetworkTimeline: true,
   isStreamingEnabled: true,
+  outputFormat: 'raw', // Default output format
 });
 
 // Helper function to get the response card configuration
@@ -313,6 +339,10 @@ export function useResponseCardConfigWithQueryParams() {
     'displayMode',
     displayModeParser,
   );
+  const [outputFormat, setOutputFormat] = useQueryState(
+    'outputFormat',
+    outputFormatParser,
+  );
 
   // Helper function to update both the atom and query params
   const updateConfig = (newConfig: Partial<ResponseCardConfig>) => {
@@ -338,6 +368,8 @@ export function useResponseCardConfigWithQueryParams() {
     if (newConfig.defaultTab !== undefined) setDefaultTab(newConfig.defaultTab);
     if (newConfig.displayMode !== undefined)
       setDisplayMode(newConfig.displayMode as 'tabs' | 'sections');
+    if (newConfig.outputFormat !== undefined)
+      setOutputFormat(newConfig.outputFormat as OutputFormat);
   };
 
   // Get the full config from query params, falling back to atom defaults
@@ -351,6 +383,7 @@ export function useResponseCardConfigWithQueryParams() {
     isStreamingEnabled: isStreamingEnabled ?? configFromAtom.isStreamingEnabled,
     defaultTab: defaultTab ?? configFromAtom.defaultTab,
     displayMode: displayMode ?? configFromAtom.displayMode,
+    outputFormat: outputFormat ?? configFromAtom.outputFormat,
   };
 
   return { config: fullConfig, updateConfig };

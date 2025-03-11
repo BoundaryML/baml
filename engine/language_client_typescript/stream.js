@@ -93,7 +93,9 @@ class BamlStream {
                 catch (streamErr) {
                     const errorPayload = {
                         type: 'StreamError',
-                        message: streamErr instanceof Error ? streamErr.message : 'Error in stream processing',
+                        message: streamErr instanceof Error
+                            ? streamErr.message
+                            : 'Error in stream processing',
                         prompt: '',
                         raw_output: '',
                     };
