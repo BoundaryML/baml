@@ -6,12 +6,12 @@ class LinkedListAliasNode {
 // Simple alias that points to recursive type.
 type LinkedListAlias = LinkedListAliasNode
 
-function AliasThatPointsToRecursiveType(list: LinkedListAlias) -> LinkedListAlias {
+function AliasThatPointsToRecursiveType(data: LinkedListAlias) -> LinkedListAlias {
     client "openai/gpt-4o"
     prompt r#"
       Return the given linked list back:
 
-      {{ list }}
+      {{ data }}
 
       {{ ctx.output_format }}
     "#
