@@ -222,6 +222,9 @@ navigation:
           - page: PII Data Extraction / Scrubbing
             icon: fa-regular fa-shield
             path: 01-guide/06-prompt-engineering/pii-data-extraction.mdx
+          - page: Action Item Extraction
+            icon: fa-regular fa-list-check
+            path: 01-guide/06-prompt-engineering/action-items.mdx
           # - page: Self-Consistency Prompting
           #   icon: fa-regular fa-sync-alt
           #   path: 01-guide/introduction.mdx
