@@ -219,6 +219,9 @@ navigation:
           - page: Symbol Tuning
             icon: fa-regular fa-adjust
             path: 01-guide/06-prompt-engineering/symbol-tuning.mdx
+          - page: PII Data Extraction / Scrubbing
+            icon: fa-regular fa-shield
+            path: 01-guide/06-prompt-engineering/pii-data-extraction.mdx
           # - page: Self-Consistency Prompting
           #   icon: fa-regular fa-sync-alt
           #   path: 01-guide/introduction.mdx
