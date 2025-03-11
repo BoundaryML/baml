@@ -9,6 +9,8 @@ use napi::{
 };
 use serde_json::Value as JsonValue;
 
+use super::{request::HTTPRequest, response::HTTPResponse};
+
 crate::lang_wrapper!(
     Collector,
     baml_runtime::tracingv2::storage::storage::Collector,
@@ -482,129 +484,35 @@ impl LLMStreamCall {
     }
 }
 
-crate::lang_wrapper!(
-    HTTPRequest,
-    baml_types::tracing::events::HTTPRequest,
-    clone_safe
-);
-
-// fn serde_value_to_js(env: Env, value: &JsonValue) -> Result<JsUnknown> {
-//     match value {
-//         JsonValue::Null => Ok(env.get_null()?.into_unknown()),
-//         JsonValue::Bool(b) => Ok(env.get_boolean(*b)?.into_unknown()),
-//         JsonValue::Number(num) => {
-//             if let Some(i) = num.as_i64() {
-//                 Ok(env.create_int64(i)?.into_unknown())
-//             } else if let Some(f) = num.as_f64() {
-//                 Ok(env.create_double(f)?.into_unknown())
-//             } else {
-//                 Err(Error::from_reason("Could not convert number to i64 or f64"))
-//             }
-//         }
-//         JsonValue::String(s) => Ok(env.create_string(s)?.into_unknown()),
-//         JsonValue::Array(arr) => {
-//             let js_array = env.create_array(arr.len() as u32)?;
-//             for (i, elem) in arr.iter().enumerate() {
-//                 let js_elem = serde_value_to_js(env, elem)?;
-//                 js_array.insert(js_elem)?;
-//             }
-//             Ok(js_array)
-//         }
-//         JsonValue::Object(obj) => {
-//             let js_obj = env.create_object()?;
-//             for (k, v) in obj {
-//                 let js_value = serde_value_to_js(env, v)?;
-//                 js_obj.set_named_property(k, js_value)?;
-//             }
-//             Ok(js_obj.into_unknown())
-//         }
-//     }
-// }
-
-#[napi]
-impl HTTPRequest {
-    #[napi(getter)]
-    pub fn body_raw(&self) -> String {
-        serde_json::to_string(&self.inner.body).unwrap_or("null".to_string())
-    }
-
-    #[napi(getter)]
-    pub fn body(&self) -> serde_json::Value {
-        self.inner.body.clone()
-    }
-
-    #[napi]
-    pub fn to_string(&self) -> String {
-        format!(
-            "HTTPRequest(url={}, method={}, headers={}, body={})",
-            self.inner.url,
-            self.inner.method,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap()
-        )
-    }
-
-    #[napi(getter)]
-    pub fn url(&self) -> String {
-        self.inner.url.clone()
-    }
-
-    #[napi(getter)]
-    pub fn method(&self) -> String {
-        self.inner.method.clone()
-    }
-
-    #[napi(getter)]
-    pub fn headers(&self, env: Env) -> Result<JsObject> {
-        let obj = env.create_object()?;
-        if let Some(headers) = self.inner.headers.as_object() {
-            for (k, v) in headers {
-                // TODO:
-                // let js_value = // serde_value_to_js(env, v)?;
-                // obj.set_named_property(k, js_value)?;
+pub fn serde_value_to_js(env: Env, value: &JsonValue) -> Result<JsUnknown> {
+    match value {
+        JsonValue::Null => Ok(env.get_null()?.into_unknown()),
+        JsonValue::Bool(b) => Ok(env.get_boolean(*b)?.into_unknown()),
+        JsonValue::Number(num) => {
+            if let Some(i) = num.as_i64() {
+                Ok(env.create_int64(i)?.into_unknown())
+            } else if let Some(f) = num.as_f64() {
+                Ok(env.create_double(f)?.into_unknown())
+            } else {
+                Err(Error::from_reason("Could not convert number to i64 or f64"))
             }
         }
-        Ok(obj)
-    }
-}
-
-crate::lang_wrapper!(
-    HTTPResponse,
-    baml_types::tracing::events::HTTPResponse,
-    clone_safe
-);
-
-#[napi]
-impl HTTPResponse {
-    #[napi]
-    pub fn to_string(&self) -> String {
-        format!(
-            "HTTPResponse(status={}, headers={}, body={})",
-            self.inner.status,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap()
-        )
-    }
-
-    #[napi(getter)]
-    pub fn status(&self) -> u16 {
-        self.inner.status
-    }
-
-    #[napi(getter)]
-    pub fn headers(&self, env: Env) -> Result<JsObject> {
-        let obj = env.create_object()?;
-        if let Some(headers) = self.inner.headers.as_object() {
-            for (k, v) in headers {
-                // let js_value = serde_value_to_js(env, v)?;
-                // obj.set_named_property(k, js_value)?;
+        JsonValue::String(s) => Ok(env.create_string(s)?.into_unknown()),
+        JsonValue::Array(arr) => {
+            let mut js_array = env.create_array_with_length(arr.len())?;
+            for (i, elem) in arr.iter().enumerate() {
+                let js_value = serde_value_to_js(env, elem)?;
+                js_array.set_element(i as u32, js_value)?;
             }
+            Ok(js_array.into_unknown())
         }
-        Ok(obj)
-    }
-
-    #[napi(getter)]
-    pub fn body(&self) -> Result<serde_json::Value> {
-        Ok(self.inner.body.clone())
+        JsonValue::Object(obj) => {
+            let mut js_obj = env.create_object()?;
+            for (k, v) in obj {
+                let js_value = serde_value_to_js(env, v)?;
+                js_obj.set_named_property(k, js_value)?;
+            }
+            Ok(js_obj.into_unknown())
+        }
     }
 }

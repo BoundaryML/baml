@@ -155,6 +155,23 @@ impl HTTPBody {
         serde_json::from_str(self.text()?)
             .map_err(|e| anyhow::anyhow!("HTTP body is not JSON: {}", e))
     }
+
+    /// Returns the HTTP body as a [`serde_json::Value`].
+    ///
+    /// If the body is not UTF-8 or JSON, it is returned as an array of bytes.
+    /// Used as input for [`serde_json::to_string_pretty`].
+    pub fn as_serde_value(&self) -> serde_json::Value {
+        self.json()
+            .or_else(|_e| self.text().map(|s| serde_json::Value::String(s.into())))
+            .unwrap_or_else(|_e| {
+                serde_json::Value::Array(
+                    self.raw()
+                        .iter()
+                        .map(|byte| serde_json::Value::from(*byte))
+                        .collect(),
+                )
+            })
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

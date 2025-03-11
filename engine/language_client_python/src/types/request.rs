@@ -20,39 +20,17 @@ crate::lang_wrapper!(HTTPBody, baml_types::tracing::events::HTTPBody, clone_safe
 impl HTTPRequest {
     #[getter]
     pub fn body(&self) -> HTTPBody {
+        // TODO: Avoid clone.
         HTTPBody::from(self.inner.body.clone())
     }
 
     pub fn __repr__(&self) -> String {
-        // Try to print as JSON, it that fails try to print string, otherwise
-        // just array of bytes.
-        let body = self
-            .inner
-            .body
-            .json()
-            .or_else(|_e| {
-                self.inner
-                    .body
-                    .text()
-                    .map(|s| serde_json::Value::String(s.into()))
-            })
-            .unwrap_or_else(|_e| {
-                serde_json::Value::Array(
-                    self.inner
-                        .body
-                        .raw()
-                        .iter()
-                        .map(|byte| serde_json::Value::from(*byte))
-                        .collect(),
-                )
-            });
-
         format!(
             "HTTPRequest(url={}, method={}, headers={}, body={})",
             self.inner.url,
             self.inner.method,
             serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&body).unwrap()
+            serde_json::to_string_pretty(&self.inner.body.as_serde_value()).unwrap()
         )
     }
 

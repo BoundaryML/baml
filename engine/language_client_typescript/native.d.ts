@@ -27,6 +27,8 @@ export declare class BamlRuntime {
   callFunctionSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResult
   streamFunction(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResultStream
   streamFunctionSync(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResultStream
+  buildRequest(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, stream: boolean): Promise<HTTPRequest>
+  buildRequestSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, stream: boolean): HTTPRequest
   setLogEventCallback(func?: undefined | ((err: any, param: BamlLogEvent) => void)): void
   flush(): void
   drainStats(): TraceStats
@@ -104,9 +106,15 @@ export declare class FunctionResultStream {
   done(rctx: RuntimeContextManager): Promise<FunctionResult>
 }
 
+export declare class HttpBody {
+  raw(): ArrayBuffer
+  text(): string
+  json(): unknown
+}
+export type HTTPBody = HttpBody
+
 export declare class HttpRequest {
-  get bodyRaw(): string
-  get body(): any
+  get body(): HttpBody
   toString(): string
   get url(): string
   get method(): string

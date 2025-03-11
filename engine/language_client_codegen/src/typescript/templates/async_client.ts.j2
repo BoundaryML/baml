@@ -1,5 +1,5 @@
 import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Collector } from "@boundaryml/baml"
-import { toBamlError, BamlStream } from "@boundaryml/baml"
+import { toBamlError, BamlStream, type HTTPRequest } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
 import type * as types from "./types"
@@ -18,15 +18,27 @@ export class BamlAsyncClient {
   private runtime: BamlRuntime
   private ctx_manager: BamlCtxManager
   private stream_client: BamlStreamClient
+  private http_request: HttpRequest
+  private http_stream_request: HttpStreamRequest
 
   constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
     this.runtime = runtime
     this.ctx_manager = ctx_manager
     this.stream_client = new BamlStreamClient(runtime, ctx_manager)
+    this.http_request = new HttpRequest(runtime, ctx_manager)
+    this.http_stream_request = new HttpStreamRequest(runtime, ctx_manager)
   }
 
   get stream() {
     return this.stream_client
+  }
+
+  get request() {
+    return this.http_request
+  }
+
+  get streamRequest() {
+    return this.http_stream_request
   }
 
   {% for fn in funcs %}
@@ -88,6 +100,66 @@ class BamlStreamClient {
         (a): {{ fn.partial_return_type }} => a,
         (a): {{ fn.return_type }} => a,
         this.ctx_manager.cloneContext(),
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}
+
+class HttpRequest {
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+
+  {% for fn in funcs %}
+  async {{ fn.name }}(
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}},
+      {%- endfor %}
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}
+
+class HttpStreamRequest {
+  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+
+  {% for fn in funcs %}
+  async {{ fn.name }}(
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}},
+      {%- endfor %}
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctx_manager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
       )
     } catch (error) {
       throw toBamlError(error);

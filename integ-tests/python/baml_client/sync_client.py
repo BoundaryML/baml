@@ -9859,7 +9859,7 @@ class HttpRequest:
     
     def AliasThatPointsToRecursiveType(
         self,
-        list: types.LinkedListAliasNode,
+        data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -9872,7 +9872,7 @@ class HttpRequest:
       return self.__runtime.build_request_sync(
         "AliasThatPointsToRecursiveType",
         {
-          "list": list,
+          "data": data,
         },
         self.__ctx_manager.get(),
         tb,
@@ -9997,7 +9997,7 @@ class HttpRequest:
     
     def AliasedInputList(
         self,
-        input: List[types.AliasedEnum],
+        input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -10089,7 +10089,7 @@ class HttpRequest:
     
     def BuildLinkedList(
         self,
-        input: List[int],
+        input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -10480,7 +10480,7 @@ class HttpRequest:
     
     def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput],
+        input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -10641,7 +10641,7 @@ class HttpRequest:
     
     def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image],
+        resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -10825,7 +10825,7 @@ class HttpRequest:
     
     def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str],
+        myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -11216,7 +11216,7 @@ class HttpRequest:
     
     def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -11239,7 +11239,7 @@ class HttpRequest:
     
     def InOutLiteralStringUnionMapKey(
         self,
-        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -11262,7 +11262,7 @@ class HttpRequest:
     
     def InOutSingleLiteralStringMapKey(
         self,
-        m: Dict[Literal["key"], str],
+        m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -11400,7 +11400,7 @@ class HttpRequest:
     
     def MapAlias(
         self,
-        m: Dict[str, List[str]],
+        m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -11504,6 +11504,29 @@ class HttpRequest:
 
       return self.__runtime.build_request_sync(
         "NullLiteralClassHello",
+        {
+          "s": s,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        False,
+      )
+    
+    def OpenAIWithAnthropicResponseHello(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "OpenAIWithAnthropicResponseHello",
         {
           "s": s,
         },
@@ -12619,7 +12642,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList],
+        myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -12688,7 +12711,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -12711,7 +12734,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
-        myMap: Dict[str, Dict[str, str]],
+        myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -12734,7 +12757,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleMapStringToString(
         self,
-        myMap: Dict[str, str],
+        myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -12780,7 +12803,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleStringArray(
         self,
-        myStringArray: List[str],
+        myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -12803,7 +12826,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleStringList(
         self,
-        myArg: List[str],
+        myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -12964,7 +12987,7 @@ class HttpRequest:
     
     def TestImageListInput(
         self,
-        imgs: List[baml_py.Image],
+        imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -13642,7 +13665,7 @@ class HttpStreamRequest:
     
     def AliasThatPointsToRecursiveType(
         self,
-        list: types.LinkedListAliasNode,
+        data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -13655,7 +13678,7 @@ class HttpStreamRequest:
       return self.__runtime.build_request_sync(
         "AliasThatPointsToRecursiveType",
         {
-          "list": list,
+          "data": data,
         },
         self.__ctx_manager.get(),
         tb,
@@ -13780,7 +13803,7 @@ class HttpStreamRequest:
     
     def AliasedInputList(
         self,
-        input: List[types.AliasedEnum],
+        input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -13872,7 +13895,7 @@ class HttpStreamRequest:
     
     def BuildLinkedList(
         self,
-        input: List[int],
+        input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -14263,7 +14286,7 @@ class HttpStreamRequest:
     
     def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput],
+        input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -14424,7 +14447,7 @@ class HttpStreamRequest:
     
     def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image],
+        resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -14608,7 +14631,7 @@ class HttpStreamRequest:
     
     def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str],
+        myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -14999,7 +15022,7 @@ class HttpStreamRequest:
     
     def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -15022,7 +15045,7 @@ class HttpStreamRequest:
     
     def InOutLiteralStringUnionMapKey(
         self,
-        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -15045,7 +15068,7 @@ class HttpStreamRequest:
     
     def InOutSingleLiteralStringMapKey(
         self,
-        m: Dict[Literal["key"], str],
+        m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -15183,7 +15206,7 @@ class HttpStreamRequest:
     
     def MapAlias(
         self,
-        m: Dict[str, List[str]],
+        m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -15287,6 +15310,29 @@ class HttpStreamRequest:
 
       return self.__runtime.build_request_sync(
         "NullLiteralClassHello",
+        {
+          "s": s,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    def OpenAIWithAnthropicResponseHello(
+        self,
+        s: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "OpenAIWithAnthropicResponseHello",
         {
           "s": s,
         },
@@ -16402,7 +16448,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList],
+        myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -16471,7 +16517,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -16494,7 +16540,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
-        myMap: Dict[str, Dict[str, str]],
+        myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -16517,7 +16563,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleMapStringToString(
         self,
-        myMap: Dict[str, str],
+        myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -16563,7 +16609,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleStringArray(
         self,
-        myStringArray: List[str],
+        myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -16586,7 +16632,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleStringList(
         self,
-        myArg: List[str],
+        myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -16747,7 +16793,7 @@ class HttpStreamRequest:
     
     def TestImageListInput(
         self,
-        imgs: List[baml_py.Image],
+        imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
