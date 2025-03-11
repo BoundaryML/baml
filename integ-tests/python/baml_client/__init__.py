@@ -22,7 +22,6 @@ from .globals import reset_baml_env_vars
 from .async_client import b
 
 
-
 __all__ = [
   "b",
   "partial_types",
