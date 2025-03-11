@@ -20,6 +20,11 @@ pub fn run_cli(env: Env, params: Vec<String>) -> napi::Result<JsUndefined> {
     env.get_undefined()
 }
 
+#[napi(js_name = "get_version")]
+pub fn get_version() -> String {
+    env!("CARGO_PKG_VERSION").to_string()
+}
+
 #[napi::module_init]
 fn module_init() {
     // Check if JSON logging is enabled

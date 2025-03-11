@@ -1113,7 +1113,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.0.1"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-cli",
