@@ -20,8 +20,8 @@ class EnsureBamlPyImport:
         """
         # Split the version strings into major, minor, and patch components
         try:
-            a_major, a_minor, _ = map(int, a.split(".", maxsplit=2))
-            b_major, b_minor, _ = map(int, b.split(".", maxsplit=2))
+            a_major, a_minor, _ = a.split(".", maxsplit=2)
+            b_major, b_minor, _ = b.split(".", maxsplit=2)
         except ValueError:
             # If the version strings are not valid integers, return False
             return False
