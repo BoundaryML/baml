@@ -41,6 +41,7 @@ json_comments = "0.2.2"
 jsonish.workspace = true
 internal-baml-codegen.workspace = true
 baml-types.workspace = true
+baml-log.workspace = true
 internal-llm-client.workspace = true
 internal-baml-core.workspace = true
 internal-baml-jinja.workspace = true
@@ -113,7 +114,12 @@ colored = { version = "2.1.0", default-features = false, features = [
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
 js-sys = "0.3.77"
-reqwest = { version = "0.12.12", features = ["stream", "json", "native-tls-vendored", "native-tls-alpn"] }
+reqwest = { version = "0.12.12", features = [
+  "stream",
+  "json",
+  "native-tls-vendored",
+  "native-tls-alpn",
+] }
 # 
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 serde-wasm-bindgen = "0.6.5"
@@ -172,8 +178,3 @@ walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 serial_test = "3.2.0"
 console_error_panic_hook = "0.1.7"
-
-[ benches ]
-name = "bench"
-path = "benches/bench.rs"
-harness = false

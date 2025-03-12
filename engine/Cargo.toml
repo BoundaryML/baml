@@ -34,6 +34,7 @@ array-macro = "2"
 askama = "0.12.1"
 baml-cli = { path = "cli" }
 baml-types = { path = "baml-lib/baml-types" }
+baml-log = { path = "baml-lib/baml-log" }
 base64 = "0.22.1"
 bstd = { path = "bstd" }
 bytes = "1.6.0"

@@ -83,7 +83,7 @@ impl Collector {
     #[staticmethod]
     pub fn __print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        log::info!("Storage: {:#?}", tracer);
+        println!("Storage: {:#?}", tracer);
     }
 }
 

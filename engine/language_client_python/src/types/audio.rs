@@ -100,7 +100,7 @@ impl BamlAudioPy {
 
     pub fn baml_serialize(&self, py: Python<'_>) -> PyResult<PyObject> {
         let s: UserFacingBamlMedia = (&self.inner).try_into().map_err(BamlError::from_anyhow)?;
-        let s = serde_json::to_value(&s).map_err(|e| BamlError::from_anyhow(e.into()))?;
+        let s = serde_json::to_value(&s).map_err(BamlError::from_anyhow)?;
         Ok(pythonize(py, &s)?.into())
     }
 

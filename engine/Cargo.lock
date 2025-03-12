@@ -824,6 +824,7 @@ dependencies = [
  "aws-smithy-types",
  "axum",
  "axum-extra",
+ "baml-log",
  "baml-runtime",
  "baml-types",
  "base64 0.22.1",
@@ -912,11 +913,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-log"
+version = "0.78.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "colored",
+ "lazy_static",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+]
+
+[[package]]
 name = "baml-python-ffi"
 version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-cli",
+ "baml-log",
  "baml-runtime",
  "baml-types",
  "ctrlc",
@@ -960,6 +975,7 @@ dependencies = [
  "aws-smithy-types",
  "axum",
  "axum-extra",
+ "baml-log",
  "baml-types",
  "base64 0.22.1",
  "bytes",
@@ -1027,7 +1043,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "test-log",
- "thiserror 2.0.9",
+ "thiserror 2.0.12",
  "time",
  "tokio",
  "tokio-stream",
@@ -1117,6 +1133,7 @@ version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-cli",
+ "baml-log",
  "baml-runtime",
  "baml-types",
  "env_logger",
@@ -1349,9 +1366,9 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrono"
-version = "0.4.38"
+version = "0.4.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401"
+checksum = "1a7964611d71df112cb1730f2ee67324fcf4d0fc6606acbbe9bfe06df124637c"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -1359,7 +1376,7 @@ dependencies = [
  "num-traits",
  "serde",
  "wasm-bindgen",
- "windows-targets 0.52.6",
+ "windows-link",
 ]
 
 [[package]]
@@ -1458,12 +1475,12 @@ checksum = "0b6a852b24ab71dffc585bcb46eaf7959d175cb865a7152e35b348d1b2960422"
 
 [[package]]
 name = "colored"
-version = "2.1.0"
+version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf2150cce219b664a8a70df7a1f933836724b503f8a413af9365b4dcc4d90b8"
+checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2757,6 +2774,7 @@ version = "0.78.0"
 dependencies = [
  "anyhow",
  "askama",
+ "baml-log",
  "baml-types",
  "base64 0.22.1",
  "cfg-if",
@@ -3058,7 +3076,7 @@ dependencies = [
  "serde_json",
  "strsim 0.10.0",
  "test-log",
- "thiserror 2.0.9",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -4393,6 +4411,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "baml-cli",
+ "baml-log",
  "baml-runtime",
  "baml-types",
  "base64 0.22.1",
@@ -5147,11 +5166,11 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "2.0.9"
+version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f072643fd0190df67a8bab670c20ef5d8737177d6ac6b2e9a236cb096206b2cc"
+checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
 dependencies = [
- "thiserror-impl 2.0.9",
+ "thiserror-impl 2.0.12",
 ]
 
 [[package]]
@@ -5167,9 +5186,9 @@ dependencies = [
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.9"
+version = "2.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b50fa271071aae2e6ee85f842e2e28ba8cd2c5fb67f11fcb1fd70b276f9e7d4"
+checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5939,6 +5958,12 @@ checksum = "33ab640c8d7e35bf8ba19b884ba838ceb4fba93a4e8c65a9059d08afcfc683d9"
 dependencies = [
  "windows-targets 0.52.6",
 ]
+
+[[package]]
+name = "windows-link"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dccfd733ce2b1753b03b6d3c65edf020262ea35e20ccdf3e288043e6dd620e3"
 
 [[package]]
 name = "windows-registry"

@@ -1,7 +1,13 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Literal, Union
+from __future__ import annotations
+from typing_extensions import Literal
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 def get_version() -> str:
     """Get the version of the BAML Python client."""
+    ...
+
+def set_log_level(level: Literal["debug", "info", "warn", "error", "off"] | str) -> None:
+    """Set the log level for the BAML Python client."""
     ...
 
 class FunctionResult:

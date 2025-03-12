@@ -1,5 +1,5 @@
 import pytest
-from dotenv import load_dotenv
+import dotenv
 from openai.types.chat import ChatCompletion
 
 from ..baml_client import b
@@ -8,9 +8,9 @@ from baml_py import Collector
 import gc
 import sys
 import asyncio
+import os
 
-load_dotenv()
-
+dotenv.load_dotenv("/Users/vbv/repos/gloo-lang/integ-tests/.env")
 
 @pytest.fixture(autouse=True)
 def ensure_collector_is_empty():

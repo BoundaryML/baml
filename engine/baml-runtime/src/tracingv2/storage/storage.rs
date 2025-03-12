@@ -73,7 +73,6 @@ impl TraceStorage {
     /// Decrease the reference count for the given FunctionId,
     /// and if it hits zero, remove from memory (both events and cached FunctionLogInner).
     pub fn dec_ref(&mut self, function_id: &FunctionId) {
-        // log::info!("Decrementing ref count for FunctionID {:?}", function_id);
         match self.ref_counts.get_mut(function_id) {
             Some(rc) => {
                 if *rc == 0 {
@@ -100,12 +99,6 @@ impl TraceStorage {
                 );
             }
         }
-        // // log::info!("Decremented ref count for FunctionID {:?}", function_id);
-        // log::info!(
-        //     "Ref counts: {:?}, span_map_function_count: {:?}",
-        //     self.ref_counts,
-        //     self.span_map.len()
-        // );
     }
 
     /// Append a new event for the given function ID, but only if ref_count > 0.
@@ -634,7 +627,6 @@ impl Collector {
 
 impl Clone for Collector {
     fn clone(&self) -> Self {
-        // log::info!("Cloning collector: {}", self.name);
         // Create a new collector with empty set
         let new_collector = Self::new(Some(format!("{}_clone", self.name)));
 
@@ -652,7 +644,6 @@ impl Clone for Collector {
 
 impl Drop for Collector {
     fn drop(&mut self) {
-        // log::info!("Dropping collector: {}", self.name);
         // On drop, we untrack (and thus dec_ref) everything we were tracking
         let mut tracer = BAML_TRACER.lock().unwrap();
         let guard = self.tracked_ids.lock().unwrap();
