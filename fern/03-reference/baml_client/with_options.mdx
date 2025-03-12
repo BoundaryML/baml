@@ -2,77 +2,77 @@
 title: with_options
 ---
 
-<Warning>
-`with_options` is in proposal stage and may change. It is not yet available in any language. Please leave feedback on our discord.
-</Warning>
+<Info>
+Added in 0.79.0
+</Info>
 
 The `with_options` function creates a new client with default configuration options for logging, client registry, and type builders. These options are automatically applied to all function calls made through this client, but can be overridden on a per-call basis when needed.
 
 ## Quick Start
 
 <Tabs>
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 from baml_client import b
-from baml_py import ClientRegistry
+from baml_py import ClientRegistry, Collector
 
 # Set up default options for this client
-logger = b.create_logger()
+collector = Collector(name="my-collector")
 client_registry = ClientRegistry()
 client_registry.set_primary("openai/gpt-4o-mini")
 
 # Create client with default options
-my_b = b.with_options(internal_logger=logger, client_registry=client_registry)
+my_b = b.with_options(collector=collector, client_registry=client_registry)
 
 # Uses the default options
 result = my_b.ExtractResume("...")
 
 # Override options for a specific call
-other_logger = b.create_logger()
-result2 = my_b.ExtractResume("...", baml_options={"logger": other_logger})
+other_collector = Collector(name="other-collector")
+result2 = my_b.ExtractResume("...", baml_options={"collector": other_collector})
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from "baml_client"
-import { ClientRegistry } from "baml_client/client_registry"
+import { Collector, ClientRegistry } from "@boundaryml/baml"
 
 // Set up default options for this client
-const logger = b.createLogger()
+const collector = new Collector("my-collector")
 const clientRegistry = new ClientRegistry()
 clientRegistry.setPrimary("openai/gpt-4o-mini")
 
 // Create client with default options
-const myB = b.withOptions({ logger, clientRegistry })
+const myB = b.withOptions({ collector, clientRegistry })
 
 // Uses the default options
 const result = await myB.ExtractResume("...")
 
 // Override options for a specific call
-const otherLogger = b.createLogger()
-const result2 = await myB.ExtractResume("...", { logger: otherLogger })
+const otherCollector = new Collector("other-collector")
+const result2 = await myB.ExtractResume("...", { collector: otherCollector })
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client'
 
 # Set up default options for this client
-logger = Baml.Client.create_internal_logger
+collector = Baml::Collector.new(name: "my-collector")
 client_registry = Baml::ClientRegistry.new
 client_registry.set_primary("openai/gpt-4o-mini")
 
 # Create client with default options
-my_b = Baml.Client.with_options(internal_logger: logger, client_registry: client_registry)
+my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry)
 
 # Uses the default options
-result = my_b.ExtractResume("...")
+result = my_b.ExtractResume(input: "...")
 
 # Override options for a specific call
-other_logger = Baml.Client.create_internal_logger
-result2 = my_b.ExtractResume("...", baml_options: { logger: other_logger })
+other_collector = Baml::Collector.new(name: "other-collector")
+result2 = my_b.ExtractResume(input: "...", baml_options: { collector: other_collector })
 ```
 </Tab>
 </Tabs>
@@ -84,19 +84,19 @@ result2 = my_b.ExtractResume("...", baml_options: { logger: other_logger })
 Use `with_options` to create a client with default settings that will be applied to all function calls made through this client. These defaults can be overridden when needed.
 
 <Tabs>
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 from baml_client import b
-from baml_py import ClientRegistry
+from baml_py import ClientRegistry, Collector
 
 def run():
     # Configure options
-    logger = b.create_internal_logger()
+    collector = Collector(name="my-collector")
     client_registry = ClientRegistry()
     client_registry.set_primary("openai/gpt-4o-mini")
 
     # Create configured client
-    my_b = b.with_options(internal_logger=logger, client_registry=client_registry)
+    my_b = b.with_options(collector=collector, client_registry=client_registry)
 
     # All calls will use the configured options
     res = my_b.ExtractResume("...")
@@ -104,21 +104,22 @@ def run():
 
     # Access configuration
     print(my_b.client_registry)
-    # Will print 2 logs from the logger
-    print(my_b.internal_logger.logs)
+    # Access logs from the collector
+    print(collector.logs)
+    print(collector.last)
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
 import { b } from "baml_client"
-import { ClientRegistry } from "baml_client/client_registry"
+import { Collector, ClientRegistry } from "@boundaryml/baml"
 
-const logger = b.createLogger()
+const collector = new Collector("my-collector")
 const clientRegistry = new ClientRegistry()
 clientRegistry.setPrimary("openai/gpt-4o-mini")
 
-const myB = b.withOptions({ logger, clientRegistry })
+const myB = b.withOptions({ collector, clientRegistry })
 
 // All calls will use the configured options
 const res = await myB.ExtractResume("...")
@@ -126,42 +127,47 @@ const invoice = await myB.ExtractInvoice("...")
 
 // Access configuration
 console.log(myB.clientRegistry)
-console.log(myB.logger.last?.usage)
+console.log(collector.logs)
+console.log(collector.last?.usage)
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client'
 
-logger = Baml.Client.create_internal_logger
+collector = Baml::Collector.new(name: "my-collector")
 client_registry = Baml::ClientRegistry.new
 client_registry.set_primary("openai/gpt-4o-mini")
 
-my_b = Baml.Client.with_options(internal_logger: logger, client_registry: client_registry)
+my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry)
 
 # All calls will use the configured options
-res = my_b.ExtractResume("...")
-invoice = my_b.ExtractInvoice("...")
+res = my_b.ExtractResume(input: "...")
+invoice = my_b.ExtractInvoice(input: "...")
 
 # Access configuration
 print(my_b.client_registry)
-print(my_b.internal_logger.last.usage)
+print(collector.logs)
+print(collector.last.usage)
 ```
 </Tab>
 </Tabs>
 
 ### Parallel Execution
 
-When running functions in parallel, `with_options` helps maintain consistent configuration across all calls. This works seamlessly with the [`Logger`](./logger) and [`id`](./id) functionality.
+When running functions in parallel, `with_options` helps maintain consistent configuration across all calls. This works seamlessly with the [`Collector`](./collector) and [`id`](./id) functionality.
 
 <Tabs>
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 from baml_client.async_client import b
+from baml_py import ClientRegistry, Collector
+import asyncio
 
 async def run():
-    my_b = b.with_options(client_registry=client_registry)
+    collector = Collector(name="my-collector")
+    my_b = b.with_options(collector=collector, client_registry=client_registry)
 
     # Run multiple functions in parallel
     res, invoice = await asyncio.gather(
@@ -172,14 +178,17 @@ async def run():
     # Access results and logs
     print(res)
     print(invoice)
-    print(my_b.internal_logger.id(res.id).usage)
-    print(my_b.internal_logger.id(invoice.id).usage)
+    print(collector.id(res.id).usage)
+    print(collector.id(invoice.id).usage)
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
-const myB = b.withOptions({ logger, clientRegistry })
+import { Collector, ClientRegistry } from "@boundaryml/baml"
+
+const collector = new Collector("my-collector")
+const myB = b.withOptions({ collector, clientRegistry })
 
 // Run multiple functions in parallel
 const [
@@ -193,30 +202,31 @@ const [
 // Access results and logs
 console.log(res)
 console.log(invoice)
-console.log(myB.logger.id(resumeId)?.usage)
-console.log(myB.logger.id(invoiceId)?.usage)
+console.log(collector.id(resumeId)?.usage)
+console.log(collector.id(invoiceId)?.usage)
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client'
 require 'async'
 
 Async do
-    my_b = Baml.Client.with_options(client_registry: client_registry)
+    collector = Baml::Collector.new(name: "my-collector")
+    my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry)
     
     # Run multiple functions in parallel
     res, invoice = await [
-        my_b.ExtractResume("..."),
-        my_b.ExtractInvoice("...")
+        my_b.ExtractResume(input: "..."),
+        my_b.ExtractInvoice(input: "...")
     ]
 
     # Access results and logs
     print(res)
     print(invoice)
-    print(my_b.internal_logger.id(res.id).usage)
-    print(my_b.internal_logger.id(invoice.id).usage)
+    print(collector.id(res.id).usage)
+    print(collector.id(invoice.id).usage)
 end
 ```
 </Tab>
@@ -227,25 +237,30 @@ end
 `with_options` can be used with streaming functions while maintaining all configured options.
 
 <Tabs>
-<Tab title="Python">
+<Tab title="Python" language="python">
 ```python
 from baml_client.async_client import b
+from baml_py import Collector
 
 async def run():
-    my_b = b.with_options(client_registry=client_registry)
+    collector = Collector(name="my-collector")
+    my_b = b.with_options(collector=collector, client_registry=client_registry)
 
     stream = my_b.stream.ExtractResume("...")
     async for chunk in stream:
         print(chunk)
     
     result = await stream.get_final_result()
-    print(my_b.internal_logger.id(stream.id).usage)
+    print(collector.id(stream.id).usage)
 ```
 </Tab>
 
-<Tab title="TypeScript">
+<Tab title="TypeScript" language="typescript">
 ```typescript
-const myB = b.withOptions({ logger, clientRegistry })
+import { Collector } from "@boundaryml/baml"
+
+const collector = new Collector("my-collector")
+const myB = b.withOptions({ collector, clientRegistry })
 
 const stream = myB.stream.ExtractResume("...")
 for await (const chunk of stream) {
@@ -253,23 +268,24 @@ for await (const chunk of stream) {
 }
 
 const result = await stream.getFinalResult()
-console.log(myB.logger.id(stream.id)?.usage)
+console.log(collector.id(stream.id)?.usage)
 ```
 </Tab>
 
-<Tab title="Ruby">
+<Tab title="Ruby" language="ruby">
 ```ruby
 require 'baml_client'
 
-my_b = Baml.Client.with_options(client_registry: client_registry)
+collector = Baml::Collector.new(name: "my-collector")
+my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry)
 
-stream = my_b.stream.ExtractResume("...")
+stream = my_b.stream.ExtractResume(input: "...")
 stream.each do |chunk|
     print(chunk)
 end
 
 result = stream.get_final_result
-print(my_b.internal_logger.id(stream.id).usage)
+print(collector.id(stream.id).usage)
 ```
 </Tab>
 </Tabs>
@@ -284,9 +300,9 @@ These can always be overridden on a per-call basis with the `baml_options` param
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `logger` / `internal_logger` | [`Logger`](./logger) | Logger instance for tracking function calls and usage |
+| `collector` | [`Collector`](/ref/baml_client/collector) | Collector instance for tracking function calls and usage metrics |
 | `client_registry` | `ClientRegistry` | Registry for managing LLM clients and their configurations |
-| `type_builder` | [`TypeBuilder`](./typebuilder) | Custom type builder for function inputs and outputs |
+| `type_builder` | [`TypeBuilder`](/ref/baml_client/type-builder) | Custom type builder for function inputs and outputs |
 
 ### Configured Client Properties
 
@@ -296,10 +312,10 @@ The configured client maintains the same interface as the base `baml_client`, so
 
 
 ## Related Topics
-- [Logger](./logger) - Track function calls and usage metrics
-- [Function IDs](./id) - Track specific function calls
-- [TypeBuilder](./typebuilder) - Build custom types for your functions
-- [Client Registry](./client-registry) - Manage LLM clients and their configurations
+- [Collector](/ref/baml_client/collector) - Track function calls and usage metrics
+- [Function IDs](/ref/baml_client/id) - Track specific function calls
+- [TypeBuilder](/ref/baml_client/type-builder) - Build custom types for your functions
+- [Client Registry](/ref/baml_client/client-registry) - Manage LLM clients and their configurations
 
 ## Best Practices
 1. Use `with_options` when you need consistent configuration across multiple function calls

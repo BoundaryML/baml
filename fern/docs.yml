@@ -145,6 +145,9 @@ navigation:
 
       - section: BAML Advanced
         contents:
+          - page: Collector (track tokens)
+            icon: fa-regular fa-wave-pulse
+            path: 01-guide/05-baml-advanced/collector.mdx
           - page: LLM Client Registry
             icon: fa-regular fa-gears
             path: 01-guide/05-baml-advanced/client-registry.mdx
