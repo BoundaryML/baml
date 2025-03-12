@@ -69,7 +69,7 @@ describe('Type aliases tests', () => {
     expect(res).toEqual({ one: { two: { three: {} } } })
   })
 
-  it('simple recursive map alias', async () => {
+  it('simple recursive list alias', async () => {
     const res = await b.SimpleRecursiveListAlias([[], [], [[]]])
     expect(res).toEqual([[], [], [[]]])
   })
