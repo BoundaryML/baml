@@ -35,6 +35,18 @@ describe('Dynamic Type Tests', () => {
       expect(res.length).toBeGreaterThan(0)
       expect(res[0]['animalLiked']).toEqual('GIRAFFE')
     })
+
+    it('should work with dynamic literals', async () => {
+      let tb = new TypeBuilder()
+      const animals = tb.union(['giraffe', 'elephant', 'lion'].map((animal) => tb.literalString(animal.toUpperCase())))
+      tb.Person.addProperty('animalLiked', animals)
+      const res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        { tb },
+      )
+      expect(res.length).toBeGreaterThan(0)
+      expect(res[0]['animalLiked']).toEqual('GIRAFFE')
+    })
   })
 
   describe('Complex Dynamic Types', () => {
