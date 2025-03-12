@@ -391,9 +391,9 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             }
             FieldType::RecursiveTypeAlias(name) => {
                 if wrapped {
-                    format!("\"{name}\"")
+                    format!("types.{name}")
                 } else {
-                    format!("Optional[\"{name}\"]")
+                    format!("Optional[types.{name}]")
                 }
             }
             FieldType::Literal(value) => {
