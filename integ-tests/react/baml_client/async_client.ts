@@ -38,47 +38,47 @@ type BamlCallOptions = {
 
 export class BamlAsyncClient {
   private runtime: BamlRuntime
-  private ctx_manager: BamlCtxManager
-  private stream_client: BamlStreamClient
-  private http_request: HttpRequest
-  private http_stream_request: HttpStreamRequest
-  private llm_response_parser: LlmResponseParser
-  private llm_stream_parser: LlmStreamParser
-  private baml_options: BamlCallOptions
+  private ctxManager: BamlCtxManager
+  private streamClient: BamlStreamClient
+  private httpRequest: HttpRequest
+  private httpStreamRequest: HttpStreamRequest
+  private llmResponseParser: LlmResponseParser
+  private llmStreamParser: LlmStreamParser
+  private bamlOptions: BamlCallOptions
 
-  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager, baml_options?: BamlCallOptions) {
+  constructor(runtime: BamlRuntime, ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.runtime = runtime
-    this.ctx_manager = ctx_manager
-    this.stream_client = new BamlStreamClient(runtime, ctx_manager, baml_options)
-    this.http_request = new HttpRequest(runtime, ctx_manager)
-    this.http_stream_request = new HttpStreamRequest(runtime, ctx_manager)
-    this.llm_response_parser = new LlmResponseParser(runtime, ctx_manager)
-    this.llm_stream_parser = new LlmStreamParser(runtime, ctx_manager)
-    this.baml_options = baml_options || {}
+    this.ctxManager = ctxManager
+    this.streamClient = new BamlStreamClient(runtime, ctxManager, bamlOptions)
+    this.httpRequest = new HttpRequest(runtime, ctxManager)
+    this.httpStreamRequest = new HttpStreamRequest(runtime, ctxManager)
+    this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
+    this.llmStreamParser = new LlmStreamParser(runtime, ctxManager)
+    this.bamlOptions = bamlOptions || {}
   }
 
-  withOptions(baml_options: BamlCallOptions) {
-    return new BamlAsyncClient(this.runtime, this.ctx_manager, baml_options)
+  withOptions(bamlOptions: BamlCallOptions) {
+    return new BamlAsyncClient(this.runtime, this.ctxManager, bamlOptions)
   }
 
   get stream() {
-    return this.stream_client
+    return this.streamClient
   }
 
   get request() {
-    return this.http_request
+    return this.httpRequest
   }
 
   get streamRequest() {
-    return this.http_stream_request
+    return this.httpStreamRequest
   }
 
   get parse() {
-    return this.llm_response_parser
+    return this.llmResponseParser
   }
 
   get parseStream() {
-    return this.llm_stream_parser
+    return this.llmStreamParser
   }
 
   
@@ -87,14 +87,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Recipe> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AaaSamOutputFormat",
         {
           "recipe": recipe
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -110,14 +110,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<LinkedListAliasNode> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AliasThatPointsToRecursiveType",
         {
           "data": data
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -133,14 +133,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"gt_ten">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AliasWithMultipleAttrs",
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -156,14 +156,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AliasedInputClass",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -179,14 +179,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AliasedInputClass2",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -202,14 +202,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AliasedInputClassNested",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -225,14 +225,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AliasedInputEnum",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -248,14 +248,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AliasedInputList",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -271,14 +271,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<OptionalListAndMap> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AllowedOptionals",
         {
           "optionals": optionals
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -294,14 +294,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AssertFn",
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -317,14 +317,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AudioInput",
         {
           "aud": aud
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -340,14 +340,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<LinkedList> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "BuildLinkedList",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -363,14 +363,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Tree> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "BuildTree",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -386,14 +386,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<ClassToRecAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
           "cls": cls
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -409,14 +409,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<(string | DynEnumTwo)> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ClassifyDynEnumTwo",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -432,14 +432,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Category> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ClassifyMessage",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -455,14 +455,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Category> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ClassifyMessage2",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -478,14 +478,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Category> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ClassifyMessage3",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -501,14 +501,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "Completion",
         {
           "prefix": prefix,"suffix": suffix,"language": language
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -524,14 +524,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<BookOrder | FlightConfirmation | GroceryReceipt> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "CustomTask",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -547,14 +547,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DescribeImage",
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -570,14 +570,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DescribeImage2",
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -593,14 +593,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DescribeImage3",
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -616,14 +616,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DescribeImage4",
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -639,14 +639,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<OriginalA | OriginalB> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DifferentiateUnions",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -662,14 +662,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<DummyOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DummyOutputFunction",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -685,14 +685,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<DynamicClassTwo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DynamicFunc",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -708,14 +708,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<DynInputOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DynamicInputOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -731,14 +731,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<DynInputOutput[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "DynamicListInputOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -754,14 +754,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExpectFailure",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -777,14 +777,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<ContactInfo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExtractContactInfo",
         {
           "document": document
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -800,14 +800,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<(string | Hobby)[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExtractHobby",
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -823,14 +823,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExtractNames",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -846,14 +846,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Person[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExtractPeople",
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -869,14 +869,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<ReceiptInfo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExtractReceiptInfo",
         {
           "email": email,"reason": reason
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -892,14 +892,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Resume> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExtractResume",
         {
           "resume": resume,"img": img?? null
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -915,14 +915,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Resume> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ExtractResume2",
         {
           "resume": resume
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -938,14 +938,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<ClassOptionalOutput | null> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnClassOptionalOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -961,14 +961,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<ClassOptionalOutput2 | null> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnClassOptionalOutput2",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -984,14 +984,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<EnumOutput[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnEnumListOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1007,14 +1007,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<EnumOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnEnumOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1030,14 +1030,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<LiteralClassHello> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnLiteralClassInputOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1053,14 +1053,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<LiteralClassOne | LiteralClassTwo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnLiteralUnionClassInputOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1076,14 +1076,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnNamedArgsSingleStringOptional",
         {
           "myString": myString?? null
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1099,14 +1099,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<boolean> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputBool",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1122,14 +1122,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TestOutputClass> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputClass",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1145,14 +1145,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TestOutputClass[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputClassList",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1168,14 +1168,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TestClassNested> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputClassNested",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1191,14 +1191,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TestClassWithEnum> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputClassWithEnum",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1214,14 +1214,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputInt",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1237,14 +1237,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<false> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralBool",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1260,14 +1260,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<5> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralInt",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1283,14 +1283,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<"example output"> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralString",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1306,14 +1306,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnOutputStringList",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1329,14 +1329,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TestEnum> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnTestAliasedEnumOutput",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1352,14 +1352,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TestClassAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnTestClassAlias",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1375,14 +1375,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "FnTestNamedArgsSingleEnum",
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1398,14 +1398,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<RaysData> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "GetDataType",
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1421,14 +1421,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<OrderInfo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "GetOrderInfo",
         {
           "email": email
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1444,14 +1444,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<SearchParams> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "GetQuery",
         {
           "query": query
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1467,14 +1467,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Partial<Record<types.MapKey, string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "InOutEnumMapKey",
         {
           "i1": i1,"i2": i2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1490,14 +1490,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Partial<Record<"one" | "two" | "three" | "four", string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "InOutLiteralStringUnionMapKey",
         {
           "i1": i1,"i2": i2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1513,14 +1513,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Partial<Record<"key", string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "InOutSingleLiteralStringMapKey",
         {
           "m": m
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1536,14 +1536,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<JsonValue> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "JsonTypeAliasCycle",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1559,14 +1559,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<1 | true | "string output"> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "LiteralUnionsTest",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1582,14 +1582,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Checked<BlockConstraint,"cross_field">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "MakeBlockConstraint",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1605,14 +1605,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<NestedBlockConstraint> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "MakeNestedBlockConstraint",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1628,14 +1628,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<SemanticContainer> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "MakeSemanticContainer",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1651,14 +1651,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Record<string, string[]>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "MapAlias",
         {
           "m": m
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1674,14 +1674,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<MergeAttrs> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "MergeAliasAttributes",
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1697,14 +1697,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<DynamicOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "MyFunc",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1720,14 +1720,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number | string | boolean | number | string[] | Record<string, string[]>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "NestedAlias",
         {
           "c": c
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1743,14 +1743,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<ClassForNullLiteral> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "NullLiteralClassHello",
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1766,14 +1766,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "OpenAIWithAnthropicResponseHello",
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1789,14 +1789,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<(OptionalTest_ReturnType | null)[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "OptionalTest_Function",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1812,14 +1812,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<FooAny> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PredictAge",
         {
           "name": name
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1835,14 +1835,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"too_big">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PredictAgeBare",
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1858,14 +1858,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number | string | boolean | number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PrimitiveAlias",
         {
           "p": p
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1881,14 +1881,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PromptTestClaude",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1904,14 +1904,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PromptTestClaudeChat",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1927,14 +1927,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PromptTestClaudeChatNoSystem",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1950,14 +1950,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAI",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1973,14 +1973,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAIChat",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -1996,14 +1996,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAIChatNoSystem",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2019,14 +2019,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "PromptTestStreaming",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2042,14 +2042,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<RecAliasOne> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "RecursiveAliasCycle",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2065,14 +2065,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<NodeWithAliasIndirection> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "RecursiveClassWithAliasIndirection",
         {
           "cls": cls
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2088,14 +2088,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"gt_ten">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ReturnAliasWithMergedAttributes",
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2111,14 +2111,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ReturnFailingAssert",
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2134,14 +2134,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<JsonTemplate> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ReturnJsonEntry",
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2157,14 +2157,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<MalformedConstraints> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "ReturnMalformedConstraints",
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2180,14 +2180,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Schema> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "SchemaDescriptions",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2203,14 +2203,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<RecursiveListAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "SimpleRecursiveListAlias",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2226,14 +2226,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<RecursiveMapAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "SimpleRecursiveMapAlias",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2249,14 +2249,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<BigNumbers> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "StreamBigNumbers",
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2272,14 +2272,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TwoStoriesOneTitle> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "StreamFailingAssertion",
         {
           "theme": theme,"length": length
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2295,14 +2295,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "StreamOneBigNumber",
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2318,14 +2318,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<(number | string)[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "StreamUnionIntegers",
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2341,14 +2341,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<CompoundBigNumbers> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "StreamingCompoundNumbers",
         {
           "digits": digits,"yapping": yapping
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2364,14 +2364,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<RecursiveAliasDependency> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TakeRecAliasDep",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2387,14 +2387,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TellStory",
         {
           "story": story
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2410,14 +2410,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAnthropic",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2433,14 +2433,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAnthropicShorthand",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2456,14 +2456,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAws",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2479,14 +2479,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidAccessKey",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2502,14 +2502,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidProfile",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2525,14 +2525,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidRegion",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2548,14 +2548,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidSessionToken",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2571,14 +2571,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzure",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2594,14 +2594,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzureFailure",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2617,14 +2617,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzureO1NoMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2640,14 +2640,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzureO1WithMaxCompletionTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2663,14 +2663,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzureO1WithMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2686,14 +2686,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzureO3NoMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2709,14 +2709,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzureO3WithMaxCompletionTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2732,14 +2732,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestAzureWithMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2755,14 +2755,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestCaching",
         {
           "input": input,"not_cached": not_cached
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2778,14 +2778,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFallbackClient",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2801,14 +2801,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFallbackStrategy",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2824,14 +2824,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFallbackToShorthand",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2847,14 +2847,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleBool",
         {
           "myBool": myBool
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2870,14 +2870,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleClass",
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2893,14 +2893,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleEnumList",
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2916,14 +2916,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleFloat",
         {
           "myFloat": myFloat
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2939,14 +2939,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleInt",
         {
           "myInt": myInt
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2962,14 +2962,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Record<string, StringToClassEntry>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToClass",
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -2985,14 +2985,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Record<string, Record<string, string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToMap",
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3008,14 +3008,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<Record<string, string>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToString",
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3031,14 +3031,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleString",
         {
           "myString": myString
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3054,14 +3054,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleStringArray",
         {
           "myStringArray": myStringArray
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3077,14 +3077,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleStringList",
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3100,14 +3100,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestGemini",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3123,14 +3123,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestGeminiOpenAiGeneric",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3146,14 +3146,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestGeminiSystem",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3169,14 +3169,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestGeminiSystemAsChat",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3192,14 +3192,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestImageInput",
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3215,14 +3215,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestImageInputAnthropic",
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3238,14 +3238,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestImageListInput",
         {
           "imgs": imgs
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3261,14 +3261,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<TestMemoryOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestMemory",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3284,14 +3284,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestMulticlassNamedArgs",
         {
           "myArg": myArg,"myArg2": myArg2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3307,14 +3307,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralBool",
         {
           "myBool": myBool
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3330,14 +3330,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralInt",
         {
           "myInt": myInt
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3353,14 +3353,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralString",
         {
           "myString": myString
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3376,14 +3376,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOllama",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3399,14 +3399,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAI",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3422,14 +3422,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAIGPT4oMini",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3445,14 +3445,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAILegacyProvider",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3468,14 +3468,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1NoMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3491,14 +3491,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3514,14 +3514,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1WithMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3537,14 +3537,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAIShorthand",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3560,14 +3560,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3583,14 +3583,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithNullMaxTokens",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3606,14 +3606,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestRetryConstant",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3629,14 +3629,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestRetryExponential",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3652,14 +3652,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestRoundRobinStrategy",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3675,14 +3675,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestSingleFallbackClient",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3698,14 +3698,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<CustomStory> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestThinking",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3721,14 +3721,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<UniverseQuestion> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestUniverseQuestion",
         {
           "question": question
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3744,14 +3744,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestVertex",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3767,14 +3767,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "TestVertexWithSystemInstructions",
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3790,14 +3790,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<UnionTest_ReturnType> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "UnionTest_Function",
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3813,14 +3813,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "UseBlockConstraint",
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3836,14 +3836,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "UseMalformedConstraints",
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3859,14 +3859,14 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "UseNestedBlockConstraint",
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3881,13 +3881,13 @@ export class BamlAsyncClient {
 
 class BamlStreamClient {
   private runtime: BamlRuntime
-  private ctx_manager: BamlCtxManager
-  private baml_options: BamlCallOptions
+  private ctxManager: BamlCtxManager
+  private bamlOptions: BamlCallOptions
 
-  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager, baml_options?: BamlCallOptions) {
+  constructor(runtime: BamlRuntime, ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.runtime = runtime
-    this.ctx_manager = ctx_manager
-    this.baml_options = baml_options || {}
+    this.ctxManager = ctxManager
+    this.bamlOptions = bamlOptions || {}
   }
 
   
@@ -3896,7 +3896,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.Recipe, Recipe> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AaaSamOutputFormat",
@@ -3904,7 +3904,7 @@ class BamlStreamClient {
           "recipe": recipe
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3913,7 +3913,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.Recipe => a,
         (a): Recipe => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -3925,7 +3925,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.LinkedListAliasNode, LinkedListAliasNode> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AliasThatPointsToRecursiveType",
@@ -3933,7 +3933,7 @@ class BamlStreamClient {
           "data": data
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3942,7 +3942,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.LinkedListAliasNode => a,
         (a): LinkedListAliasNode => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -3954,7 +3954,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AliasWithMultipleAttrs",
@@ -3962,7 +3962,7 @@ class BamlStreamClient {
           "money": money
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -3971,7 +3971,7 @@ class BamlStreamClient {
         raw,
         (a): Checked<number,"gt_ten"> => a,
         (a): Checked<number,"gt_ten"> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -3983,7 +3983,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AliasedInputClass",
@@ -3991,7 +3991,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4000,7 +4000,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4012,7 +4012,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AliasedInputClass2",
@@ -4020,7 +4020,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4029,7 +4029,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4041,7 +4041,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AliasedInputClassNested",
@@ -4049,7 +4049,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4058,7 +4058,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4070,7 +4070,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AliasedInputEnum",
@@ -4078,7 +4078,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4087,7 +4087,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4099,7 +4099,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AliasedInputList",
@@ -4107,7 +4107,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4116,7 +4116,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4128,7 +4128,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.OptionalListAndMap, OptionalListAndMap> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AllowedOptionals",
@@ -4136,7 +4136,7 @@ class BamlStreamClient {
           "optionals": optionals
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4145,7 +4145,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.OptionalListAndMap => a,
         (a): OptionalListAndMap => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4157,7 +4157,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<number, number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AssertFn",
@@ -4165,7 +4165,7 @@ class BamlStreamClient {
           "a": a
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4174,7 +4174,7 @@ class BamlStreamClient {
         raw,
         (a): number => a,
         (a): number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4186,7 +4186,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AudioInput",
@@ -4194,7 +4194,7 @@ class BamlStreamClient {
           "aud": aud
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4203,7 +4203,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4215,7 +4215,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.LinkedList, LinkedList> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "BuildLinkedList",
@@ -4223,7 +4223,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4232,7 +4232,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.LinkedList => a,
         (a): LinkedList => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4244,7 +4244,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.Tree, Tree> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "BuildTree",
@@ -4252,7 +4252,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4261,7 +4261,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.Tree => a,
         (a): Tree => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4273,7 +4273,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.ClassToRecAlias, ClassToRecAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -4281,7 +4281,7 @@ class BamlStreamClient {
           "cls": cls
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4290,7 +4290,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.ClassToRecAlias => a,
         (a): ClassToRecAlias => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4302,7 +4302,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(string | DynEnumTwo), (string | DynEnumTwo)> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ClassifyDynEnumTwo",
@@ -4310,7 +4310,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4319,7 +4319,7 @@ class BamlStreamClient {
         raw,
         (a): (string | DynEnumTwo) => a,
         (a): (string | DynEnumTwo) => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4331,7 +4331,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<types.Category, Category> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ClassifyMessage",
@@ -4339,7 +4339,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4348,7 +4348,7 @@ class BamlStreamClient {
         raw,
         (a): types.Category => a,
         (a): Category => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4360,7 +4360,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<types.Category, Category> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ClassifyMessage2",
@@ -4368,7 +4368,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4377,7 +4377,7 @@ class BamlStreamClient {
         raw,
         (a): types.Category => a,
         (a): Category => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4389,7 +4389,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<types.Category, Category> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ClassifyMessage3",
@@ -4397,7 +4397,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4406,7 +4406,7 @@ class BamlStreamClient {
         raw,
         (a): types.Category => a,
         (a): Category => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4418,7 +4418,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "Completion",
@@ -4426,7 +4426,7 @@ class BamlStreamClient {
           "prefix": prefix,"suffix": suffix,"language": language
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4435,7 +4435,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4447,7 +4447,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((partial_types.BookOrder | null) | (partial_types.FlightConfirmation | null) | (partial_types.GroceryReceipt | null)), BookOrder | FlightConfirmation | GroceryReceipt> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "CustomTask",
@@ -4455,7 +4455,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4464,7 +4464,7 @@ class BamlStreamClient {
         raw,
         (a): ((partial_types.BookOrder | null) | (partial_types.FlightConfirmation | null) | (partial_types.GroceryReceipt | null)) => a,
         (a): BookOrder | FlightConfirmation | GroceryReceipt => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4476,7 +4476,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DescribeImage",
@@ -4484,7 +4484,7 @@ class BamlStreamClient {
           "img": img
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4493,7 +4493,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4505,7 +4505,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DescribeImage2",
@@ -4513,7 +4513,7 @@ class BamlStreamClient {
           "classWithImage": classWithImage,"img2": img2
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4522,7 +4522,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4534,7 +4534,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DescribeImage3",
@@ -4542,7 +4542,7 @@ class BamlStreamClient {
           "classWithImage": classWithImage,"img2": img2
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4551,7 +4551,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4563,7 +4563,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DescribeImage4",
@@ -4571,7 +4571,7 @@ class BamlStreamClient {
           "classWithImage": classWithImage,"img2": img2
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4580,7 +4580,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4592,7 +4592,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((partial_types.OriginalA | null) | (partial_types.OriginalB | null)), OriginalA | OriginalB> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DifferentiateUnions",
@@ -4600,7 +4600,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4609,7 +4609,7 @@ class BamlStreamClient {
         raw,
         (a): ((partial_types.OriginalA | null) | (partial_types.OriginalB | null)) => a,
         (a): OriginalA | OriginalB => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4621,7 +4621,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.DummyOutput, DummyOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DummyOutputFunction",
@@ -4629,7 +4629,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4638,7 +4638,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.DummyOutput => a,
         (a): DummyOutput => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4650,7 +4650,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.DynamicClassTwo, DynamicClassTwo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DynamicFunc",
@@ -4658,7 +4658,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4667,7 +4667,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.DynamicClassTwo => a,
         (a): DynamicClassTwo => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4679,7 +4679,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.DynInputOutput, DynInputOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DynamicInputOutput",
@@ -4687,7 +4687,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4696,7 +4696,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.DynInputOutput => a,
         (a): DynInputOutput => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4708,7 +4708,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(partial_types.DynInputOutput | null)[], DynInputOutput[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "DynamicListInputOutput",
@@ -4716,7 +4716,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4725,7 +4725,7 @@ class BamlStreamClient {
         raw,
         (a): (partial_types.DynInputOutput | null)[] => a,
         (a): DynInputOutput[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4737,7 +4737,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExpectFailure",
@@ -4745,7 +4745,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4754,7 +4754,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4766,7 +4766,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.ContactInfo, ContactInfo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExtractContactInfo",
@@ -4774,7 +4774,7 @@ class BamlStreamClient {
           "document": document
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4783,7 +4783,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.ContactInfo => a,
         (a): ContactInfo => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4795,7 +4795,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(string | Hobby | null)[], (string | Hobby)[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExtractHobby",
@@ -4803,7 +4803,7 @@ class BamlStreamClient {
           "text": text
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4812,7 +4812,7 @@ class BamlStreamClient {
         raw,
         (a): (string | Hobby | null)[] => a,
         (a): (string | Hobby)[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4824,7 +4824,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(string | null)[], string[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExtractNames",
@@ -4832,7 +4832,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4841,7 +4841,7 @@ class BamlStreamClient {
         raw,
         (a): (string | null)[] => a,
         (a): string[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4853,7 +4853,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(partial_types.Person | null)[], Person[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExtractPeople",
@@ -4861,7 +4861,7 @@ class BamlStreamClient {
           "text": text
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4870,7 +4870,7 @@ class BamlStreamClient {
         raw,
         (a): (partial_types.Person | null)[] => a,
         (a): Person[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4882,7 +4882,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.ReceiptInfo, ReceiptInfo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExtractReceiptInfo",
@@ -4890,7 +4890,7 @@ class BamlStreamClient {
           "email": email,"reason": reason
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4899,7 +4899,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.ReceiptInfo => a,
         (a): ReceiptInfo => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4911,7 +4911,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.Resume, Resume> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExtractResume",
@@ -4919,7 +4919,7 @@ class BamlStreamClient {
           "resume": resume,"img": img ?? null
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4928,7 +4928,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.Resume => a,
         (a): Resume => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4940,7 +4940,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.Resume, Resume> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ExtractResume2",
@@ -4948,7 +4948,7 @@ class BamlStreamClient {
           "resume": resume
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4957,7 +4957,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.Resume => a,
         (a): Resume => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4969,7 +4969,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((partial_types.ClassOptionalOutput | null) | null), ClassOptionalOutput | null> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnClassOptionalOutput",
@@ -4977,7 +4977,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -4986,7 +4986,7 @@ class BamlStreamClient {
         raw,
         (a): ((partial_types.ClassOptionalOutput | null) | null) => a,
         (a): ClassOptionalOutput | null => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4998,7 +4998,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((partial_types.ClassOptionalOutput2 | null) | null), ClassOptionalOutput2 | null> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnClassOptionalOutput2",
@@ -5006,7 +5006,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5015,7 +5015,7 @@ class BamlStreamClient {
         raw,
         (a): ((partial_types.ClassOptionalOutput2 | null) | null) => a,
         (a): ClassOptionalOutput2 | null => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5027,7 +5027,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(EnumOutput | null)[], EnumOutput[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnEnumListOutput",
@@ -5035,7 +5035,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5044,7 +5044,7 @@ class BamlStreamClient {
         raw,
         (a): (EnumOutput | null)[] => a,
         (a): EnumOutput[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5056,7 +5056,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<types.EnumOutput, EnumOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnEnumOutput",
@@ -5064,7 +5064,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5073,7 +5073,7 @@ class BamlStreamClient {
         raw,
         (a): types.EnumOutput => a,
         (a): EnumOutput => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5085,7 +5085,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.LiteralClassHello, LiteralClassHello> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnLiteralClassInputOutput",
@@ -5093,7 +5093,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5102,7 +5102,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.LiteralClassHello => a,
         (a): LiteralClassHello => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5114,7 +5114,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((partial_types.LiteralClassOne | null) | (partial_types.LiteralClassTwo | null)), LiteralClassOne | LiteralClassTwo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnLiteralUnionClassInputOutput",
@@ -5122,7 +5122,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5131,7 +5131,7 @@ class BamlStreamClient {
         raw,
         (a): ((partial_types.LiteralClassOne | null) | (partial_types.LiteralClassTwo | null)) => a,
         (a): LiteralClassOne | LiteralClassTwo => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5143,7 +5143,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnNamedArgsSingleStringOptional",
@@ -5151,7 +5151,7 @@ class BamlStreamClient {
           "myString": myString ?? null
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5160,7 +5160,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5172,7 +5172,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<boolean, boolean> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputBool",
@@ -5180,7 +5180,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5189,7 +5189,7 @@ class BamlStreamClient {
         raw,
         (a): boolean => a,
         (a): boolean => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5201,7 +5201,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.TestOutputClass, TestOutputClass> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputClass",
@@ -5209,7 +5209,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5218,7 +5218,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.TestOutputClass => a,
         (a): TestOutputClass => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5230,7 +5230,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(partial_types.TestOutputClass | null)[], TestOutputClass[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputClassList",
@@ -5238,7 +5238,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5247,7 +5247,7 @@ class BamlStreamClient {
         raw,
         (a): (partial_types.TestOutputClass | null)[] => a,
         (a): TestOutputClass[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5259,7 +5259,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.TestClassNested, TestClassNested> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputClassNested",
@@ -5267,7 +5267,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5276,7 +5276,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.TestClassNested => a,
         (a): TestClassNested => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5288,7 +5288,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.TestClassWithEnum, TestClassWithEnum> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputClassWithEnum",
@@ -5296,7 +5296,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5305,7 +5305,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.TestClassWithEnum => a,
         (a): TestClassWithEnum => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5317,7 +5317,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<number, number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputInt",
@@ -5325,7 +5325,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5334,7 +5334,7 @@ class BamlStreamClient {
         raw,
         (a): number => a,
         (a): number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5346,7 +5346,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<false, false> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralBool",
@@ -5354,7 +5354,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5363,7 +5363,7 @@ class BamlStreamClient {
         raw,
         (a): false => a,
         (a): false => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5375,7 +5375,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<5, 5> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralInt",
@@ -5383,7 +5383,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5392,7 +5392,7 @@ class BamlStreamClient {
         raw,
         (a): 5 => a,
         (a): 5 => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5404,7 +5404,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<"example output", "example output"> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralString",
@@ -5412,7 +5412,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5421,7 +5421,7 @@ class BamlStreamClient {
         raw,
         (a): "example output" => a,
         (a): "example output" => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5433,7 +5433,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(string | null)[], string[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnOutputStringList",
@@ -5441,7 +5441,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5450,7 +5450,7 @@ class BamlStreamClient {
         raw,
         (a): (string | null)[] => a,
         (a): string[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5462,7 +5462,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<types.TestEnum, TestEnum> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnTestAliasedEnumOutput",
@@ -5470,7 +5470,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5479,7 +5479,7 @@ class BamlStreamClient {
         raw,
         (a): types.TestEnum => a,
         (a): TestEnum => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5491,7 +5491,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.TestClassAlias, TestClassAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnTestClassAlias",
@@ -5499,7 +5499,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5508,7 +5508,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.TestClassAlias => a,
         (a): TestClassAlias => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5520,7 +5520,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "FnTestNamedArgsSingleEnum",
@@ -5528,7 +5528,7 @@ class BamlStreamClient {
           "myArg": myArg
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5537,7 +5537,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5549,7 +5549,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.RaysData, RaysData> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "GetDataType",
@@ -5557,7 +5557,7 @@ class BamlStreamClient {
           "text": text
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5566,7 +5566,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.RaysData => a,
         (a): RaysData => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5578,7 +5578,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.OrderInfo, OrderInfo> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "GetOrderInfo",
@@ -5586,7 +5586,7 @@ class BamlStreamClient {
           "email": email
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5595,7 +5595,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.OrderInfo => a,
         (a): OrderInfo => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5607,7 +5607,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.SearchParams, SearchParams> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "GetQuery",
@@ -5615,7 +5615,7 @@ class BamlStreamClient {
           "query": query
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5624,7 +5624,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.SearchParams => a,
         (a): SearchParams => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5636,7 +5636,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(Record<MapKey, (string | null)> ), Partial<Record<types.MapKey, string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "InOutEnumMapKey",
@@ -5644,7 +5644,7 @@ class BamlStreamClient {
           "i1": i1,"i2": i2
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5653,7 +5653,7 @@ class BamlStreamClient {
         raw,
         (a): (Record<MapKey, (string | null)> ) => a,
         (a): Partial<Record<types.MapKey, string>> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5665,7 +5665,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(Record<"one" | "two" | "three" | "four", (string | null)> ), Partial<Record<"one" | "two" | "three" | "four", string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "InOutLiteralStringUnionMapKey",
@@ -5673,7 +5673,7 @@ class BamlStreamClient {
           "i1": i1,"i2": i2
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5682,7 +5682,7 @@ class BamlStreamClient {
         raw,
         (a): (Record<"one" | "two" | "three" | "four", (string | null)> ) => a,
         (a): Partial<Record<"one" | "two" | "three" | "four", string>> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5694,7 +5694,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(Record<"key", (string | null)> ), Partial<Record<"key", string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "InOutSingleLiteralStringMapKey",
@@ -5702,7 +5702,7 @@ class BamlStreamClient {
           "m": m
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5711,7 +5711,7 @@ class BamlStreamClient {
         raw,
         (a): (Record<"key", (string | null)> ) => a,
         (a): Partial<Record<"key", string>> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5723,7 +5723,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<JsonValue, JsonValue> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "JsonTypeAliasCycle",
@@ -5731,7 +5731,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5740,7 +5740,7 @@ class BamlStreamClient {
         raw,
         (a): JsonValue => a,
         (a): JsonValue => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5752,7 +5752,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(1 | true | "string output"), 1 | true | "string output"> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "LiteralUnionsTest",
@@ -5760,7 +5760,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5769,7 +5769,7 @@ class BamlStreamClient {
         raw,
         (a): (1 | true | "string output") => a,
         (a): 1 | true | "string output" => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5781,7 +5781,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<Checked<partial_types.BlockConstraint,"cross_field">, Checked<BlockConstraint,"cross_field">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "MakeBlockConstraint",
@@ -5789,7 +5789,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5798,7 +5798,7 @@ class BamlStreamClient {
         raw,
         (a): Checked<partial_types.BlockConstraint,"cross_field"> => a,
         (a): Checked<BlockConstraint,"cross_field"> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5810,7 +5810,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.NestedBlockConstraint, NestedBlockConstraint> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "MakeNestedBlockConstraint",
@@ -5818,7 +5818,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5827,7 +5827,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.NestedBlockConstraint => a,
         (a): NestedBlockConstraint => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5839,7 +5839,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.SemanticContainer, SemanticContainer> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "MakeSemanticContainer",
@@ -5847,7 +5847,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5856,7 +5856,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.SemanticContainer => a,
         (a): SemanticContainer => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5868,7 +5868,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(Record<string, (string | null)[]> ), Record<string, string[]>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "MapAlias",
@@ -5876,7 +5876,7 @@ class BamlStreamClient {
           "m": m
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5885,7 +5885,7 @@ class BamlStreamClient {
         raw,
         (a): (Record<string, (string | null)[]> ) => a,
         (a): Record<string, string[]> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5897,7 +5897,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.MergeAttrs, MergeAttrs> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "MergeAliasAttributes",
@@ -5905,7 +5905,7 @@ class BamlStreamClient {
           "money": money
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5914,7 +5914,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.MergeAttrs => a,
         (a): MergeAttrs => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5926,7 +5926,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.DynamicOutput, DynamicOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "MyFunc",
@@ -5934,7 +5934,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5943,7 +5943,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.DynamicOutput => a,
         (a): DynamicOutput => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5955,7 +5955,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null)), number | string | boolean | number | string[] | Record<string, string[]>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "NestedAlias",
@@ -5963,7 +5963,7 @@ class BamlStreamClient {
           "c": c
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -5972,7 +5972,7 @@ class BamlStreamClient {
         raw,
         (a): (((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null)) => a,
         (a): number | string | boolean | number | string[] | Record<string, string[]> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -5984,7 +5984,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.ClassForNullLiteral, ClassForNullLiteral> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "NullLiteralClassHello",
@@ -5992,7 +5992,7 @@ class BamlStreamClient {
           "s": s
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6001,7 +6001,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.ClassForNullLiteral => a,
         (a): ClassForNullLiteral => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6013,7 +6013,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "OpenAIWithAnthropicResponseHello",
@@ -6021,7 +6021,7 @@ class BamlStreamClient {
           "s": s
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6030,7 +6030,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6042,7 +6042,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((partial_types.OptionalTest_ReturnType | null) | null)[], (OptionalTest_ReturnType | null)[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "OptionalTest_Function",
@@ -6050,7 +6050,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6059,7 +6059,7 @@ class BamlStreamClient {
         raw,
         (a): ((partial_types.OptionalTest_ReturnType | null) | null)[] => a,
         (a): (OptionalTest_ReturnType | null)[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6071,7 +6071,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.FooAny, FooAny> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PredictAge",
@@ -6079,7 +6079,7 @@ class BamlStreamClient {
           "name": name
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6088,7 +6088,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.FooAny => a,
         (a): FooAny => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6100,7 +6100,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<Checked<number,"too_big">, Checked<number,"too_big">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PredictAgeBare",
@@ -6108,7 +6108,7 @@ class BamlStreamClient {
           "inp": inp
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6117,7 +6117,7 @@ class BamlStreamClient {
         raw,
         (a): Checked<number,"too_big"> => a,
         (a): Checked<number,"too_big"> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6129,7 +6129,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((number | null) | (string | null) | (boolean | null) | (number | null)), number | string | boolean | number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PrimitiveAlias",
@@ -6137,7 +6137,7 @@ class BamlStreamClient {
           "p": p
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6146,7 +6146,7 @@ class BamlStreamClient {
         raw,
         (a): ((number | null) | (string | null) | (boolean | null) | (number | null)) => a,
         (a): number | string | boolean | number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6158,7 +6158,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PromptTestClaude",
@@ -6166,7 +6166,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6175,7 +6175,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6187,7 +6187,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PromptTestClaudeChat",
@@ -6195,7 +6195,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6204,7 +6204,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6216,7 +6216,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PromptTestClaudeChatNoSystem",
@@ -6224,7 +6224,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6233,7 +6233,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6245,7 +6245,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAI",
@@ -6253,7 +6253,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6262,7 +6262,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6274,7 +6274,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAIChat",
@@ -6282,7 +6282,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6291,7 +6291,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6303,7 +6303,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAIChatNoSystem",
@@ -6311,7 +6311,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6320,7 +6320,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6332,7 +6332,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "PromptTestStreaming",
@@ -6340,7 +6340,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6349,7 +6349,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6361,7 +6361,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<RecAliasOne, RecAliasOne> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "RecursiveAliasCycle",
@@ -6369,7 +6369,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6378,7 +6378,7 @@ class BamlStreamClient {
         raw,
         (a): RecAliasOne => a,
         (a): RecAliasOne => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6390,7 +6390,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.NodeWithAliasIndirection, NodeWithAliasIndirection> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "RecursiveClassWithAliasIndirection",
@@ -6398,7 +6398,7 @@ class BamlStreamClient {
           "cls": cls
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6407,7 +6407,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.NodeWithAliasIndirection => a,
         (a): NodeWithAliasIndirection => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6419,7 +6419,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ReturnAliasWithMergedAttributes",
@@ -6427,7 +6427,7 @@ class BamlStreamClient {
           "money": money
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6436,7 +6436,7 @@ class BamlStreamClient {
         raw,
         (a): Checked<number,"gt_ten"> => a,
         (a): Checked<number,"gt_ten"> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6448,7 +6448,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<number, number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ReturnFailingAssert",
@@ -6456,7 +6456,7 @@ class BamlStreamClient {
           "inp": inp
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6465,7 +6465,7 @@ class BamlStreamClient {
         raw,
         (a): number => a,
         (a): number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6477,7 +6477,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<JsonTemplate, JsonTemplate> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ReturnJsonEntry",
@@ -6485,7 +6485,7 @@ class BamlStreamClient {
           "s": s
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6494,7 +6494,7 @@ class BamlStreamClient {
         raw,
         (a): JsonTemplate => a,
         (a): JsonTemplate => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6506,7 +6506,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.MalformedConstraints, MalformedConstraints> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "ReturnMalformedConstraints",
@@ -6514,7 +6514,7 @@ class BamlStreamClient {
           "a": a
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6523,7 +6523,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.MalformedConstraints => a,
         (a): MalformedConstraints => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6535,7 +6535,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.Schema, Schema> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "SchemaDescriptions",
@@ -6543,7 +6543,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6552,7 +6552,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.Schema => a,
         (a): Schema => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6564,7 +6564,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<RecursiveListAlias, RecursiveListAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "SimpleRecursiveListAlias",
@@ -6572,7 +6572,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6581,7 +6581,7 @@ class BamlStreamClient {
         raw,
         (a): RecursiveListAlias => a,
         (a): RecursiveListAlias => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6593,7 +6593,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<RecursiveMapAlias, RecursiveMapAlias> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "SimpleRecursiveMapAlias",
@@ -6601,7 +6601,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6610,7 +6610,7 @@ class BamlStreamClient {
         raw,
         (a): RecursiveMapAlias => a,
         (a): RecursiveMapAlias => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6622,7 +6622,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.BigNumbers, BigNumbers> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "StreamBigNumbers",
@@ -6630,7 +6630,7 @@ class BamlStreamClient {
           "digits": digits
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6639,7 +6639,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.BigNumbers => a,
         (a): BigNumbers => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6651,7 +6651,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.TwoStoriesOneTitle, TwoStoriesOneTitle> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "StreamFailingAssertion",
@@ -6659,7 +6659,7 @@ class BamlStreamClient {
           "theme": theme,"length": length
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6668,7 +6668,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.TwoStoriesOneTitle => a,
         (a): TwoStoriesOneTitle => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6680,7 +6680,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<number, number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "StreamOneBigNumber",
@@ -6688,7 +6688,7 @@ class BamlStreamClient {
           "digits": digits
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6697,7 +6697,7 @@ class BamlStreamClient {
         raw,
         (a): number => a,
         (a): number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6709,7 +6709,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((number | null) | (string | null) | null)[], (number | string)[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "StreamUnionIntegers",
@@ -6717,7 +6717,7 @@ class BamlStreamClient {
           "digits": digits
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6726,7 +6726,7 @@ class BamlStreamClient {
         raw,
         (a): ((number | null) | (string | null) | null)[] => a,
         (a): (number | string)[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6738,7 +6738,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.CompoundBigNumbers, CompoundBigNumbers> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "StreamingCompoundNumbers",
@@ -6746,7 +6746,7 @@ class BamlStreamClient {
           "digits": digits,"yapping": yapping
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6755,7 +6755,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.CompoundBigNumbers => a,
         (a): CompoundBigNumbers => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6767,7 +6767,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.RecursiveAliasDependency, RecursiveAliasDependency> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TakeRecAliasDep",
@@ -6775,7 +6775,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6784,7 +6784,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.RecursiveAliasDependency => a,
         (a): RecursiveAliasDependency => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6796,7 +6796,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TellStory",
@@ -6804,7 +6804,7 @@ class BamlStreamClient {
           "story": story
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6813,7 +6813,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6825,7 +6825,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAnthropic",
@@ -6833,7 +6833,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6842,7 +6842,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6854,7 +6854,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAnthropicShorthand",
@@ -6862,7 +6862,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6871,7 +6871,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6883,7 +6883,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAws",
@@ -6891,7 +6891,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6900,7 +6900,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6912,7 +6912,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidAccessKey",
@@ -6920,7 +6920,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6929,7 +6929,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6941,7 +6941,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidProfile",
@@ -6949,7 +6949,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6958,7 +6958,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6970,7 +6970,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidRegion",
@@ -6978,7 +6978,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -6987,7 +6987,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -6999,7 +6999,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidSessionToken",
@@ -7007,7 +7007,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7016,7 +7016,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7028,7 +7028,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzure",
@@ -7036,7 +7036,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7045,7 +7045,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7057,7 +7057,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzureFailure",
@@ -7065,7 +7065,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7074,7 +7074,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7086,7 +7086,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzureO1NoMaxTokens",
@@ -7094,7 +7094,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7103,7 +7103,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7115,7 +7115,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzureO1WithMaxCompletionTokens",
@@ -7123,7 +7123,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7132,7 +7132,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7144,7 +7144,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzureO1WithMaxTokens",
@@ -7152,7 +7152,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7161,7 +7161,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7173,7 +7173,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzureO3NoMaxTokens",
@@ -7181,7 +7181,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7190,7 +7190,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7202,7 +7202,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzureO3WithMaxCompletionTokens",
@@ -7210,7 +7210,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7219,7 +7219,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7231,7 +7231,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestAzureWithMaxTokens",
@@ -7239,7 +7239,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7248,7 +7248,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7260,7 +7260,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestCaching",
@@ -7268,7 +7268,7 @@ class BamlStreamClient {
           "input": input,"not_cached": not_cached
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7277,7 +7277,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7289,7 +7289,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFallbackClient",
@@ -7297,7 +7297,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7306,7 +7306,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7318,7 +7318,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFallbackStrategy",
@@ -7326,7 +7326,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7335,7 +7335,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7347,7 +7347,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFallbackToShorthand",
@@ -7355,7 +7355,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7364,7 +7364,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7376,7 +7376,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleBool",
@@ -7384,7 +7384,7 @@ class BamlStreamClient {
           "myBool": myBool
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7393,7 +7393,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7405,7 +7405,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleClass",
@@ -7413,7 +7413,7 @@ class BamlStreamClient {
           "myArg": myArg
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7422,7 +7422,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7434,7 +7434,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleEnumList",
@@ -7442,7 +7442,7 @@ class BamlStreamClient {
           "myArg": myArg
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7451,7 +7451,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7463,7 +7463,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleFloat",
@@ -7471,7 +7471,7 @@ class BamlStreamClient {
           "myFloat": myFloat
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7480,7 +7480,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7492,7 +7492,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleInt",
@@ -7500,7 +7500,7 @@ class BamlStreamClient {
           "myInt": myInt
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7509,7 +7509,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7521,7 +7521,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(Record<string, (partial_types.StringToClassEntry | null)> ), Record<string, StringToClassEntry>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -7529,7 +7529,7 @@ class BamlStreamClient {
           "myMap": myMap
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7538,7 +7538,7 @@ class BamlStreamClient {
         raw,
         (a): (Record<string, (partial_types.StringToClassEntry | null)> ) => a,
         (a): Record<string, StringToClassEntry> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7550,7 +7550,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(Record<string, (Record<string, (string | null)> | null)> ), Record<string, Record<string, string>>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -7558,7 +7558,7 @@ class BamlStreamClient {
           "myMap": myMap
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7567,7 +7567,7 @@ class BamlStreamClient {
         raw,
         (a): (Record<string, (Record<string, (string | null)> | null)> ) => a,
         (a): Record<string, Record<string, string>> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7579,7 +7579,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(Record<string, (string | null)> ), Record<string, string>> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToString",
@@ -7587,7 +7587,7 @@ class BamlStreamClient {
           "myMap": myMap
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7596,7 +7596,7 @@ class BamlStreamClient {
         raw,
         (a): (Record<string, (string | null)> ) => a,
         (a): Record<string, string> => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7608,7 +7608,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleString",
@@ -7616,7 +7616,7 @@ class BamlStreamClient {
           "myString": myString
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7625,7 +7625,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7637,7 +7637,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleStringArray",
@@ -7645,7 +7645,7 @@ class BamlStreamClient {
           "myStringArray": myStringArray
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7654,7 +7654,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7666,7 +7666,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<(string | null)[], string[]> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleStringList",
@@ -7674,7 +7674,7 @@ class BamlStreamClient {
           "myArg": myArg
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7683,7 +7683,7 @@ class BamlStreamClient {
         raw,
         (a): (string | null)[] => a,
         (a): string[] => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7695,7 +7695,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestGemini",
@@ -7703,7 +7703,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7712,7 +7712,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7724,7 +7724,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestGeminiOpenAiGeneric",
@@ -7732,7 +7732,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7741,7 +7741,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7753,7 +7753,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestGeminiSystem",
@@ -7761,7 +7761,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7770,7 +7770,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7782,7 +7782,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestGeminiSystemAsChat",
@@ -7790,7 +7790,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7799,7 +7799,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7811,7 +7811,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestImageInput",
@@ -7819,7 +7819,7 @@ class BamlStreamClient {
           "img": img
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7828,7 +7828,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7840,7 +7840,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestImageInputAnthropic",
@@ -7848,7 +7848,7 @@ class BamlStreamClient {
           "img": img
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7857,7 +7857,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7869,7 +7869,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestImageListInput",
@@ -7877,7 +7877,7 @@ class BamlStreamClient {
           "imgs": imgs
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7886,7 +7886,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7898,7 +7898,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.TestMemoryOutput, TestMemoryOutput> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestMemory",
@@ -7906,7 +7906,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7915,7 +7915,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.TestMemoryOutput => a,
         (a): TestMemoryOutput => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7927,7 +7927,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestMulticlassNamedArgs",
@@ -7935,7 +7935,7 @@ class BamlStreamClient {
           "myArg": myArg,"myArg2": myArg2
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7944,7 +7944,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7956,7 +7956,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralBool",
@@ -7964,7 +7964,7 @@ class BamlStreamClient {
           "myBool": myBool
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -7973,7 +7973,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -7985,7 +7985,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralInt",
@@ -7993,7 +7993,7 @@ class BamlStreamClient {
           "myInt": myInt
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8002,7 +8002,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8014,7 +8014,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralString",
@@ -8022,7 +8022,7 @@ class BamlStreamClient {
           "myString": myString
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8031,7 +8031,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8043,7 +8043,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOllama",
@@ -8051,7 +8051,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8060,7 +8060,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8072,7 +8072,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAI",
@@ -8080,7 +8080,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8089,7 +8089,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8101,7 +8101,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAIGPT4oMini",
@@ -8109,7 +8109,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8118,7 +8118,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8130,7 +8130,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAILegacyProvider",
@@ -8138,7 +8138,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8147,7 +8147,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8159,7 +8159,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1NoMaxTokens",
@@ -8167,7 +8167,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8176,7 +8176,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8188,7 +8188,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -8196,7 +8196,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8205,7 +8205,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8217,7 +8217,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1WithMaxTokens",
@@ -8225,7 +8225,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8234,7 +8234,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8246,7 +8246,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAIShorthand",
@@ -8254,7 +8254,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8263,7 +8263,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8275,7 +8275,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithMaxTokens",
@@ -8283,7 +8283,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8292,7 +8292,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8304,7 +8304,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithNullMaxTokens",
@@ -8312,7 +8312,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8321,7 +8321,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8333,7 +8333,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestRetryConstant",
@@ -8341,7 +8341,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8350,7 +8350,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8362,7 +8362,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestRetryExponential",
@@ -8370,7 +8370,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8379,7 +8379,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8391,7 +8391,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestRoundRobinStrategy",
@@ -8399,7 +8399,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8408,7 +8408,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8420,7 +8420,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestSingleFallbackClient",
@@ -8428,7 +8428,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8437,7 +8437,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8449,7 +8449,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.CustomStory, CustomStory> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestThinking",
@@ -8457,7 +8457,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8466,7 +8466,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.CustomStory => a,
         (a): CustomStory => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8478,7 +8478,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.UniverseQuestion, UniverseQuestion> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestUniverseQuestion",
@@ -8486,7 +8486,7 @@ class BamlStreamClient {
           "question": question
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8495,7 +8495,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.UniverseQuestion => a,
         (a): UniverseQuestion => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8507,7 +8507,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestVertex",
@@ -8515,7 +8515,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8524,7 +8524,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8536,7 +8536,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<string, string> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestVertexWithSystemInstructions",
@@ -8544,7 +8544,7 @@ class BamlStreamClient {
           
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8553,7 +8553,7 @@ class BamlStreamClient {
         raw,
         (a): string => a,
         (a): string => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8565,7 +8565,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<partial_types.UnionTest_ReturnType, UnionTest_ReturnType> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "UnionTest_Function",
@@ -8573,7 +8573,7 @@ class BamlStreamClient {
           "input": input
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8582,7 +8582,7 @@ class BamlStreamClient {
         raw,
         (a): partial_types.UnionTest_ReturnType => a,
         (a): UnionTest_ReturnType => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8594,7 +8594,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<number, number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "UseBlockConstraint",
@@ -8602,7 +8602,7 @@ class BamlStreamClient {
           "inp": inp
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8611,7 +8611,7 @@ class BamlStreamClient {
         raw,
         (a): number => a,
         (a): number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8623,7 +8623,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<number, number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "UseMalformedConstraints",
@@ -8631,7 +8631,7 @@ class BamlStreamClient {
           "a": a
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8640,7 +8640,7 @@ class BamlStreamClient {
         raw,
         (a): number => a,
         (a): number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8652,7 +8652,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<number, number> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "UseNestedBlockConstraint",
@@ -8660,7 +8660,7 @@ class BamlStreamClient {
           "inp": inp
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -8669,7 +8669,7 @@ class BamlStreamClient {
         raw,
         (a): number => a,
         (a): number => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);
@@ -8679,7 +8679,7 @@ class BamlStreamClient {
 }
 
 class HttpRequest {
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
   
   async AaaSamOutputFormat(
@@ -8692,7 +8692,7 @@ class HttpRequest {
         {
           "recipe": recipe
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8712,7 +8712,7 @@ class HttpRequest {
         {
           "data": data
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8732,7 +8732,7 @@ class HttpRequest {
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8752,7 +8752,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8772,7 +8772,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8792,7 +8792,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8812,7 +8812,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8832,7 +8832,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8852,7 +8852,7 @@ class HttpRequest {
         {
           "optionals": optionals
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8872,7 +8872,7 @@ class HttpRequest {
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8892,7 +8892,7 @@ class HttpRequest {
         {
           "aud": aud
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8912,7 +8912,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8932,7 +8932,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8952,7 +8952,7 @@ class HttpRequest {
         {
           "cls": cls
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8972,7 +8972,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -8992,7 +8992,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9012,7 +9012,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9032,7 +9032,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9052,7 +9052,7 @@ class HttpRequest {
         {
           "prefix": prefix,"suffix": suffix,"language": language
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9072,7 +9072,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9092,7 +9092,7 @@ class HttpRequest {
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9112,7 +9112,7 @@ class HttpRequest {
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9132,7 +9132,7 @@ class HttpRequest {
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9152,7 +9152,7 @@ class HttpRequest {
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9172,7 +9172,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9192,7 +9192,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9212,7 +9212,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9232,7 +9232,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9252,7 +9252,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9272,7 +9272,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9292,7 +9292,7 @@ class HttpRequest {
         {
           "document": document
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9312,7 +9312,7 @@ class HttpRequest {
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9332,7 +9332,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9352,7 +9352,7 @@ class HttpRequest {
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9372,7 +9372,7 @@ class HttpRequest {
         {
           "email": email,"reason": reason
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9392,7 +9392,7 @@ class HttpRequest {
         {
           "resume": resume,"img": img?? null
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9412,7 +9412,7 @@ class HttpRequest {
         {
           "resume": resume
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9432,7 +9432,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9452,7 +9452,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9472,7 +9472,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9492,7 +9492,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9512,7 +9512,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9532,7 +9532,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9552,7 +9552,7 @@ class HttpRequest {
         {
           "myString": myString?? null
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9572,7 +9572,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9592,7 +9592,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9612,7 +9612,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9632,7 +9632,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9652,7 +9652,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9672,7 +9672,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9692,7 +9692,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9712,7 +9712,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9732,7 +9732,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9752,7 +9752,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9772,7 +9772,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9792,7 +9792,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9812,7 +9812,7 @@ class HttpRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9832,7 +9832,7 @@ class HttpRequest {
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9852,7 +9852,7 @@ class HttpRequest {
         {
           "email": email
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9872,7 +9872,7 @@ class HttpRequest {
         {
           "query": query
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9892,7 +9892,7 @@ class HttpRequest {
         {
           "i1": i1,"i2": i2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9912,7 +9912,7 @@ class HttpRequest {
         {
           "i1": i1,"i2": i2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9932,7 +9932,7 @@ class HttpRequest {
         {
           "m": m
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9952,7 +9952,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9972,7 +9972,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -9992,7 +9992,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10012,7 +10012,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10032,7 +10032,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10052,7 +10052,7 @@ class HttpRequest {
         {
           "m": m
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10072,7 +10072,7 @@ class HttpRequest {
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10092,7 +10092,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10112,7 +10112,7 @@ class HttpRequest {
         {
           "c": c
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10132,7 +10132,7 @@ class HttpRequest {
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10152,7 +10152,7 @@ class HttpRequest {
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10172,7 +10172,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10192,7 +10192,7 @@ class HttpRequest {
         {
           "name": name
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10212,7 +10212,7 @@ class HttpRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10232,7 +10232,7 @@ class HttpRequest {
         {
           "p": p
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10252,7 +10252,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10272,7 +10272,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10292,7 +10292,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10312,7 +10312,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10332,7 +10332,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10352,7 +10352,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10372,7 +10372,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10392,7 +10392,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10412,7 +10412,7 @@ class HttpRequest {
         {
           "cls": cls
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10432,7 +10432,7 @@ class HttpRequest {
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10452,7 +10452,7 @@ class HttpRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10472,7 +10472,7 @@ class HttpRequest {
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10492,7 +10492,7 @@ class HttpRequest {
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10512,7 +10512,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10532,7 +10532,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10552,7 +10552,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10572,7 +10572,7 @@ class HttpRequest {
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10592,7 +10592,7 @@ class HttpRequest {
         {
           "theme": theme,"length": length
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10612,7 +10612,7 @@ class HttpRequest {
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10632,7 +10632,7 @@ class HttpRequest {
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10652,7 +10652,7 @@ class HttpRequest {
         {
           "digits": digits,"yapping": yapping
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10672,7 +10672,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10692,7 +10692,7 @@ class HttpRequest {
         {
           "story": story
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10712,7 +10712,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10732,7 +10732,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10752,7 +10752,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10772,7 +10772,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10792,7 +10792,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10812,7 +10812,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10832,7 +10832,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10852,7 +10852,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10872,7 +10872,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10892,7 +10892,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10912,7 +10912,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10932,7 +10932,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10952,7 +10952,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10972,7 +10972,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -10992,7 +10992,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11012,7 +11012,7 @@ class HttpRequest {
         {
           "input": input,"not_cached": not_cached
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11032,7 +11032,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11052,7 +11052,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11072,7 +11072,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11092,7 +11092,7 @@ class HttpRequest {
         {
           "myBool": myBool
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11112,7 +11112,7 @@ class HttpRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11132,7 +11132,7 @@ class HttpRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11152,7 +11152,7 @@ class HttpRequest {
         {
           "myFloat": myFloat
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11172,7 +11172,7 @@ class HttpRequest {
         {
           "myInt": myInt
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11192,7 +11192,7 @@ class HttpRequest {
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11212,7 +11212,7 @@ class HttpRequest {
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11232,7 +11232,7 @@ class HttpRequest {
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11252,7 +11252,7 @@ class HttpRequest {
         {
           "myString": myString
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11272,7 +11272,7 @@ class HttpRequest {
         {
           "myStringArray": myStringArray
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11292,7 +11292,7 @@ class HttpRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11312,7 +11312,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11332,7 +11332,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11352,7 +11352,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11372,7 +11372,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11392,7 +11392,7 @@ class HttpRequest {
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11412,7 +11412,7 @@ class HttpRequest {
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11432,7 +11432,7 @@ class HttpRequest {
         {
           "imgs": imgs
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11452,7 +11452,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11472,7 +11472,7 @@ class HttpRequest {
         {
           "myArg": myArg,"myArg2": myArg2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11492,7 +11492,7 @@ class HttpRequest {
         {
           "myBool": myBool
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11512,7 +11512,7 @@ class HttpRequest {
         {
           "myInt": myInt
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11532,7 +11532,7 @@ class HttpRequest {
         {
           "myString": myString
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11552,7 +11552,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11572,7 +11572,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11592,7 +11592,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11612,7 +11612,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11632,7 +11632,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11652,7 +11652,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11672,7 +11672,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11692,7 +11692,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11712,7 +11712,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11732,7 +11732,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11752,7 +11752,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11772,7 +11772,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11792,7 +11792,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11812,7 +11812,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11832,7 +11832,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11852,7 +11852,7 @@ class HttpRequest {
         {
           "question": question
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11872,7 +11872,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11892,7 +11892,7 @@ class HttpRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11912,7 +11912,7 @@ class HttpRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11932,7 +11932,7 @@ class HttpRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11952,7 +11952,7 @@ class HttpRequest {
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11972,7 +11972,7 @@ class HttpRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
@@ -11985,7 +11985,7 @@ class HttpRequest {
 }
 
 class HttpStreamRequest {
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
   
   async AaaSamOutputFormat(
@@ -11998,7 +11998,7 @@ class HttpStreamRequest {
         {
           "recipe": recipe
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12018,7 +12018,7 @@ class HttpStreamRequest {
         {
           "data": data
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12038,7 +12038,7 @@ class HttpStreamRequest {
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12058,7 +12058,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12078,7 +12078,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12098,7 +12098,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12118,7 +12118,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12138,7 +12138,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12158,7 +12158,7 @@ class HttpStreamRequest {
         {
           "optionals": optionals
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12178,7 +12178,7 @@ class HttpStreamRequest {
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12198,7 +12198,7 @@ class HttpStreamRequest {
         {
           "aud": aud
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12218,7 +12218,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12238,7 +12238,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12258,7 +12258,7 @@ class HttpStreamRequest {
         {
           "cls": cls
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12278,7 +12278,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12298,7 +12298,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12318,7 +12318,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12338,7 +12338,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12358,7 +12358,7 @@ class HttpStreamRequest {
         {
           "prefix": prefix,"suffix": suffix,"language": language
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12378,7 +12378,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12398,7 +12398,7 @@ class HttpStreamRequest {
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12418,7 +12418,7 @@ class HttpStreamRequest {
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12438,7 +12438,7 @@ class HttpStreamRequest {
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12458,7 +12458,7 @@ class HttpStreamRequest {
         {
           "classWithImage": classWithImage,"img2": img2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12478,7 +12478,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12498,7 +12498,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12518,7 +12518,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12538,7 +12538,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12558,7 +12558,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12578,7 +12578,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12598,7 +12598,7 @@ class HttpStreamRequest {
         {
           "document": document
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12618,7 +12618,7 @@ class HttpStreamRequest {
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12638,7 +12638,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12658,7 +12658,7 @@ class HttpStreamRequest {
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12678,7 +12678,7 @@ class HttpStreamRequest {
         {
           "email": email,"reason": reason
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12698,7 +12698,7 @@ class HttpStreamRequest {
         {
           "resume": resume,"img": img?? null
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12718,7 +12718,7 @@ class HttpStreamRequest {
         {
           "resume": resume
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12738,7 +12738,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12758,7 +12758,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12778,7 +12778,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12798,7 +12798,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12818,7 +12818,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12838,7 +12838,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12858,7 +12858,7 @@ class HttpStreamRequest {
         {
           "myString": myString?? null
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12878,7 +12878,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12898,7 +12898,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12918,7 +12918,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12938,7 +12938,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12958,7 +12958,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12978,7 +12978,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -12998,7 +12998,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13018,7 +13018,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13038,7 +13038,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13058,7 +13058,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13078,7 +13078,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13098,7 +13098,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13118,7 +13118,7 @@ class HttpStreamRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13138,7 +13138,7 @@ class HttpStreamRequest {
         {
           "text": text
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13158,7 +13158,7 @@ class HttpStreamRequest {
         {
           "email": email
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13178,7 +13178,7 @@ class HttpStreamRequest {
         {
           "query": query
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13198,7 +13198,7 @@ class HttpStreamRequest {
         {
           "i1": i1,"i2": i2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13218,7 +13218,7 @@ class HttpStreamRequest {
         {
           "i1": i1,"i2": i2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13238,7 +13238,7 @@ class HttpStreamRequest {
         {
           "m": m
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13258,7 +13258,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13278,7 +13278,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13298,7 +13298,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13318,7 +13318,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13338,7 +13338,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13358,7 +13358,7 @@ class HttpStreamRequest {
         {
           "m": m
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13378,7 +13378,7 @@ class HttpStreamRequest {
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13398,7 +13398,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13418,7 +13418,7 @@ class HttpStreamRequest {
         {
           "c": c
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13438,7 +13438,7 @@ class HttpStreamRequest {
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13458,7 +13458,7 @@ class HttpStreamRequest {
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13478,7 +13478,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13498,7 +13498,7 @@ class HttpStreamRequest {
         {
           "name": name
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13518,7 +13518,7 @@ class HttpStreamRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13538,7 +13538,7 @@ class HttpStreamRequest {
         {
           "p": p
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13558,7 +13558,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13578,7 +13578,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13598,7 +13598,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13618,7 +13618,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13638,7 +13638,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13658,7 +13658,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13678,7 +13678,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13698,7 +13698,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13718,7 +13718,7 @@ class HttpStreamRequest {
         {
           "cls": cls
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13738,7 +13738,7 @@ class HttpStreamRequest {
         {
           "money": money
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13758,7 +13758,7 @@ class HttpStreamRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13778,7 +13778,7 @@ class HttpStreamRequest {
         {
           "s": s
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13798,7 +13798,7 @@ class HttpStreamRequest {
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13818,7 +13818,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13838,7 +13838,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13858,7 +13858,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13878,7 +13878,7 @@ class HttpStreamRequest {
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13898,7 +13898,7 @@ class HttpStreamRequest {
         {
           "theme": theme,"length": length
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13918,7 +13918,7 @@ class HttpStreamRequest {
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13938,7 +13938,7 @@ class HttpStreamRequest {
         {
           "digits": digits
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13958,7 +13958,7 @@ class HttpStreamRequest {
         {
           "digits": digits,"yapping": yapping
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13978,7 +13978,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -13998,7 +13998,7 @@ class HttpStreamRequest {
         {
           "story": story
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14018,7 +14018,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14038,7 +14038,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14058,7 +14058,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14078,7 +14078,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14098,7 +14098,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14118,7 +14118,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14138,7 +14138,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14158,7 +14158,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14178,7 +14178,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14198,7 +14198,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14218,7 +14218,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14238,7 +14238,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14258,7 +14258,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14278,7 +14278,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14298,7 +14298,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14318,7 +14318,7 @@ class HttpStreamRequest {
         {
           "input": input,"not_cached": not_cached
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14338,7 +14338,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14358,7 +14358,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14378,7 +14378,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14398,7 +14398,7 @@ class HttpStreamRequest {
         {
           "myBool": myBool
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14418,7 +14418,7 @@ class HttpStreamRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14438,7 +14438,7 @@ class HttpStreamRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14458,7 +14458,7 @@ class HttpStreamRequest {
         {
           "myFloat": myFloat
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14478,7 +14478,7 @@ class HttpStreamRequest {
         {
           "myInt": myInt
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14498,7 +14498,7 @@ class HttpStreamRequest {
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14518,7 +14518,7 @@ class HttpStreamRequest {
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14538,7 +14538,7 @@ class HttpStreamRequest {
         {
           "myMap": myMap
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14558,7 +14558,7 @@ class HttpStreamRequest {
         {
           "myString": myString
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14578,7 +14578,7 @@ class HttpStreamRequest {
         {
           "myStringArray": myStringArray
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14598,7 +14598,7 @@ class HttpStreamRequest {
         {
           "myArg": myArg
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14618,7 +14618,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14638,7 +14638,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14658,7 +14658,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14678,7 +14678,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14698,7 +14698,7 @@ class HttpStreamRequest {
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14718,7 +14718,7 @@ class HttpStreamRequest {
         {
           "img": img
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14738,7 +14738,7 @@ class HttpStreamRequest {
         {
           "imgs": imgs
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14758,7 +14758,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14778,7 +14778,7 @@ class HttpStreamRequest {
         {
           "myArg": myArg,"myArg2": myArg2
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14798,7 +14798,7 @@ class HttpStreamRequest {
         {
           "myBool": myBool
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14818,7 +14818,7 @@ class HttpStreamRequest {
         {
           "myInt": myInt
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14838,7 +14838,7 @@ class HttpStreamRequest {
         {
           "myString": myString
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14858,7 +14858,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14878,7 +14878,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14898,7 +14898,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14918,7 +14918,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14938,7 +14938,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14958,7 +14958,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14978,7 +14978,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -14998,7 +14998,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15018,7 +15018,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15038,7 +15038,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15058,7 +15058,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15078,7 +15078,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15098,7 +15098,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15118,7 +15118,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15138,7 +15138,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15158,7 +15158,7 @@ class HttpStreamRequest {
         {
           "question": question
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15178,7 +15178,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15198,7 +15198,7 @@ class HttpStreamRequest {
         {
           
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15218,7 +15218,7 @@ class HttpStreamRequest {
         {
           "input": input
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15238,7 +15238,7 @@ class HttpStreamRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15258,7 +15258,7 @@ class HttpStreamRequest {
         {
           "a": a
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
@@ -15278,7 +15278,7 @@ class HttpStreamRequest {
         {
           "inp": inp
         },
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
