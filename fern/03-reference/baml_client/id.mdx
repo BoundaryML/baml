@@ -1,0 +1,207 @@
+---
+title: id
+---
+
+<Warning>
+`id` is in proposal stage and may change. It is not yet available in any language. Please leave feedback on our discord.
+</Warning>
+
+The `id` property allows you to get a unique identifier for each function call. This is particularly useful when tracking specific calls in logs, especially when running multiple functions in parallel or when using streaming responses.
+
+## Quick Start
+
+<Tabs>
+<Tab title="Python">
+```python
+from baml_client import b
+
+# Get both id and result
+id, result = b.id.ExtractResume("...")
+
+# Use id with logger
+logger = b.create_logger()
+other_id, result = b.id.ExtractResume("...", baml_options={"logger": logger})
+print(logger.id(other_id).usage)  # Get usage for specific call
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { b } from 'baml_client'
+
+// Get both id and result
+const { id, data: result } = await b.id.ExtractResume("...")
+
+// Use id with logger
+const logger = b.createLogger()
+const { id: otherId, data: result2 } = await b.id.ExtractResume("...", { logger })
+console.log(logger.id(otherId)?.usage)  // Get usage for specific call
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+# Get both id and result
+id, result = Baml.Client.id.ExtractResume("...")
+
+# Use id with logger
+logger = Baml.Client.create_internal_logger
+other_id, result = Baml.Client.id.ExtractResume("...", baml_options: { logger: logger })
+print(logger.id(other_id).usage)  # Get usage for specific call
+```
+</Tab>
+</Tabs>
+
+## Common Use Cases
+
+### Tracking Parallel Calls
+
+Use `id` to track individual function calls when running multiple functions in parallel.
+
+<Tabs>
+<Tab title="Python">
+```python
+from baml_client import b
+import asyncio
+
+async def run():
+    logger = b.create_logger()
+    
+    # Run multiple functions in parallel
+    resume_id, resume = b.id.ExtractResume("...", baml_options={"logger": logger})
+    invoice_id, invoice = b.id.ExtractInvoice("...", baml_options={"logger": logger})
+    
+    # Access specific logs by id
+    print(f"Resume usage: {logger.id(resume_id).usage}")
+    print(f"Invoice usage: {logger.id(invoice_id).usage}")
+    
+    # Access all logs
+    print(f"Total usage: {logger.usage}")
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { b } from 'baml_client'
+
+const logger = b.createLogger()
+
+// Run multiple functions in parallel
+const [
+    { id: resumeId, data: resume },
+    { id: invoiceId, data: invoice }
+] = await Promise.all([
+    b.id.ExtractResume("...", { logger }),
+    b.id.ExtractInvoice("...", { logger })
+])
+
+// Access specific logs by id
+console.log(`Resume usage: ${logger.id(resumeId)?.usage}`)
+console.log(`Invoice usage: ${logger.id(invoiceId)?.usage}`)
+
+// Access all logs
+console.log(`Total usage: ${logger.usage}`)
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+require 'async'
+
+Async do
+    logger = Baml.Client.create_internal_logger
+    
+    # Run multiple functions in parallel
+    resume_id, resume = Baml.Client.id.ExtractResume("...", baml_options: { logger: logger })
+    invoice_id, invoice = Baml.Client.id.ExtractInvoice("...", baml_options: { logger: logger })
+    
+    # Access specific logs by id
+    print("Resume usage: #{logger.id(resume_id).usage}")
+    print("Invoice usage: #{logger.id(invoice_id).usage}")
+    
+    # Access all logs
+    print("Total usage: #{logger.usage}")
+end
+```
+</Tab>
+</Tabs>
+
+### Using with Streaming
+
+The `id` property works seamlessly with streaming responses, allowing you to track the entire stream's usage.
+
+<Tabs>
+<Tab title="Python">
+```python
+from baml_client.async_client import b
+
+async def run():
+    logger = b.create_logger()
+    stream_id, stream = b.id.stream.ExtractResume("...", baml_options={"logger": logger})
+    
+    async for chunk in stream:
+        print(chunk)
+    
+    result = await stream.get_final_result()
+    print(f"Stream usage: {logger.id(stream_id).usage}")
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+const logger = b.createLogger()
+const { id: streamId, data: stream } = await b.id.stream.ExtractResume("...", { logger })
+
+for await (const chunk of stream) {
+    console.log(chunk)
+}
+
+const result = await stream.getFinalResult()
+console.log(`Stream usage: ${logger.id(streamId)?.usage}`)
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+logger = Baml.Client.create_internal_logger
+stream_id, stream = Baml.Client.id.stream.ExtractResume("...", baml_options: { logger: logger })
+
+stream.each do |chunk|
+    print(chunk)
+end
+
+result = stream.get_final_result
+print("Stream usage: #{logger.id(stream_id).usage}")
+```
+</Tab>
+</Tabs>
+
+## API Reference
+
+### Return Types
+
+The `id` property returns different types depending on the language:
+
+| Language | Return Type | Description |
+|----------|-------------|-------------|
+| Python | `Tuple[str, T]` | A tuple of `(id, result)` where `T` is the function's return type |
+| TypeScript | `{ id: string, data: T }` | An object with `id` and `data` properties where `T` is the function's return type |
+| Ruby | `[String, T]` | An array of `[id, result]` where `T` is the function's return type |
+
+## Related Topics
+- [Logger](./logger) - Track function calls and usage metrics
+- [with_options](./with_options) - Configure default options for function calls
+
+## Best Practices
+1. Use `id` when you need to track specific function calls in parallel operations
+2. Always use the same logger instance when tracking related function calls
+3. Consider using `with_options` to set up consistent logging and ID tracking
+
+<Info>
+IDs are globally unique and can be used to track function calls across your entire application, including in logs and monitoring systems.
+</Info>

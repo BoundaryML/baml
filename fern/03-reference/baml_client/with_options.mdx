@@ -1,0 +1,314 @@
+---
+title: with_options
+---
+
+<Warning>
+`with_options` is in proposal stage and may change. It is not yet available in any language. Please leave feedback on our discord.
+</Warning>
+
+The `with_options` function creates a new client with default configuration options for logging, client registry, and type builders. These options are automatically applied to all function calls made through this client, but can be overridden on a per-call basis when needed.
+
+## Quick Start
+
+<Tabs>
+<Tab title="Python">
+```python
+from baml_client import b
+from baml_py import ClientRegistry
+
+# Set up default options for this client
+logger = b.create_logger()
+client_registry = ClientRegistry()
+client_registry.set_primary("openai/gpt-4o-mini")
+
+# Create client with default options
+my_b = b.with_options(internal_logger=logger, client_registry=client_registry)
+
+# Uses the default options
+result = my_b.ExtractResume("...")
+
+# Override options for a specific call
+other_logger = b.create_logger()
+result2 = my_b.ExtractResume("...", baml_options={"logger": other_logger})
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { b } from "baml_client"
+import { ClientRegistry } from "baml_client/client_registry"
+
+// Set up default options for this client
+const logger = b.createLogger()
+const clientRegistry = new ClientRegistry()
+clientRegistry.setPrimary("openai/gpt-4o-mini")
+
+// Create client with default options
+const myB = b.withOptions({ logger, clientRegistry })
+
+// Uses the default options
+const result = await myB.ExtractResume("...")
+
+// Override options for a specific call
+const otherLogger = b.createLogger()
+const result2 = await myB.ExtractResume("...", { logger: otherLogger })
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+# Set up default options for this client
+logger = Baml.Client.create_internal_logger
+client_registry = Baml::ClientRegistry.new
+client_registry.set_primary("openai/gpt-4o-mini")
+
+# Create client with default options
+my_b = Baml.Client.with_options(internal_logger: logger, client_registry: client_registry)
+
+# Uses the default options
+result = my_b.ExtractResume("...")
+
+# Override options for a specific call
+other_logger = Baml.Client.create_internal_logger
+result2 = my_b.ExtractResume("...", baml_options: { logger: other_logger })
+```
+</Tab>
+</Tabs>
+
+## Common Use Cases
+
+### Basic Configuration
+
+Use `with_options` to create a client with default settings that will be applied to all function calls made through this client. These defaults can be overridden when needed.
+
+<Tabs>
+<Tab title="Python">
+```python
+from baml_client import b
+from baml_py import ClientRegistry
+
+def run():
+    # Configure options
+    logger = b.create_internal_logger()
+    client_registry = ClientRegistry()
+    client_registry.set_primary("openai/gpt-4o-mini")
+
+    # Create configured client
+    my_b = b.with_options(internal_logger=logger, client_registry=client_registry)
+
+    # All calls will use the configured options
+    res = my_b.ExtractResume("...")
+    invoice = my_b.ExtractInvoice("...")
+
+    # Access configuration
+    print(my_b.client_registry)
+    # Will print 2 logs from the logger
+    print(my_b.internal_logger.logs)
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+import { b } from "baml_client"
+import { ClientRegistry } from "baml_client/client_registry"
+
+const logger = b.createLogger()
+const clientRegistry = new ClientRegistry()
+clientRegistry.setPrimary("openai/gpt-4o-mini")
+
+const myB = b.withOptions({ logger, clientRegistry })
+
+// All calls will use the configured options
+const res = await myB.ExtractResume("...")
+const invoice = await myB.ExtractInvoice("...")
+
+// Access configuration
+console.log(myB.clientRegistry)
+console.log(myB.logger.last?.usage)
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+logger = Baml.Client.create_internal_logger
+client_registry = Baml::ClientRegistry.new
+client_registry.set_primary("openai/gpt-4o-mini")
+
+my_b = Baml.Client.with_options(internal_logger: logger, client_registry: client_registry)
+
+# All calls will use the configured options
+res = my_b.ExtractResume("...")
+invoice = my_b.ExtractInvoice("...")
+
+# Access configuration
+print(my_b.client_registry)
+print(my_b.internal_logger.last.usage)
+```
+</Tab>
+</Tabs>
+
+### Parallel Execution
+
+When running functions in parallel, `with_options` helps maintain consistent configuration across all calls. This works seamlessly with the [`Logger`](./logger) and [`id`](./id) functionality.
+
+<Tabs>
+<Tab title="Python">
+```python
+from baml_client.async_client import b
+
+async def run():
+    my_b = b.with_options(client_registry=client_registry)
+
+    # Run multiple functions in parallel
+    res, invoice = await asyncio.gather(
+        my_b.ExtractResume("..."),
+        my_b.ExtractInvoice("...")
+    )
+
+    # Access results and logs
+    print(res)
+    print(invoice)
+    print(my_b.internal_logger.id(res.id).usage)
+    print(my_b.internal_logger.id(invoice.id).usage)
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+const myB = b.withOptions({ logger, clientRegistry })
+
+// Run multiple functions in parallel
+const [
+    {data: res, id: resumeId},
+    {data: invoice, id: invoiceId}
+] = await Promise.all([
+    myB.raw.ExtractResume("..."),
+    myB.raw.ExtractInvoice("...")
+])
+
+// Access results and logs
+console.log(res)
+console.log(invoice)
+console.log(myB.logger.id(resumeId)?.usage)
+console.log(myB.logger.id(invoiceId)?.usage)
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+require 'async'
+
+Async do
+    my_b = Baml.Client.with_options(client_registry: client_registry)
+    
+    # Run multiple functions in parallel
+    res, invoice = await [
+        my_b.ExtractResume("..."),
+        my_b.ExtractInvoice("...")
+    ]
+
+    # Access results and logs
+    print(res)
+    print(invoice)
+    print(my_b.internal_logger.id(res.id).usage)
+    print(my_b.internal_logger.id(invoice.id).usage)
+end
+```
+</Tab>
+</Tabs>
+
+### Streaming Mode
+
+`with_options` can be used with streaming functions while maintaining all configured options.
+
+<Tabs>
+<Tab title="Python">
+```python
+from baml_client.async_client import b
+
+async def run():
+    my_b = b.with_options(client_registry=client_registry)
+
+    stream = my_b.stream.ExtractResume("...")
+    async for chunk in stream:
+        print(chunk)
+    
+    result = await stream.get_final_result()
+    print(my_b.internal_logger.id(stream.id).usage)
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+const myB = b.withOptions({ logger, clientRegistry })
+
+const stream = myB.stream.ExtractResume("...")
+for await (const chunk of stream) {
+    console.log(chunk)
+}
+
+const result = await stream.getFinalResult()
+console.log(myB.logger.id(stream.id)?.usage)
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+require 'baml_client'
+
+my_b = Baml.Client.with_options(client_registry: client_registry)
+
+stream = my_b.stream.ExtractResume("...")
+stream.each do |chunk|
+    print(chunk)
+end
+
+result = stream.get_final_result
+print(my_b.internal_logger.id(stream.id).usage)
+```
+</Tab>
+</Tabs>
+
+## API Reference
+
+### with_options Parameters
+
+<Note>
+These can always be overridden on a per-call basis with the `baml_options` parameter in any function call.
+</Note>
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `logger` / `internal_logger` | [`Logger`](./logger) | Logger instance for tracking function calls and usage |
+| `client_registry` | `ClientRegistry` | Registry for managing LLM clients and their configurations |
+| `type_builder` | [`TypeBuilder`](./typebuilder) | Custom type builder for function inputs and outputs |
+
+### Configured Client Properties
+
+<Info>
+The configured client maintains the same interface as the base `baml_client`, so you can use all the same functions and methods.
+</Info>
+
+
+## Related Topics
+- [Logger](./logger) - Track function calls and usage metrics
+- [Function IDs](./id) - Track specific function calls
+- [TypeBuilder](./typebuilder) - Build custom types for your functions
+- [Client Registry](./client-registry) - Manage LLM clients and their configurations
+
+## Best Practices
+1. Use `with_options` when you need consistent configuration across multiple function calls
+2. Configure logging and client registry at the start of your application
+3. Create separate configured clients for different parts of your application that need different settings
+4. Use the configured client's properties to access logs and metrics
+
+<Info>
+The configured client maintains the same interface as the base client, so you can use all the same functions and methods.
+</Info>
+
+

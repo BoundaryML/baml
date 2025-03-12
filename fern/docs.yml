@@ -414,6 +414,13 @@ navigation:
       - section: Generated baml_client
         slug: baml_client
         contents:
+          - page: id(..)
+            path: 03-reference/baml_client/id.mdx
+          - page: with_options(..)
+            path: 03-reference/baml_client/with_options.mdx
+          - page: Collector
+            path: 03-reference/baml_client/collector.mdx
+            slug: collector
           - page: TypeBuilder
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
@@ -499,7 +506,7 @@ navigation:
             path: 03-reference/baml/clients/strategy/fallback.mdx
           - page: "Round Robin"
             path: 03-reference/baml/clients/strategy/round-robin.mdx
-
+  
       - section: Prompt Syntax
         contents:
           - page: What is jinja?
