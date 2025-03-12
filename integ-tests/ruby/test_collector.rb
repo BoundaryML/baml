@@ -41,10 +41,8 @@ describe "Ruby Collector Tests" do
     puts "#{Baml::Collector.__print_storage}"
 
     function_logs = collector.logs
-    puts "function_logs: #{function_logs}"
     assert_equal 1, function_logs.length
 
-    puts "function_logs: #{function_logs}"
 
     log = collector.last
     refute_nil log
