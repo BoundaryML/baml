@@ -70,6 +70,11 @@ fn invoke_runtime_cli(py: Python) -> PyResult<()> {
 
 pub(crate) const MODULE_NAME: &str = "baml_py.baml_py";
 
+#[pyfunction]
+fn get_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
+
 #[pymodule]
 fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     let use_json = match std::env::var("BAML_LOG_JSON") {
@@ -102,8 +107,8 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
         }
     }
 
+    m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_class::<runtime::BamlRuntime>()?;
-
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::FunctionResultStream>()?;
     m.add_class::<types::SyncFunctionResultStream>()?;

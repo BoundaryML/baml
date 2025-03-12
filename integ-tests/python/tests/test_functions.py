@@ -7,8 +7,6 @@ import pytest
 from assertpy import assert_that
 from dotenv import load_dotenv
 from .base64_test_data import image_b64, audio_b64
-
-load_dotenv()
 import baml_py
 from baml_py import errors
 
@@ -22,7 +20,6 @@ from ..baml_client import partial_types
 from ..baml_client.types import (
     DynInputOutput,
     Hobby,
-    FooAny,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
     Nested,
@@ -43,15 +40,11 @@ from ..baml_client.types import (
     LinkedListAliasNode,
     ClassToRecAlias,
     NodeWithAliasIndirection,
-    MergeAttrs,
     OptionalListAndMap,
-    RecursiveAliasDependency,
     Person,
     Color,
-    JsonEntry,
     SimpleTag,
 )
-import baml_client.types as types
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 from ..baml_client import reset_baml_env_vars
@@ -60,6 +53,8 @@ import datetime
 import concurrent.futures
 import asyncio
 import random
+
+load_dotenv()
 
 
 @pytest.mark.asyncio
@@ -127,7 +122,7 @@ class TestAllInputs:
     @pytest.mark.asyncio
     async def test_return_literal_union(self):
         res = await b.LiteralUnionsTest("a")
-        assert res == 1 or res == True or res == "string output"
+        assert res == 1 or res is True or res == "string output"
 
     @pytest.mark.asyncio
     async def test_optional_list_and_map(self):
@@ -428,7 +423,7 @@ async def accepts_subclass_of_baml_type():
 async def test_should_work_for_all_outputs():
     a = "a"  # dummy
     res = await b.FnOutputBool(a)
-    assert res == True
+    assert res is True
 
     integer = await b.FnOutputInt(a)
     assert integer == 5
@@ -437,7 +432,7 @@ async def test_should_work_for_all_outputs():
     assert literal_integer == 5
 
     literal_bool = await b.FnOutputLiteralBool(a)
-    assert literal_bool == False
+    assert literal_bool is False
 
     literal_string = await b.FnOutputLiteralString(a)
     assert literal_string == "example output"
@@ -1429,7 +1424,7 @@ async def test_descriptions():
 
 @pytest.mark.asyncio
 async def test_caching():
-    story_idea = f"""
+    story_idea = """
 In a futuristic world where dreams are a marketable asset and collective experience, an introverted and socially inept teenager named Alex realizes they have a unique and potent skill to not only observe but also alter the dreams of others. Initially excited by this newfound talent, Alex starts discreetly modifying the dreams of peers and relatives, aiding them in conquering fears, boosting self-esteem, or embarking on fantastical journeys. As Alex's abilities expand, so does their sway. They begin marketing exclusive dream experiences on the underground market, designing complex and captivating dreamscapes for affluent clients. However, the boundary between dream and reality starts to fade for those subjected to Alex's creations. Some clients find it difficult to distinguish between their genuine memories and the fabricated ones inserted by Alex's dream manipulation.
 
 Challenges emerge when a secretive government organization becomes aware of Alex's distinct talents. They propose Alex utilize their gift for "the greater good," suggesting uses in therapy, criminal reform, and even national defense. Concurrently, a covert resistance group contacts Alex, cautioning them about the risks of dream manipulation and the potential for widespread control and exploitation. Trapped between these conflicting forces, Alex must navigate a tangled web of moral dilemmas. They wrestle with issues of free will, the essence of consciousness, and the duty that comes with having influence over people's minds. As the repercussions of their actions ripple outward, impacting the lives of loved ones and strangers alike, Alex is compelled to face the true nature of their power and decide how—or if—it should be wielded.
@@ -1741,7 +1736,7 @@ async def test_add_baml_parser_error():
 @pytest.mark.asyncio
 async def test_return_failing_assert():
     with pytest.raises(errors.BamlValidationError):
-        msg = await b.ReturnFailingAssert(1)
+        await b.ReturnFailingAssert(1)
 
 
 @pytest.mark.asyncio

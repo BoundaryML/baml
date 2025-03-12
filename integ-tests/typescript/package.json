@@ -9,7 +9,7 @@
     "build": "cd ../../engine/language_client_typescript && npm run build && cd - && pnpm i",
     "integ-tests:ci": "pnpm tsc && infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
     "integ-tests": "pnpm tsc && infisical run --env=test -- pnpm test -- --silent false --testTimeout 30000",
-    "integ-tests:dotenv": "pnpm tsc && dotenv -e ../.env -- pnpm test -- --silent false --testTimeout 30000",
+    "integ-tests:dotenv": "pnpm tsc && pnpm test -- --silent false --testTimeout 30000",
     "generate": "baml-cli generate --from ../baml_src",
     "memory-test": "BAML_LOG=info infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000 -t 'memory'"
   },

@@ -1,3 +1,4 @@
+export * from "./safe_imports";
 export * from "./errors";
 export { BamlRuntime, FunctionResult, FunctionResultStream, BamlImage as Image, ClientBuilder, BamlAudio as Audio, invoke_runtime_cli, ClientRegistry, BamlLogEvent, Collector, FunctionLog, Usage, } from "./native";
 export { BamlStream } from "./stream";

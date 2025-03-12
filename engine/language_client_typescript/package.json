@@ -32,7 +32,9 @@
     "./type_builder.d.ts",
     "./type_builder.js",
     "./errors.d.ts",
-    "./errors.js"
+    "./errors.js",
+    "./safe_imports.d.ts",
+    "./safe_imports.js"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",

@@ -198,6 +198,9 @@ navigation:
           - page: Reducing Hallucinations
             icon: fa-regular fa-person-fairy
             path: 01-guide/06-prompt-engineering/hallucinations.mdx
+          - page: Classification
+            icon: fa-regular fa-tags
+            path: 01-guide/06-prompt-engineering/classification.mdx
           - page: Chat
             icon: fa-regular fa-comments
             path: 01-guide/06-prompt-engineering/chat-history.mdx
@@ -216,6 +219,12 @@ navigation:
           - page: Symbol Tuning
             icon: fa-regular fa-adjust
             path: 01-guide/06-prompt-engineering/symbol-tuning.mdx
+          - page: PII Data Extraction / Scrubbing
+            icon: fa-regular fa-shield
+            path: 01-guide/06-prompt-engineering/pii-data-extraction.mdx
+          - page: Action Item Extraction
+            icon: fa-regular fa-list-check
+            path: 01-guide/06-prompt-engineering/action-items.mdx
           # - page: Self-Consistency Prompting
           #   icon: fa-regular fa-sync-alt
           #   path: 01-guide/introduction.mdx

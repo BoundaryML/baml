@@ -17,7 +17,6 @@ dependencies = [
     "pytest-asyncio",
     "python-dotenv",
     "requests",
-    "ruff",
 ]
 
 [dependency-groups]
@@ -25,6 +24,9 @@ dev = ["types-assertpy"]
 
 [tool.uv]
 package = true
+dev-dependencies = [
+    "ruff>=0.9.10",
+]
 
 [tool.setuptools.packages.find]
 include = ["app*", "baml_client*"]

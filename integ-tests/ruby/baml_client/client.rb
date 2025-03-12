@@ -100,13 +100,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        list: Baml::Types::LinkedListAliasNode,
+        data: Baml::Types::LinkedListAliasNode,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::Types::LinkedListAliasNode)
     }
     def AliasThatPointsToRecursiveType(
         *varargs,
-        list:,
+        data:,
         baml_options: {}
     )
       if varargs.any?
@@ -126,7 +126,7 @@ module Baml
       raw = @runtime.call_function(
         "AliasThatPointsToRecursiveType",
         {
-          list: list,
+          data: data,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -6473,13 +6473,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        list: Baml::Types::LinkedListAliasNode,
+        data: Baml::Types::LinkedListAliasNode,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::BamlStream[Baml::Types::LinkedListAliasNode])
     }
     def AliasThatPointsToRecursiveType(
         *varargs,
-        list:,
+        data:,
         baml_options: {}
     )
       if varargs.any?
@@ -6499,7 +6499,7 @@ module Baml
       raw = @runtime.stream_function(
         "AliasThatPointsToRecursiveType",
         {
-          list: list,
+          data: data,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),

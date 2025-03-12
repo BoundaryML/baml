@@ -114,8 +114,8 @@ describe('Dynamic Type Tests', () => {
       let tb = new TypeBuilder()
       tb.addBaml(`
         class ExtraPersonInfo {
-            height int
-            weight int
+            height int @description("in feet")
+            weight int @description("in pounds")
         }
 
         enum Job {

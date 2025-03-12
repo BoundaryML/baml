@@ -1,5 +1,9 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Literal, Union
 
+def get_version() -> str:
+    """Get the version of the BAML Python client."""
+    ...
+
 class FunctionResult:
     """The result of a BAML function call.
 
@@ -84,6 +88,15 @@ class BamlRuntime:
     @staticmethod
     def from_directory(directory: str, env_vars: Dict[str, str]) -> BamlRuntime: ...
     async def call_function(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+        collector: Optional[Collector],
+    ) -> FunctionResult: ...
+    def call_function_sync(
         self,
         function_name: str,
         args: Dict[str, Any],

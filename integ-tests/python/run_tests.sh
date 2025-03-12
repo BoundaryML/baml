@@ -10,3 +10,5 @@ uv run baml-cli generate --from ../baml_src
 
 # test_functions.py is excluded because it requires credentials
 uv run pytest "$@" --ignore=tests/test_functions.py --ignore=tests/test_collector.py
+
+uv run ruff check .

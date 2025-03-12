@@ -69,7 +69,7 @@ export class BamlSyncClient {
   }
   
   AliasThatPointsToRecursiveType(
-      list: LinkedListAliasNode,
+      data: LinkedListAliasNode,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): LinkedListAliasNode {
     try {
@@ -77,7 +77,7 @@ export class BamlSyncClient {
       const raw = this.runtime.callFunctionSync(
         "AliasThatPointsToRecursiveType",
         {
-          "list": list
+          "data": data
         },
         this.ctx_manager.cloneContext(),
         __baml_options__?.tb?.__tb(),

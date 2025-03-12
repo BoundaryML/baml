@@ -6,10 +6,9 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, resetBaml
 import { ReadableStream, ReadableStreamDefaultController } from 'stream/web';
 import { TextEncoder, TextDecoder } from 'util';
 
-config()
 
 beforeAll(() => {
-  // Add any global setup here
+  config({ path: "../.env" })
 })
 
 afterAll(() => {

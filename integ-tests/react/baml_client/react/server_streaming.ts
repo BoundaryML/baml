@@ -54,15 +54,15 @@ export const AaaSamOutputFormat = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { LinkedListAliasNode } list - Input parameter.
+ * @param { LinkedListAliasNode } data - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const AliasThatPointsToRecursiveType = async (
-  list: LinkedListAliasNode,
+  data: LinkedListAliasNode,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.AliasThatPointsToRecursiveType(
-    list,
+    data,
   );
   return Promise.resolve(stream.toStreamable());
 };

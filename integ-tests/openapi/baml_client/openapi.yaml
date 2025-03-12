@@ -2291,13 +2291,13 @@ components:
             title: AliasThatPointsToRecursiveTypeRequest
             type: object
             properties:
-              list:
+              data:
                 $ref: '#/components/schemas/LinkedListAliasNode'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
-            - list
+            - data
             additionalProperties: false
     AliasWithMultipleAttrs:
       required: true
