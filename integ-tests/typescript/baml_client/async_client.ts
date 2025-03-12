@@ -8684,7 +8684,7 @@ class HttpRequest {
   
   async AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8704,7 +8704,7 @@ class HttpRequest {
   
   async AliasThatPointsToRecursiveType(
       data: LinkedListAliasNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8724,7 +8724,7 @@ class HttpRequest {
   
   async AliasWithMultipleAttrs(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8744,7 +8744,7 @@ class HttpRequest {
   
   async AliasedInputClass(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8764,7 +8764,7 @@ class HttpRequest {
   
   async AliasedInputClass2(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8784,7 +8784,7 @@ class HttpRequest {
   
   async AliasedInputClassNested(
       input: InputClassNested,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8804,7 +8804,7 @@ class HttpRequest {
   
   async AliasedInputEnum(
       input: AliasedEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8824,7 +8824,7 @@ class HttpRequest {
   
   async AliasedInputList(
       input: AliasedEnum[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8844,7 +8844,7 @@ class HttpRequest {
   
   async AllowedOptionals(
       optionals: OptionalListAndMap,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8864,7 +8864,7 @@ class HttpRequest {
   
   async AssertFn(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8884,7 +8884,7 @@ class HttpRequest {
   
   async AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8904,7 +8904,7 @@ class HttpRequest {
   
   async BuildLinkedList(
       input: number[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8924,7 +8924,7 @@ class HttpRequest {
   
   async BuildTree(
       input: BinaryNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8944,7 +8944,7 @@ class HttpRequest {
   
   async ClassThatPointsToRecursiveClassThroughAlias(
       cls: ClassToRecAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8964,7 +8964,7 @@ class HttpRequest {
   
   async ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -8984,7 +8984,7 @@ class HttpRequest {
   
   async ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9004,7 +9004,7 @@ class HttpRequest {
   
   async ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9024,7 +9024,7 @@ class HttpRequest {
   
   async ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9044,7 +9044,7 @@ class HttpRequest {
   
   async Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9064,7 +9064,7 @@ class HttpRequest {
   
   async CustomTask(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9084,7 +9084,7 @@ class HttpRequest {
   
   async DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9104,7 +9104,7 @@ class HttpRequest {
   
   async DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9124,7 +9124,7 @@ class HttpRequest {
   
   async DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9144,7 +9144,7 @@ class HttpRequest {
   
   async DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9164,7 +9164,7 @@ class HttpRequest {
   
   async DifferentiateUnions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9184,7 +9184,7 @@ class HttpRequest {
   
   async DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9204,7 +9204,7 @@ class HttpRequest {
   
   async DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9224,7 +9224,7 @@ class HttpRequest {
   
   async DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9244,7 +9244,7 @@ class HttpRequest {
   
   async DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9264,7 +9264,7 @@ class HttpRequest {
   
   async ExpectFailure(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9284,7 +9284,7 @@ class HttpRequest {
   
   async ExtractContactInfo(
       document: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9304,7 +9304,7 @@ class HttpRequest {
   
   async ExtractHobby(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9324,7 +9324,7 @@ class HttpRequest {
   
   async ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9344,7 +9344,7 @@ class HttpRequest {
   
   async ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9364,7 +9364,7 @@ class HttpRequest {
   
   async ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9384,7 +9384,7 @@ class HttpRequest {
   
   async ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9404,7 +9404,7 @@ class HttpRequest {
   
   async ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9424,7 +9424,7 @@ class HttpRequest {
   
   async FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9444,7 +9444,7 @@ class HttpRequest {
   
   async FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9464,7 +9464,7 @@ class HttpRequest {
   
   async FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9484,7 +9484,7 @@ class HttpRequest {
   
   async FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9504,7 +9504,7 @@ class HttpRequest {
   
   async FnLiteralClassInputOutput(
       input: LiteralClassHello,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9524,7 +9524,7 @@ class HttpRequest {
   
   async FnLiteralUnionClassInputOutput(
       input: LiteralClassOne | LiteralClassTwo,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9544,7 +9544,7 @@ class HttpRequest {
   
   async FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9564,7 +9564,7 @@ class HttpRequest {
   
   async FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9584,7 +9584,7 @@ class HttpRequest {
   
   async FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9604,7 +9604,7 @@ class HttpRequest {
   
   async FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9624,7 +9624,7 @@ class HttpRequest {
   
   async FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9644,7 +9644,7 @@ class HttpRequest {
   
   async FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9664,7 +9664,7 @@ class HttpRequest {
   
   async FnOutputInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9684,7 +9684,7 @@ class HttpRequest {
   
   async FnOutputLiteralBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9704,7 +9704,7 @@ class HttpRequest {
   
   async FnOutputLiteralInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9724,7 +9724,7 @@ class HttpRequest {
   
   async FnOutputLiteralString(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9744,7 +9744,7 @@ class HttpRequest {
   
   async FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9764,7 +9764,7 @@ class HttpRequest {
   
   async FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9784,7 +9784,7 @@ class HttpRequest {
   
   async FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9804,7 +9804,7 @@ class HttpRequest {
   
   async FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9824,7 +9824,7 @@ class HttpRequest {
   
   async GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9844,7 +9844,7 @@ class HttpRequest {
   
   async GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9864,7 +9864,7 @@ class HttpRequest {
   
   async GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9884,7 +9884,7 @@ class HttpRequest {
   
   async InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9904,7 +9904,7 @@ class HttpRequest {
   
   async InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9924,7 +9924,7 @@ class HttpRequest {
   
   async InOutSingleLiteralStringMapKey(
       m: Partial<Record<"key", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9944,7 +9944,7 @@ class HttpRequest {
   
   async JsonTypeAliasCycle(
       input: JsonValue,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9964,7 +9964,7 @@ class HttpRequest {
   
   async LiteralUnionsTest(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -9984,7 +9984,7 @@ class HttpRequest {
   
   async MakeBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10004,7 +10004,7 @@ class HttpRequest {
   
   async MakeNestedBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10024,7 +10024,7 @@ class HttpRequest {
   
   async MakeSemanticContainer(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10044,7 +10044,7 @@ class HttpRequest {
   
   async MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10064,7 +10064,7 @@ class HttpRequest {
   
   async MergeAliasAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10084,7 +10084,7 @@ class HttpRequest {
   
   async MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10104,7 +10104,7 @@ class HttpRequest {
   
   async NestedAlias(
       c: number | string | boolean | number | string[] | Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10124,7 +10124,7 @@ class HttpRequest {
   
   async NullLiteralClassHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10144,7 +10144,7 @@ class HttpRequest {
   
   async OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10164,7 +10164,7 @@ class HttpRequest {
   
   async OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10184,7 +10184,7 @@ class HttpRequest {
   
   async PredictAge(
       name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10204,7 +10204,7 @@ class HttpRequest {
   
   async PredictAgeBare(
       inp: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10224,7 +10224,7 @@ class HttpRequest {
   
   async PrimitiveAlias(
       p: number | string | boolean | number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10244,7 +10244,7 @@ class HttpRequest {
   
   async PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10264,7 +10264,7 @@ class HttpRequest {
   
   async PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10284,7 +10284,7 @@ class HttpRequest {
   
   async PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10304,7 +10304,7 @@ class HttpRequest {
   
   async PromptTestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10324,7 +10324,7 @@ class HttpRequest {
   
   async PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10344,7 +10344,7 @@ class HttpRequest {
   
   async PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10364,7 +10364,7 @@ class HttpRequest {
   
   async PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10384,7 +10384,7 @@ class HttpRequest {
   
   async RecursiveAliasCycle(
       input: RecAliasOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10404,7 +10404,7 @@ class HttpRequest {
   
   async RecursiveClassWithAliasIndirection(
       cls: NodeWithAliasIndirection,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10424,7 +10424,7 @@ class HttpRequest {
   
   async ReturnAliasWithMergedAttributes(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10444,7 +10444,7 @@ class HttpRequest {
   
   async ReturnFailingAssert(
       inp: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10464,7 +10464,7 @@ class HttpRequest {
   
   async ReturnJsonEntry(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10484,7 +10484,7 @@ class HttpRequest {
   
   async ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10504,7 +10504,7 @@ class HttpRequest {
   
   async SchemaDescriptions(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10524,7 +10524,7 @@ class HttpRequest {
   
   async SimpleRecursiveListAlias(
       input: RecursiveListAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10544,7 +10544,7 @@ class HttpRequest {
   
   async SimpleRecursiveMapAlias(
       input: RecursiveMapAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10564,7 +10564,7 @@ class HttpRequest {
   
   async StreamBigNumbers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10584,7 +10584,7 @@ class HttpRequest {
   
   async StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10604,7 +10604,7 @@ class HttpRequest {
   
   async StreamOneBigNumber(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10624,7 +10624,7 @@ class HttpRequest {
   
   async StreamUnionIntegers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10644,7 +10644,7 @@ class HttpRequest {
   
   async StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10664,7 +10664,7 @@ class HttpRequest {
   
   async TakeRecAliasDep(
       input: RecursiveAliasDependency,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10684,7 +10684,7 @@ class HttpRequest {
   
   async TellStory(
       story: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10704,7 +10704,7 @@ class HttpRequest {
   
   async TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10724,7 +10724,7 @@ class HttpRequest {
   
   async TestAnthropicShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10744,7 +10744,7 @@ class HttpRequest {
   
   async TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10764,7 +10764,7 @@ class HttpRequest {
   
   async TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10784,7 +10784,7 @@ class HttpRequest {
   
   async TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10804,7 +10804,7 @@ class HttpRequest {
   
   async TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10824,7 +10824,7 @@ class HttpRequest {
   
   async TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10844,7 +10844,7 @@ class HttpRequest {
   
   async TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10864,7 +10864,7 @@ class HttpRequest {
   
   async TestAzureFailure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10884,7 +10884,7 @@ class HttpRequest {
   
   async TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10904,7 +10904,7 @@ class HttpRequest {
   
   async TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10924,7 +10924,7 @@ class HttpRequest {
   
   async TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10944,7 +10944,7 @@ class HttpRequest {
   
   async TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10964,7 +10964,7 @@ class HttpRequest {
   
   async TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -10984,7 +10984,7 @@ class HttpRequest {
   
   async TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11004,7 +11004,7 @@ class HttpRequest {
   
   async TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11024,7 +11024,7 @@ class HttpRequest {
   
   async TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11044,7 +11044,7 @@ class HttpRequest {
   
   async TestFallbackStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11064,7 +11064,7 @@ class HttpRequest {
   
   async TestFallbackToShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11084,7 +11084,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11104,7 +11104,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11124,7 +11124,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11144,7 +11144,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11164,7 +11164,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11184,7 +11184,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11204,7 +11204,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11224,7 +11224,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11244,7 +11244,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11264,7 +11264,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11284,7 +11284,7 @@ class HttpRequest {
   
   async TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11304,7 +11304,7 @@ class HttpRequest {
   
   async TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11324,7 +11324,7 @@ class HttpRequest {
   
   async TestGeminiOpenAiGeneric(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11344,7 +11344,7 @@ class HttpRequest {
   
   async TestGeminiSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11364,7 +11364,7 @@ class HttpRequest {
   
   async TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11384,7 +11384,7 @@ class HttpRequest {
   
   async TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11404,7 +11404,7 @@ class HttpRequest {
   
   async TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11424,7 +11424,7 @@ class HttpRequest {
   
   async TestImageListInput(
       imgs: Image[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11444,7 +11444,7 @@ class HttpRequest {
   
   async TestMemory(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11464,7 +11464,7 @@ class HttpRequest {
   
   async TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11484,7 +11484,7 @@ class HttpRequest {
   
   async TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11504,7 +11504,7 @@ class HttpRequest {
   
   async TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11524,7 +11524,7 @@ class HttpRequest {
   
   async TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11544,7 +11544,7 @@ class HttpRequest {
   
   async TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11564,7 +11564,7 @@ class HttpRequest {
   
   async TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11584,7 +11584,7 @@ class HttpRequest {
   
   async TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11604,7 +11604,7 @@ class HttpRequest {
   
   async TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11624,7 +11624,7 @@ class HttpRequest {
   
   async TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11644,7 +11644,7 @@ class HttpRequest {
   
   async TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11664,7 +11664,7 @@ class HttpRequest {
   
   async TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11684,7 +11684,7 @@ class HttpRequest {
   
   async TestOpenAIShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11704,7 +11704,7 @@ class HttpRequest {
   
   async TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11724,7 +11724,7 @@ class HttpRequest {
   
   async TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11744,7 +11744,7 @@ class HttpRequest {
   
   async TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11764,7 +11764,7 @@ class HttpRequest {
   
   async TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11784,7 +11784,7 @@ class HttpRequest {
   
   async TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11804,7 +11804,7 @@ class HttpRequest {
   
   async TestSingleFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11824,7 +11824,7 @@ class HttpRequest {
   
   async TestThinking(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11844,7 +11844,7 @@ class HttpRequest {
   
   async TestUniverseQuestion(
       question: UniverseQuestionInput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11864,7 +11864,7 @@ class HttpRequest {
   
   async TestVertex(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11884,7 +11884,7 @@ class HttpRequest {
   
   async TestVertexWithSystemInstructions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11904,7 +11904,7 @@ class HttpRequest {
   
   async UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11924,7 +11924,7 @@ class HttpRequest {
   
   async UseBlockConstraint(
       inp: BlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11944,7 +11944,7 @@ class HttpRequest {
   
   async UseMalformedConstraints(
       a: MalformedConstraints2,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11964,7 +11964,7 @@ class HttpRequest {
   
   async UseNestedBlockConstraint(
       inp: NestedBlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -11990,7 +11990,7 @@ class HttpStreamRequest {
   
   async AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12010,7 +12010,7 @@ class HttpStreamRequest {
   
   async AliasThatPointsToRecursiveType(
       data: LinkedListAliasNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12030,7 +12030,7 @@ class HttpStreamRequest {
   
   async AliasWithMultipleAttrs(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12050,7 +12050,7 @@ class HttpStreamRequest {
   
   async AliasedInputClass(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12070,7 +12070,7 @@ class HttpStreamRequest {
   
   async AliasedInputClass2(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12090,7 +12090,7 @@ class HttpStreamRequest {
   
   async AliasedInputClassNested(
       input: InputClassNested,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12110,7 +12110,7 @@ class HttpStreamRequest {
   
   async AliasedInputEnum(
       input: AliasedEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12130,7 +12130,7 @@ class HttpStreamRequest {
   
   async AliasedInputList(
       input: AliasedEnum[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12150,7 +12150,7 @@ class HttpStreamRequest {
   
   async AllowedOptionals(
       optionals: OptionalListAndMap,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12170,7 +12170,7 @@ class HttpStreamRequest {
   
   async AssertFn(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12190,7 +12190,7 @@ class HttpStreamRequest {
   
   async AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12210,7 +12210,7 @@ class HttpStreamRequest {
   
   async BuildLinkedList(
       input: number[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12230,7 +12230,7 @@ class HttpStreamRequest {
   
   async BuildTree(
       input: BinaryNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12250,7 +12250,7 @@ class HttpStreamRequest {
   
   async ClassThatPointsToRecursiveClassThroughAlias(
       cls: ClassToRecAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12270,7 +12270,7 @@ class HttpStreamRequest {
   
   async ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12290,7 +12290,7 @@ class HttpStreamRequest {
   
   async ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12310,7 +12310,7 @@ class HttpStreamRequest {
   
   async ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12330,7 +12330,7 @@ class HttpStreamRequest {
   
   async ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12350,7 +12350,7 @@ class HttpStreamRequest {
   
   async Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12370,7 +12370,7 @@ class HttpStreamRequest {
   
   async CustomTask(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12390,7 +12390,7 @@ class HttpStreamRequest {
   
   async DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12410,7 +12410,7 @@ class HttpStreamRequest {
   
   async DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12430,7 +12430,7 @@ class HttpStreamRequest {
   
   async DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12450,7 +12450,7 @@ class HttpStreamRequest {
   
   async DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12470,7 +12470,7 @@ class HttpStreamRequest {
   
   async DifferentiateUnions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12490,7 +12490,7 @@ class HttpStreamRequest {
   
   async DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12510,7 +12510,7 @@ class HttpStreamRequest {
   
   async DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12530,7 +12530,7 @@ class HttpStreamRequest {
   
   async DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12550,7 +12550,7 @@ class HttpStreamRequest {
   
   async DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12570,7 +12570,7 @@ class HttpStreamRequest {
   
   async ExpectFailure(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12590,7 +12590,7 @@ class HttpStreamRequest {
   
   async ExtractContactInfo(
       document: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12610,7 +12610,7 @@ class HttpStreamRequest {
   
   async ExtractHobby(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12630,7 +12630,7 @@ class HttpStreamRequest {
   
   async ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12650,7 +12650,7 @@ class HttpStreamRequest {
   
   async ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12670,7 +12670,7 @@ class HttpStreamRequest {
   
   async ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12690,7 +12690,7 @@ class HttpStreamRequest {
   
   async ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12710,7 +12710,7 @@ class HttpStreamRequest {
   
   async ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12730,7 +12730,7 @@ class HttpStreamRequest {
   
   async FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12750,7 +12750,7 @@ class HttpStreamRequest {
   
   async FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12770,7 +12770,7 @@ class HttpStreamRequest {
   
   async FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12790,7 +12790,7 @@ class HttpStreamRequest {
   
   async FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12810,7 +12810,7 @@ class HttpStreamRequest {
   
   async FnLiteralClassInputOutput(
       input: LiteralClassHello,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12830,7 +12830,7 @@ class HttpStreamRequest {
   
   async FnLiteralUnionClassInputOutput(
       input: LiteralClassOne | LiteralClassTwo,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12850,7 +12850,7 @@ class HttpStreamRequest {
   
   async FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12870,7 +12870,7 @@ class HttpStreamRequest {
   
   async FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12890,7 +12890,7 @@ class HttpStreamRequest {
   
   async FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12910,7 +12910,7 @@ class HttpStreamRequest {
   
   async FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12930,7 +12930,7 @@ class HttpStreamRequest {
   
   async FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12950,7 +12950,7 @@ class HttpStreamRequest {
   
   async FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12970,7 +12970,7 @@ class HttpStreamRequest {
   
   async FnOutputInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -12990,7 +12990,7 @@ class HttpStreamRequest {
   
   async FnOutputLiteralBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13010,7 +13010,7 @@ class HttpStreamRequest {
   
   async FnOutputLiteralInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13030,7 +13030,7 @@ class HttpStreamRequest {
   
   async FnOutputLiteralString(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13050,7 +13050,7 @@ class HttpStreamRequest {
   
   async FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13070,7 +13070,7 @@ class HttpStreamRequest {
   
   async FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13090,7 +13090,7 @@ class HttpStreamRequest {
   
   async FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13110,7 +13110,7 @@ class HttpStreamRequest {
   
   async FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13130,7 +13130,7 @@ class HttpStreamRequest {
   
   async GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13150,7 +13150,7 @@ class HttpStreamRequest {
   
   async GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13170,7 +13170,7 @@ class HttpStreamRequest {
   
   async GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13190,7 +13190,7 @@ class HttpStreamRequest {
   
   async InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13210,7 +13210,7 @@ class HttpStreamRequest {
   
   async InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13230,7 +13230,7 @@ class HttpStreamRequest {
   
   async InOutSingleLiteralStringMapKey(
       m: Partial<Record<"key", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13250,7 +13250,7 @@ class HttpStreamRequest {
   
   async JsonTypeAliasCycle(
       input: JsonValue,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13270,7 +13270,7 @@ class HttpStreamRequest {
   
   async LiteralUnionsTest(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13290,7 +13290,7 @@ class HttpStreamRequest {
   
   async MakeBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13310,7 +13310,7 @@ class HttpStreamRequest {
   
   async MakeNestedBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13330,7 +13330,7 @@ class HttpStreamRequest {
   
   async MakeSemanticContainer(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13350,7 +13350,7 @@ class HttpStreamRequest {
   
   async MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13370,7 +13370,7 @@ class HttpStreamRequest {
   
   async MergeAliasAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13390,7 +13390,7 @@ class HttpStreamRequest {
   
   async MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13410,7 +13410,7 @@ class HttpStreamRequest {
   
   async NestedAlias(
       c: number | string | boolean | number | string[] | Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13430,7 +13430,7 @@ class HttpStreamRequest {
   
   async NullLiteralClassHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13450,7 +13450,7 @@ class HttpStreamRequest {
   
   async OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13470,7 +13470,7 @@ class HttpStreamRequest {
   
   async OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13490,7 +13490,7 @@ class HttpStreamRequest {
   
   async PredictAge(
       name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13510,7 +13510,7 @@ class HttpStreamRequest {
   
   async PredictAgeBare(
       inp: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13530,7 +13530,7 @@ class HttpStreamRequest {
   
   async PrimitiveAlias(
       p: number | string | boolean | number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13550,7 +13550,7 @@ class HttpStreamRequest {
   
   async PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13570,7 +13570,7 @@ class HttpStreamRequest {
   
   async PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13590,7 +13590,7 @@ class HttpStreamRequest {
   
   async PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13610,7 +13610,7 @@ class HttpStreamRequest {
   
   async PromptTestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13630,7 +13630,7 @@ class HttpStreamRequest {
   
   async PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13650,7 +13650,7 @@ class HttpStreamRequest {
   
   async PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13670,7 +13670,7 @@ class HttpStreamRequest {
   
   async PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13690,7 +13690,7 @@ class HttpStreamRequest {
   
   async RecursiveAliasCycle(
       input: RecAliasOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13710,7 +13710,7 @@ class HttpStreamRequest {
   
   async RecursiveClassWithAliasIndirection(
       cls: NodeWithAliasIndirection,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13730,7 +13730,7 @@ class HttpStreamRequest {
   
   async ReturnAliasWithMergedAttributes(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13750,7 +13750,7 @@ class HttpStreamRequest {
   
   async ReturnFailingAssert(
       inp: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13770,7 +13770,7 @@ class HttpStreamRequest {
   
   async ReturnJsonEntry(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13790,7 +13790,7 @@ class HttpStreamRequest {
   
   async ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13810,7 +13810,7 @@ class HttpStreamRequest {
   
   async SchemaDescriptions(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13830,7 +13830,7 @@ class HttpStreamRequest {
   
   async SimpleRecursiveListAlias(
       input: RecursiveListAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13850,7 +13850,7 @@ class HttpStreamRequest {
   
   async SimpleRecursiveMapAlias(
       input: RecursiveMapAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13870,7 +13870,7 @@ class HttpStreamRequest {
   
   async StreamBigNumbers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13890,7 +13890,7 @@ class HttpStreamRequest {
   
   async StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13910,7 +13910,7 @@ class HttpStreamRequest {
   
   async StreamOneBigNumber(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13930,7 +13930,7 @@ class HttpStreamRequest {
   
   async StreamUnionIntegers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13950,7 +13950,7 @@ class HttpStreamRequest {
   
   async StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13970,7 +13970,7 @@ class HttpStreamRequest {
   
   async TakeRecAliasDep(
       input: RecursiveAliasDependency,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -13990,7 +13990,7 @@ class HttpStreamRequest {
   
   async TellStory(
       story: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14010,7 +14010,7 @@ class HttpStreamRequest {
   
   async TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14030,7 +14030,7 @@ class HttpStreamRequest {
   
   async TestAnthropicShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14050,7 +14050,7 @@ class HttpStreamRequest {
   
   async TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14070,7 +14070,7 @@ class HttpStreamRequest {
   
   async TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14090,7 +14090,7 @@ class HttpStreamRequest {
   
   async TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14110,7 +14110,7 @@ class HttpStreamRequest {
   
   async TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14130,7 +14130,7 @@ class HttpStreamRequest {
   
   async TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14150,7 +14150,7 @@ class HttpStreamRequest {
   
   async TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14170,7 +14170,7 @@ class HttpStreamRequest {
   
   async TestAzureFailure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14190,7 +14190,7 @@ class HttpStreamRequest {
   
   async TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14210,7 +14210,7 @@ class HttpStreamRequest {
   
   async TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14230,7 +14230,7 @@ class HttpStreamRequest {
   
   async TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14250,7 +14250,7 @@ class HttpStreamRequest {
   
   async TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14270,7 +14270,7 @@ class HttpStreamRequest {
   
   async TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14290,7 +14290,7 @@ class HttpStreamRequest {
   
   async TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14310,7 +14310,7 @@ class HttpStreamRequest {
   
   async TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14330,7 +14330,7 @@ class HttpStreamRequest {
   
   async TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14350,7 +14350,7 @@ class HttpStreamRequest {
   
   async TestFallbackStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14370,7 +14370,7 @@ class HttpStreamRequest {
   
   async TestFallbackToShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14390,7 +14390,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14410,7 +14410,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14430,7 +14430,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14450,7 +14450,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14470,7 +14470,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14490,7 +14490,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14510,7 +14510,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14530,7 +14530,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14550,7 +14550,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14570,7 +14570,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14590,7 +14590,7 @@ class HttpStreamRequest {
   
   async TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14610,7 +14610,7 @@ class HttpStreamRequest {
   
   async TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14630,7 +14630,7 @@ class HttpStreamRequest {
   
   async TestGeminiOpenAiGeneric(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14650,7 +14650,7 @@ class HttpStreamRequest {
   
   async TestGeminiSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14670,7 +14670,7 @@ class HttpStreamRequest {
   
   async TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14690,7 +14690,7 @@ class HttpStreamRequest {
   
   async TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14710,7 +14710,7 @@ class HttpStreamRequest {
   
   async TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14730,7 +14730,7 @@ class HttpStreamRequest {
   
   async TestImageListInput(
       imgs: Image[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14750,7 +14750,7 @@ class HttpStreamRequest {
   
   async TestMemory(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14770,7 +14770,7 @@ class HttpStreamRequest {
   
   async TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14790,7 +14790,7 @@ class HttpStreamRequest {
   
   async TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14810,7 +14810,7 @@ class HttpStreamRequest {
   
   async TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14830,7 +14830,7 @@ class HttpStreamRequest {
   
   async TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14850,7 +14850,7 @@ class HttpStreamRequest {
   
   async TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14870,7 +14870,7 @@ class HttpStreamRequest {
   
   async TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14890,7 +14890,7 @@ class HttpStreamRequest {
   
   async TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14910,7 +14910,7 @@ class HttpStreamRequest {
   
   async TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14930,7 +14930,7 @@ class HttpStreamRequest {
   
   async TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14950,7 +14950,7 @@ class HttpStreamRequest {
   
   async TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14970,7 +14970,7 @@ class HttpStreamRequest {
   
   async TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -14990,7 +14990,7 @@ class HttpStreamRequest {
   
   async TestOpenAIShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15010,7 +15010,7 @@ class HttpStreamRequest {
   
   async TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15030,7 +15030,7 @@ class HttpStreamRequest {
   
   async TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15050,7 +15050,7 @@ class HttpStreamRequest {
   
   async TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15070,7 +15070,7 @@ class HttpStreamRequest {
   
   async TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15090,7 +15090,7 @@ class HttpStreamRequest {
   
   async TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15110,7 +15110,7 @@ class HttpStreamRequest {
   
   async TestSingleFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15130,7 +15130,7 @@ class HttpStreamRequest {
   
   async TestThinking(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15150,7 +15150,7 @@ class HttpStreamRequest {
   
   async TestUniverseQuestion(
       question: UniverseQuestionInput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15170,7 +15170,7 @@ class HttpStreamRequest {
   
   async TestVertex(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15190,7 +15190,7 @@ class HttpStreamRequest {
   
   async TestVertexWithSystemInstructions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15210,7 +15210,7 @@ class HttpStreamRequest {
   
   async UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15230,7 +15230,7 @@ class HttpStreamRequest {
   
   async UseBlockConstraint(
       inp: BlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15250,7 +15250,7 @@ class HttpStreamRequest {
   
   async UseMalformedConstraints(
       a: MalformedConstraints2,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
@@ -15270,7 +15270,7 @@ class HttpStreamRequest {
   
   async UseNestedBlockConstraint(
       inp: NestedBlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(

@@ -3887,7 +3887,7 @@ class HttpRequest {
   
   AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -3907,7 +3907,7 @@ class HttpRequest {
   
   AliasThatPointsToRecursiveType(
       data: LinkedListAliasNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -3927,7 +3927,7 @@ class HttpRequest {
   
   AliasWithMultipleAttrs(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -3947,7 +3947,7 @@ class HttpRequest {
   
   AliasedInputClass(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -3967,7 +3967,7 @@ class HttpRequest {
   
   AliasedInputClass2(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -3987,7 +3987,7 @@ class HttpRequest {
   
   AliasedInputClassNested(
       input: InputClassNested,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4007,7 +4007,7 @@ class HttpRequest {
   
   AliasedInputEnum(
       input: AliasedEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4027,7 +4027,7 @@ class HttpRequest {
   
   AliasedInputList(
       input: AliasedEnum[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4047,7 +4047,7 @@ class HttpRequest {
   
   AllowedOptionals(
       optionals: OptionalListAndMap,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4067,7 +4067,7 @@ class HttpRequest {
   
   AssertFn(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4087,7 +4087,7 @@ class HttpRequest {
   
   AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4107,7 +4107,7 @@ class HttpRequest {
   
   BuildLinkedList(
       input: number[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4127,7 +4127,7 @@ class HttpRequest {
   
   BuildTree(
       input: BinaryNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4147,7 +4147,7 @@ class HttpRequest {
   
   ClassThatPointsToRecursiveClassThroughAlias(
       cls: ClassToRecAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4167,7 +4167,7 @@ class HttpRequest {
   
   ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4187,7 +4187,7 @@ class HttpRequest {
   
   ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4207,7 +4207,7 @@ class HttpRequest {
   
   ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4227,7 +4227,7 @@ class HttpRequest {
   
   ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4247,7 +4247,7 @@ class HttpRequest {
   
   Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4267,7 +4267,7 @@ class HttpRequest {
   
   CustomTask(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4287,7 +4287,7 @@ class HttpRequest {
   
   DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4307,7 +4307,7 @@ class HttpRequest {
   
   DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4327,7 +4327,7 @@ class HttpRequest {
   
   DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4347,7 +4347,7 @@ class HttpRequest {
   
   DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4367,7 +4367,7 @@ class HttpRequest {
   
   DifferentiateUnions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4387,7 +4387,7 @@ class HttpRequest {
   
   DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4407,7 +4407,7 @@ class HttpRequest {
   
   DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4427,7 +4427,7 @@ class HttpRequest {
   
   DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4447,7 +4447,7 @@ class HttpRequest {
   
   DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4467,7 +4467,7 @@ class HttpRequest {
   
   ExpectFailure(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4487,7 +4487,7 @@ class HttpRequest {
   
   ExtractContactInfo(
       document: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4507,7 +4507,7 @@ class HttpRequest {
   
   ExtractHobby(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4527,7 +4527,7 @@ class HttpRequest {
   
   ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4547,7 +4547,7 @@ class HttpRequest {
   
   ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4567,7 +4567,7 @@ class HttpRequest {
   
   ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4587,7 +4587,7 @@ class HttpRequest {
   
   ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4607,7 +4607,7 @@ class HttpRequest {
   
   ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4627,7 +4627,7 @@ class HttpRequest {
   
   FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4647,7 +4647,7 @@ class HttpRequest {
   
   FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4667,7 +4667,7 @@ class HttpRequest {
   
   FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4687,7 +4687,7 @@ class HttpRequest {
   
   FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4707,7 +4707,7 @@ class HttpRequest {
   
   FnLiteralClassInputOutput(
       input: LiteralClassHello,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4727,7 +4727,7 @@ class HttpRequest {
   
   FnLiteralUnionClassInputOutput(
       input: LiteralClassOne | LiteralClassTwo,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4747,7 +4747,7 @@ class HttpRequest {
   
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4767,7 +4767,7 @@ class HttpRequest {
   
   FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4787,7 +4787,7 @@ class HttpRequest {
   
   FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4807,7 +4807,7 @@ class HttpRequest {
   
   FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4827,7 +4827,7 @@ class HttpRequest {
   
   FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4847,7 +4847,7 @@ class HttpRequest {
   
   FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4867,7 +4867,7 @@ class HttpRequest {
   
   FnOutputInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4887,7 +4887,7 @@ class HttpRequest {
   
   FnOutputLiteralBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4907,7 +4907,7 @@ class HttpRequest {
   
   FnOutputLiteralInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4927,7 +4927,7 @@ class HttpRequest {
   
   FnOutputLiteralString(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4947,7 +4947,7 @@ class HttpRequest {
   
   FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4967,7 +4967,7 @@ class HttpRequest {
   
   FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -4987,7 +4987,7 @@ class HttpRequest {
   
   FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5007,7 +5007,7 @@ class HttpRequest {
   
   FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5027,7 +5027,7 @@ class HttpRequest {
   
   GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5047,7 +5047,7 @@ class HttpRequest {
   
   GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5067,7 +5067,7 @@ class HttpRequest {
   
   GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5087,7 +5087,7 @@ class HttpRequest {
   
   InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5107,7 +5107,7 @@ class HttpRequest {
   
   InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5127,7 +5127,7 @@ class HttpRequest {
   
   InOutSingleLiteralStringMapKey(
       m: Partial<Record<"key", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5147,7 +5147,7 @@ class HttpRequest {
   
   JsonTypeAliasCycle(
       input: JsonValue,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5167,7 +5167,7 @@ class HttpRequest {
   
   LiteralUnionsTest(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5187,7 +5187,7 @@ class HttpRequest {
   
   MakeBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5207,7 +5207,7 @@ class HttpRequest {
   
   MakeNestedBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5227,7 +5227,7 @@ class HttpRequest {
   
   MakeSemanticContainer(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5247,7 +5247,7 @@ class HttpRequest {
   
   MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5267,7 +5267,7 @@ class HttpRequest {
   
   MergeAliasAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5287,7 +5287,7 @@ class HttpRequest {
   
   MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5307,7 +5307,7 @@ class HttpRequest {
   
   NestedAlias(
       c: number | string | boolean | number | string[] | Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5327,7 +5327,7 @@ class HttpRequest {
   
   NullLiteralClassHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5347,7 +5347,7 @@ class HttpRequest {
   
   OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5367,7 +5367,7 @@ class HttpRequest {
   
   OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5387,7 +5387,7 @@ class HttpRequest {
   
   PredictAge(
       name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5407,7 +5407,7 @@ class HttpRequest {
   
   PredictAgeBare(
       inp: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5427,7 +5427,7 @@ class HttpRequest {
   
   PrimitiveAlias(
       p: number | string | boolean | number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5447,7 +5447,7 @@ class HttpRequest {
   
   PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5467,7 +5467,7 @@ class HttpRequest {
   
   PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5487,7 +5487,7 @@ class HttpRequest {
   
   PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5507,7 +5507,7 @@ class HttpRequest {
   
   PromptTestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5527,7 +5527,7 @@ class HttpRequest {
   
   PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5547,7 +5547,7 @@ class HttpRequest {
   
   PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5567,7 +5567,7 @@ class HttpRequest {
   
   PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5587,7 +5587,7 @@ class HttpRequest {
   
   RecursiveAliasCycle(
       input: RecAliasOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5607,7 +5607,7 @@ class HttpRequest {
   
   RecursiveClassWithAliasIndirection(
       cls: NodeWithAliasIndirection,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5627,7 +5627,7 @@ class HttpRequest {
   
   ReturnAliasWithMergedAttributes(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5647,7 +5647,7 @@ class HttpRequest {
   
   ReturnFailingAssert(
       inp: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5667,7 +5667,7 @@ class HttpRequest {
   
   ReturnJsonEntry(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5687,7 +5687,7 @@ class HttpRequest {
   
   ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5707,7 +5707,7 @@ class HttpRequest {
   
   SchemaDescriptions(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5727,7 +5727,7 @@ class HttpRequest {
   
   SimpleRecursiveListAlias(
       input: RecursiveListAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5747,7 +5747,7 @@ class HttpRequest {
   
   SimpleRecursiveMapAlias(
       input: RecursiveMapAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5767,7 +5767,7 @@ class HttpRequest {
   
   StreamBigNumbers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5787,7 +5787,7 @@ class HttpRequest {
   
   StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5807,7 +5807,7 @@ class HttpRequest {
   
   StreamOneBigNumber(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5827,7 +5827,7 @@ class HttpRequest {
   
   StreamUnionIntegers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5847,7 +5847,7 @@ class HttpRequest {
   
   StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5867,7 +5867,7 @@ class HttpRequest {
   
   TakeRecAliasDep(
       input: RecursiveAliasDependency,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5887,7 +5887,7 @@ class HttpRequest {
   
   TellStory(
       story: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5907,7 +5907,7 @@ class HttpRequest {
   
   TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5927,7 +5927,7 @@ class HttpRequest {
   
   TestAnthropicShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5947,7 +5947,7 @@ class HttpRequest {
   
   TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5967,7 +5967,7 @@ class HttpRequest {
   
   TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -5987,7 +5987,7 @@ class HttpRequest {
   
   TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6007,7 +6007,7 @@ class HttpRequest {
   
   TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6027,7 +6027,7 @@ class HttpRequest {
   
   TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6047,7 +6047,7 @@ class HttpRequest {
   
   TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6067,7 +6067,7 @@ class HttpRequest {
   
   TestAzureFailure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6087,7 +6087,7 @@ class HttpRequest {
   
   TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6107,7 +6107,7 @@ class HttpRequest {
   
   TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6127,7 +6127,7 @@ class HttpRequest {
   
   TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6147,7 +6147,7 @@ class HttpRequest {
   
   TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6167,7 +6167,7 @@ class HttpRequest {
   
   TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6187,7 +6187,7 @@ class HttpRequest {
   
   TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6207,7 +6207,7 @@ class HttpRequest {
   
   TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6227,7 +6227,7 @@ class HttpRequest {
   
   TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6247,7 +6247,7 @@ class HttpRequest {
   
   TestFallbackStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6267,7 +6267,7 @@ class HttpRequest {
   
   TestFallbackToShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6287,7 +6287,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6307,7 +6307,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6327,7 +6327,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6347,7 +6347,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6367,7 +6367,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6387,7 +6387,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6407,7 +6407,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6427,7 +6427,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6447,7 +6447,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6467,7 +6467,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6487,7 +6487,7 @@ class HttpRequest {
   
   TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6507,7 +6507,7 @@ class HttpRequest {
   
   TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6527,7 +6527,7 @@ class HttpRequest {
   
   TestGeminiOpenAiGeneric(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6547,7 +6547,7 @@ class HttpRequest {
   
   TestGeminiSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6567,7 +6567,7 @@ class HttpRequest {
   
   TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6587,7 +6587,7 @@ class HttpRequest {
   
   TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6607,7 +6607,7 @@ class HttpRequest {
   
   TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6627,7 +6627,7 @@ class HttpRequest {
   
   TestImageListInput(
       imgs: Image[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6647,7 +6647,7 @@ class HttpRequest {
   
   TestMemory(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6667,7 +6667,7 @@ class HttpRequest {
   
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6687,7 +6687,7 @@ class HttpRequest {
   
   TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6707,7 +6707,7 @@ class HttpRequest {
   
   TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6727,7 +6727,7 @@ class HttpRequest {
   
   TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6747,7 +6747,7 @@ class HttpRequest {
   
   TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6767,7 +6767,7 @@ class HttpRequest {
   
   TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6787,7 +6787,7 @@ class HttpRequest {
   
   TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6807,7 +6807,7 @@ class HttpRequest {
   
   TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6827,7 +6827,7 @@ class HttpRequest {
   
   TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6847,7 +6847,7 @@ class HttpRequest {
   
   TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6867,7 +6867,7 @@ class HttpRequest {
   
   TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6887,7 +6887,7 @@ class HttpRequest {
   
   TestOpenAIShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6907,7 +6907,7 @@ class HttpRequest {
   
   TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6927,7 +6927,7 @@ class HttpRequest {
   
   TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6947,7 +6947,7 @@ class HttpRequest {
   
   TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6967,7 +6967,7 @@ class HttpRequest {
   
   TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -6987,7 +6987,7 @@ class HttpRequest {
   
   TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7007,7 +7007,7 @@ class HttpRequest {
   
   TestSingleFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7027,7 +7027,7 @@ class HttpRequest {
   
   TestThinking(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7047,7 +7047,7 @@ class HttpRequest {
   
   TestUniverseQuestion(
       question: UniverseQuestionInput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7067,7 +7067,7 @@ class HttpRequest {
   
   TestVertex(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7087,7 +7087,7 @@ class HttpRequest {
   
   TestVertexWithSystemInstructions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7107,7 +7107,7 @@ class HttpRequest {
   
   UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7127,7 +7127,7 @@ class HttpRequest {
   
   UseBlockConstraint(
       inp: BlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7147,7 +7147,7 @@ class HttpRequest {
   
   UseMalformedConstraints(
       a: MalformedConstraints2,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7167,7 +7167,7 @@ class HttpRequest {
   
   UseNestedBlockConstraint(
       inp: NestedBlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7193,7 +7193,7 @@ class HttpStreamRequest {
   
   AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7213,7 +7213,7 @@ class HttpStreamRequest {
   
   AliasThatPointsToRecursiveType(
       data: LinkedListAliasNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7233,7 +7233,7 @@ class HttpStreamRequest {
   
   AliasWithMultipleAttrs(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7253,7 +7253,7 @@ class HttpStreamRequest {
   
   AliasedInputClass(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7273,7 +7273,7 @@ class HttpStreamRequest {
   
   AliasedInputClass2(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7293,7 +7293,7 @@ class HttpStreamRequest {
   
   AliasedInputClassNested(
       input: InputClassNested,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7313,7 +7313,7 @@ class HttpStreamRequest {
   
   AliasedInputEnum(
       input: AliasedEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7333,7 +7333,7 @@ class HttpStreamRequest {
   
   AliasedInputList(
       input: AliasedEnum[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7353,7 +7353,7 @@ class HttpStreamRequest {
   
   AllowedOptionals(
       optionals: OptionalListAndMap,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7373,7 +7373,7 @@ class HttpStreamRequest {
   
   AssertFn(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7393,7 +7393,7 @@ class HttpStreamRequest {
   
   AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7413,7 +7413,7 @@ class HttpStreamRequest {
   
   BuildLinkedList(
       input: number[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7433,7 +7433,7 @@ class HttpStreamRequest {
   
   BuildTree(
       input: BinaryNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7453,7 +7453,7 @@ class HttpStreamRequest {
   
   ClassThatPointsToRecursiveClassThroughAlias(
       cls: ClassToRecAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7473,7 +7473,7 @@ class HttpStreamRequest {
   
   ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7493,7 +7493,7 @@ class HttpStreamRequest {
   
   ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7513,7 +7513,7 @@ class HttpStreamRequest {
   
   ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7533,7 +7533,7 @@ class HttpStreamRequest {
   
   ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7553,7 +7553,7 @@ class HttpStreamRequest {
   
   Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7573,7 +7573,7 @@ class HttpStreamRequest {
   
   CustomTask(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7593,7 +7593,7 @@ class HttpStreamRequest {
   
   DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7613,7 +7613,7 @@ class HttpStreamRequest {
   
   DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7633,7 +7633,7 @@ class HttpStreamRequest {
   
   DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7653,7 +7653,7 @@ class HttpStreamRequest {
   
   DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7673,7 +7673,7 @@ class HttpStreamRequest {
   
   DifferentiateUnions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7693,7 +7693,7 @@ class HttpStreamRequest {
   
   DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7713,7 +7713,7 @@ class HttpStreamRequest {
   
   DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7733,7 +7733,7 @@ class HttpStreamRequest {
   
   DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7753,7 +7753,7 @@ class HttpStreamRequest {
   
   DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7773,7 +7773,7 @@ class HttpStreamRequest {
   
   ExpectFailure(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7793,7 +7793,7 @@ class HttpStreamRequest {
   
   ExtractContactInfo(
       document: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7813,7 +7813,7 @@ class HttpStreamRequest {
   
   ExtractHobby(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7833,7 +7833,7 @@ class HttpStreamRequest {
   
   ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7853,7 +7853,7 @@ class HttpStreamRequest {
   
   ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7873,7 +7873,7 @@ class HttpStreamRequest {
   
   ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7893,7 +7893,7 @@ class HttpStreamRequest {
   
   ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7913,7 +7913,7 @@ class HttpStreamRequest {
   
   ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7933,7 +7933,7 @@ class HttpStreamRequest {
   
   FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7953,7 +7953,7 @@ class HttpStreamRequest {
   
   FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7973,7 +7973,7 @@ class HttpStreamRequest {
   
   FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -7993,7 +7993,7 @@ class HttpStreamRequest {
   
   FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8013,7 +8013,7 @@ class HttpStreamRequest {
   
   FnLiteralClassInputOutput(
       input: LiteralClassHello,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8033,7 +8033,7 @@ class HttpStreamRequest {
   
   FnLiteralUnionClassInputOutput(
       input: LiteralClassOne | LiteralClassTwo,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8053,7 +8053,7 @@ class HttpStreamRequest {
   
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8073,7 +8073,7 @@ class HttpStreamRequest {
   
   FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8093,7 +8093,7 @@ class HttpStreamRequest {
   
   FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8113,7 +8113,7 @@ class HttpStreamRequest {
   
   FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8133,7 +8133,7 @@ class HttpStreamRequest {
   
   FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8153,7 +8153,7 @@ class HttpStreamRequest {
   
   FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8173,7 +8173,7 @@ class HttpStreamRequest {
   
   FnOutputInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8193,7 +8193,7 @@ class HttpStreamRequest {
   
   FnOutputLiteralBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8213,7 +8213,7 @@ class HttpStreamRequest {
   
   FnOutputLiteralInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8233,7 +8233,7 @@ class HttpStreamRequest {
   
   FnOutputLiteralString(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8253,7 +8253,7 @@ class HttpStreamRequest {
   
   FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8273,7 +8273,7 @@ class HttpStreamRequest {
   
   FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8293,7 +8293,7 @@ class HttpStreamRequest {
   
   FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8313,7 +8313,7 @@ class HttpStreamRequest {
   
   FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8333,7 +8333,7 @@ class HttpStreamRequest {
   
   GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8353,7 +8353,7 @@ class HttpStreamRequest {
   
   GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8373,7 +8373,7 @@ class HttpStreamRequest {
   
   GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8393,7 +8393,7 @@ class HttpStreamRequest {
   
   InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8413,7 +8413,7 @@ class HttpStreamRequest {
   
   InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8433,7 +8433,7 @@ class HttpStreamRequest {
   
   InOutSingleLiteralStringMapKey(
       m: Partial<Record<"key", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8453,7 +8453,7 @@ class HttpStreamRequest {
   
   JsonTypeAliasCycle(
       input: JsonValue,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8473,7 +8473,7 @@ class HttpStreamRequest {
   
   LiteralUnionsTest(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8493,7 +8493,7 @@ class HttpStreamRequest {
   
   MakeBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8513,7 +8513,7 @@ class HttpStreamRequest {
   
   MakeNestedBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8533,7 +8533,7 @@ class HttpStreamRequest {
   
   MakeSemanticContainer(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8553,7 +8553,7 @@ class HttpStreamRequest {
   
   MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8573,7 +8573,7 @@ class HttpStreamRequest {
   
   MergeAliasAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8593,7 +8593,7 @@ class HttpStreamRequest {
   
   MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8613,7 +8613,7 @@ class HttpStreamRequest {
   
   NestedAlias(
       c: number | string | boolean | number | string[] | Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8633,7 +8633,7 @@ class HttpStreamRequest {
   
   NullLiteralClassHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8653,7 +8653,7 @@ class HttpStreamRequest {
   
   OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8673,7 +8673,7 @@ class HttpStreamRequest {
   
   OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8693,7 +8693,7 @@ class HttpStreamRequest {
   
   PredictAge(
       name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8713,7 +8713,7 @@ class HttpStreamRequest {
   
   PredictAgeBare(
       inp: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8733,7 +8733,7 @@ class HttpStreamRequest {
   
   PrimitiveAlias(
       p: number | string | boolean | number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8753,7 +8753,7 @@ class HttpStreamRequest {
   
   PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8773,7 +8773,7 @@ class HttpStreamRequest {
   
   PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8793,7 +8793,7 @@ class HttpStreamRequest {
   
   PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8813,7 +8813,7 @@ class HttpStreamRequest {
   
   PromptTestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8833,7 +8833,7 @@ class HttpStreamRequest {
   
   PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8853,7 +8853,7 @@ class HttpStreamRequest {
   
   PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8873,7 +8873,7 @@ class HttpStreamRequest {
   
   PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8893,7 +8893,7 @@ class HttpStreamRequest {
   
   RecursiveAliasCycle(
       input: RecAliasOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8913,7 +8913,7 @@ class HttpStreamRequest {
   
   RecursiveClassWithAliasIndirection(
       cls: NodeWithAliasIndirection,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8933,7 +8933,7 @@ class HttpStreamRequest {
   
   ReturnAliasWithMergedAttributes(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8953,7 +8953,7 @@ class HttpStreamRequest {
   
   ReturnFailingAssert(
       inp: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8973,7 +8973,7 @@ class HttpStreamRequest {
   
   ReturnJsonEntry(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -8993,7 +8993,7 @@ class HttpStreamRequest {
   
   ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9013,7 +9013,7 @@ class HttpStreamRequest {
   
   SchemaDescriptions(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9033,7 +9033,7 @@ class HttpStreamRequest {
   
   SimpleRecursiveListAlias(
       input: RecursiveListAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9053,7 +9053,7 @@ class HttpStreamRequest {
   
   SimpleRecursiveMapAlias(
       input: RecursiveMapAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9073,7 +9073,7 @@ class HttpStreamRequest {
   
   StreamBigNumbers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9093,7 +9093,7 @@ class HttpStreamRequest {
   
   StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9113,7 +9113,7 @@ class HttpStreamRequest {
   
   StreamOneBigNumber(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9133,7 +9133,7 @@ class HttpStreamRequest {
   
   StreamUnionIntegers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9153,7 +9153,7 @@ class HttpStreamRequest {
   
   StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9173,7 +9173,7 @@ class HttpStreamRequest {
   
   TakeRecAliasDep(
       input: RecursiveAliasDependency,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9193,7 +9193,7 @@ class HttpStreamRequest {
   
   TellStory(
       story: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9213,7 +9213,7 @@ class HttpStreamRequest {
   
   TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9233,7 +9233,7 @@ class HttpStreamRequest {
   
   TestAnthropicShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9253,7 +9253,7 @@ class HttpStreamRequest {
   
   TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9273,7 +9273,7 @@ class HttpStreamRequest {
   
   TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9293,7 +9293,7 @@ class HttpStreamRequest {
   
   TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9313,7 +9313,7 @@ class HttpStreamRequest {
   
   TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9333,7 +9333,7 @@ class HttpStreamRequest {
   
   TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9353,7 +9353,7 @@ class HttpStreamRequest {
   
   TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9373,7 +9373,7 @@ class HttpStreamRequest {
   
   TestAzureFailure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9393,7 +9393,7 @@ class HttpStreamRequest {
   
   TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9413,7 +9413,7 @@ class HttpStreamRequest {
   
   TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9433,7 +9433,7 @@ class HttpStreamRequest {
   
   TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9453,7 +9453,7 @@ class HttpStreamRequest {
   
   TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9473,7 +9473,7 @@ class HttpStreamRequest {
   
   TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9493,7 +9493,7 @@ class HttpStreamRequest {
   
   TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9513,7 +9513,7 @@ class HttpStreamRequest {
   
   TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9533,7 +9533,7 @@ class HttpStreamRequest {
   
   TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9553,7 +9553,7 @@ class HttpStreamRequest {
   
   TestFallbackStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9573,7 +9573,7 @@ class HttpStreamRequest {
   
   TestFallbackToShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9593,7 +9593,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9613,7 +9613,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9633,7 +9633,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9653,7 +9653,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9673,7 +9673,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9693,7 +9693,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9713,7 +9713,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9733,7 +9733,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9753,7 +9753,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9773,7 +9773,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9793,7 +9793,7 @@ class HttpStreamRequest {
   
   TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9813,7 +9813,7 @@ class HttpStreamRequest {
   
   TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9833,7 +9833,7 @@ class HttpStreamRequest {
   
   TestGeminiOpenAiGeneric(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9853,7 +9853,7 @@ class HttpStreamRequest {
   
   TestGeminiSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9873,7 +9873,7 @@ class HttpStreamRequest {
   
   TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9893,7 +9893,7 @@ class HttpStreamRequest {
   
   TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9913,7 +9913,7 @@ class HttpStreamRequest {
   
   TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9933,7 +9933,7 @@ class HttpStreamRequest {
   
   TestImageListInput(
       imgs: Image[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9953,7 +9953,7 @@ class HttpStreamRequest {
   
   TestMemory(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9973,7 +9973,7 @@ class HttpStreamRequest {
   
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -9993,7 +9993,7 @@ class HttpStreamRequest {
   
   TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10013,7 +10013,7 @@ class HttpStreamRequest {
   
   TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10033,7 +10033,7 @@ class HttpStreamRequest {
   
   TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10053,7 +10053,7 @@ class HttpStreamRequest {
   
   TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10073,7 +10073,7 @@ class HttpStreamRequest {
   
   TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10093,7 +10093,7 @@ class HttpStreamRequest {
   
   TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10113,7 +10113,7 @@ class HttpStreamRequest {
   
   TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10133,7 +10133,7 @@ class HttpStreamRequest {
   
   TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10153,7 +10153,7 @@ class HttpStreamRequest {
   
   TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10173,7 +10173,7 @@ class HttpStreamRequest {
   
   TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10193,7 +10193,7 @@ class HttpStreamRequest {
   
   TestOpenAIShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10213,7 +10213,7 @@ class HttpStreamRequest {
   
   TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10233,7 +10233,7 @@ class HttpStreamRequest {
   
   TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10253,7 +10253,7 @@ class HttpStreamRequest {
   
   TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10273,7 +10273,7 @@ class HttpStreamRequest {
   
   TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10293,7 +10293,7 @@ class HttpStreamRequest {
   
   TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10313,7 +10313,7 @@ class HttpStreamRequest {
   
   TestSingleFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10333,7 +10333,7 @@ class HttpStreamRequest {
   
   TestThinking(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10353,7 +10353,7 @@ class HttpStreamRequest {
   
   TestUniverseQuestion(
       question: UniverseQuestionInput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10373,7 +10373,7 @@ class HttpStreamRequest {
   
   TestVertex(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10393,7 +10393,7 @@ class HttpStreamRequest {
   
   TestVertexWithSystemInstructions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10413,7 +10413,7 @@ class HttpStreamRequest {
   
   UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10433,7 +10433,7 @@ class HttpStreamRequest {
   
   UseBlockConstraint(
       inp: BlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10453,7 +10453,7 @@ class HttpStreamRequest {
   
   UseMalformedConstraints(
       a: MalformedConstraints2,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
@@ -10473,7 +10473,7 @@ class HttpStreamRequest {
   
   UseNestedBlockConstraint(
       inp: NestedBlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
