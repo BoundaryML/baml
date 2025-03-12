@@ -5,18 +5,18 @@
 //! for a single FunctionId, even if multiple Collectors or FunctionLogs want it.
 //! It uses manual reference counting (`inc_ref` / `dec_ref`) to free memory for
 //! a FunctionId as soon as there are no more "owners."
+use baml_types::tracing::events::{
+    FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest,
+    LoggedLLMResponse, TraceData, TraceEvent,
+};
 use indexmap::{IndexMap, IndexSet};
 use once_cell::sync::Lazy;
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::hash::Hash;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
-
-use baml_types::tracing::events::{
-    FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest,
-    LoggedLLMResponse, TraceData, TraceEvent,
-};
 
 use crate::tracingv2::publisher::publisher::PublisherMessage;
 
@@ -470,7 +470,7 @@ impl Drop for FunctionLog {
 /// Represents the "inner" data for a single function call
 /// (the real set of usage/calls/timing, etc.).
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct FunctionLogInner {
     pub id: String,
     pub function_name: String,
@@ -489,20 +489,20 @@ impl FunctionLogInner {
     }
 }
 
-#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct Usage {
     pub input_tokens: Option<i64>,
     pub output_tokens: Option<i64>,
 }
 
-#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct Timing {
     pub start_time_utc_ms: i64,
     pub duration_ms: Option<i64>,
     pub time_to_first_parsed_ms: Option<i64>,
 }
 
-#[derive(Debug, Default, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Default, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct StreamTiming {
     pub start_time_utc_ms: i64,
     pub duration_ms: Option<i64>,
@@ -510,7 +510,8 @@ pub struct StreamTiming {
     pub time_to_first_token_ms: Option<i64>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
 pub enum LLMCallKind {
     Basic(LLMCall),
     Stream(LLMStreamCall),
@@ -526,7 +527,7 @@ impl LLMCallKind {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct LLMCall {
     pub client_name: String,
     pub provider: String,
@@ -537,7 +538,7 @@ pub struct LLMCall {
     pub selected: bool,
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct LLMStreamCall {
     pub client_name: String,
     pub provider: String,

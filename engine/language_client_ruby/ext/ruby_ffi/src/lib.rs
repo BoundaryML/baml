@@ -1,10 +1,11 @@
 use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
-use magnus::{class, function, method, prelude::*, Error, RHash, Ruby};
+use magnus::{class, function, method, prelude::*, Error, RArray, RHash, Ruby};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
+use types::log_collector::Collector;
 
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
@@ -112,6 +113,7 @@ impl BamlRuntimeFfi {
         ctx: &RuntimeContextManager,
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
+        collector: RArray,
     ) -> Result<FunctionResult> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -123,14 +125,18 @@ impl BamlRuntimeFfi {
             }
         };
 
+        let mut collectors = Vec::new();
+        for i in collector.into_iter() {
+            collectors.push(<&Collector>::try_convert(i)?.inner.clone());
+        }
+
         let retval = match rb_self.t.block_on(rb_self.inner.call_function(
             function_name.clone(),
             &args,
             &ctx.inner,
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
-            // TODO: wire this
-            Some(vec![]),
+            Some(collectors),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -153,6 +159,7 @@ impl BamlRuntimeFfi {
         ctx: &RuntimeContextManager,
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
+        collector: RArray,
     ) -> Result<FunctionResultStream> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -164,6 +171,11 @@ impl BamlRuntimeFfi {
             }
         };
 
+        let mut collectors = Vec::new();
+        for i in collector.into_iter() {
+            collectors.push(<&Collector>::try_convert(i)?.inner.clone());
+        }
+
         log::debug!("Streaming {function_name} with:\nargs: {args:#?}\nctx ???");
 
         let retval = match rb_self.inner.stream_function(
@@ -172,8 +184,7 @@ impl BamlRuntimeFfi {
             &ctx.inner,
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
-            // TODO: wire this
-            Some(vec![]),
+            Some(collectors),
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(
@@ -255,10 +266,10 @@ fn init(ruby: &Ruby) -> Result<()> {
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 5))?;
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 6))?;
     runtime_class.define_method(
         "stream_function",
-        method!(BamlRuntimeFfi::stream_function, 5),
+        method!(BamlRuntimeFfi::stream_function, 6),
     )?;
 
     FunctionResult::define_in_ruby(&module)?;
@@ -276,6 +287,9 @@ fn init(ruby: &Ruby) -> Result<()> {
     types::client_registry::ClientRegistry::define_in_ruby(&module)?;
     types::media::Audio::define_in_ruby(&module)?;
     types::media::Image::define_in_ruby(&module)?;
+
+    // Register the new log collector classes
+    types::log_collector::define_all_in_ruby(&module)?;
 
     // everything below this is for our own testing purposes
     module.define_module_function(
