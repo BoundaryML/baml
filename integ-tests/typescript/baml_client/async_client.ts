@@ -22,6 +22,7 @@ import type { partial_types } from "./partial_types"
 import type * as types from "./types"
 import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, DummyOutput, DynEnumOne, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, Tree, TwoStoriesOneTitle, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
 import type TypeBuilder from "./type_builder"
+import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 /**
@@ -35,6 +36,8 @@ export class BamlAsyncClient {
   private stream_client: BamlStreamClient
   private http_request: HttpRequest
   private http_stream_request: HttpStreamRequest
+  private llm_response_parser: LlmResponseParser
+  private llm_stream_parser: LlmStreamParser
 
   constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
     this.runtime = runtime
@@ -42,6 +45,8 @@ export class BamlAsyncClient {
     this.stream_client = new BamlStreamClient(runtime, ctx_manager)
     this.http_request = new HttpRequest(runtime, ctx_manager)
     this.http_stream_request = new HttpStreamRequest(runtime, ctx_manager)
+    this.llm_response_parser = new LlmResponseParser(runtime, ctx_manager)
+    this.llm_stream_parser = new LlmStreamParser(runtime, ctx_manager)
   }
 
   get stream() {
@@ -54,6 +59,14 @@ export class BamlAsyncClient {
 
   get streamRequest() {
     return this.http_stream_request
+  }
+
+  get parse() {
+    return this.llm_response_parser
+  }
+
+  get parseStream() {
+    return this.llm_stream_parser
   }
 
   

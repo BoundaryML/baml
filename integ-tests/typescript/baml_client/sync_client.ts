@@ -21,6 +21,7 @@ import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull 
 import type * as types from "./types"
 import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, DummyOutput, DynEnumOne, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, Tree, TwoStoriesOneTitle, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
 import type TypeBuilder from "./type_builder"
+import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 /**
@@ -35,10 +36,14 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>;
 export class BamlSyncClient {
   private httpRequest: HttpRequest
   private httpStreamRequest: HttpStreamRequest
+  private llmResponseParser: LlmResponseParser
+  private llmStreamParser: LlmStreamParser
 
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {
-    this.httpRequest = new HttpRequest(runtime, ctx_manager)
-    this.httpStreamRequest = new HttpStreamRequest(runtime, ctx_manager)
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {
+    this.httpRequest = new HttpRequest(runtime, ctxManager)
+    this.httpStreamRequest = new HttpStreamRequest(runtime, ctxManager)
+    this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
+    this.llmStreamParser = new LlmStreamParser(runtime, ctxManager)
   }
 
   /*
@@ -56,6 +61,14 @@ export class BamlSyncClient {
 
   get streamRequest() {
     return this.httpStreamRequest
+  }
+
+  get parse() {
+    return this.llmResponseParser
+  }
+
+  get parseStream() {
+    return this.llmStreamParser
   }
 
   

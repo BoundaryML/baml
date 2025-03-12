@@ -371,6 +371,42 @@ impl BamlRuntime {
     }
 
     #[napi]
+    pub fn parse_llm_response(
+        &self,
+        env: Env,
+        function_name: String,
+        llm_response: String,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> napi::Result<serde_json::Value> {
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
+        let parsed = self
+            .inner
+            .parse_llm_response(
+                function_name,
+                llm_response,
+                allow_partials,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+            )
+            .map_err(from_anyhow_error)?;
+
+        let value = serde_json::to_value(if allow_partials {
+            parsed.serialize_partial()
+        } else {
+            parsed.serialize_final()
+        });
+
+        value.map_err(|e| napi::Error::from_reason(format!("Could not parse LLM response: {e}")))
+    }
+
+    #[napi]
     pub fn set_log_event_callback(
         &mut self,
         env: Env,

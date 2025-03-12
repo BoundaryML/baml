@@ -182,6 +182,22 @@ struct InlinedBaml {
 #[template(path = "tracing.ts.j2", escape = "none")]
 struct TypescriptTracing {}
 
+#[derive(askama::Template)]
+#[template(path = "parser.ts.j2", escape = "none")]
+struct TypscriptLlmParser {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+impl From<TypescriptClient> for TypscriptLlmParser {
+    fn from(ts_client: TypescriptClient) -> Self {
+        Self {
+            funcs: ts_client.funcs,
+            types: ts_client.types,
+        }
+    }
+}
+
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
@@ -200,6 +216,7 @@ pub(crate) fn generate(
     collector.add_template::<AsyncTypescriptClient>("async_client.ts", (ir, generator))?;
     collector.add_template::<SyncTypescriptClient>("sync_client.ts", (ir, generator))?;
     collector.add_template::<TypescriptGlobals>("globals.ts", (ir, generator))?;
+    collector.add_template::<TypscriptLlmParser>("parser.ts", (ir, generator))?;
     collector.add_template::<TypescriptTracing>("tracing.ts", (ir, generator))?;
     collector.add_template::<TypescriptInit>("index.ts", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.ts", (ir, generator))?;
@@ -302,6 +319,15 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             partial_return_types,
             types,
         })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypscriptLlmParser {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
     }
 }
 

@@ -6,6 +6,7 @@ import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
+import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 /**
@@ -20,10 +21,14 @@ export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>;
 export class BamlSyncClient {
   private httpRequest: HttpRequest
   private httpStreamRequest: HttpStreamRequest
+  private llmResponseParser: LlmResponseParser
+  private llmStreamParser: LlmStreamParser
 
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {
-    this.httpRequest = new HttpRequest(runtime, ctx_manager)
-    this.httpStreamRequest = new HttpStreamRequest(runtime, ctx_manager)
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {
+    this.httpRequest = new HttpRequest(runtime, ctxManager)
+    this.httpStreamRequest = new HttpStreamRequest(runtime, ctxManager)
+    this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
+    this.llmStreamParser = new LlmStreamParser(runtime, ctxManager)
   }
 
   /*
@@ -41,6 +46,14 @@ export class BamlSyncClient {
 
   get streamRequest() {
     return this.httpStreamRequest
+  }
+
+  get parse() {
+    return this.llmResponseParser
+  }
+
+  get parseStream() {
+    return this.llmStreamParser
   }
 
   {% for fn in funcs %}

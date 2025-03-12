@@ -7,6 +7,7 @@ import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
+import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 /**
@@ -20,6 +21,8 @@ export class BamlAsyncClient {
   private stream_client: BamlStreamClient
   private http_request: HttpRequest
   private http_stream_request: HttpStreamRequest
+  private llm_response_parser: LlmResponseParser
+  private llm_stream_parser: LlmStreamParser
 
   constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
     this.runtime = runtime
@@ -27,6 +30,8 @@ export class BamlAsyncClient {
     this.stream_client = new BamlStreamClient(runtime, ctx_manager)
     this.http_request = new HttpRequest(runtime, ctx_manager)
     this.http_stream_request = new HttpStreamRequest(runtime, ctx_manager)
+    this.llm_response_parser = new LlmResponseParser(runtime, ctx_manager)
+    this.llm_stream_parser = new LlmStreamParser(runtime, ctx_manager)
   }
 
   get stream() {
@@ -39,6 +44,14 @@ export class BamlAsyncClient {
 
   get streamRequest() {
     return this.http_stream_request
+  }
+
+  get parse() {
+    return this.llm_response_parser
+  }
+
+  get parseStream() {
+    return this.llm_stream_parser
   }
 
   {% for fn in funcs %}
