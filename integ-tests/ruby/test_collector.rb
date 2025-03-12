@@ -7,11 +7,8 @@ require_relative "baml_client/client"
 
 b = Baml.Client
 
-# Read image and audio test data
-# You might need to implement similar base64 test data as in Python
-# image_b64 = File.read('path/to/image_b64.txt')
-# audio_b64 = File.read('path/to/audio_b64.txt')
-
+# Run all these tests with:
+# infisical run --env=test -- mise exec -- rake test test_collector.rb TEST_OPTS="--name=/collector/"
 describe "Ruby Collector Tests" do
   before do
     # Ensure collector is empty before each test
@@ -24,14 +21,11 @@ describe "Ruby Collector Tests" do
     # Force garbage collection and check collector is empty
     GC.start
     # GC.start(full_mark: true, immediate_sweep: true);
-    # Wait for 2 seconds to ensure any asynchronous operations complete
-    puts "----------- after is running ---------"
     assert_equal 0, Baml::Collector.__function_span_count if Baml::Collector.respond_to?(:__function_span_count)
-    puts "----------- after is done ---------"
   end
 
   it "test_collector_no_stream_success" do
-    collector = Baml::Collector.new(name: "my-collector")
+    collector = Baml::Collector.new()
     function_logs = collector.logs
     assert_equal 0, function_logs.length
 
@@ -98,6 +92,13 @@ describe "Ruby Collector Tests" do
     assert_includes response.body["choices"][0]["message"], "content"
     refute_nil response.body["choices"][0]["message"]["content"]
 
+    puts "call.body.headers: #{call.http_response.headers}"
+    # Verify response headers contain openai-version
+    refute_nil response.headers
+    assert_kind_of Hash, response.headers
+    assert_includes response.headers, "openai-version"
+    refute_nil response.headers["openai-version"]
+
     # Verify call timing
     call_timing = call.timing
     assert call_timing.start_time_utc_ms > 0
@@ -131,7 +132,7 @@ describe "Ruby Collector Tests" do
     assert Baml::Collector.__function_span_count > 0 if Baml::Collector.respond_to?(:__function_span_count)
   end
 
-  it "tests collector no stream no getting logs" do
+  it "tests_collector_no_stream_no_getting_logs" do
     collector = Baml::Collector.new(name: "my-collector")
     function_logs = collector.logs
     assert_equal 0, function_logs.length
@@ -144,7 +145,7 @@ describe "Ruby Collector Tests" do
     assert Baml::Collector.__function_span_count > 0 if Baml::Collector.respond_to?(:__function_span_count)
   end
 
-  it "tests collector stream success" do
+  it "tests_collector_stream_success" do
     collector = Baml::Collector.new(name: "my-collector")
     function_logs = collector.logs
     assert_equal 0, function_logs.length
@@ -220,7 +221,7 @@ describe "Ruby Collector Tests" do
     assert Baml::Collector.__function_span_count > 0 if Baml::Collector.respond_to?(:__function_span_count)
   end
 
-  it "tests collector multiple calls usage" do
+  it "tests_collector_multiple_calls_usage" do
     collector = Baml::Collector.new(name: "my-collector")
 
     # First call
@@ -246,7 +247,7 @@ describe "Ruby Collector Tests" do
     assert_equal total_output, collector.usage.output_tokens
   end
 
-  it "tests collector multiple collectors" do
+  it "tests_collector_multiple_collectors" do
     coll1 = Baml::Collector.new(name: "collector-1")
     coll2 = Baml::Collector.new(name: "collector-2")
 
@@ -293,7 +294,7 @@ describe "Ruby Collector Tests" do
     assert_equal usage_first_call_coll2.output_tokens, coll2.usage.output_tokens
   end
 
-  it "tests collector sync calls" do
+  it "tests_collector_sync_calls" do
     collector = Baml::Collector.new(name: "sync-collector")
 
     # First call
@@ -322,7 +323,7 @@ describe "Ruby Collector Tests" do
 
   # Since Ruby doesn't have async/await patterns like Python,
   # the parallel calls test might need to use threads
-  it "tests collector parallel calls" do
+  it "tests_collector_parallel_calls" do
     collector = Baml::Collector.new(name: "parallel-collector")
 
     # Execute two calls in parallel using threads
@@ -338,7 +339,6 @@ describe "Ruby Collector Tests" do
     assert_equal 2, logs.length
 
     # Ensure each call is recorded properly
-    puts "------------------------- logs iteration", logs
     logs.each do |log|
       assert_equal "TestOpenAIGPT4oMini", log.function_name
       assert_equal "call", log.log_type

@@ -1,13 +1,14 @@
 use std::cell::RefCell;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use crate::Result;
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
 use magnus::scan_args::get_kwargs;
 use magnus::{
     class, function, method, rb_sys::FromRawValue, scan_args::scan_args,
-    try_convert::TryConvertOwned, value::ReprValue, Error, IntoValue, IntoValueFromNative, Module,
-    Object, RArray, RModule, Ruby, Value,
+    try_convert::TryConvertOwned, value::ReprValue, Error, IntoValueFromNative, Module, Object,
+    RArray, RModule, Ruby, Value,
 };
 use magnus::{prelude::*, RHash};
 
@@ -55,24 +56,29 @@ crate::lang_wrapper!(
     clone_safe
 );
 
-#[magnus::wrap(class = "Baml::Ffi::FunctionLog", free_immediately, size)]
-pub(crate) struct FunctionLog {
-    pub(crate) inner: RefCell<baml_runtime::tracingv2::storage::storage::FunctionLog>,
-}
+crate::lang_wrapper!(
+    FunctionLog,
+    "Baml::Ffi::FunctionLog",
+    baml_runtime::tracingv2::storage::storage::FunctionLog,
+    sync_thread_safe
+);
 
-#[magnus::wrap(class = "Baml::Ffi::LLMCall", free_immediately, size)]
-pub(crate) struct LLMCall {
-    pub(crate) inner: RefCell<baml_runtime::tracingv2::storage::storage::LLMCall>,
-}
+crate::lang_wrapper!(
+    LLMCall,
+    "Baml::Ffi::LLMCall",
+    baml_runtime::tracingv2::storage::storage::LLMCall,
+    clone_safe
+);
 
 unsafe impl IntoValueFromNative for LLMCall {}
 
 unsafe impl IntoValueFromNative for LLMStreamCall {}
-
-#[magnus::wrap(class = "Baml::Ffi::LLMStreamCall", free_immediately, size)]
-pub(crate) struct LLMStreamCall {
-    pub(crate) inner: RefCell<baml_runtime::tracingv2::storage::storage::LLMStreamCall>,
-}
+crate::lang_wrapper!(
+    LLMStreamCall,
+    "Baml::Ffi::LLMStreamCall",
+    baml_runtime::tracingv2::storage::storage::LLMStreamCall,
+    clone_safe
+);
 
 unsafe impl TryConvertOwned for &FunctionLog {}
 
@@ -93,7 +99,7 @@ impl Collector {
         function_logs
             .iter()
             .map(|inner_function_log| FunctionLog {
-                inner: RefCell::new(inner_function_log.clone()),
+                inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
             .collect()
     }
@@ -102,7 +108,7 @@ impl Collector {
         self.inner
             .last_function_log()
             .map(|inner_function_log| FunctionLog {
-                inner: RefCell::new(inner_function_log.clone()),
+                inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
     }
 
@@ -110,7 +116,7 @@ impl Collector {
         self.inner
             .function_log_by_id(&baml_types::tracing::events::FunctionId(function_log_id))
             .map(|inner_function_log| FunctionLog {
-                inner: RefCell::new(inner_function_log.clone()),
+                inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
     }
 
@@ -121,17 +127,13 @@ impl Collector {
     }
 
     pub fn to_s(&self) -> String {
-        // let logs = self.logs();
-        // let log_ids: Vec<String> = logs
-        //     .iter()
-        //     .map(|log| log.inner.borrow().id().0.clone())
-        //     .collect();
-        // format!(
-        //     "LogCollector(name={}, function_log_ids=[{}])",
-        //     self.inner.borrow().name(),
-        //     log_ids.join(", ")
-        // )
-        "LogCollector".to_string()
+        let logs = self.inner.function_logs();
+        let log_ids: Vec<String> = logs.iter().map(|log| log.id().0.clone()).collect();
+        format!(
+            "LogCollector(name={}, function_log_ids=[{}])",
+            self.inner.name(),
+            log_ids.join(", ")
+        )
     }
 
     pub fn __function_span_count() -> u32 {
@@ -166,20 +168,31 @@ impl Collector {
 
 impl FunctionLog {
     pub fn to_s(&self) -> String {
-        let mut inner = self.inner.borrow_mut();
-        let calls_str = inner
-            .calls()
+        // Acquire the lock once and extract all needed data
+        let mut guard = self.inner.lock().unwrap();
+        let id = guard.id().0.clone();
+        let function_name = guard.function_name();
+        let log_type = guard.log_type().to_string();
+        let timing_data = guard.timing().clone();
+        let usage_data = guard.usage().clone();
+        let calls_data = guard.calls();
+        let raw_llm_response = guard.raw_llm_response().unwrap_or("null".to_string());
+        // Release the lock by dropping the guard
+        drop(guard);
+
+        // Now process calls without holding the lock
+        let calls_str = calls_data
             .into_iter()
             .map(|call| match call {
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
                     let llm_call = LLMCall {
-                        inner: RefCell::new(inner.clone()),
+                        inner: Arc::new(inner.clone()),
                     };
                     llm_call.to_s()
                 }
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
                     let stream_call = LLMStreamCall {
-                        inner: RefCell::new(inner.clone()),
+                        inner: Arc::new(inner.clone()),
                     };
                     stream_call.to_s()
                 }
@@ -187,57 +200,66 @@ impl FunctionLog {
             .collect::<Vec<_>>()
             .join(", ");
 
+        // Create timing and usage objects from cloned data
+        let timing = Timing {
+            inner: timing_data.into(),
+        };
+        let usage = Usage {
+            inner: usage_data.into(),
+        };
+
+        // Format the string with all the extracted data
         format!(
             "FunctionLog(id={}, function_name={}, type={}, timing={}, usage={}, calls=[{}], raw_llm_response={})",
-            inner.id().0,
-            inner.function_name(),
-            inner.log_type().to_string(),
-            self.timing().to_s(),
-            self.usage().to_s(),
+            id,
+            function_name,
+            log_type,
+            timing.to_s(),
+            usage.to_s(),
             calls_str,
-            inner.raw_llm_response().unwrap_or("null".to_string())
+            raw_llm_response
         )
     }
 
     pub fn id(&self) -> String {
-        self.inner.borrow().id().0.clone()
+        self.inner.lock().unwrap().id().0.clone()
     }
 
     pub fn function_name(&self) -> String {
-        self.inner.borrow_mut().function_name()
+        self.inner.lock().unwrap().function_name()
     }
 
     pub fn log_type(&self) -> String {
-        self.inner.borrow_mut().log_type().to_string()
+        self.inner.lock().unwrap().log_type().to_string()
     }
 
     pub fn timing(&self) -> Timing {
         Timing {
-            inner: self.inner.borrow_mut().timing().into(),
+            inner: self.inner.lock().unwrap().timing().into(),
         }
     }
 
     pub fn usage(&self) -> Usage {
         Usage {
-            inner: self.inner.borrow_mut().usage().into(),
+            inner: self.inner.lock().unwrap().usage().into(),
         }
     }
 
     pub fn calls(&self) -> RArray {
-        let calls = self.inner.borrow_mut().calls();
+        let calls = self.inner.lock().unwrap().calls();
         let array = RArray::new();
 
         for call in calls {
             match call {
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
                     let llm_call = LLMCall {
-                        inner: RefCell::new(inner.clone()),
+                        inner: Arc::new(inner.clone()),
                     };
                     array.push(llm_call).unwrap();
                 }
                 baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
                     let stream_call = LLMStreamCall {
-                        inner: RefCell::new(inner.clone()),
+                        inner: Arc::new(inner.clone()),
                     };
                     array.push(stream_call).unwrap();
                 }
@@ -248,17 +270,17 @@ impl FunctionLog {
     }
 
     pub fn raw_llm_response(&self) -> Option<String> {
-        self.inner.borrow_mut().raw_llm_response()
+        self.inner.lock().unwrap().raw_llm_response()
     }
 
     pub fn selected_call(ruby: &Ruby, rb_self: &Self) -> Option<Value> {
-        let calls = rb_self.inner.borrow_mut().calls();
+        let calls = rb_self.inner.lock().unwrap().calls();
         calls.into_iter().find_map(|call| match call {
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Basic(inner) => {
                 if inner.selected {
                     Some(
                         LLMCall {
-                            inner: RefCell::new(inner.clone()),
+                            inner: Arc::new(inner.clone()),
                         }
                         .to_value(ruby)
                         .unwrap(),
@@ -270,7 +292,7 @@ impl FunctionLog {
             baml_runtime::tracingv2::storage::storage::LLMCallKind::Stream(inner) => {
                 if inner.selected {
                     let stream_call = LLMStreamCall {
-                        inner: RefCell::new(inner.clone()),
+                        inner: Arc::new(inner.clone()),
                     };
                     Some(stream_call.to_value(ruby).unwrap())
                 } else {
@@ -442,12 +464,11 @@ unsafe impl TryConvertOwned for &LLMCall {}
 
 impl LLMCall {
     pub fn selected(&self) -> bool {
-        self.inner.borrow().selected
+        self.inner.selected
     }
 
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
-            .borrow()
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
@@ -455,52 +476,44 @@ impl LLMCall {
 
     pub fn http_response(&self) -> Option<HTTPResponse> {
         self.inner
-            .borrow()
             .response
             .clone()
             .map(|resp| HTTPResponse { inner: resp })
     }
 
     pub fn usage(&self) -> Option<Usage> {
-        self.inner
-            .borrow()
-            .usage
-            .clone()
-            .map(|u| Usage { inner: u.into() })
+        self.inner.usage.clone().map(|u| Usage { inner: u.into() })
     }
 
     pub fn timing(&self) -> Timing {
         Timing {
-            inner: self.inner.borrow().timing.clone().into(),
+            inner: self.inner.timing.clone().into(),
         }
     }
 
     pub fn provider(&self) -> String {
-        self.inner.borrow().provider.clone()
+        self.inner.provider.clone()
     }
 
     pub fn client_name(&self) -> String {
-        self.inner.borrow().client_name.clone()
+        self.inner.client_name.clone()
     }
 
     pub fn to_s(&self) -> String {
-        let inner = self.inner.borrow();
         format!(
             "LLMCall(provider={}, client_name={}, selected={}, usage={}, timing={}, http_request={}, http_response={})",
-            inner.provider,
-            inner.client_name,
-            inner.selected,
-            inner.usage.as_ref().map_or("null".to_string(), |u| format!("{:?}", u)),
-            format!("{:?}", inner.timing),
-            inner.request.as_ref().map_or("null".to_string(), |req| format!("{:?}", req)),
-            inner.response.as_ref().map_or("null".to_string(), |resp| format!("{:?}", resp))
+            self.inner.provider,
+            self.inner.client_name,
+            self.inner.selected,
+            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{:?}", u)),
+            format!("{:?}", self.inner.timing),
+            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{:?}", req)),
+            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{:?}", resp))
         )
     }
 
     pub fn to_value(self, ruby: &Ruby) -> crate::Result<Value> {
-        let inner = self.inner.borrow();
-
-        serde_magnus::serialize(&*inner)
+        serde_magnus::serialize(&self.inner)
             .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
     }
 
@@ -520,72 +533,61 @@ impl LLMCall {
     }
 }
 
+// TODO: remove?
 unsafe impl TryConvertOwned for &LLMStreamCall {}
 
 impl LLMStreamCall {
     pub fn to_s(&self) -> String {
-        let inner = self.inner.borrow();
         format!(
             "LLMStreamCall(provider={}, client_name={}, selected={}, usage={}, timing={}, http_request={}, http_response={})",
-            inner.provider,
-            inner.client_name,
-            inner.selected,
-            inner.usage.as_ref().map_or("null".to_string(), |u| format!("{:?}", u)),
-            format!("{:?}", inner.timing),
-            inner.request.as_ref().map_or("null".to_string(), |req| format!("{:?}", req)),
-            inner.response.as_ref().map_or("null".to_string(), |resp| format!("{:?}", resp))
+            self.inner.provider,
+            self.inner.client_name,
+            self.inner.selected,
+            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{:?}", u)),
+            format!("{:?}", self.inner.timing),
+            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{:?}", req)),
+            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{:?}", resp))
         )
     }
 
     pub fn http_request(&self) -> Option<HTTPRequest> {
         self.inner
-            .borrow()
             .request
             .clone()
             .map(|req| HTTPRequest { inner: req })
     }
 
     pub fn http_response(&self) -> Option<HTTPResponse> {
-        self.inner
-            .borrow()
-            .response
-            .clone()
-            .map(|resp| HTTPResponse {
-                inner: resp.clone(),
-            })
+        self.inner.response.clone().map(|resp| HTTPResponse {
+            inner: resp.clone(),
+        })
     }
 
     pub fn provider(&self) -> String {
-        self.inner.borrow().provider.clone()
+        self.inner.provider.clone()
     }
 
     pub fn client_name(&self) -> String {
-        self.inner.borrow().client_name.clone()
+        self.inner.client_name.clone()
     }
 
     pub fn selected(&self) -> bool {
-        self.inner.borrow().selected
+        self.inner.selected
     }
 
     pub fn usage(&self) -> Option<Usage> {
-        self.inner
-            .borrow()
-            .usage
-            .clone()
-            .map(|u| Usage { inner: u.into() })
+        self.inner.usage.clone().map(|u| Usage { inner: u.into() })
     }
 
     pub fn timing(&self) -> StreamTiming {
         StreamTiming {
-            inner: self.inner.borrow().timing.clone().into(),
+            inner: self.inner.timing.clone().into(),
         }
     }
 
     pub fn to_value(self, ruby: &Ruby) -> crate::Result<Value> {
-        let mut inner = self.inner.borrow_mut();
-
         // Serialize to Ruby value - handle errors gracefully
-        serde_magnus::serialize(&*inner)
+        serde_magnus::serialize(&self.inner)
             .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
     }
 
@@ -624,42 +626,10 @@ impl HTTPRequest {
         self.inner.method.clone()
     }
 
-    pub fn headers(&self) -> magnus::RHash {
+    pub fn headers(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
         // Convert headers to Ruby hash
-        let result = magnus::RHash::new();
-        if let Some(headers) = self.inner.headers.as_object() {
-            for (k, v) in headers {
-                // let value = match v {
-                //     serde_json::Value::Null => unsafe { magnus::Value::nil() },
-                //     serde_json::Value::Bool(b) => unsafe {
-                //         magnus::Value::from_ruby_value(magnus::Boolean::from(*b).as_value())
-                //     },
-                //     serde_json::Value::Number(n) => {
-                //         if let Some(i) = n.as_i64() {
-                //             unsafe {
-                //                 magnus::Value::from_ruby_value(
-                //                     magnus::Integer::from_i64(i).as_value(),
-                //                 )
-                //             }
-                //         } else if let Some(f) = n.as_f64() {
-                //             unsafe {
-                //                 magnus::Value::from_ruby_value(
-                //                     magnus::Float::from_f64(f).as_value(),
-                //                 )
-                //             }
-                //         } else {
-                //             unsafe { magnus::Value::nil() }
-                //         }
-                //     }
-                //     serde_json::Value::String(s) => unsafe {
-                //         magnus::Value::from_ruby_value(magnus::RString::new(s).as_value())
-                //     },
-                //     _ => unsafe { magnus::Value::nil() },
-                // };
-                // result.aset(k.clone(), value).unwrap();
-            }
-        }
-        result
+        serde_magnus::serialize(&rb_self.inner.headers)
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
     }
 
     pub fn body(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
@@ -694,42 +664,10 @@ impl HTTPResponse {
         self.inner.status
     }
 
-    pub fn headers(&self) -> magnus::RHash {
+    pub fn headers(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
         // Convert headers to Ruby hash
-        let result = magnus::RHash::new();
-        if let Some(headers) = self.inner.headers.as_object() {
-            for (k, v) in headers {
-                // let value = match v {
-                //     serde_json::Value::Null => unsafe { magnus::Value::nil() },
-                //     serde_json::Value::Bool(b) => unsafe {
-                //         magnus::Value::from_ruby_value(magnus::Boolean::from(*b).as_value())
-                //     },
-                //     serde_json::Value::Number(n) => {
-                //         if let Some(i) = n.as_i64() {
-                //             unsafe {
-                //                 magnus::Value::from_ruby_value(
-                //                     magnus::Integer::from_i64(i).as_value(),
-                //                 )
-                //             }
-                //         } else if let Some(f) = n.as_f64() {
-                //             unsafe {
-                //                 magnus::Value::from_ruby_value(
-                //                     magnus::Float::from_f64(f).as_value(),
-                //                 )
-                //             }
-                //         } else {
-                //             unsafe { magnus::Value::nil() }
-                //         }
-                //     }
-                //     serde_json::Value::String(s) => unsafe {
-                //         magnus::Value::from_ruby_value(magnus::RString::new(s).as_value())
-                //     },
-                //     _ => unsafe { magnus::Value::nil() },
-                // };
-                // result.aset(k.clone(), value).unwrap();
-            }
-        }
-        result
+        serde_magnus::serialize(&rb_self.inner.headers)
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
     }
 
     pub fn body(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {

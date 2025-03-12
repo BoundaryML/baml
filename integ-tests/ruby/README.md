@@ -7,6 +7,9 @@ Install `mise` to manage ruby installations
 `cargo build`
 `mise exec -- bundle install`
 `mise exec -- rake compile`
+
+to speed it up, you can try building the dev mode before doing rake compile:
+`export RB_SYS_CARGO_PROFILE="dev"` 
    
 ## Running Tests
 
