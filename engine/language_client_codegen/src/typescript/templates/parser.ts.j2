@@ -9,19 +9,19 @@ import type {
 import type TypeBuilder from "./type_builder"
 
 export class LlmResponseParser {
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
   {% for fn in funcs %}
   {{ fn.name }}(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): {{fn.return_type}} {
     try {
       return this.runtime.parseLlmResponse(
         "{{fn.name}}",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as {{fn.return_type}}
@@ -33,19 +33,19 @@ export class LlmResponseParser {
 }
 
 export class LlmStreamParser {
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
   {% for fn in funcs %}
   {{ fn.name }}(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): {{fn.partial_return_type}} {
     try {
       return this.runtime.parseLlmResponse(
         "{{fn.name}}",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as {{fn.partial_return_type}}

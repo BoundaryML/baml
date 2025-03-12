@@ -24,19 +24,19 @@ import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockCons
 import type TypeBuilder from "./type_builder"
 
 export class LlmResponseParser {
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
   
   AaaSamOutputFormat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Recipe {
     try {
       return this.runtime.parseLlmResponse(
         "AaaSamOutputFormat",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Recipe
@@ -47,14 +47,14 @@ export class LlmResponseParser {
   
   AliasThatPointsToRecursiveType(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): LinkedListAliasNode {
     try {
       return this.runtime.parseLlmResponse(
         "AliasThatPointsToRecursiveType",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as LinkedListAliasNode
@@ -65,14 +65,14 @@ export class LlmResponseParser {
   
   AliasWithMultipleAttrs(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<number,"gt_ten"> {
     try {
       return this.runtime.parseLlmResponse(
         "AliasWithMultipleAttrs",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<number,"gt_ten">
@@ -83,14 +83,14 @@ export class LlmResponseParser {
   
   AliasedInputClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputClass",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -101,14 +101,14 @@ export class LlmResponseParser {
   
   AliasedInputClass2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputClass2",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -119,14 +119,14 @@ export class LlmResponseParser {
   
   AliasedInputClassNested(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputClassNested",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -137,14 +137,14 @@ export class LlmResponseParser {
   
   AliasedInputEnum(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputEnum",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -155,14 +155,14 @@ export class LlmResponseParser {
   
   AliasedInputList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputList",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -173,14 +173,14 @@ export class LlmResponseParser {
   
   AllowedOptionals(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): OptionalListAndMap {
     try {
       return this.runtime.parseLlmResponse(
         "AllowedOptionals",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as OptionalListAndMap
@@ -191,14 +191,14 @@ export class LlmResponseParser {
   
   AssertFn(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "AssertFn",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -209,14 +209,14 @@ export class LlmResponseParser {
   
   AudioInput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AudioInput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -227,14 +227,14 @@ export class LlmResponseParser {
   
   BuildLinkedList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): LinkedList {
     try {
       return this.runtime.parseLlmResponse(
         "BuildLinkedList",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as LinkedList
@@ -245,14 +245,14 @@ export class LlmResponseParser {
   
   BuildTree(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Tree {
     try {
       return this.runtime.parseLlmResponse(
         "BuildTree",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Tree
@@ -263,14 +263,14 @@ export class LlmResponseParser {
   
   ClassThatPointsToRecursiveClassThroughAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ClassToRecAlias {
     try {
       return this.runtime.parseLlmResponse(
         "ClassThatPointsToRecursiveClassThroughAlias",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ClassToRecAlias
@@ -281,14 +281,14 @@ export class LlmResponseParser {
   
   ClassifyDynEnumTwo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | DynEnumTwo) {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyDynEnumTwo",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (string | DynEnumTwo)
@@ -299,14 +299,14 @@ export class LlmResponseParser {
   
   ClassifyMessage(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Category {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyMessage",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Category
@@ -317,14 +317,14 @@ export class LlmResponseParser {
   
   ClassifyMessage2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Category {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyMessage2",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Category
@@ -335,14 +335,14 @@ export class LlmResponseParser {
   
   ClassifyMessage3(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Category {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyMessage3",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Category
@@ -353,14 +353,14 @@ export class LlmResponseParser {
   
   Completion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "Completion",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -371,14 +371,14 @@ export class LlmResponseParser {
   
   CustomTask(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BookOrder | FlightConfirmation | GroceryReceipt {
     try {
       return this.runtime.parseLlmResponse(
         "CustomTask",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as BookOrder | FlightConfirmation | GroceryReceipt
@@ -389,14 +389,14 @@ export class LlmResponseParser {
   
   DescribeImage(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -407,14 +407,14 @@ export class LlmResponseParser {
   
   DescribeImage2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage2",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -425,14 +425,14 @@ export class LlmResponseParser {
   
   DescribeImage3(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage3",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -443,14 +443,14 @@ export class LlmResponseParser {
   
   DescribeImage4(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage4",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -461,14 +461,14 @@ export class LlmResponseParser {
   
   DifferentiateUnions(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): OriginalA | OriginalB {
     try {
       return this.runtime.parseLlmResponse(
         "DifferentiateUnions",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as OriginalA | OriginalB
@@ -479,14 +479,14 @@ export class LlmResponseParser {
   
   DummyOutputFunction(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DummyOutput {
     try {
       return this.runtime.parseLlmResponse(
         "DummyOutputFunction",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as DummyOutput
@@ -497,14 +497,14 @@ export class LlmResponseParser {
   
   DynamicFunc(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynamicClassTwo {
     try {
       return this.runtime.parseLlmResponse(
         "DynamicFunc",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as DynamicClassTwo
@@ -515,14 +515,14 @@ export class LlmResponseParser {
   
   DynamicInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynInputOutput {
     try {
       return this.runtime.parseLlmResponse(
         "DynamicInputOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as DynInputOutput
@@ -533,14 +533,14 @@ export class LlmResponseParser {
   
   DynamicListInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynInputOutput[] {
     try {
       return this.runtime.parseLlmResponse(
         "DynamicListInputOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as DynInputOutput[]
@@ -551,14 +551,14 @@ export class LlmResponseParser {
   
   ExpectFailure(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "ExpectFailure",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -569,14 +569,14 @@ export class LlmResponseParser {
   
   ExtractContactInfo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ContactInfo {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractContactInfo",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ContactInfo
@@ -587,14 +587,14 @@ export class LlmResponseParser {
   
   ExtractHobby(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | Hobby)[] {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractHobby",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (string | Hobby)[]
@@ -605,14 +605,14 @@ export class LlmResponseParser {
   
   ExtractNames(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string[] {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractNames",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string[]
@@ -623,14 +623,14 @@ export class LlmResponseParser {
   
   ExtractPeople(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Person[] {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractPeople",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Person[]
@@ -641,14 +641,14 @@ export class LlmResponseParser {
   
   ExtractReceiptInfo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ReceiptInfo {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractReceiptInfo",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ReceiptInfo
@@ -659,14 +659,14 @@ export class LlmResponseParser {
   
   ExtractResume(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Resume {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractResume",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Resume
@@ -677,14 +677,14 @@ export class LlmResponseParser {
   
   ExtractResume2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Resume {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractResume2",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Resume
@@ -695,14 +695,14 @@ export class LlmResponseParser {
   
   FnClassOptionalOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ClassOptionalOutput | null {
     try {
       return this.runtime.parseLlmResponse(
         "FnClassOptionalOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ClassOptionalOutput | null
@@ -713,14 +713,14 @@ export class LlmResponseParser {
   
   FnClassOptionalOutput2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ClassOptionalOutput2 | null {
     try {
       return this.runtime.parseLlmResponse(
         "FnClassOptionalOutput2",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ClassOptionalOutput2 | null
@@ -731,14 +731,14 @@ export class LlmResponseParser {
   
   FnEnumListOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): EnumOutput[] {
     try {
       return this.runtime.parseLlmResponse(
         "FnEnumListOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as EnumOutput[]
@@ -749,14 +749,14 @@ export class LlmResponseParser {
   
   FnEnumOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): EnumOutput {
     try {
       return this.runtime.parseLlmResponse(
         "FnEnumOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as EnumOutput
@@ -767,14 +767,14 @@ export class LlmResponseParser {
   
   FnLiteralClassInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): LiteralClassHello {
     try {
       return this.runtime.parseLlmResponse(
         "FnLiteralClassInputOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as LiteralClassHello
@@ -785,14 +785,14 @@ export class LlmResponseParser {
   
   FnLiteralUnionClassInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): LiteralClassOne | LiteralClassTwo {
     try {
       return this.runtime.parseLlmResponse(
         "FnLiteralUnionClassInputOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as LiteralClassOne | LiteralClassTwo
@@ -803,14 +803,14 @@ export class LlmResponseParser {
   
   FnNamedArgsSingleStringOptional(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "FnNamedArgsSingleStringOptional",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -821,14 +821,14 @@ export class LlmResponseParser {
   
   FnOutputBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): boolean {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputBool",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as boolean
@@ -839,14 +839,14 @@ export class LlmResponseParser {
   
   FnOutputClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestOutputClass {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClass",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TestOutputClass
@@ -857,14 +857,14 @@ export class LlmResponseParser {
   
   FnOutputClassList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestOutputClass[] {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClassList",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TestOutputClass[]
@@ -875,14 +875,14 @@ export class LlmResponseParser {
   
   FnOutputClassNested(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestClassNested {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClassNested",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TestClassNested
@@ -893,14 +893,14 @@ export class LlmResponseParser {
   
   FnOutputClassWithEnum(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestClassWithEnum {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClassWithEnum",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TestClassWithEnum
@@ -911,14 +911,14 @@ export class LlmResponseParser {
   
   FnOutputInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputInt",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -929,14 +929,14 @@ export class LlmResponseParser {
   
   FnOutputLiteralBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): false {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputLiteralBool",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as false
@@ -947,14 +947,14 @@ export class LlmResponseParser {
   
   FnOutputLiteralInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): 5 {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputLiteralInt",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as 5
@@ -965,14 +965,14 @@ export class LlmResponseParser {
   
   FnOutputLiteralString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): "example output" {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputLiteralString",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as "example output"
@@ -983,14 +983,14 @@ export class LlmResponseParser {
   
   FnOutputStringList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string[] {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputStringList",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string[]
@@ -1001,14 +1001,14 @@ export class LlmResponseParser {
   
   FnTestAliasedEnumOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestEnum {
     try {
       return this.runtime.parseLlmResponse(
         "FnTestAliasedEnumOutput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TestEnum
@@ -1019,14 +1019,14 @@ export class LlmResponseParser {
   
   FnTestClassAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestClassAlias {
     try {
       return this.runtime.parseLlmResponse(
         "FnTestClassAlias",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TestClassAlias
@@ -1037,14 +1037,14 @@ export class LlmResponseParser {
   
   FnTestNamedArgsSingleEnum(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "FnTestNamedArgsSingleEnum",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1055,14 +1055,14 @@ export class LlmResponseParser {
   
   GetDataType(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RaysData {
     try {
       return this.runtime.parseLlmResponse(
         "GetDataType",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RaysData
@@ -1073,14 +1073,14 @@ export class LlmResponseParser {
   
   GetOrderInfo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): OrderInfo {
     try {
       return this.runtime.parseLlmResponse(
         "GetOrderInfo",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as OrderInfo
@@ -1091,14 +1091,14 @@ export class LlmResponseParser {
   
   GetQuery(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): SearchParams {
     try {
       return this.runtime.parseLlmResponse(
         "GetQuery",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as SearchParams
@@ -1109,14 +1109,14 @@ export class LlmResponseParser {
   
   InOutEnumMapKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Partial<Record<types.MapKey, string>> {
     try {
       return this.runtime.parseLlmResponse(
         "InOutEnumMapKey",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Partial<Record<types.MapKey, string>>
@@ -1127,14 +1127,14 @@ export class LlmResponseParser {
   
   InOutLiteralStringUnionMapKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Partial<Record<"one" | "two" | "three" | "four", string>> {
     try {
       return this.runtime.parseLlmResponse(
         "InOutLiteralStringUnionMapKey",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Partial<Record<"one" | "two" | "three" | "four", string>>
@@ -1145,14 +1145,14 @@ export class LlmResponseParser {
   
   InOutSingleLiteralStringMapKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Partial<Record<"key", string>> {
     try {
       return this.runtime.parseLlmResponse(
         "InOutSingleLiteralStringMapKey",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Partial<Record<"key", string>>
@@ -1163,14 +1163,14 @@ export class LlmResponseParser {
   
   JsonTypeAliasCycle(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): JsonValue {
     try {
       return this.runtime.parseLlmResponse(
         "JsonTypeAliasCycle",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as JsonValue
@@ -1181,14 +1181,14 @@ export class LlmResponseParser {
   
   LiteralUnionsTest(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): 1 | true | "string output" {
     try {
       return this.runtime.parseLlmResponse(
         "LiteralUnionsTest",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as 1 | true | "string output"
@@ -1199,14 +1199,14 @@ export class LlmResponseParser {
   
   MakeBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<BlockConstraint,"cross_field"> {
     try {
       return this.runtime.parseLlmResponse(
         "MakeBlockConstraint",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<BlockConstraint,"cross_field">
@@ -1217,14 +1217,14 @@ export class LlmResponseParser {
   
   MakeNestedBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): NestedBlockConstraint {
     try {
       return this.runtime.parseLlmResponse(
         "MakeNestedBlockConstraint",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as NestedBlockConstraint
@@ -1235,14 +1235,14 @@ export class LlmResponseParser {
   
   MakeSemanticContainer(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): SemanticContainer {
     try {
       return this.runtime.parseLlmResponse(
         "MakeSemanticContainer",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as SemanticContainer
@@ -1253,14 +1253,14 @@ export class LlmResponseParser {
   
   MapAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, string[]> {
     try {
       return this.runtime.parseLlmResponse(
         "MapAlias",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Record<string, string[]>
@@ -1271,14 +1271,14 @@ export class LlmResponseParser {
   
   MergeAliasAttributes(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): MergeAttrs {
     try {
       return this.runtime.parseLlmResponse(
         "MergeAliasAttributes",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as MergeAttrs
@@ -1289,14 +1289,14 @@ export class LlmResponseParser {
   
   MyFunc(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): DynamicOutput {
     try {
       return this.runtime.parseLlmResponse(
         "MyFunc",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as DynamicOutput
@@ -1307,14 +1307,14 @@ export class LlmResponseParser {
   
   NestedAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number | string | boolean | number | string[] | Record<string, string[]> {
     try {
       return this.runtime.parseLlmResponse(
         "NestedAlias",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number | string | boolean | number | string[] | Record<string, string[]>
@@ -1325,14 +1325,14 @@ export class LlmResponseParser {
   
   NullLiteralClassHello(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ClassForNullLiteral {
     try {
       return this.runtime.parseLlmResponse(
         "NullLiteralClassHello",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ClassForNullLiteral
@@ -1343,14 +1343,14 @@ export class LlmResponseParser {
   
   OpenAIWithAnthropicResponseHello(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "OpenAIWithAnthropicResponseHello",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1361,14 +1361,14 @@ export class LlmResponseParser {
   
   OptionalTest_Function(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (OptionalTest_ReturnType | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "OptionalTest_Function",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (OptionalTest_ReturnType | null)[]
@@ -1379,14 +1379,14 @@ export class LlmResponseParser {
   
   PredictAge(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): FooAny {
     try {
       return this.runtime.parseLlmResponse(
         "PredictAge",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as FooAny
@@ -1397,14 +1397,14 @@ export class LlmResponseParser {
   
   PredictAgeBare(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<number,"too_big"> {
     try {
       return this.runtime.parseLlmResponse(
         "PredictAgeBare",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<number,"too_big">
@@ -1415,14 +1415,14 @@ export class LlmResponseParser {
   
   PrimitiveAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number | string | boolean | number {
     try {
       return this.runtime.parseLlmResponse(
         "PrimitiveAlias",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number | string | boolean | number
@@ -1433,14 +1433,14 @@ export class LlmResponseParser {
   
   PromptTestClaude(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestClaude",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1451,14 +1451,14 @@ export class LlmResponseParser {
   
   PromptTestClaudeChat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestClaudeChat",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1469,14 +1469,14 @@ export class LlmResponseParser {
   
   PromptTestClaudeChatNoSystem(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestClaudeChatNoSystem",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1487,14 +1487,14 @@ export class LlmResponseParser {
   
   PromptTestOpenAI(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestOpenAI",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1505,14 +1505,14 @@ export class LlmResponseParser {
   
   PromptTestOpenAIChat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestOpenAIChat",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1523,14 +1523,14 @@ export class LlmResponseParser {
   
   PromptTestOpenAIChatNoSystem(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestOpenAIChatNoSystem",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1541,14 +1541,14 @@ export class LlmResponseParser {
   
   PromptTestStreaming(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestStreaming",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1559,14 +1559,14 @@ export class LlmResponseParser {
   
   RecursiveAliasCycle(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RecAliasOne {
     try {
       return this.runtime.parseLlmResponse(
         "RecursiveAliasCycle",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RecAliasOne
@@ -1577,14 +1577,14 @@ export class LlmResponseParser {
   
   RecursiveClassWithAliasIndirection(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): NodeWithAliasIndirection {
     try {
       return this.runtime.parseLlmResponse(
         "RecursiveClassWithAliasIndirection",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as NodeWithAliasIndirection
@@ -1595,14 +1595,14 @@ export class LlmResponseParser {
   
   ReturnAliasWithMergedAttributes(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<number,"gt_ten"> {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnAliasWithMergedAttributes",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<number,"gt_ten">
@@ -1613,14 +1613,14 @@ export class LlmResponseParser {
   
   ReturnFailingAssert(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnFailingAssert",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -1631,14 +1631,14 @@ export class LlmResponseParser {
   
   ReturnJsonEntry(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): JsonTemplate {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnJsonEntry",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as JsonTemplate
@@ -1649,14 +1649,14 @@ export class LlmResponseParser {
   
   ReturnMalformedConstraints(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): MalformedConstraints {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnMalformedConstraints",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as MalformedConstraints
@@ -1667,14 +1667,14 @@ export class LlmResponseParser {
   
   SchemaDescriptions(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Schema {
     try {
       return this.runtime.parseLlmResponse(
         "SchemaDescriptions",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Schema
@@ -1685,14 +1685,14 @@ export class LlmResponseParser {
   
   SimpleRecursiveListAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RecursiveListAlias {
     try {
       return this.runtime.parseLlmResponse(
         "SimpleRecursiveListAlias",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RecursiveListAlias
@@ -1703,14 +1703,14 @@ export class LlmResponseParser {
   
   SimpleRecursiveMapAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RecursiveMapAlias {
     try {
       return this.runtime.parseLlmResponse(
         "SimpleRecursiveMapAlias",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RecursiveMapAlias
@@ -1721,14 +1721,14 @@ export class LlmResponseParser {
   
   StreamBigNumbers(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): BigNumbers {
     try {
       return this.runtime.parseLlmResponse(
         "StreamBigNumbers",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as BigNumbers
@@ -1739,14 +1739,14 @@ export class LlmResponseParser {
   
   StreamFailingAssertion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TwoStoriesOneTitle {
     try {
       return this.runtime.parseLlmResponse(
         "StreamFailingAssertion",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TwoStoriesOneTitle
@@ -1757,14 +1757,14 @@ export class LlmResponseParser {
   
   StreamOneBigNumber(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "StreamOneBigNumber",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -1775,14 +1775,14 @@ export class LlmResponseParser {
   
   StreamUnionIntegers(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (number | string)[] {
     try {
       return this.runtime.parseLlmResponse(
         "StreamUnionIntegers",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (number | string)[]
@@ -1793,14 +1793,14 @@ export class LlmResponseParser {
   
   StreamingCompoundNumbers(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): CompoundBigNumbers {
     try {
       return this.runtime.parseLlmResponse(
         "StreamingCompoundNumbers",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as CompoundBigNumbers
@@ -1811,14 +1811,14 @@ export class LlmResponseParser {
   
   TakeRecAliasDep(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RecursiveAliasDependency {
     try {
       return this.runtime.parseLlmResponse(
         "TakeRecAliasDep",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RecursiveAliasDependency
@@ -1829,14 +1829,14 @@ export class LlmResponseParser {
   
   TellStory(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TellStory",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1847,14 +1847,14 @@ export class LlmResponseParser {
   
   TestAnthropic(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAnthropic",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1865,14 +1865,14 @@ export class LlmResponseParser {
   
   TestAnthropicShorthand(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAnthropicShorthand",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1883,14 +1883,14 @@ export class LlmResponseParser {
   
   TestAws(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAws",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1901,14 +1901,14 @@ export class LlmResponseParser {
   
   TestAwsInvalidAccessKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidAccessKey",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1919,14 +1919,14 @@ export class LlmResponseParser {
   
   TestAwsInvalidProfile(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidProfile",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1937,14 +1937,14 @@ export class LlmResponseParser {
   
   TestAwsInvalidRegion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidRegion",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1955,14 +1955,14 @@ export class LlmResponseParser {
   
   TestAwsInvalidSessionToken(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidSessionToken",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1973,14 +1973,14 @@ export class LlmResponseParser {
   
   TestAzure(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzure",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -1991,14 +1991,14 @@ export class LlmResponseParser {
   
   TestAzureFailure(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureFailure",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2009,14 +2009,14 @@ export class LlmResponseParser {
   
   TestAzureO1NoMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO1NoMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2027,14 +2027,14 @@ export class LlmResponseParser {
   
   TestAzureO1WithMaxCompletionTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO1WithMaxCompletionTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2045,14 +2045,14 @@ export class LlmResponseParser {
   
   TestAzureO1WithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO1WithMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2063,14 +2063,14 @@ export class LlmResponseParser {
   
   TestAzureO3NoMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO3NoMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2081,14 +2081,14 @@ export class LlmResponseParser {
   
   TestAzureO3WithMaxCompletionTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO3WithMaxCompletionTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2099,14 +2099,14 @@ export class LlmResponseParser {
   
   TestAzureWithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureWithMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2117,14 +2117,14 @@ export class LlmResponseParser {
   
   TestCaching(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestCaching",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2135,14 +2135,14 @@ export class LlmResponseParser {
   
   TestFallbackClient(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFallbackClient",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2153,14 +2153,14 @@ export class LlmResponseParser {
   
   TestFallbackStrategy(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFallbackStrategy",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2171,14 +2171,14 @@ export class LlmResponseParser {
   
   TestFallbackToShorthand(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFallbackToShorthand",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2189,14 +2189,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleBool",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2207,14 +2207,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleClass",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2225,14 +2225,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleEnumList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleEnumList",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2243,14 +2243,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleFloat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleFloat",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2261,14 +2261,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleInt",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2279,14 +2279,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleMapStringToClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, StringToClassEntry> {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleMapStringToClass",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Record<string, StringToClassEntry>
@@ -2297,14 +2297,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleMapStringToMap(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, Record<string, string>> {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleMapStringToMap",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Record<string, Record<string, string>>
@@ -2315,14 +2315,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleMapStringToString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Record<string, string> {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleMapStringToString",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Record<string, string>
@@ -2333,14 +2333,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleString",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2351,14 +2351,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleStringArray(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleStringArray",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2369,14 +2369,14 @@ export class LlmResponseParser {
   
   TestFnNamedArgsSingleStringList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string[] {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleStringList",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string[]
@@ -2387,14 +2387,14 @@ export class LlmResponseParser {
   
   TestGemini(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGemini",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2405,14 +2405,14 @@ export class LlmResponseParser {
   
   TestGeminiOpenAiGeneric(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGeminiOpenAiGeneric",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2423,14 +2423,14 @@ export class LlmResponseParser {
   
   TestGeminiSystem(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGeminiSystem",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2441,14 +2441,14 @@ export class LlmResponseParser {
   
   TestGeminiSystemAsChat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGeminiSystemAsChat",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2459,14 +2459,14 @@ export class LlmResponseParser {
   
   TestImageInput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestImageInput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2477,14 +2477,14 @@ export class LlmResponseParser {
   
   TestImageInputAnthropic(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestImageInputAnthropic",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2495,14 +2495,14 @@ export class LlmResponseParser {
   
   TestImageListInput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestImageListInput",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2513,14 +2513,14 @@ export class LlmResponseParser {
   
   TestMemory(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): TestMemoryOutput {
     try {
       return this.runtime.parseLlmResponse(
         "TestMemory",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as TestMemoryOutput
@@ -2531,14 +2531,14 @@ export class LlmResponseParser {
   
   TestMulticlassNamedArgs(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestMulticlassNamedArgs",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2549,14 +2549,14 @@ export class LlmResponseParser {
   
   TestNamedArgsLiteralBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestNamedArgsLiteralBool",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2567,14 +2567,14 @@ export class LlmResponseParser {
   
   TestNamedArgsLiteralInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestNamedArgsLiteralInt",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2585,14 +2585,14 @@ export class LlmResponseParser {
   
   TestNamedArgsLiteralString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestNamedArgsLiteralString",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2603,14 +2603,14 @@ export class LlmResponseParser {
   
   TestOllama(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOllama",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2621,14 +2621,14 @@ export class LlmResponseParser {
   
   TestOpenAI(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAI",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2639,14 +2639,14 @@ export class LlmResponseParser {
   
   TestOpenAIGPT4oMini(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIGPT4oMini",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2657,14 +2657,14 @@ export class LlmResponseParser {
   
   TestOpenAILegacyProvider(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAILegacyProvider",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2675,14 +2675,14 @@ export class LlmResponseParser {
   
   TestOpenAIO1NoMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIO1NoMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2693,14 +2693,14 @@ export class LlmResponseParser {
   
   TestOpenAIO1WithMaxCompletionTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIO1WithMaxCompletionTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2711,14 +2711,14 @@ export class LlmResponseParser {
   
   TestOpenAIO1WithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIO1WithMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2729,14 +2729,14 @@ export class LlmResponseParser {
   
   TestOpenAIShorthand(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIShorthand",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2747,14 +2747,14 @@ export class LlmResponseParser {
   
   TestOpenAIWithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIWithMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2765,14 +2765,14 @@ export class LlmResponseParser {
   
   TestOpenAIWithNullMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIWithNullMaxTokens",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2783,14 +2783,14 @@ export class LlmResponseParser {
   
   TestRetryConstant(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestRetryConstant",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2801,14 +2801,14 @@ export class LlmResponseParser {
   
   TestRetryExponential(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestRetryExponential",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2819,14 +2819,14 @@ export class LlmResponseParser {
   
   TestRoundRobinStrategy(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestRoundRobinStrategy",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2837,14 +2837,14 @@ export class LlmResponseParser {
   
   TestSingleFallbackClient(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestSingleFallbackClient",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2855,14 +2855,14 @@ export class LlmResponseParser {
   
   TestThinking(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): CustomStory {
     try {
       return this.runtime.parseLlmResponse(
         "TestThinking",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as CustomStory
@@ -2873,14 +2873,14 @@ export class LlmResponseParser {
   
   TestUniverseQuestion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): UniverseQuestion {
     try {
       return this.runtime.parseLlmResponse(
         "TestUniverseQuestion",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as UniverseQuestion
@@ -2891,14 +2891,14 @@ export class LlmResponseParser {
   
   TestVertex(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestVertex",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2909,14 +2909,14 @@ export class LlmResponseParser {
   
   TestVertexWithSystemInstructions(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestVertexWithSystemInstructions",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -2927,14 +2927,14 @@ export class LlmResponseParser {
   
   UnionTest_Function(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): UnionTest_ReturnType {
     try {
       return this.runtime.parseLlmResponse(
         "UnionTest_Function",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as UnionTest_ReturnType
@@ -2945,14 +2945,14 @@ export class LlmResponseParser {
   
   UseBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "UseBlockConstraint",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -2963,14 +2963,14 @@ export class LlmResponseParser {
   
   UseMalformedConstraints(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "UseMalformedConstraints",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -2981,14 +2981,14 @@ export class LlmResponseParser {
   
   UseNestedBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "UseNestedBlockConstraint",
         llmResponse,
         false,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -3000,19 +3000,19 @@ export class LlmResponseParser {
 }
 
 export class LlmStreamParser {
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
   
   AaaSamOutputFormat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.Recipe {
     try {
       return this.runtime.parseLlmResponse(
         "AaaSamOutputFormat",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.Recipe
@@ -3023,14 +3023,14 @@ export class LlmStreamParser {
   
   AliasThatPointsToRecursiveType(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.LinkedListAliasNode {
     try {
       return this.runtime.parseLlmResponse(
         "AliasThatPointsToRecursiveType",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.LinkedListAliasNode
@@ -3041,14 +3041,14 @@ export class LlmStreamParser {
   
   AliasWithMultipleAttrs(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<number,"gt_ten"> {
     try {
       return this.runtime.parseLlmResponse(
         "AliasWithMultipleAttrs",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<number,"gt_ten">
@@ -3059,14 +3059,14 @@ export class LlmStreamParser {
   
   AliasedInputClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputClass",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3077,14 +3077,14 @@ export class LlmStreamParser {
   
   AliasedInputClass2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputClass2",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3095,14 +3095,14 @@ export class LlmStreamParser {
   
   AliasedInputClassNested(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputClassNested",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3113,14 +3113,14 @@ export class LlmStreamParser {
   
   AliasedInputEnum(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputEnum",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3131,14 +3131,14 @@ export class LlmStreamParser {
   
   AliasedInputList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AliasedInputList",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3149,14 +3149,14 @@ export class LlmStreamParser {
   
   AllowedOptionals(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.OptionalListAndMap {
     try {
       return this.runtime.parseLlmResponse(
         "AllowedOptionals",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.OptionalListAndMap
@@ -3167,14 +3167,14 @@ export class LlmStreamParser {
   
   AssertFn(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "AssertFn",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -3185,14 +3185,14 @@ export class LlmStreamParser {
   
   AudioInput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "AudioInput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3203,14 +3203,14 @@ export class LlmStreamParser {
   
   BuildLinkedList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.LinkedList {
     try {
       return this.runtime.parseLlmResponse(
         "BuildLinkedList",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.LinkedList
@@ -3221,14 +3221,14 @@ export class LlmStreamParser {
   
   BuildTree(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.Tree {
     try {
       return this.runtime.parseLlmResponse(
         "BuildTree",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.Tree
@@ -3239,14 +3239,14 @@ export class LlmStreamParser {
   
   ClassThatPointsToRecursiveClassThroughAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.ClassToRecAlias {
     try {
       return this.runtime.parseLlmResponse(
         "ClassThatPointsToRecursiveClassThroughAlias",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.ClassToRecAlias
@@ -3257,14 +3257,14 @@ export class LlmStreamParser {
   
   ClassifyDynEnumTwo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | DynEnumTwo) {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyDynEnumTwo",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (string | DynEnumTwo)
@@ -3275,14 +3275,14 @@ export class LlmStreamParser {
   
   ClassifyMessage(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): types.Category {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyMessage",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as types.Category
@@ -3293,14 +3293,14 @@ export class LlmStreamParser {
   
   ClassifyMessage2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): types.Category {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyMessage2",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as types.Category
@@ -3311,14 +3311,14 @@ export class LlmStreamParser {
   
   ClassifyMessage3(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): types.Category {
     try {
       return this.runtime.parseLlmResponse(
         "ClassifyMessage3",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as types.Category
@@ -3329,14 +3329,14 @@ export class LlmStreamParser {
   
   Completion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "Completion",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3347,14 +3347,14 @@ export class LlmStreamParser {
   
   CustomTask(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((partial_types.BookOrder | null) | (partial_types.FlightConfirmation | null) | (partial_types.GroceryReceipt | null)) {
     try {
       return this.runtime.parseLlmResponse(
         "CustomTask",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((partial_types.BookOrder | null) | (partial_types.FlightConfirmation | null) | (partial_types.GroceryReceipt | null))
@@ -3365,14 +3365,14 @@ export class LlmStreamParser {
   
   DescribeImage(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3383,14 +3383,14 @@ export class LlmStreamParser {
   
   DescribeImage2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage2",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3401,14 +3401,14 @@ export class LlmStreamParser {
   
   DescribeImage3(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage3",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3419,14 +3419,14 @@ export class LlmStreamParser {
   
   DescribeImage4(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "DescribeImage4",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3437,14 +3437,14 @@ export class LlmStreamParser {
   
   DifferentiateUnions(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((partial_types.OriginalA | null) | (partial_types.OriginalB | null)) {
     try {
       return this.runtime.parseLlmResponse(
         "DifferentiateUnions",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((partial_types.OriginalA | null) | (partial_types.OriginalB | null))
@@ -3455,14 +3455,14 @@ export class LlmStreamParser {
   
   DummyOutputFunction(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.DummyOutput {
     try {
       return this.runtime.parseLlmResponse(
         "DummyOutputFunction",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.DummyOutput
@@ -3473,14 +3473,14 @@ export class LlmStreamParser {
   
   DynamicFunc(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.DynamicClassTwo {
     try {
       return this.runtime.parseLlmResponse(
         "DynamicFunc",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.DynamicClassTwo
@@ -3491,14 +3491,14 @@ export class LlmStreamParser {
   
   DynamicInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.DynInputOutput {
     try {
       return this.runtime.parseLlmResponse(
         "DynamicInputOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.DynInputOutput
@@ -3509,14 +3509,14 @@ export class LlmStreamParser {
   
   DynamicListInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (partial_types.DynInputOutput | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "DynamicListInputOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (partial_types.DynInputOutput | null)[]
@@ -3527,14 +3527,14 @@ export class LlmStreamParser {
   
   ExpectFailure(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "ExpectFailure",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3545,14 +3545,14 @@ export class LlmStreamParser {
   
   ExtractContactInfo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.ContactInfo {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractContactInfo",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.ContactInfo
@@ -3563,14 +3563,14 @@ export class LlmStreamParser {
   
   ExtractHobby(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | Hobby | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractHobby",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (string | Hobby | null)[]
@@ -3581,14 +3581,14 @@ export class LlmStreamParser {
   
   ExtractNames(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractNames",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (string | null)[]
@@ -3599,14 +3599,14 @@ export class LlmStreamParser {
   
   ExtractPeople(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (partial_types.Person | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractPeople",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (partial_types.Person | null)[]
@@ -3617,14 +3617,14 @@ export class LlmStreamParser {
   
   ExtractReceiptInfo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.ReceiptInfo {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractReceiptInfo",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.ReceiptInfo
@@ -3635,14 +3635,14 @@ export class LlmStreamParser {
   
   ExtractResume(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.Resume {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractResume",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.Resume
@@ -3653,14 +3653,14 @@ export class LlmStreamParser {
   
   ExtractResume2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.Resume {
     try {
       return this.runtime.parseLlmResponse(
         "ExtractResume2",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.Resume
@@ -3671,14 +3671,14 @@ export class LlmStreamParser {
   
   FnClassOptionalOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((partial_types.ClassOptionalOutput | null) | null) {
     try {
       return this.runtime.parseLlmResponse(
         "FnClassOptionalOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((partial_types.ClassOptionalOutput | null) | null)
@@ -3689,14 +3689,14 @@ export class LlmStreamParser {
   
   FnClassOptionalOutput2(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((partial_types.ClassOptionalOutput2 | null) | null) {
     try {
       return this.runtime.parseLlmResponse(
         "FnClassOptionalOutput2",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((partial_types.ClassOptionalOutput2 | null) | null)
@@ -3707,14 +3707,14 @@ export class LlmStreamParser {
   
   FnEnumListOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (EnumOutput | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "FnEnumListOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (EnumOutput | null)[]
@@ -3725,14 +3725,14 @@ export class LlmStreamParser {
   
   FnEnumOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): types.EnumOutput {
     try {
       return this.runtime.parseLlmResponse(
         "FnEnumOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as types.EnumOutput
@@ -3743,14 +3743,14 @@ export class LlmStreamParser {
   
   FnLiteralClassInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.LiteralClassHello {
     try {
       return this.runtime.parseLlmResponse(
         "FnLiteralClassInputOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.LiteralClassHello
@@ -3761,14 +3761,14 @@ export class LlmStreamParser {
   
   FnLiteralUnionClassInputOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((partial_types.LiteralClassOne | null) | (partial_types.LiteralClassTwo | null)) {
     try {
       return this.runtime.parseLlmResponse(
         "FnLiteralUnionClassInputOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((partial_types.LiteralClassOne | null) | (partial_types.LiteralClassTwo | null))
@@ -3779,14 +3779,14 @@ export class LlmStreamParser {
   
   FnNamedArgsSingleStringOptional(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "FnNamedArgsSingleStringOptional",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -3797,14 +3797,14 @@ export class LlmStreamParser {
   
   FnOutputBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): boolean {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputBool",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as boolean
@@ -3815,14 +3815,14 @@ export class LlmStreamParser {
   
   FnOutputClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.TestOutputClass {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClass",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.TestOutputClass
@@ -3833,14 +3833,14 @@ export class LlmStreamParser {
   
   FnOutputClassList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (partial_types.TestOutputClass | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClassList",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (partial_types.TestOutputClass | null)[]
@@ -3851,14 +3851,14 @@ export class LlmStreamParser {
   
   FnOutputClassNested(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.TestClassNested {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClassNested",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.TestClassNested
@@ -3869,14 +3869,14 @@ export class LlmStreamParser {
   
   FnOutputClassWithEnum(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.TestClassWithEnum {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputClassWithEnum",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.TestClassWithEnum
@@ -3887,14 +3887,14 @@ export class LlmStreamParser {
   
   FnOutputInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputInt",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -3905,14 +3905,14 @@ export class LlmStreamParser {
   
   FnOutputLiteralBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): false {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputLiteralBool",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as false
@@ -3923,14 +3923,14 @@ export class LlmStreamParser {
   
   FnOutputLiteralInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): 5 {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputLiteralInt",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as 5
@@ -3941,14 +3941,14 @@ export class LlmStreamParser {
   
   FnOutputLiteralString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): "example output" {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputLiteralString",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as "example output"
@@ -3959,14 +3959,14 @@ export class LlmStreamParser {
   
   FnOutputStringList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "FnOutputStringList",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (string | null)[]
@@ -3977,14 +3977,14 @@ export class LlmStreamParser {
   
   FnTestAliasedEnumOutput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): types.TestEnum {
     try {
       return this.runtime.parseLlmResponse(
         "FnTestAliasedEnumOutput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as types.TestEnum
@@ -3995,14 +3995,14 @@ export class LlmStreamParser {
   
   FnTestClassAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.TestClassAlias {
     try {
       return this.runtime.parseLlmResponse(
         "FnTestClassAlias",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.TestClassAlias
@@ -4013,14 +4013,14 @@ export class LlmStreamParser {
   
   FnTestNamedArgsSingleEnum(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "FnTestNamedArgsSingleEnum",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4031,14 +4031,14 @@ export class LlmStreamParser {
   
   GetDataType(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.RaysData {
     try {
       return this.runtime.parseLlmResponse(
         "GetDataType",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.RaysData
@@ -4049,14 +4049,14 @@ export class LlmStreamParser {
   
   GetOrderInfo(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.OrderInfo {
     try {
       return this.runtime.parseLlmResponse(
         "GetOrderInfo",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.OrderInfo
@@ -4067,14 +4067,14 @@ export class LlmStreamParser {
   
   GetQuery(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.SearchParams {
     try {
       return this.runtime.parseLlmResponse(
         "GetQuery",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.SearchParams
@@ -4085,14 +4085,14 @@ export class LlmStreamParser {
   
   InOutEnumMapKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (Record<MapKey, (string | null)> ) {
     try {
       return this.runtime.parseLlmResponse(
         "InOutEnumMapKey",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (Record<MapKey, (string | null)> )
@@ -4103,14 +4103,14 @@ export class LlmStreamParser {
   
   InOutLiteralStringUnionMapKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (Record<"one" | "two" | "three" | "four", (string | null)> ) {
     try {
       return this.runtime.parseLlmResponse(
         "InOutLiteralStringUnionMapKey",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (Record<"one" | "two" | "three" | "four", (string | null)> )
@@ -4121,14 +4121,14 @@ export class LlmStreamParser {
   
   InOutSingleLiteralStringMapKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (Record<"key", (string | null)> ) {
     try {
       return this.runtime.parseLlmResponse(
         "InOutSingleLiteralStringMapKey",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (Record<"key", (string | null)> )
@@ -4139,14 +4139,14 @@ export class LlmStreamParser {
   
   JsonTypeAliasCycle(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): JsonValue {
     try {
       return this.runtime.parseLlmResponse(
         "JsonTypeAliasCycle",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as JsonValue
@@ -4157,14 +4157,14 @@ export class LlmStreamParser {
   
   LiteralUnionsTest(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (1 | true | "string output") {
     try {
       return this.runtime.parseLlmResponse(
         "LiteralUnionsTest",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (1 | true | "string output")
@@ -4175,14 +4175,14 @@ export class LlmStreamParser {
   
   MakeBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<partial_types.BlockConstraint,"cross_field"> {
     try {
       return this.runtime.parseLlmResponse(
         "MakeBlockConstraint",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<partial_types.BlockConstraint,"cross_field">
@@ -4193,14 +4193,14 @@ export class LlmStreamParser {
   
   MakeNestedBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.NestedBlockConstraint {
     try {
       return this.runtime.parseLlmResponse(
         "MakeNestedBlockConstraint",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.NestedBlockConstraint
@@ -4211,14 +4211,14 @@ export class LlmStreamParser {
   
   MakeSemanticContainer(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.SemanticContainer {
     try {
       return this.runtime.parseLlmResponse(
         "MakeSemanticContainer",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.SemanticContainer
@@ -4229,14 +4229,14 @@ export class LlmStreamParser {
   
   MapAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (Record<string, (string | null)[]> ) {
     try {
       return this.runtime.parseLlmResponse(
         "MapAlias",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (Record<string, (string | null)[]> )
@@ -4247,14 +4247,14 @@ export class LlmStreamParser {
   
   MergeAliasAttributes(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.MergeAttrs {
     try {
       return this.runtime.parseLlmResponse(
         "MergeAliasAttributes",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.MergeAttrs
@@ -4265,14 +4265,14 @@ export class LlmStreamParser {
   
   MyFunc(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.DynamicOutput {
     try {
       return this.runtime.parseLlmResponse(
         "MyFunc",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.DynamicOutput
@@ -4283,14 +4283,14 @@ export class LlmStreamParser {
   
   NestedAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null)) {
     try {
       return this.runtime.parseLlmResponse(
         "NestedAlias",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null))
@@ -4301,14 +4301,14 @@ export class LlmStreamParser {
   
   NullLiteralClassHello(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.ClassForNullLiteral {
     try {
       return this.runtime.parseLlmResponse(
         "NullLiteralClassHello",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.ClassForNullLiteral
@@ -4319,14 +4319,14 @@ export class LlmStreamParser {
   
   OpenAIWithAnthropicResponseHello(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "OpenAIWithAnthropicResponseHello",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4337,14 +4337,14 @@ export class LlmStreamParser {
   
   OptionalTest_Function(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((partial_types.OptionalTest_ReturnType | null) | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "OptionalTest_Function",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((partial_types.OptionalTest_ReturnType | null) | null)[]
@@ -4355,14 +4355,14 @@ export class LlmStreamParser {
   
   PredictAge(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.FooAny {
     try {
       return this.runtime.parseLlmResponse(
         "PredictAge",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.FooAny
@@ -4373,14 +4373,14 @@ export class LlmStreamParser {
   
   PredictAgeBare(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<number,"too_big"> {
     try {
       return this.runtime.parseLlmResponse(
         "PredictAgeBare",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<number,"too_big">
@@ -4391,14 +4391,14 @@ export class LlmStreamParser {
   
   PrimitiveAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((number | null) | (string | null) | (boolean | null) | (number | null)) {
     try {
       return this.runtime.parseLlmResponse(
         "PrimitiveAlias",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((number | null) | (string | null) | (boolean | null) | (number | null))
@@ -4409,14 +4409,14 @@ export class LlmStreamParser {
   
   PromptTestClaude(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestClaude",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4427,14 +4427,14 @@ export class LlmStreamParser {
   
   PromptTestClaudeChat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestClaudeChat",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4445,14 +4445,14 @@ export class LlmStreamParser {
   
   PromptTestClaudeChatNoSystem(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestClaudeChatNoSystem",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4463,14 +4463,14 @@ export class LlmStreamParser {
   
   PromptTestOpenAI(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestOpenAI",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4481,14 +4481,14 @@ export class LlmStreamParser {
   
   PromptTestOpenAIChat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestOpenAIChat",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4499,14 +4499,14 @@ export class LlmStreamParser {
   
   PromptTestOpenAIChatNoSystem(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestOpenAIChatNoSystem",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4517,14 +4517,14 @@ export class LlmStreamParser {
   
   PromptTestStreaming(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "PromptTestStreaming",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4535,14 +4535,14 @@ export class LlmStreamParser {
   
   RecursiveAliasCycle(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RecAliasOne {
     try {
       return this.runtime.parseLlmResponse(
         "RecursiveAliasCycle",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RecAliasOne
@@ -4553,14 +4553,14 @@ export class LlmStreamParser {
   
   RecursiveClassWithAliasIndirection(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.NodeWithAliasIndirection {
     try {
       return this.runtime.parseLlmResponse(
         "RecursiveClassWithAliasIndirection",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.NodeWithAliasIndirection
@@ -4571,14 +4571,14 @@ export class LlmStreamParser {
   
   ReturnAliasWithMergedAttributes(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): Checked<number,"gt_ten"> {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnAliasWithMergedAttributes",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<number,"gt_ten">
@@ -4589,14 +4589,14 @@ export class LlmStreamParser {
   
   ReturnFailingAssert(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnFailingAssert",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -4607,14 +4607,14 @@ export class LlmStreamParser {
   
   ReturnJsonEntry(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): JsonTemplate {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnJsonEntry",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as JsonTemplate
@@ -4625,14 +4625,14 @@ export class LlmStreamParser {
   
   ReturnMalformedConstraints(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.MalformedConstraints {
     try {
       return this.runtime.parseLlmResponse(
         "ReturnMalformedConstraints",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.MalformedConstraints
@@ -4643,14 +4643,14 @@ export class LlmStreamParser {
   
   SchemaDescriptions(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.Schema {
     try {
       return this.runtime.parseLlmResponse(
         "SchemaDescriptions",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.Schema
@@ -4661,14 +4661,14 @@ export class LlmStreamParser {
   
   SimpleRecursiveListAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RecursiveListAlias {
     try {
       return this.runtime.parseLlmResponse(
         "SimpleRecursiveListAlias",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RecursiveListAlias
@@ -4679,14 +4679,14 @@ export class LlmStreamParser {
   
   SimpleRecursiveMapAlias(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): RecursiveMapAlias {
     try {
       return this.runtime.parseLlmResponse(
         "SimpleRecursiveMapAlias",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as RecursiveMapAlias
@@ -4697,14 +4697,14 @@ export class LlmStreamParser {
   
   StreamBigNumbers(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.BigNumbers {
     try {
       return this.runtime.parseLlmResponse(
         "StreamBigNumbers",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.BigNumbers
@@ -4715,14 +4715,14 @@ export class LlmStreamParser {
   
   StreamFailingAssertion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.TwoStoriesOneTitle {
     try {
       return this.runtime.parseLlmResponse(
         "StreamFailingAssertion",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.TwoStoriesOneTitle
@@ -4733,14 +4733,14 @@ export class LlmStreamParser {
   
   StreamOneBigNumber(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "StreamOneBigNumber",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -4751,14 +4751,14 @@ export class LlmStreamParser {
   
   StreamUnionIntegers(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): ((number | null) | (string | null) | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "StreamUnionIntegers",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as ((number | null) | (string | null) | null)[]
@@ -4769,14 +4769,14 @@ export class LlmStreamParser {
   
   StreamingCompoundNumbers(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.CompoundBigNumbers {
     try {
       return this.runtime.parseLlmResponse(
         "StreamingCompoundNumbers",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.CompoundBigNumbers
@@ -4787,14 +4787,14 @@ export class LlmStreamParser {
   
   TakeRecAliasDep(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.RecursiveAliasDependency {
     try {
       return this.runtime.parseLlmResponse(
         "TakeRecAliasDep",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.RecursiveAliasDependency
@@ -4805,14 +4805,14 @@ export class LlmStreamParser {
   
   TellStory(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TellStory",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4823,14 +4823,14 @@ export class LlmStreamParser {
   
   TestAnthropic(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAnthropic",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4841,14 +4841,14 @@ export class LlmStreamParser {
   
   TestAnthropicShorthand(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAnthropicShorthand",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4859,14 +4859,14 @@ export class LlmStreamParser {
   
   TestAws(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAws",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4877,14 +4877,14 @@ export class LlmStreamParser {
   
   TestAwsInvalidAccessKey(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidAccessKey",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4895,14 +4895,14 @@ export class LlmStreamParser {
   
   TestAwsInvalidProfile(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidProfile",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4913,14 +4913,14 @@ export class LlmStreamParser {
   
   TestAwsInvalidRegion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidRegion",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4931,14 +4931,14 @@ export class LlmStreamParser {
   
   TestAwsInvalidSessionToken(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAwsInvalidSessionToken",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4949,14 +4949,14 @@ export class LlmStreamParser {
   
   TestAzure(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzure",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4967,14 +4967,14 @@ export class LlmStreamParser {
   
   TestAzureFailure(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureFailure",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -4985,14 +4985,14 @@ export class LlmStreamParser {
   
   TestAzureO1NoMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO1NoMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5003,14 +5003,14 @@ export class LlmStreamParser {
   
   TestAzureO1WithMaxCompletionTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO1WithMaxCompletionTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5021,14 +5021,14 @@ export class LlmStreamParser {
   
   TestAzureO1WithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO1WithMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5039,14 +5039,14 @@ export class LlmStreamParser {
   
   TestAzureO3NoMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO3NoMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5057,14 +5057,14 @@ export class LlmStreamParser {
   
   TestAzureO3WithMaxCompletionTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureO3WithMaxCompletionTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5075,14 +5075,14 @@ export class LlmStreamParser {
   
   TestAzureWithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestAzureWithMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5093,14 +5093,14 @@ export class LlmStreamParser {
   
   TestCaching(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestCaching",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5111,14 +5111,14 @@ export class LlmStreamParser {
   
   TestFallbackClient(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFallbackClient",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5129,14 +5129,14 @@ export class LlmStreamParser {
   
   TestFallbackStrategy(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFallbackStrategy",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5147,14 +5147,14 @@ export class LlmStreamParser {
   
   TestFallbackToShorthand(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFallbackToShorthand",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5165,14 +5165,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleBool",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5183,14 +5183,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleClass",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5201,14 +5201,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleEnumList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleEnumList",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5219,14 +5219,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleFloat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleFloat",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5237,14 +5237,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleInt",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5255,14 +5255,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleMapStringToClass(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (Record<string, (partial_types.StringToClassEntry | null)> ) {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleMapStringToClass",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (Record<string, (partial_types.StringToClassEntry | null)> )
@@ -5273,14 +5273,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleMapStringToMap(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (Record<string, (Record<string, (string | null)> | null)> ) {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleMapStringToMap",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (Record<string, (Record<string, (string | null)> | null)> )
@@ -5291,14 +5291,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleMapStringToString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (Record<string, (string | null)> ) {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleMapStringToString",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (Record<string, (string | null)> )
@@ -5309,14 +5309,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleString",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5327,14 +5327,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleStringArray(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleStringArray",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5345,14 +5345,14 @@ export class LlmStreamParser {
   
   TestFnNamedArgsSingleStringList(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): (string | null)[] {
     try {
       return this.runtime.parseLlmResponse(
         "TestFnNamedArgsSingleStringList",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as (string | null)[]
@@ -5363,14 +5363,14 @@ export class LlmStreamParser {
   
   TestGemini(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGemini",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5381,14 +5381,14 @@ export class LlmStreamParser {
   
   TestGeminiOpenAiGeneric(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGeminiOpenAiGeneric",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5399,14 +5399,14 @@ export class LlmStreamParser {
   
   TestGeminiSystem(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGeminiSystem",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5417,14 +5417,14 @@ export class LlmStreamParser {
   
   TestGeminiSystemAsChat(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestGeminiSystemAsChat",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5435,14 +5435,14 @@ export class LlmStreamParser {
   
   TestImageInput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestImageInput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5453,14 +5453,14 @@ export class LlmStreamParser {
   
   TestImageInputAnthropic(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestImageInputAnthropic",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5471,14 +5471,14 @@ export class LlmStreamParser {
   
   TestImageListInput(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestImageListInput",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5489,14 +5489,14 @@ export class LlmStreamParser {
   
   TestMemory(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.TestMemoryOutput {
     try {
       return this.runtime.parseLlmResponse(
         "TestMemory",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.TestMemoryOutput
@@ -5507,14 +5507,14 @@ export class LlmStreamParser {
   
   TestMulticlassNamedArgs(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestMulticlassNamedArgs",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5525,14 +5525,14 @@ export class LlmStreamParser {
   
   TestNamedArgsLiteralBool(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestNamedArgsLiteralBool",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5543,14 +5543,14 @@ export class LlmStreamParser {
   
   TestNamedArgsLiteralInt(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestNamedArgsLiteralInt",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5561,14 +5561,14 @@ export class LlmStreamParser {
   
   TestNamedArgsLiteralString(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestNamedArgsLiteralString",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5579,14 +5579,14 @@ export class LlmStreamParser {
   
   TestOllama(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOllama",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5597,14 +5597,14 @@ export class LlmStreamParser {
   
   TestOpenAI(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAI",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5615,14 +5615,14 @@ export class LlmStreamParser {
   
   TestOpenAIGPT4oMini(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIGPT4oMini",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5633,14 +5633,14 @@ export class LlmStreamParser {
   
   TestOpenAILegacyProvider(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAILegacyProvider",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5651,14 +5651,14 @@ export class LlmStreamParser {
   
   TestOpenAIO1NoMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIO1NoMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5669,14 +5669,14 @@ export class LlmStreamParser {
   
   TestOpenAIO1WithMaxCompletionTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIO1WithMaxCompletionTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5687,14 +5687,14 @@ export class LlmStreamParser {
   
   TestOpenAIO1WithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIO1WithMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5705,14 +5705,14 @@ export class LlmStreamParser {
   
   TestOpenAIShorthand(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIShorthand",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5723,14 +5723,14 @@ export class LlmStreamParser {
   
   TestOpenAIWithMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIWithMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5741,14 +5741,14 @@ export class LlmStreamParser {
   
   TestOpenAIWithNullMaxTokens(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIWithNullMaxTokens",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5759,14 +5759,14 @@ export class LlmStreamParser {
   
   TestRetryConstant(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestRetryConstant",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5777,14 +5777,14 @@ export class LlmStreamParser {
   
   TestRetryExponential(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestRetryExponential",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5795,14 +5795,14 @@ export class LlmStreamParser {
   
   TestRoundRobinStrategy(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestRoundRobinStrategy",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5813,14 +5813,14 @@ export class LlmStreamParser {
   
   TestSingleFallbackClient(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestSingleFallbackClient",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5831,14 +5831,14 @@ export class LlmStreamParser {
   
   TestThinking(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.CustomStory {
     try {
       return this.runtime.parseLlmResponse(
         "TestThinking",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.CustomStory
@@ -5849,14 +5849,14 @@ export class LlmStreamParser {
   
   TestUniverseQuestion(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.UniverseQuestion {
     try {
       return this.runtime.parseLlmResponse(
         "TestUniverseQuestion",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.UniverseQuestion
@@ -5867,14 +5867,14 @@ export class LlmStreamParser {
   
   TestVertex(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestVertex",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5885,14 +5885,14 @@ export class LlmStreamParser {
   
   TestVertexWithSystemInstructions(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
       return this.runtime.parseLlmResponse(
         "TestVertexWithSystemInstructions",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as string
@@ -5903,14 +5903,14 @@ export class LlmStreamParser {
   
   UnionTest_Function(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): partial_types.UnionTest_ReturnType {
     try {
       return this.runtime.parseLlmResponse(
         "UnionTest_Function",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.UnionTest_ReturnType
@@ -5921,14 +5921,14 @@ export class LlmStreamParser {
   
   UseBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "UseBlockConstraint",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -5939,14 +5939,14 @@ export class LlmStreamParser {
   
   UseMalformedConstraints(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "UseMalformedConstraints",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
@@ -5957,14 +5957,14 @@ export class LlmStreamParser {
   
   UseNestedBlockConstraint(
       llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): number {
     try {
       return this.runtime.parseLlmResponse(
         "UseNestedBlockConstraint",
         llmResponse,
         true,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as number
