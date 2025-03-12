@@ -138,7 +138,6 @@ impl Collector {
 
     pub fn __function_span_count() -> u32 {
         let span_count = BAML_TRACER.lock().unwrap().function_span_count();
-        log::info!("Function span count: {}", span_count);
         span_count as u32
     }
 
