@@ -61,6 +61,7 @@ struct PythonFunction {
 #[template(path = "__init__.py.j2", escape = "none")]
 struct PythonInit {
     default_client_mode: GeneratorDefaultClientMode,
+    version: String,
 }
 
 #[derive(askama::Template)]
@@ -118,6 +119,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonInit {
     fn try_from((_, gen): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(PythonInit {
             default_client_mode: gen.default_client_mode.clone(),
+            // TODO: Should we use gen.version instead?
+            version: env!("CARGO_PKG_VERSION").to_string(),
         })
     }
 }

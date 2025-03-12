@@ -164,6 +164,7 @@ struct TypescriptFunction {
 #[template(path = "index.ts.j2", escape = "none")]
 struct TypescriptInit {
     default_client_mode: GeneratorDefaultClientMode,
+    version: String,
 }
 
 #[derive(askama::Template)]
@@ -363,6 +364,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptIni
     fn try_from((_, gen): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
         Ok(TypescriptInit {
             default_client_mode: gen.default_client_mode.clone(),
+            // TODO: Should we use gen.version
+            version: env!("CARGO_PKG_VERSION").to_string(),
         })
     }
 }

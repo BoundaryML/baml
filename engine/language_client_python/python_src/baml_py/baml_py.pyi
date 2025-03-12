@@ -1,5 +1,9 @@
 from typing import Any, Callable, Dict, List, Optional, Tuple, Literal, Union
 
+def get_version() -> str:
+    """Get the version of the BAML Python client."""
+    ...
+
 class FunctionResult:
     """The result of a BAML function call.
 
