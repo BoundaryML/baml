@@ -59,7 +59,7 @@ export class BamlAsyncClient {
   
   async AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Recipe> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -82,7 +82,7 @@ export class BamlAsyncClient {
   
   async AliasThatPointsToRecursiveType(
       data: LinkedListAliasNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<LinkedListAliasNode> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -105,7 +105,7 @@ export class BamlAsyncClient {
   
   async AliasWithMultipleAttrs(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"gt_ten">> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -128,7 +128,7 @@ export class BamlAsyncClient {
   
   async AliasedInputClass(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -151,7 +151,7 @@ export class BamlAsyncClient {
   
   async AliasedInputClass2(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -174,7 +174,7 @@ export class BamlAsyncClient {
   
   async AliasedInputClassNested(
       input: InputClassNested,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -197,7 +197,7 @@ export class BamlAsyncClient {
   
   async AliasedInputEnum(
       input: AliasedEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -220,7 +220,7 @@ export class BamlAsyncClient {
   
   async AliasedInputList(
       input: AliasedEnum[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -243,7 +243,7 @@ export class BamlAsyncClient {
   
   async AllowedOptionals(
       optionals: OptionalListAndMap,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<OptionalListAndMap> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -266,7 +266,7 @@ export class BamlAsyncClient {
   
   async AssertFn(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -289,7 +289,7 @@ export class BamlAsyncClient {
   
   async AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -312,7 +312,7 @@ export class BamlAsyncClient {
   
   async BuildLinkedList(
       input: number[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<LinkedList> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -335,7 +335,7 @@ export class BamlAsyncClient {
   
   async BuildTree(
       input: BinaryNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Tree> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -358,7 +358,7 @@ export class BamlAsyncClient {
   
   async ClassThatPointsToRecursiveClassThroughAlias(
       cls: ClassToRecAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<ClassToRecAlias> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -381,7 +381,7 @@ export class BamlAsyncClient {
   
   async ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<(string | DynEnumTwo)> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -404,7 +404,7 @@ export class BamlAsyncClient {
   
   async ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Category> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -427,7 +427,7 @@ export class BamlAsyncClient {
   
   async ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Category> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -450,7 +450,7 @@ export class BamlAsyncClient {
   
   async ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Category> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -473,7 +473,7 @@ export class BamlAsyncClient {
   
   async Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -496,7 +496,7 @@ export class BamlAsyncClient {
   
   async CustomTask(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<BookOrder | FlightConfirmation | GroceryReceipt> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -519,7 +519,7 @@ export class BamlAsyncClient {
   
   async DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -542,7 +542,7 @@ export class BamlAsyncClient {
   
   async DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -565,7 +565,7 @@ export class BamlAsyncClient {
   
   async DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -588,7 +588,7 @@ export class BamlAsyncClient {
   
   async DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -611,7 +611,7 @@ export class BamlAsyncClient {
   
   async DifferentiateUnions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<OriginalA | OriginalB> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -634,7 +634,7 @@ export class BamlAsyncClient {
   
   async DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<DummyOutput> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -657,7 +657,7 @@ export class BamlAsyncClient {
   
   async DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<DynamicClassTwo> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -680,7 +680,7 @@ export class BamlAsyncClient {
   
   async DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<DynInputOutput> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -703,7 +703,7 @@ export class BamlAsyncClient {
   
   async DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<DynInputOutput[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -726,7 +726,7 @@ export class BamlAsyncClient {
   
   async ExpectFailure(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -749,7 +749,7 @@ export class BamlAsyncClient {
   
   async ExtractContactInfo(
       document: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<ContactInfo> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -772,7 +772,7 @@ export class BamlAsyncClient {
   
   async ExtractHobby(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<(string | Hobby)[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -795,7 +795,7 @@ export class BamlAsyncClient {
   
   async ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -818,7 +818,7 @@ export class BamlAsyncClient {
   
   async ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Person[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -841,7 +841,7 @@ export class BamlAsyncClient {
   
   async ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<ReceiptInfo> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -864,7 +864,7 @@ export class BamlAsyncClient {
   
   async ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Resume> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -887,7 +887,7 @@ export class BamlAsyncClient {
   
   async ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Resume> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -910,7 +910,7 @@ export class BamlAsyncClient {
   
   async FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<ClassOptionalOutput | null> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -933,7 +933,7 @@ export class BamlAsyncClient {
   
   async FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<ClassOptionalOutput2 | null> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -956,7 +956,7 @@ export class BamlAsyncClient {
   
   async FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<EnumOutput[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -979,7 +979,7 @@ export class BamlAsyncClient {
   
   async FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<EnumOutput> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1002,7 +1002,7 @@ export class BamlAsyncClient {
   
   async FnLiteralClassInputOutput(
       input: LiteralClassHello,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<LiteralClassHello> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1025,7 +1025,7 @@ export class BamlAsyncClient {
   
   async FnLiteralUnionClassInputOutput(
       input: LiteralClassOne | LiteralClassTwo,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<LiteralClassOne | LiteralClassTwo> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1048,7 +1048,7 @@ export class BamlAsyncClient {
   
   async FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1071,7 +1071,7 @@ export class BamlAsyncClient {
   
   async FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<boolean> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1094,7 +1094,7 @@ export class BamlAsyncClient {
   
   async FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TestOutputClass> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1117,7 +1117,7 @@ export class BamlAsyncClient {
   
   async FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TestOutputClass[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1140,7 +1140,7 @@ export class BamlAsyncClient {
   
   async FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TestClassNested> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1163,7 +1163,7 @@ export class BamlAsyncClient {
   
   async FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TestClassWithEnum> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1186,7 +1186,7 @@ export class BamlAsyncClient {
   
   async FnOutputInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1209,7 +1209,7 @@ export class BamlAsyncClient {
   
   async FnOutputLiteralBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<false> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1232,7 +1232,7 @@ export class BamlAsyncClient {
   
   async FnOutputLiteralInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<5> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1255,7 +1255,7 @@ export class BamlAsyncClient {
   
   async FnOutputLiteralString(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<"example output"> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1278,7 +1278,7 @@ export class BamlAsyncClient {
   
   async FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1301,7 +1301,7 @@ export class BamlAsyncClient {
   
   async FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TestEnum> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1324,7 +1324,7 @@ export class BamlAsyncClient {
   
   async FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TestClassAlias> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1347,7 +1347,7 @@ export class BamlAsyncClient {
   
   async FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1370,7 +1370,7 @@ export class BamlAsyncClient {
   
   async GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<RaysData> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1393,7 +1393,7 @@ export class BamlAsyncClient {
   
   async GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<OrderInfo> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1416,7 +1416,7 @@ export class BamlAsyncClient {
   
   async GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<SearchParams> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1439,7 +1439,7 @@ export class BamlAsyncClient {
   
   async InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Partial<Record<types.MapKey, string>>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1462,7 +1462,7 @@ export class BamlAsyncClient {
   
   async InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Partial<Record<"one" | "two" | "three" | "four", string>>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1485,7 +1485,7 @@ export class BamlAsyncClient {
   
   async InOutSingleLiteralStringMapKey(
       m: Partial<Record<"key", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Partial<Record<"key", string>>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1508,7 +1508,7 @@ export class BamlAsyncClient {
   
   async JsonTypeAliasCycle(
       input: JsonValue,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<JsonValue> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1531,7 +1531,7 @@ export class BamlAsyncClient {
   
   async LiteralUnionsTest(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<1 | true | "string output"> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1554,7 +1554,7 @@ export class BamlAsyncClient {
   
   async MakeBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Checked<BlockConstraint,"cross_field">> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1577,7 +1577,7 @@ export class BamlAsyncClient {
   
   async MakeNestedBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<NestedBlockConstraint> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1600,7 +1600,7 @@ export class BamlAsyncClient {
   
   async MakeSemanticContainer(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<SemanticContainer> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1623,7 +1623,7 @@ export class BamlAsyncClient {
   
   async MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Record<string, string[]>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1646,7 +1646,7 @@ export class BamlAsyncClient {
   
   async MergeAliasAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<MergeAttrs> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1669,7 +1669,7 @@ export class BamlAsyncClient {
   
   async MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<DynamicOutput> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1692,7 +1692,7 @@ export class BamlAsyncClient {
   
   async NestedAlias(
       c: number | string | boolean | number | string[] | Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number | string | boolean | number | string[] | Record<string, string[]>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1715,7 +1715,7 @@ export class BamlAsyncClient {
   
   async NullLiteralClassHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<ClassForNullLiteral> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1738,7 +1738,7 @@ export class BamlAsyncClient {
   
   async OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1761,7 +1761,7 @@ export class BamlAsyncClient {
   
   async OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<(OptionalTest_ReturnType | null)[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1784,7 +1784,7 @@ export class BamlAsyncClient {
   
   async PredictAge(
       name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<FooAny> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1807,7 +1807,7 @@ export class BamlAsyncClient {
   
   async PredictAgeBare(
       inp: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"too_big">> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1830,7 +1830,7 @@ export class BamlAsyncClient {
   
   async PrimitiveAlias(
       p: number | string | boolean | number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number | string | boolean | number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1853,7 +1853,7 @@ export class BamlAsyncClient {
   
   async PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1876,7 +1876,7 @@ export class BamlAsyncClient {
   
   async PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1899,7 +1899,7 @@ export class BamlAsyncClient {
   
   async PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1922,7 +1922,7 @@ export class BamlAsyncClient {
   
   async PromptTestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1945,7 +1945,7 @@ export class BamlAsyncClient {
   
   async PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1968,7 +1968,7 @@ export class BamlAsyncClient {
   
   async PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -1991,7 +1991,7 @@ export class BamlAsyncClient {
   
   async PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2014,7 +2014,7 @@ export class BamlAsyncClient {
   
   async RecursiveAliasCycle(
       input: RecAliasOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<RecAliasOne> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2037,7 +2037,7 @@ export class BamlAsyncClient {
   
   async RecursiveClassWithAliasIndirection(
       cls: NodeWithAliasIndirection,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<NodeWithAliasIndirection> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2060,7 +2060,7 @@ export class BamlAsyncClient {
   
   async ReturnAliasWithMergedAttributes(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"gt_ten">> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2083,7 +2083,7 @@ export class BamlAsyncClient {
   
   async ReturnFailingAssert(
       inp: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2106,7 +2106,7 @@ export class BamlAsyncClient {
   
   async ReturnJsonEntry(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<JsonTemplate> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2129,7 +2129,7 @@ export class BamlAsyncClient {
   
   async ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<MalformedConstraints> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2152,7 +2152,7 @@ export class BamlAsyncClient {
   
   async SchemaDescriptions(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Schema> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2175,7 +2175,7 @@ export class BamlAsyncClient {
   
   async SimpleRecursiveListAlias(
       input: RecursiveListAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<RecursiveListAlias> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2198,7 +2198,7 @@ export class BamlAsyncClient {
   
   async SimpleRecursiveMapAlias(
       input: RecursiveMapAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<RecursiveMapAlias> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2221,7 +2221,7 @@ export class BamlAsyncClient {
   
   async StreamBigNumbers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<BigNumbers> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2244,7 +2244,7 @@ export class BamlAsyncClient {
   
   async StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TwoStoriesOneTitle> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2267,7 +2267,7 @@ export class BamlAsyncClient {
   
   async StreamOneBigNumber(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2290,7 +2290,7 @@ export class BamlAsyncClient {
   
   async StreamUnionIntegers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<(number | string)[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2313,7 +2313,7 @@ export class BamlAsyncClient {
   
   async StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<CompoundBigNumbers> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2336,7 +2336,7 @@ export class BamlAsyncClient {
   
   async TakeRecAliasDep(
       input: RecursiveAliasDependency,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<RecursiveAliasDependency> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2359,7 +2359,7 @@ export class BamlAsyncClient {
   
   async TellStory(
       story: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2382,7 +2382,7 @@ export class BamlAsyncClient {
   
   async TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2405,7 +2405,7 @@ export class BamlAsyncClient {
   
   async TestAnthropicShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2428,7 +2428,7 @@ export class BamlAsyncClient {
   
   async TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2451,7 +2451,7 @@ export class BamlAsyncClient {
   
   async TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2474,7 +2474,7 @@ export class BamlAsyncClient {
   
   async TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2497,7 +2497,7 @@ export class BamlAsyncClient {
   
   async TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2520,7 +2520,7 @@ export class BamlAsyncClient {
   
   async TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2543,7 +2543,7 @@ export class BamlAsyncClient {
   
   async TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2566,7 +2566,7 @@ export class BamlAsyncClient {
   
   async TestAzureFailure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2589,7 +2589,7 @@ export class BamlAsyncClient {
   
   async TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2612,7 +2612,7 @@ export class BamlAsyncClient {
   
   async TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2635,7 +2635,7 @@ export class BamlAsyncClient {
   
   async TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2658,7 +2658,7 @@ export class BamlAsyncClient {
   
   async TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2681,7 +2681,7 @@ export class BamlAsyncClient {
   
   async TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2704,7 +2704,7 @@ export class BamlAsyncClient {
   
   async TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2727,7 +2727,7 @@ export class BamlAsyncClient {
   
   async TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2750,7 +2750,7 @@ export class BamlAsyncClient {
   
   async TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2773,7 +2773,7 @@ export class BamlAsyncClient {
   
   async TestFallbackToShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2796,7 +2796,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2819,7 +2819,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2842,7 +2842,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2865,7 +2865,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2888,7 +2888,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2911,7 +2911,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Record<string, StringToClassEntry>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2934,7 +2934,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Record<string, Record<string, string>>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2957,7 +2957,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<Record<string, string>> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -2980,7 +2980,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3003,7 +3003,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3026,7 +3026,7 @@ export class BamlAsyncClient {
   
   async TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string[]> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3049,7 +3049,7 @@ export class BamlAsyncClient {
   
   async TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3072,7 +3072,7 @@ export class BamlAsyncClient {
   
   async TestGeminiOpenAiGeneric(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3095,7 +3095,7 @@ export class BamlAsyncClient {
   
   async TestGeminiSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3118,7 +3118,7 @@ export class BamlAsyncClient {
   
   async TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3141,7 +3141,7 @@ export class BamlAsyncClient {
   
   async TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3164,7 +3164,7 @@ export class BamlAsyncClient {
   
   async TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3187,7 +3187,7 @@ export class BamlAsyncClient {
   
   async TestImageListInput(
       imgs: Image[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3210,7 +3210,7 @@ export class BamlAsyncClient {
   
   async TestMemory(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<TestMemoryOutput> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3233,7 +3233,7 @@ export class BamlAsyncClient {
   
   async TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3256,7 +3256,7 @@ export class BamlAsyncClient {
   
   async TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3279,7 +3279,7 @@ export class BamlAsyncClient {
   
   async TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3302,7 +3302,7 @@ export class BamlAsyncClient {
   
   async TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3325,7 +3325,7 @@ export class BamlAsyncClient {
   
   async TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3348,7 +3348,7 @@ export class BamlAsyncClient {
   
   async TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3371,7 +3371,7 @@ export class BamlAsyncClient {
   
   async TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3394,7 +3394,7 @@ export class BamlAsyncClient {
   
   async TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3417,7 +3417,7 @@ export class BamlAsyncClient {
   
   async TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3440,7 +3440,7 @@ export class BamlAsyncClient {
   
   async TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3463,7 +3463,7 @@ export class BamlAsyncClient {
   
   async TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3486,7 +3486,7 @@ export class BamlAsyncClient {
   
   async TestOpenAIShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3509,7 +3509,7 @@ export class BamlAsyncClient {
   
   async TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3532,7 +3532,7 @@ export class BamlAsyncClient {
   
   async TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3555,7 +3555,7 @@ export class BamlAsyncClient {
   
   async TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3578,7 +3578,7 @@ export class BamlAsyncClient {
   
   async TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3601,7 +3601,7 @@ export class BamlAsyncClient {
   
   async TestSingleFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3624,7 +3624,7 @@ export class BamlAsyncClient {
   
   async TestThinking(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<CustomStory> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3647,7 +3647,7 @@ export class BamlAsyncClient {
   
   async TestUniverseQuestion(
       question: UniverseQuestionInput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<UniverseQuestion> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3670,7 +3670,7 @@ export class BamlAsyncClient {
   
   async TestVertex(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3693,7 +3693,7 @@ export class BamlAsyncClient {
   
   async TestVertexWithSystemInstructions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3716,7 +3716,7 @@ export class BamlAsyncClient {
   
   async UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<UnionTest_ReturnType> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3739,7 +3739,7 @@ export class BamlAsyncClient {
   
   async UseBlockConstraint(
       inp: BlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3762,7 +3762,7 @@ export class BamlAsyncClient {
   
   async UseMalformedConstraints(
       a: MalformedConstraints2,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }
@@ -3785,7 +3785,7 @@ export class BamlAsyncClient {
   
   async UseNestedBlockConstraint(
       inp: NestedBlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<number> {
     try {
       const options = { ...this.baml_options, ...(__baml_options__ || {}) }

@@ -46,11 +46,12 @@ module Baml
     sig { returns(BamlStreamClient) }
     attr_reader :stream
 
-    sig {params(runtime: Baml::Ffi::BamlRuntime).void}
-    def initialize(runtime:)
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))])).void}
+    def initialize(runtime:, ctx_manager: nil, baml_options: nil)
       @runtime = runtime
-      @ctx_manager = runtime.create_context_manager()
-      @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager)
+      @ctx_manager = ctx_manager || runtime.create_context_manager()
+      @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager, baml_options: baml_options)
+      @baml_options = baml_options
     end
 
     sig {params(path: String).returns(BamlClient)}
@@ -77,6 +78,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -117,6 +134,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -155,6 +188,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -195,6 +244,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -233,6 +298,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -273,6 +354,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -311,6 +408,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -351,6 +464,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -389,6 +518,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -429,6 +574,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -467,6 +628,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -507,6 +684,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -545,6 +738,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -585,6 +794,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -623,6 +848,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -663,6 +904,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -701,6 +958,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -741,6 +1014,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -779,6 +1068,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -819,6 +1124,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -857,6 +1178,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -897,6 +1234,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -935,6 +1288,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -975,6 +1344,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1013,6 +1398,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1053,6 +1454,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1091,6 +1508,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1131,6 +1564,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1169,6 +1618,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1209,6 +1674,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1247,6 +1728,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1287,6 +1784,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1325,6 +1838,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1365,6 +1894,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1403,6 +1948,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1443,6 +2004,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1481,6 +2058,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1521,6 +2114,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1559,6 +2168,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1599,6 +2224,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1637,6 +2278,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1677,6 +2334,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1715,6 +2388,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1755,6 +2444,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1793,6 +2498,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1833,6 +2554,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1871,6 +2608,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1911,6 +2664,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -1949,6 +2718,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -1989,6 +2774,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2027,6 +2828,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2067,6 +2884,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2105,6 +2938,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2145,6 +2994,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2183,6 +3048,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2223,6 +3104,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2261,6 +3158,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2301,6 +3214,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2339,6 +3268,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2379,6 +3324,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2417,6 +3378,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2457,6 +3434,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2495,6 +3488,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2535,6 +3544,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2573,6 +3598,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2613,6 +3654,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2651,6 +3708,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2691,6 +3764,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2729,6 +3818,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2769,6 +3874,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2807,6 +3928,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2847,6 +3984,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2885,6 +4038,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -2925,6 +4094,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -2963,6 +4148,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3003,6 +4204,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3041,6 +4258,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3081,6 +4314,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3119,6 +4368,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3159,6 +4424,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3197,6 +4478,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3237,6 +4534,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3275,6 +4588,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3315,6 +4644,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3353,6 +4698,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3393,6 +4754,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3431,6 +4808,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3471,6 +4864,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3509,6 +4918,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3549,6 +4974,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3587,6 +5028,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3627,6 +5084,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3665,6 +5138,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3705,6 +5194,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3743,6 +5248,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3783,6 +5304,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3821,6 +5358,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3861,6 +5414,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3899,6 +5468,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -3939,6 +5524,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -3977,6 +5578,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4017,6 +5634,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4055,6 +5688,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4095,6 +5744,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4133,6 +5798,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4173,6 +5854,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4211,6 +5908,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4251,6 +5964,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4289,6 +6018,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4329,6 +6074,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4367,6 +6128,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4407,6 +6184,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4445,6 +6238,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4485,6 +6294,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4523,6 +6348,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4563,6 +6404,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4601,6 +6458,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4641,6 +6514,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4679,6 +6568,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4719,6 +6624,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4757,6 +6678,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4797,6 +6734,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4835,6 +6788,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4875,6 +6844,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4913,6 +6898,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -4953,6 +6954,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -4991,6 +7008,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5031,6 +7064,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5069,6 +7118,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5109,6 +7174,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5147,6 +7228,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5187,6 +7284,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5225,6 +7338,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5265,6 +7394,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5303,6 +7448,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5343,6 +7504,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5381,6 +7558,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5421,6 +7614,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5459,6 +7668,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5499,6 +7724,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5537,6 +7778,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5577,6 +7834,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5615,6 +7888,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5655,6 +7944,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5693,6 +7998,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5733,6 +8054,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5771,6 +8108,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5811,6 +8164,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5849,6 +8218,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5889,6 +8274,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -5927,6 +8328,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -5967,6 +8384,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6005,6 +8438,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6045,6 +8494,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6083,6 +8548,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6123,6 +8604,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6161,6 +8658,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6201,6 +8714,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6239,6 +8768,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6279,6 +8824,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6317,6 +8878,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6357,6 +8934,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6396,6 +8989,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+      
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+      
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6417,15 +9026,20 @@ module Baml
 
     
 
+    sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry)).returns(BamlClient)}
+    def with_options(collector: nil, tb: nil, client_registry: nil)
+      BamlClient.new(runtime: @runtime, ctx_manager: @ctx_manager, baml_options: {collector: collector, tb: tb, client_registry: client_registry})
+    end
   end
 
   class BamlStreamClient
     extend T::Sig
 
-    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
-    def initialize(runtime:, ctx_manager:)
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))])).void}
+    def initialize(runtime:, ctx_manager:, baml_options: nil)
       @runtime = runtime
       @ctx_manager = ctx_manager
+      @baml_options = baml_options || {}
     end
 
     sig {
@@ -6447,6 +9061,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6490,6 +9120,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6531,6 +9177,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6574,6 +9236,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6615,6 +9293,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6658,6 +9352,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6699,6 +9409,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6742,6 +9468,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6783,6 +9525,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6826,6 +9584,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6867,6 +9641,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6910,6 +9700,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -6951,6 +9757,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -6994,6 +9816,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7035,6 +9873,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7078,6 +9932,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7119,6 +9989,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7162,6 +10048,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7203,6 +10105,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7246,6 +10164,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7287,6 +10221,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7330,6 +10280,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7371,6 +10337,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7414,6 +10396,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7455,6 +10453,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7498,6 +10512,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7539,6 +10569,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7582,6 +10628,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7623,6 +10685,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7666,6 +10744,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7707,6 +10801,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7750,6 +10860,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7791,6 +10917,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7834,6 +10976,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7875,6 +11033,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -7918,6 +11092,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -7959,6 +11149,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8002,6 +11208,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8043,6 +11265,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8086,6 +11324,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8127,6 +11381,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8170,6 +11440,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8211,6 +11497,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8254,6 +11556,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8295,6 +11613,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8338,6 +11672,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8379,6 +11729,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8422,6 +11788,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8463,6 +11845,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8506,6 +11904,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8547,6 +11961,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8590,6 +12020,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8631,6 +12077,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8674,6 +12136,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8715,6 +12193,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8758,6 +12252,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8799,6 +12309,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8842,6 +12368,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8883,6 +12425,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -8926,6 +12484,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -8967,6 +12541,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9010,6 +12600,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9051,6 +12657,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9094,6 +12716,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9135,6 +12773,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9178,6 +12832,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9219,6 +12889,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9262,6 +12948,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9303,6 +13005,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9346,6 +13064,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9387,6 +13121,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9430,6 +13180,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9471,6 +13237,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9514,6 +13296,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9555,6 +13353,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9598,6 +13412,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9639,6 +13469,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9682,6 +13528,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9723,6 +13585,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9766,6 +13644,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9807,6 +13701,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9850,6 +13760,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9891,6 +13817,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9934,6 +13876,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -9975,6 +13933,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10018,6 +13992,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10059,6 +14049,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10102,6 +14108,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10143,6 +14165,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10186,6 +14224,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10227,6 +14281,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10270,6 +14340,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10311,6 +14397,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10354,6 +14456,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10395,6 +14513,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10438,6 +14572,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10479,6 +14629,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10522,6 +14688,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10563,6 +14745,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10606,6 +14804,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10647,6 +14861,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10690,6 +14920,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10731,6 +14977,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10774,6 +15036,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10815,6 +15093,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10858,6 +15152,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10899,6 +15209,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10942,6 +15268,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -10983,6 +15325,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11026,6 +15384,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11067,6 +15441,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11110,6 +15500,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11151,6 +15557,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11194,6 +15616,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11235,6 +15673,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11278,6 +15732,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11319,6 +15789,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11362,6 +15848,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11403,6 +15905,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11446,6 +15964,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11487,6 +16021,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11530,6 +16080,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11571,6 +16137,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11614,6 +16196,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11655,6 +16253,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11698,6 +16312,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11739,6 +16369,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11782,6 +16428,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11823,6 +16485,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11866,6 +16544,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11907,6 +16601,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11950,6 +16660,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -11991,6 +16717,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12034,6 +16776,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12075,6 +16833,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12118,6 +16892,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12159,6 +16949,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12202,6 +17008,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12243,6 +17065,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12286,6 +17124,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12327,6 +17181,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12370,6 +17240,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12411,6 +17297,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12454,6 +17356,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12495,6 +17413,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12538,6 +17472,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12579,6 +17529,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12622,6 +17588,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12663,6 +17645,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12706,6 +17704,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12747,6 +17761,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12790,6 +17820,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12831,6 +17877,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12874,6 +17936,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12915,6 +17993,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12958,6 +18052,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -12999,6 +18109,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13042,6 +18168,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -13083,6 +18225,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13126,6 +18284,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -13167,6 +18341,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13210,6 +18400,22 @@ module Baml
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
 
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
       else
@@ -13251,6 +18457,22 @@ module Baml
       if (baml_options.keys - [:client_registry, :tb, :collector]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
       end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+      
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
