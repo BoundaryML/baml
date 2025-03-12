@@ -327,8 +327,11 @@ pub fn init() -> Result<(), LogError> {
 pub fn set_log_level(level: Level) -> Result<(), LogError> {
     match CONFIG.write() {
         Ok(mut config) => {
+            let old_level = config.level;
             config.level = level;
-            println!("[BAML] Log level set to {}", level.colored());
+            if old_level != level {
+                println!("[BAML] Log level set to {}", level.colored());
+            }
             Ok(())
         }
         Err(_) => Err(LogError::LockError),
@@ -355,6 +358,25 @@ pub fn set_color_mode(mode: ColorMode) -> Result<(), LogError> {
         }
         Err(_) => Err(LogError::LockError),
     }
+}
+
+pub fn set_from_env(env_vars: &std::collections::HashMap<String, String>) -> Result<(), LogError> {
+    if let Some(level) = env_vars
+        .get("BAML_LOG")
+        .map(|s| Level::from_str(s.as_str()))
+    {
+        set_log_level(level)?;
+    }
+    if let Some(use_json) = env_vars.get("BAML_LOG_JSON") {
+        set_json_mode(use_json.trim().eq_ignore_ascii_case("true") || use_json.trim() == "1")?;
+    }
+    if let Some(color_mode) = env_vars
+        .get("BAML_LOG_STYLE")
+        .map(|s| ColorMode::from_str(s))
+    {
+        set_color_mode(color_mode)?;
+    }
+    Ok(())
 }
 
 /// Reload configuration from environment variables

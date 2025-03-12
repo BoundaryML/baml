@@ -16,8 +16,6 @@ DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = BamlCtxManager(DO_NOT
 
 def reset_baml_env_vars(env_vars: Dict[str, str]):
   if DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.allow_reset():
-    if "BAML_LOG" in env_vars:
-      set_baml_log_level(env_vars["BAML_LOG"])
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.reset(
       "baml_src",
       get_baml_files(),
