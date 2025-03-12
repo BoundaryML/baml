@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing_subscriber::EnvFilter;
 use types::log_collector::Collector;
+use types::request::HTTPRequest;
 
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
@@ -198,6 +199,50 @@ impl BamlRuntimeFfi {
 
         retval
     }
+
+    pub fn build_request(
+        ruby: &Ruby,
+        rb_self: &BamlRuntimeFfi,
+        function_name: String,
+        args: RHash,
+        ctx: &RuntimeContextManager,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
+        stream: bool,
+    ) -> Result<HTTPRequest> {
+        let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
+            Ok(args) => args.into_iter().collect(),
+            Err(e) => {
+                return Err(Error::new(
+                    ruby.exception_syntax_error(),
+                    format!("error while parsing call_function args:\n{}", e),
+                ));
+            }
+        };
+
+        rb_self
+            .inner
+            .build_request_sync(
+                function_name.clone(),
+                &args,
+                &ctx.inner,
+                type_registry.map(|t| &t.inner),
+                client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+                stream,
+            )
+            .map(HTTPRequest::from)
+            .map_err(|e| {
+                Error::new(
+                    ruby.exception_runtime_error(),
+                    format!(
+                        "{:?}",
+                        e.context(format!(
+                            "error while building HTTP request for function {function_name}"
+                        ))
+                    ),
+                )
+            })
+    }
 }
 
 fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<()> {
@@ -271,6 +316,7 @@ fn init(ruby: &Ruby) -> Result<()> {
         "stream_function",
         method!(BamlRuntimeFfi::stream_function, 6),
     )?;
+    runtime_class.define_method("build_request", method!(BamlRuntimeFfi::build_request, 6))?;
 
     FunctionResult::define_in_ruby(&module)?;
     FunctionResultStream::define_in_ruby(&module)?;

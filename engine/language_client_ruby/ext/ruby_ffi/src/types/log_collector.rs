@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -6,11 +5,14 @@ use crate::Result;
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
 use magnus::scan_args::get_kwargs;
 use magnus::{
-    class, function, method, rb_sys::FromRawValue, scan_args::scan_args,
-    try_convert::TryConvertOwned, value::ReprValue, Error, IntoValueFromNative, Module, Object,
-    RArray, RModule, Ruby, Value,
+    class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, Error,
+    IntoValueFromNative, Module, Object, RArray, RModule, Ruby, Value,
 };
-use magnus::{prelude::*, RHash};
+
+use super::{
+    request::{HTTPBody, HTTPRequest},
+    response::HTTPResponse,
+};
 
 crate::lang_wrapper!(
     Collector,
@@ -39,20 +41,6 @@ crate::lang_wrapper!(
     StreamTiming,
     "Baml::Ffi::StreamTiming",
     baml_runtime::tracingv2::storage::storage::StreamTiming,
-    clone_safe
-);
-
-crate::lang_wrapper!(
-    HTTPRequest,
-    "Baml::Ffi::HTTPRequest",
-    baml_types::tracing::events::HTTPRequest,
-    clone_safe
-);
-
-crate::lang_wrapper!(
-    HTTPResponse,
-    "Baml::Ffi::HTTPResponse",
-    baml_types::tracing::events::HTTPResponse,
     clone_safe
 );
 
@@ -606,86 +594,6 @@ impl LLMStreamCall {
     }
 }
 
-impl HTTPRequest {
-    pub fn to_s(&self) -> String {
-        format!(
-            "HTTPRequest(url={}, method={}, headers={}, body={})",
-            self.inner.url,
-            self.inner.method,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap_or_default(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap_or_default()
-        )
-    }
-
-    pub fn url(&self) -> String {
-        self.inner.url.clone()
-    }
-
-    pub fn method(&self) -> String {
-        self.inner.method.clone()
-    }
-
-    pub fn headers(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
-        // Convert headers to Ruby hash
-        serde_magnus::serialize(&rb_self.inner.headers)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
-    }
-
-    pub fn body(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
-        serde_magnus::serialize(&rb_self.inner.body)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
-    }
-
-    pub fn define_in_ruby(module: &RModule) -> Result<()> {
-        let cls = module.define_class("HTTPRequest", class::object())?;
-
-        cls.define_method("to_s", method!(HTTPRequest::to_s, 0))?;
-        cls.define_method("url", method!(HTTPRequest::url, 0))?;
-        cls.define_method("method", method!(HTTPRequest::method, 0))?;
-        cls.define_method("headers", method!(HTTPRequest::headers, 0))?;
-        cls.define_method("body", method!(HTTPRequest::body, 0))?;
-
-        Ok(())
-    }
-}
-
-impl HTTPResponse {
-    pub fn to_s(&self) -> String {
-        format!(
-            "HTTPResponse(status={}, headers={}, body={})",
-            self.inner.status,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap_or_default(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap_or_default()
-        )
-    }
-
-    pub fn status(&self) -> u16 {
-        self.inner.status
-    }
-
-    pub fn headers(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
-        // Convert headers to Ruby hash
-        serde_magnus::serialize(&rb_self.inner.headers)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
-    }
-
-    pub fn body(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
-        serde_magnus::serialize(&rb_self.inner.body)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
-    }
-
-    pub fn define_in_ruby(module: &RModule) -> Result<()> {
-        let cls = module.define_class("HTTPResponse", class::object())?;
-
-        cls.define_method("to_s", method!(HTTPResponse::to_s, 0))?;
-        cls.define_method("status", method!(HTTPResponse::status, 0))?;
-        cls.define_method("headers", method!(HTTPResponse::headers, 0))?;
-        cls.define_method("body", method!(HTTPResponse::body, 0))?;
-
-        Ok(())
-    }
-}
-
 pub fn define_all_in_ruby(module: &RModule) -> Result<()> {
     Collector::define_in_ruby(module)?;
     FunctionLog::define_in_ruby(module)?;
@@ -696,6 +604,7 @@ pub fn define_all_in_ruby(module: &RModule) -> Result<()> {
     LLMStreamCall::define_in_ruby(module)?;
     HTTPRequest::define_in_ruby(module)?;
     HTTPResponse::define_in_ruby(module)?;
+    HTTPBody::define_in_ruby(module)?;
 
     Ok(())
 }

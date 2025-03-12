@@ -46,11 +46,19 @@ module Baml
     sig { returns(BamlStreamClient) }
     attr_reader :stream
 
+    sig { returns(HttpRequest) }
+    attr_reader :request
+
+    sig { returns(HttpStreamRequest) }
+    attr_reader :stream_request
+
     sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))])).void}
     def initialize(runtime:, ctx_manager: nil, baml_options: nil)
       @runtime = runtime
       @ctx_manager = ctx_manager || runtime.create_context_manager()
       @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager, baml_options: baml_options)
+      @request = HttpRequest.new(runtime: @runtime, ctx_manager: @ctx_manager)
+      @stream_request = HttpStreamRequest.new(runtime: @runtime, ctx_manager: @ctx_manager)
       @baml_options = baml_options
     end
 
@@ -82,16 +90,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -137,16 +145,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -192,16 +200,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -247,16 +255,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -302,16 +310,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -357,16 +365,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -412,16 +420,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -467,16 +475,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -522,16 +530,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -577,16 +585,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -632,16 +640,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -687,16 +695,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -742,16 +750,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -797,16 +805,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -852,16 +860,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -907,16 +915,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -962,16 +970,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1017,16 +1025,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1072,16 +1080,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1127,16 +1135,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1182,16 +1190,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1237,16 +1245,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1292,16 +1300,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1347,16 +1355,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1402,16 +1410,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1457,16 +1465,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1512,16 +1520,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1567,16 +1575,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1622,16 +1630,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1677,16 +1685,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1732,16 +1740,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1787,16 +1795,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1842,16 +1850,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1897,16 +1905,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1952,16 +1960,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2007,16 +2015,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2062,16 +2070,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2117,16 +2125,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2172,16 +2180,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2227,16 +2235,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2282,16 +2290,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2337,16 +2345,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2392,16 +2400,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2447,16 +2455,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2502,16 +2510,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2557,16 +2565,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2612,16 +2620,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2667,16 +2675,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2722,16 +2730,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2777,16 +2785,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2832,16 +2840,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2887,16 +2895,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2942,16 +2950,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2997,16 +3005,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3052,16 +3060,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3107,16 +3115,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3162,16 +3170,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3217,16 +3225,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3272,16 +3280,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3327,16 +3335,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3382,16 +3390,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3437,16 +3445,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3492,16 +3500,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3547,16 +3555,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3602,16 +3610,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3657,16 +3665,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3712,16 +3720,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3767,16 +3775,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3822,16 +3830,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3877,16 +3885,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3932,16 +3940,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3987,16 +3995,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4042,16 +4050,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4097,16 +4105,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4152,16 +4160,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4207,16 +4215,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4262,16 +4270,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4317,16 +4325,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4372,16 +4380,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4427,16 +4435,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4482,16 +4490,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4537,16 +4545,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4592,16 +4600,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4647,16 +4655,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4702,16 +4710,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4757,16 +4765,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4812,16 +4820,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4867,16 +4875,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4922,16 +4930,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4977,16 +4985,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5032,16 +5040,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5087,16 +5095,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5142,16 +5150,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5197,16 +5205,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5252,16 +5260,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5307,16 +5315,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5362,16 +5370,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5417,16 +5425,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5472,16 +5480,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5527,16 +5535,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5582,16 +5590,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5637,16 +5645,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5692,16 +5700,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5747,16 +5755,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5802,16 +5810,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5857,16 +5865,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5912,16 +5920,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5967,16 +5975,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6022,16 +6030,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6077,16 +6085,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6132,16 +6140,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6187,16 +6195,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6242,16 +6250,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6297,16 +6305,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6352,16 +6360,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6407,16 +6415,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6462,16 +6470,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6517,16 +6525,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6572,16 +6580,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6627,16 +6635,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6682,16 +6690,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6737,16 +6745,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6792,16 +6800,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6847,16 +6855,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6902,16 +6910,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6957,16 +6965,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7012,16 +7020,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7067,16 +7075,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7122,16 +7130,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7177,16 +7185,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7232,16 +7240,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7287,16 +7295,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7342,16 +7350,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7397,16 +7405,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7452,16 +7460,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7507,16 +7515,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7562,16 +7570,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7617,16 +7625,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7672,16 +7680,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7727,16 +7735,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7782,16 +7790,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7837,16 +7845,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7892,16 +7900,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7947,16 +7955,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8002,16 +8010,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8057,16 +8065,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8112,16 +8120,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8167,16 +8175,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8222,16 +8230,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8277,16 +8285,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8332,16 +8340,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8387,16 +8395,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8442,16 +8450,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8497,16 +8505,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8552,16 +8560,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8607,16 +8615,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8662,16 +8670,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8717,16 +8725,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8772,16 +8780,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8827,16 +8835,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8882,16 +8890,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8937,16 +8945,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8992,16 +9000,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -9047,16 +9055,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -9102,16 +9110,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -16577,6 +16585,9930 @@ module Baml
       )
     end
 
+    
+  end
+
+  class HttpRequest
+    extend T::Sig
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
+    def initialize(runtime:, ctx_manager:)
+      @runtime = runtime
+      @ctx_manager = ctx_manager
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        recipe: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AaaSamOutputFormat(
+        *varargs,
+        recipe:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AaaSamOutputFormat",
+        {
+          recipe: recipe,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        data: Baml::Types::LinkedListAliasNode,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasThatPointsToRecursiveType(
+        *varargs,
+        data:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasThatPointsToRecursiveType",
+        {
+          data: data,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasWithMultipleAttrs(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasWithMultipleAttrs",
+        {
+          money: money,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputClass",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputClass2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputClass2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClassNested,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputClassNested",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(Baml::Types::AliasedEnum, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputEnum",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        optionals: Baml::Types::OptionalListAndMap,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AllowedOptionals(
+        *varargs,
+        optionals:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AllowedOptionals",
+        {
+          optionals: optionals,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        a: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AssertFn(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AssertFn may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AssertFn",
+        {
+          a: a,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        aud: Baml::Audio,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AudioInput(
+        *varargs,
+        aud:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AudioInput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AudioInput",
+        {
+          aud: aud,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[Integer],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def BuildLinkedList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "BuildLinkedList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::BinaryNode,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def BuildTree(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildTree may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "BuildTree",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        cls: Baml::Types::ClassToRecAlias,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassThatPointsToRecursiveClassThroughAlias(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassThatPointsToRecursiveClassThroughAlias",
+        {
+          cls: cls,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyDynEnumTwo(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyDynEnumTwo",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyMessage(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyMessage",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyMessage2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyMessage2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyMessage3(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyMessage3",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        prefix: String,suffix: String,language: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def Completion(
+        *varargs,
+        prefix:,suffix:,language:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("Completion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "Completion",
+        {
+          prefix: prefix,suffix: suffix,language: language,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def CustomTask(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("CustomTask may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "CustomTask",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage",
+        {
+          img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage2(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage2",
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage3(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage3",
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage4(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage4",
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DifferentiateUnions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DifferentiateUnions",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DummyOutputFunction(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DummyOutputFunction",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::DynamicClassOne,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DynamicFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DynamicFunc",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::DynInputOutput,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DynamicInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DynamicInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[Baml::Types::DynInputOutput],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DynamicListInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DynamicListInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExpectFailure(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExpectFailure",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        document: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractContactInfo(
+        *varargs,
+        document:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractContactInfo",
+        {
+          document: document,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractHobby(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractHobby",
+        {
+          text: text,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractNames(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractNames",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractPeople(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractPeople",
+        {
+          text: text,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        email: String,reason: T.any(String, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractReceiptInfo(
+        *varargs,
+        email:,reason:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractReceiptInfo",
+        {
+          email: email,reason: reason,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        resume: String,img: T.nilable(Baml::Image),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractResume(
+        *varargs,
+        resume:,img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractResume",
+        {
+          resume: resume,img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        resume: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractResume2(
+        *varargs,
+        resume:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractResume2",
+        {
+          resume: resume,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnClassOptionalOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnClassOptionalOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnClassOptionalOutput2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnClassOptionalOutput2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnEnumListOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnEnumListOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnEnumOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::LiteralClassHello,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnLiteralClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnLiteralClassInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnLiteralUnionClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnLiteralUnionClassInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myString: T.nilable(String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnNamedArgsSingleStringOptional(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnNamedArgsSingleStringOptional",
+        {
+          myString: myString,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputBool",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClass",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClassList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClassList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClassNested",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClassWithEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClassWithEnum",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputInt",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputLiteralBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputLiteralBool",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputLiteralInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputLiteralInt",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputLiteralString(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputLiteralString",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputStringList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputStringList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnTestAliasedEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnTestAliasedEnumOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnTestClassAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnTestClassAlias",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnTestNamedArgsSingleEnum(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnTestNamedArgsSingleEnum",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def GetDataType(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetDataType may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "GetDataType",
+        {
+          text: text,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        email: Baml::Types::Email,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def GetOrderInfo(
+        *varargs,
+        email:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "GetOrderInfo",
+        {
+          email: email,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        query: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def GetQuery(
+        *varargs,
+        query:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetQuery may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "GetQuery",
+        {
+          query: query,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def InOutEnumMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "InOutEnumMapKey",
+        {
+          i1: i1,i2: i2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def InOutLiteralStringUnionMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "InOutLiteralStringUnionMapKey",
+        {
+          i1: i1,i2: i2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        m: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def InOutSingleLiteralStringMapKey(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "InOutSingleLiteralStringMapKey",
+        {
+          m: m,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def JsonTypeAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "JsonTypeAliasCycle",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def LiteralUnionsTest(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "LiteralUnionsTest",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeBlockConstraint",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeNestedBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeNestedBlockConstraint",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeSemanticContainer(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeSemanticContainer",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        m: T::Hash[String, T::Array[String]],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MapAlias(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MapAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MapAlias",
+        {
+          m: m,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        money: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MergeAliasAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MergeAliasAttributes",
+        {
+          money: money,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MyFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MyFunc may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MyFunc",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def NestedAlias(
+        *varargs,
+        c:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "NestedAlias",
+        {
+          c: c,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        s: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def NullLiteralClassHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "NullLiteralClassHello",
+        {
+          s: s,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        s: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def OpenAIWithAnthropicResponseHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "OpenAIWithAnthropicResponseHello",
+        {
+          s: s,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def OptionalTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "OptionalTest_Function",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        name: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PredictAge(
+        *varargs,
+        name:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAge may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PredictAge",
+        {
+          name: name,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PredictAgeBare(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PredictAgeBare",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        p: T.any(Integer, String, T::Boolean, Float),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PrimitiveAlias(
+        *varargs,
+        p:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PrimitiveAlias",
+        {
+          p: p,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestClaude(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestClaude",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestClaudeChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestClaudeChat",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestClaudeChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestClaudeChatNoSystem",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestOpenAI",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestOpenAIChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestOpenAIChat",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestOpenAIChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestStreaming(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestStreaming",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def RecursiveAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "RecursiveAliasCycle",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        cls: Baml::Types::NodeWithAliasIndirection,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def RecursiveClassWithAliasIndirection(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "RecursiveClassWithAliasIndirection",
+        {
+          cls: cls,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnAliasWithMergedAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnAliasWithMergedAttributes",
+        {
+          money: money,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnFailingAssert(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnFailingAssert",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        s: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnJsonEntry(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnJsonEntry",
+        {
+          s: s,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        a: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnMalformedConstraints",
+        {
+          a: a,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def SchemaDescriptions(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "SchemaDescriptions",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def SimpleRecursiveListAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "SimpleRecursiveListAlias",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def SimpleRecursiveMapAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "SimpleRecursiveMapAlias",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamBigNumbers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamBigNumbers",
+        {
+          digits: digits,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        theme: String,length: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamFailingAssertion(
+        *varargs,
+        theme:,length:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamFailingAssertion",
+        {
+          theme: theme,length: length,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamOneBigNumber(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamOneBigNumber",
+        {
+          digits: digits,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamUnionIntegers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamUnionIntegers",
+        {
+          digits: digits,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,yapping: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamingCompoundNumbers(
+        *varargs,
+        digits:,yapping:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamingCompoundNumbers",
+        {
+          digits: digits,yapping: yapping,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::RecursiveAliasDependency,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TakeRecAliasDep(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TakeRecAliasDep",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        story: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TellStory(
+        *varargs,
+        story:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TellStory may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TellStory",
+        {
+          story: story,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAnthropic(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAnthropic",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAnthropicShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAnthropicShorthand",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAws(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAws may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAws",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidAccessKey(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidAccessKey",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidProfile(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidProfile",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidRegion(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidRegion",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidSessionToken(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidSessionToken",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzure may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzure",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureFailure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureFailure",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO1NoMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO1WithMaxCompletionTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO1WithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO3NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO3NoMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO3WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO3WithMaxCompletionTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureWithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,not_cached: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestCaching(
+        *varargs,
+        input:,not_cached:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestCaching may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestCaching",
+        {
+          input: input,not_cached: not_cached,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFallbackClient",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFallbackStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFallbackStrategy",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFallbackToShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFallbackToShorthand",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myBool: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleBool",
+        {
+          myBool: myBool,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleClass(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleClass",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleEnumList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myFloat: Float,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleFloat(
+        *varargs,
+        myFloat:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleFloat",
+        {
+          myFloat: myFloat,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myInt: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleInt",
+        {
+          myInt: myInt,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleMapStringToClass(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          myMap: myMap,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myMap: T::Hash[String, T::Hash[String, String]],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleMapStringToMap(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          myMap: myMap,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myMap: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleMapStringToString(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          myMap: myMap,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myString: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleString",
+        {
+          myString: myString,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myStringArray: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleStringArray(
+        *varargs,
+        myStringArray:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          myStringArray: myStringArray,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleStringList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleStringList",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGemini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGemini may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGemini",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGeminiOpenAiGeneric(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGeminiOpenAiGeneric",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGeminiSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGeminiSystem",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGeminiSystemAsChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGeminiSystemAsChat",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestImageInput(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestImageInput",
+        {
+          img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestImageInputAnthropic(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestImageInputAnthropic",
+        {
+          img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        imgs: T::Array[Baml::Image],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestImageListInput(
+        *varargs,
+        imgs:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestImageListInput",
+        {
+          imgs: imgs,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestMemory(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMemory may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestMemory",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestMulticlassNamedArgs(
+        *varargs,
+        myArg:,myArg2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestMulticlassNamedArgs",
+        {
+          myArg: myArg,myArg2: myArg2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myBool: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestNamedArgsLiteralBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestNamedArgsLiteralBool",
+        {
+          myBool: myBool,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myInt: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestNamedArgsLiteralInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestNamedArgsLiteralInt",
+        {
+          myInt: myInt,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myString: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestNamedArgsLiteralString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestNamedArgsLiteralString",
+        {
+          myString: myString,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOllama(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOllama may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOllama",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAI",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIGPT4oMini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIGPT4oMini",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAILegacyProvider(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAILegacyProvider",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIO1NoMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIO1WithMaxCompletionTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIO1WithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIShorthand",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIWithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIWithNullMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIWithNullMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestRetryConstant(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestRetryConstant",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestRetryExponential(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestRetryExponential",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestRoundRobinStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestRoundRobinStrategy",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestSingleFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestSingleFallbackClient",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestThinking(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestThinking may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestThinking",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        question: Baml::Types::UniverseQuestionInput,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestUniverseQuestion(
+        *varargs,
+        question:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestUniverseQuestion",
+        {
+          question: question,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestVertex(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertex may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestVertex",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestVertexWithSystemInstructions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestVertexWithSystemInstructions",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(String, T::Boolean),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UnionTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UnionTest_Function",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Baml::Types::BlockConstraintForParam,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UseBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UseBlockConstraint",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        a: Baml::Types::MalformedConstraints2,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UseMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UseMalformedConstraints",
+        {
+          a: a,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Baml::Types::NestedBlockConstraintForParam,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UseNestedBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UseNestedBlockConstraint",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+    
+  end
+
+  class HttpStreamRequest
+    extend T::Sig
+
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
+    def initialize(runtime:, ctx_manager:)
+      @runtime = runtime
+      @ctx_manager = ctx_manager
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        recipe: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AaaSamOutputFormat(
+        *varargs,
+        recipe:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AaaSamOutputFormat",
+        {
+          recipe: recipe,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        data: Baml::Types::LinkedListAliasNode,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasThatPointsToRecursiveType(
+        *varargs,
+        data:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasThatPointsToRecursiveType",
+        {
+          data: data,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasWithMultipleAttrs(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasWithMultipleAttrs",
+        {
+          money: money,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputClass",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputClass2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputClass2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::InputClassNested,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputClassNested",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(Baml::Types::AliasedEnum, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputEnum",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AliasedInputList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AliasedInputList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        optionals: Baml::Types::OptionalListAndMap,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AllowedOptionals(
+        *varargs,
+        optionals:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AllowedOptionals",
+        {
+          optionals: optionals,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        a: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AssertFn(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AssertFn may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AssertFn",
+        {
+          a: a,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        aud: Baml::Audio,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def AudioInput(
+        *varargs,
+        aud:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AudioInput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "AudioInput",
+        {
+          aud: aud,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[Integer],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def BuildLinkedList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "BuildLinkedList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::BinaryNode,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def BuildTree(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildTree may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "BuildTree",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        cls: Baml::Types::ClassToRecAlias,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassThatPointsToRecursiveClassThroughAlias(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassThatPointsToRecursiveClassThroughAlias",
+        {
+          cls: cls,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyDynEnumTwo(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyDynEnumTwo",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyMessage(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyMessage",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyMessage2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyMessage2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ClassifyMessage3(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ClassifyMessage3",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        prefix: String,suffix: String,language: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def Completion(
+        *varargs,
+        prefix:,suffix:,language:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("Completion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "Completion",
+        {
+          prefix: prefix,suffix: suffix,language: language,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def CustomTask(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("CustomTask may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "CustomTask",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage",
+        {
+          img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage2(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage2",
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage3(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage3",
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DescribeImage4(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DescribeImage4",
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DifferentiateUnions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DifferentiateUnions",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DummyOutputFunction(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DummyOutputFunction",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::DynamicClassOne,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DynamicFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DynamicFunc",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::DynInputOutput,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DynamicInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DynamicInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T::Array[Baml::Types::DynInputOutput],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def DynamicListInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "DynamicListInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExpectFailure(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExpectFailure",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        document: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractContactInfo(
+        *varargs,
+        document:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractContactInfo",
+        {
+          document: document,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractHobby(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractHobby",
+        {
+          text: text,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractNames(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractNames",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractPeople(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractPeople",
+        {
+          text: text,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        email: String,reason: T.any(String, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractReceiptInfo(
+        *varargs,
+        email:,reason:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractReceiptInfo",
+        {
+          email: email,reason: reason,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        resume: String,img: T.nilable(Baml::Image),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractResume(
+        *varargs,
+        resume:,img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractResume",
+        {
+          resume: resume,img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        resume: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ExtractResume2(
+        *varargs,
+        resume:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ExtractResume2",
+        {
+          resume: resume,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnClassOptionalOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnClassOptionalOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnClassOptionalOutput2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnClassOptionalOutput2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnEnumListOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnEnumListOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnEnumOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::LiteralClassHello,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnLiteralClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnLiteralClassInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnLiteralUnionClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnLiteralUnionClassInputOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myString: T.nilable(String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnNamedArgsSingleStringOptional(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnNamedArgsSingleStringOptional",
+        {
+          myString: myString,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputBool",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClass",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClassList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClassList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClassNested",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputClassWithEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputClassWithEnum",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputInt",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputLiteralBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputLiteralBool",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputLiteralInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputLiteralInt",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputLiteralString(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputLiteralString",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnOutputStringList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnOutputStringList",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnTestAliasedEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnTestAliasedEnumOutput",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnTestClassAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnTestClassAlias",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def FnTestNamedArgsSingleEnum(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "FnTestNamedArgsSingleEnum",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        text: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def GetDataType(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetDataType may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "GetDataType",
+        {
+          text: text,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        email: Baml::Types::Email,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def GetOrderInfo(
+        *varargs,
+        email:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "GetOrderInfo",
+        {
+          email: email,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        query: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def GetQuery(
+        *varargs,
+        query:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetQuery may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "GetQuery",
+        {
+          query: query,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def InOutEnumMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "InOutEnumMapKey",
+        {
+          i1: i1,i2: i2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def InOutLiteralStringUnionMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "InOutLiteralStringUnionMapKey",
+        {
+          i1: i1,i2: i2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        m: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def InOutSingleLiteralStringMapKey(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "InOutSingleLiteralStringMapKey",
+        {
+          m: m,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def JsonTypeAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "JsonTypeAliasCycle",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def LiteralUnionsTest(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "LiteralUnionsTest",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeBlockConstraint",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeNestedBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeNestedBlockConstraint",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeSemanticContainer(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeSemanticContainer",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        m: T::Hash[String, T::Array[String]],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MapAlias(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MapAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MapAlias",
+        {
+          m: m,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        money: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MergeAliasAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MergeAliasAttributes",
+        {
+          money: money,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MyFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MyFunc may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MyFunc",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def NestedAlias(
+        *varargs,
+        c:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "NestedAlias",
+        {
+          c: c,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        s: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def NullLiteralClassHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "NullLiteralClassHello",
+        {
+          s: s,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        s: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def OpenAIWithAnthropicResponseHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "OpenAIWithAnthropicResponseHello",
+        {
+          s: s,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def OptionalTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "OptionalTest_Function",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        name: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PredictAge(
+        *varargs,
+        name:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAge may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PredictAge",
+        {
+          name: name,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PredictAgeBare(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PredictAgeBare",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        p: T.any(Integer, String, T::Boolean, Float),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PrimitiveAlias(
+        *varargs,
+        p:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PrimitiveAlias",
+        {
+          p: p,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestClaude(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestClaude",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestClaudeChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestClaudeChat",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestClaudeChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestClaudeChatNoSystem",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestOpenAI",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestOpenAIChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestOpenAIChat",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestOpenAIChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def PromptTestStreaming(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "PromptTestStreaming",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def RecursiveAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "RecursiveAliasCycle",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        cls: Baml::Types::NodeWithAliasIndirection,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def RecursiveClassWithAliasIndirection(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "RecursiveClassWithAliasIndirection",
+        {
+          cls: cls,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnAliasWithMergedAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnAliasWithMergedAttributes",
+        {
+          money: money,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnFailingAssert(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnFailingAssert",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        s: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnJsonEntry(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnJsonEntry",
+        {
+          s: s,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        a: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def ReturnMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "ReturnMalformedConstraints",
+        {
+          a: a,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def SchemaDescriptions(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "SchemaDescriptions",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def SimpleRecursiveListAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "SimpleRecursiveListAlias",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def SimpleRecursiveMapAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "SimpleRecursiveMapAlias",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamBigNumbers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamBigNumbers",
+        {
+          digits: digits,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        theme: String,length: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamFailingAssertion(
+        *varargs,
+        theme:,length:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamFailingAssertion",
+        {
+          theme: theme,length: length,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamOneBigNumber(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamOneBigNumber",
+        {
+          digits: digits,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamUnionIntegers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamUnionIntegers",
+        {
+          digits: digits,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        digits: Integer,yapping: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def StreamingCompoundNumbers(
+        *varargs,
+        digits:,yapping:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "StreamingCompoundNumbers",
+        {
+          digits: digits,yapping: yapping,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::RecursiveAliasDependency,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TakeRecAliasDep(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TakeRecAliasDep",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        story: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TellStory(
+        *varargs,
+        story:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TellStory may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TellStory",
+        {
+          story: story,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAnthropic(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAnthropic",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAnthropicShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAnthropicShorthand",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAws(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAws may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAws",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidAccessKey(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidAccessKey",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidProfile(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidProfile",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidRegion(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidRegion",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAwsInvalidSessionToken(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAwsInvalidSessionToken",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzure may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzure",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureFailure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureFailure",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO1NoMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO1WithMaxCompletionTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO1WithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO3NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO3NoMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureO3WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureO3WithMaxCompletionTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestAzureWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestAzureWithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,not_cached: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestCaching(
+        *varargs,
+        input:,not_cached:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestCaching may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestCaching",
+        {
+          input: input,not_cached: not_cached,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFallbackClient",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFallbackStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFallbackStrategy",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFallbackToShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFallbackToShorthand",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myBool: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleBool",
+        {
+          myBool: myBool,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleClass(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleClass",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleEnumList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myFloat: Float,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleFloat(
+        *varargs,
+        myFloat:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleFloat",
+        {
+          myFloat: myFloat,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myInt: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleInt",
+        {
+          myInt: myInt,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleMapStringToClass(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          myMap: myMap,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myMap: T::Hash[String, T::Hash[String, String]],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleMapStringToMap(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          myMap: myMap,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myMap: T::Hash[String, String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleMapStringToString(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          myMap: myMap,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myString: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleString",
+        {
+          myString: myString,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myStringArray: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleStringArray(
+        *varargs,
+        myStringArray:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          myStringArray: myStringArray,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: T::Array[String],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestFnNamedArgsSingleStringList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestFnNamedArgsSingleStringList",
+        {
+          myArg: myArg,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGemini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGemini may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGemini",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGeminiOpenAiGeneric(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGeminiOpenAiGeneric",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGeminiSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGeminiSystem",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestGeminiSystemAsChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestGeminiSystemAsChat",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestImageInput(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestImageInput",
+        {
+          img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        img: Baml::Image,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestImageInputAnthropic(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestImageInputAnthropic",
+        {
+          img: img,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        imgs: T::Array[Baml::Image],
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestImageListInput(
+        *varargs,
+        imgs:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestImageListInput",
+        {
+          imgs: imgs,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestMemory(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMemory may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestMemory",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestMulticlassNamedArgs(
+        *varargs,
+        myArg:,myArg2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestMulticlassNamedArgs",
+        {
+          myArg: myArg,myArg2: myArg2,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myBool: T::Boolean,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestNamedArgsLiteralBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestNamedArgsLiteralBool",
+        {
+          myBool: myBool,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myInt: Integer,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestNamedArgsLiteralInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestNamedArgsLiteralInt",
+        {
+          myInt: myInt,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        myString: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestNamedArgsLiteralString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestNamedArgsLiteralString",
+        {
+          myString: myString,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOllama(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOllama may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOllama",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAI",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIGPT4oMini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIGPT4oMini",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAILegacyProvider(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAILegacyProvider",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIO1NoMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIO1WithMaxCompletionTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIO1WithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIShorthand",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIWithMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIWithNullMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIWithNullMaxTokens",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestRetryConstant(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestRetryConstant",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestRetryExponential(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestRetryExponential",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestRoundRobinStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestRoundRobinStrategy",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestSingleFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestSingleFallbackClient",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestThinking(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestThinking may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestThinking",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        question: Baml::Types::UniverseQuestionInput,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestUniverseQuestion(
+        *varargs,
+        question:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestUniverseQuestion",
+        {
+          question: question,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestVertex(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertex may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestVertex",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestVertexWithSystemInstructions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "TestVertexWithSystemInstructions",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.any(String, T::Boolean),
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UnionTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UnionTest_Function",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Baml::Types::BlockConstraintForParam,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UseBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UseBlockConstraint",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        a: Baml::Types::MalformedConstraints2,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UseMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UseMalformedConstraints",
+        {
+          a: a,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+    sig {
+      params(
+        varargs: T.untyped,
+        inp: Baml::Types::NestedBlockConstraintForParam,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def UseNestedBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "UseNestedBlockConstraint",
+        {
+          inp: inp,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
     
   end
 end
