@@ -1,16 +1,11 @@
 import pytest
 from dotenv import load_dotenv
 
-# warning -- using this object -- even just instantiating it with dummy values, makes it so some
-# of our pyo3 objects dont get cleaned up until after pytest starts exiting.
-from openai.types.chat import ChatCompletion
-
 from ..baml_client import b
 from ..baml_client.sync_client import b as b_sync
 from baml_py import Collector
 import gc
 import sys
-import asyncio
 
 load_dotenv()
 
