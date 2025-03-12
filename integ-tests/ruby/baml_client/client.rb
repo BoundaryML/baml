@@ -9063,20 +9063,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9121,20 +9108,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9179,20 +9153,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9237,20 +9198,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9295,20 +9243,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9353,20 +9288,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9411,20 +9333,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9469,20 +9378,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9527,20 +9423,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9585,20 +9468,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9643,20 +9513,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9701,20 +9558,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9759,20 +9603,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9817,20 +9648,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9875,20 +9693,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9933,20 +9738,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -9991,20 +9783,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10049,20 +9828,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10107,20 +9873,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10165,20 +9918,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10223,20 +9963,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10281,20 +10008,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10339,20 +10053,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10397,20 +10098,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10455,20 +10143,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10513,20 +10188,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10571,20 +10233,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10629,20 +10278,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10687,20 +10323,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10745,20 +10368,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10803,20 +10413,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10861,20 +10458,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10919,20 +10503,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -10977,20 +10548,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11035,20 +10593,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11093,20 +10638,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11151,20 +10683,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11209,20 +10728,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11267,20 +10773,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11325,20 +10818,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11383,20 +10863,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11441,20 +10908,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11499,20 +10953,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11557,20 +10998,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11615,20 +11043,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11673,20 +11088,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11731,20 +11133,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11789,20 +11178,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11847,20 +11223,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11905,20 +11268,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -11963,20 +11313,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12021,20 +11358,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12079,20 +11403,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12137,20 +11448,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12195,20 +11493,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12253,20 +11538,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12311,20 +11583,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12369,20 +11628,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12427,20 +11673,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12485,20 +11718,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12543,20 +11763,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12601,20 +11808,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12659,20 +11853,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12717,20 +11898,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12775,20 +11943,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12833,20 +11988,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12891,20 +12033,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -12949,20 +12078,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13007,20 +12123,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13065,20 +12168,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13123,20 +12213,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13181,20 +12258,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13239,20 +12303,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13297,20 +12348,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13355,20 +12393,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13413,20 +12438,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13471,20 +12483,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13529,20 +12528,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13587,20 +12573,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13645,20 +12618,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13703,20 +12663,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13761,20 +12708,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13819,20 +12753,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13877,20 +12798,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13935,20 +12843,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -13993,20 +12888,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14051,20 +12933,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14109,20 +12978,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14167,20 +13023,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14225,20 +13068,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14283,20 +13113,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14341,20 +13158,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14399,20 +13203,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14457,20 +13248,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14515,20 +13293,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14573,20 +13338,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14631,20 +13383,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14689,20 +13428,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14747,20 +13473,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14805,20 +13518,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14863,20 +13563,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14921,20 +13608,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -14979,20 +13653,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15037,20 +13698,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15095,20 +13743,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15153,20 +13788,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15211,20 +13833,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15269,20 +13878,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15327,20 +13923,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15385,20 +13968,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15443,20 +14013,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15501,20 +14058,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15559,20 +14103,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15617,20 +14148,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15675,20 +14193,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15733,20 +14238,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15791,20 +14283,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15849,20 +14328,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15907,20 +14373,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -15965,20 +14418,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16023,20 +14463,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16081,20 +14508,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16139,20 +14553,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16197,20 +14598,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16255,20 +14643,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16313,20 +14688,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16371,20 +14733,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16429,20 +14778,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16487,20 +14823,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16545,20 +14868,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16603,20 +14913,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16661,20 +14958,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16719,20 +15003,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16777,20 +15048,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16835,20 +15093,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16893,20 +15138,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -16951,20 +15183,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17009,20 +15228,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17067,20 +15273,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17125,20 +15318,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17183,20 +15363,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17241,20 +15408,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17299,20 +15453,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17357,20 +15498,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17415,20 +15543,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17473,20 +15588,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17531,20 +15633,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17589,20 +15678,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17647,20 +15723,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17705,20 +15768,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17763,20 +15813,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17821,20 +15858,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17879,20 +15903,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17937,20 +15948,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -17995,20 +15993,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18053,20 +16038,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18111,20 +16083,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18169,20 +16128,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18227,20 +16173,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18285,20 +16218,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18343,20 +16263,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18401,20 +16308,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
@@ -18459,20 +16353,7 @@ module Baml
       end
 
       # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-      
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
+      baml_options = (@baml_options || {}).merge(baml_options)
 
       collector = if baml_options[:collector]
         baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
