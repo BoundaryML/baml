@@ -220,7 +220,7 @@ navigation:
             icon: fa-regular fa-adjust
             path: 01-guide/06-prompt-engineering/symbol-tuning.mdx
           - page: PII Data Extraction / Scrubbing
-            icon: fa-regular fa-shield
+            icon: fa-regular fa-user-cog
             path: 01-guide/06-prompt-engineering/pii-data-extraction.mdx
           - page: Action Item Extraction
             icon: fa-regular fa-list-check

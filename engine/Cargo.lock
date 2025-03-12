@@ -4742,7 +4742,8 @@ dependencies = [
 [[package]]
 name = "serde_magnus"
 version = "0.9.0"
-source = "git+https://github.com/BoundaryML/serde-magnus.git?branch=sam%2Fmagnus-0.7.1#c547ef5ef475087ce57322b8e74c4a73ee2ab84b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51b8b945a2dadb221f1c5490cfb411cab6c3821446b8eca50ee07e5a3893ec51"
 dependencies = [
  "magnus",
  "serde",

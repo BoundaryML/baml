@@ -13,6 +13,7 @@ module Baml
   ClientRegistry = Baml::Ffi::ClientRegistry
   Image = Baml::Ffi::Image
   Audio = Baml::Ffi::Audio
+  Collector = Baml::Ffi::Collector
 
   # Reexport Checked types.
   Checked = Baml::Checks::Checked

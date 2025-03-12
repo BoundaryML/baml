@@ -79,11 +79,14 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         try:
             self.__drive_to_completion_in_bg()
             while True:
-                event = self.__event_queue.get()
-                if event is None:
-                    break
-                if event.is_ok():
-                    yield self.__partial_coerce(event)
+                try:
+                    event = self.__event_queue.get_nowait()
+                    if event is None:
+                        break
+                    if event.is_ok():
+                        yield self.__partial_coerce(event)
+                except queue.Empty:
+                    await asyncio.sleep(0.050)
         except Exception as e:
             raise e
         finally:

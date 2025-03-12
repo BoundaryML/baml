@@ -33,17 +33,29 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DI
  */
 export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>;
 
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+  collector?: Collector | Collector[]
+}
+
 export class BamlSyncClient {
   private httpRequest: HttpRequest
   private httpStreamRequest: HttpStreamRequest
   private llmResponseParser: LlmResponseParser
   private llmStreamParser: LlmStreamParser
+  private baml_options: BamlCallOptions
 
-  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager, private baml_options?: BamlCallOptions) {
     this.httpRequest = new HttpRequest(runtime, ctxManager)
     this.httpStreamRequest = new HttpStreamRequest(runtime, ctxManager)
     this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
     this.llmStreamParser = new LlmStreamParser(runtime, ctxManager)
+    this.baml_options = baml_options || {}
+  }
+
+  withOptions(baml_options: BamlCallOptions) {
+    return new BamlSyncClient(this.runtime, this.ctx_manager, baml_options)
   }
 
   /*
@@ -74,18 +86,19 @@ export class BamlSyncClient {
   
   AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Recipe {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AaaSamOutputFormat",
         {
           "recipe": recipe
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Recipe
@@ -96,18 +109,19 @@ export class BamlSyncClient {
   
   AliasThatPointsToRecursiveType(
       data: LinkedListAliasNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): LinkedListAliasNode {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AliasThatPointsToRecursiveType",
         {
           "data": data
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as LinkedListAliasNode
@@ -118,18 +132,19 @@ export class BamlSyncClient {
   
   AliasWithMultipleAttrs(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Checked<number,"gt_ten"> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AliasWithMultipleAttrs",
         {
           "money": money
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Checked<number,"gt_ten">
@@ -140,18 +155,19 @@ export class BamlSyncClient {
   
   AliasedInputClass(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AliasedInputClass",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -162,18 +178,19 @@ export class BamlSyncClient {
   
   AliasedInputClass2(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AliasedInputClass2",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -184,18 +201,19 @@ export class BamlSyncClient {
   
   AliasedInputClassNested(
       input: InputClassNested,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AliasedInputClassNested",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -206,18 +224,19 @@ export class BamlSyncClient {
   
   AliasedInputEnum(
       input: AliasedEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AliasedInputEnum",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -228,18 +247,19 @@ export class BamlSyncClient {
   
   AliasedInputList(
       input: AliasedEnum[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AliasedInputList",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -250,18 +270,19 @@ export class BamlSyncClient {
   
   AllowedOptionals(
       optionals: OptionalListAndMap,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): OptionalListAndMap {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AllowedOptionals",
         {
           "optionals": optionals
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as OptionalListAndMap
@@ -272,18 +293,19 @@ export class BamlSyncClient {
   
   AssertFn(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AssertFn",
         {
           "a": a
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number
@@ -294,18 +316,19 @@ export class BamlSyncClient {
   
   AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AudioInput",
         {
           "aud": aud
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -316,18 +339,19 @@ export class BamlSyncClient {
   
   BuildLinkedList(
       input: number[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): LinkedList {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "BuildLinkedList",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as LinkedList
@@ -338,18 +362,19 @@ export class BamlSyncClient {
   
   BuildTree(
       input: BinaryNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Tree {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "BuildTree",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Tree
@@ -360,18 +385,19 @@ export class BamlSyncClient {
   
   ClassThatPointsToRecursiveClassThroughAlias(
       cls: ClassToRecAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): ClassToRecAlias {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
           "cls": cls
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as ClassToRecAlias
@@ -382,18 +408,19 @@ export class BamlSyncClient {
   
   ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): (string | DynEnumTwo) {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ClassifyDynEnumTwo",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as (string | DynEnumTwo)
@@ -404,18 +431,19 @@ export class BamlSyncClient {
   
   ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Category {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ClassifyMessage",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Category
@@ -426,18 +454,19 @@ export class BamlSyncClient {
   
   ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Category {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ClassifyMessage2",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Category
@@ -448,18 +477,19 @@ export class BamlSyncClient {
   
   ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Category {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ClassifyMessage3",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Category
@@ -470,18 +500,19 @@ export class BamlSyncClient {
   
   Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "Completion",
         {
           "prefix": prefix,"suffix": suffix,"language": language
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -492,18 +523,19 @@ export class BamlSyncClient {
   
   CustomTask(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): BookOrder | FlightConfirmation | GroceryReceipt {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "CustomTask",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as BookOrder | FlightConfirmation | GroceryReceipt
@@ -514,18 +546,19 @@ export class BamlSyncClient {
   
   DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DescribeImage",
         {
           "img": img
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -536,18 +569,19 @@ export class BamlSyncClient {
   
   DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DescribeImage2",
         {
           "classWithImage": classWithImage,"img2": img2
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -558,18 +592,19 @@ export class BamlSyncClient {
   
   DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DescribeImage3",
         {
           "classWithImage": classWithImage,"img2": img2
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -580,18 +615,19 @@ export class BamlSyncClient {
   
   DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DescribeImage4",
         {
           "classWithImage": classWithImage,"img2": img2
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -602,18 +638,19 @@ export class BamlSyncClient {
   
   DifferentiateUnions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): OriginalA | OriginalB {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DifferentiateUnions",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as OriginalA | OriginalB
@@ -624,18 +661,19 @@ export class BamlSyncClient {
   
   DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): DummyOutput {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DummyOutputFunction",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as DummyOutput
@@ -646,18 +684,19 @@ export class BamlSyncClient {
   
   DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): DynamicClassTwo {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DynamicFunc",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as DynamicClassTwo
@@ -668,18 +707,19 @@ export class BamlSyncClient {
   
   DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): DynInputOutput {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DynamicInputOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as DynInputOutput
@@ -690,18 +730,19 @@ export class BamlSyncClient {
   
   DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): DynInputOutput[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "DynamicListInputOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as DynInputOutput[]
@@ -712,18 +753,19 @@ export class BamlSyncClient {
   
   ExpectFailure(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExpectFailure",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -734,18 +776,19 @@ export class BamlSyncClient {
   
   ExtractContactInfo(
       document: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): ContactInfo {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExtractContactInfo",
         {
           "document": document
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as ContactInfo
@@ -756,18 +799,19 @@ export class BamlSyncClient {
   
   ExtractHobby(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): (string | Hobby)[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExtractHobby",
         {
           "text": text
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as (string | Hobby)[]
@@ -778,18 +822,19 @@ export class BamlSyncClient {
   
   ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExtractNames",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string[]
@@ -800,18 +845,19 @@ export class BamlSyncClient {
   
   ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Person[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExtractPeople",
         {
           "text": text
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Person[]
@@ -822,18 +868,19 @@ export class BamlSyncClient {
   
   ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): ReceiptInfo {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExtractReceiptInfo",
         {
           "email": email,"reason": reason
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as ReceiptInfo
@@ -844,18 +891,19 @@ export class BamlSyncClient {
   
   ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Resume {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExtractResume",
         {
           "resume": resume,"img": img?? null
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Resume
@@ -866,18 +914,19 @@ export class BamlSyncClient {
   
   ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Resume {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ExtractResume2",
         {
           "resume": resume
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Resume
@@ -888,18 +937,19 @@ export class BamlSyncClient {
   
   FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): ClassOptionalOutput | null {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnClassOptionalOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as ClassOptionalOutput | null
@@ -910,18 +960,19 @@ export class BamlSyncClient {
   
   FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): ClassOptionalOutput2 | null {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnClassOptionalOutput2",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as ClassOptionalOutput2 | null
@@ -932,18 +983,19 @@ export class BamlSyncClient {
   
   FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): EnumOutput[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnEnumListOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as EnumOutput[]
@@ -954,18 +1006,19 @@ export class BamlSyncClient {
   
   FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): EnumOutput {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnEnumOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as EnumOutput
@@ -976,18 +1029,19 @@ export class BamlSyncClient {
   
   FnLiteralClassInputOutput(
       input: LiteralClassHello,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): LiteralClassHello {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnLiteralClassInputOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as LiteralClassHello
@@ -998,18 +1052,19 @@ export class BamlSyncClient {
   
   FnLiteralUnionClassInputOutput(
       input: LiteralClassOne | LiteralClassTwo,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): LiteralClassOne | LiteralClassTwo {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnLiteralUnionClassInputOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as LiteralClassOne | LiteralClassTwo
@@ -1020,18 +1075,19 @@ export class BamlSyncClient {
   
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnNamedArgsSingleStringOptional",
         {
           "myString": myString?? null
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1042,18 +1098,19 @@ export class BamlSyncClient {
   
   FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): boolean {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputBool",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as boolean
@@ -1064,18 +1121,19 @@ export class BamlSyncClient {
   
   FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TestOutputClass {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputClass",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TestOutputClass
@@ -1086,18 +1144,19 @@ export class BamlSyncClient {
   
   FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TestOutputClass[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputClassList",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TestOutputClass[]
@@ -1108,18 +1167,19 @@ export class BamlSyncClient {
   
   FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TestClassNested {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputClassNested",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TestClassNested
@@ -1130,18 +1190,19 @@ export class BamlSyncClient {
   
   FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TestClassWithEnum {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputClassWithEnum",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TestClassWithEnum
@@ -1152,18 +1213,19 @@ export class BamlSyncClient {
   
   FnOutputInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputInt",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number
@@ -1174,18 +1236,19 @@ export class BamlSyncClient {
   
   FnOutputLiteralBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): false {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputLiteralBool",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as false
@@ -1196,18 +1259,19 @@ export class BamlSyncClient {
   
   FnOutputLiteralInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): 5 {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputLiteralInt",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as 5
@@ -1218,18 +1282,19 @@ export class BamlSyncClient {
   
   FnOutputLiteralString(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): "example output" {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputLiteralString",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as "example output"
@@ -1240,18 +1305,19 @@ export class BamlSyncClient {
   
   FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnOutputStringList",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string[]
@@ -1262,18 +1328,19 @@ export class BamlSyncClient {
   
   FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TestEnum {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnTestAliasedEnumOutput",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TestEnum
@@ -1284,18 +1351,19 @@ export class BamlSyncClient {
   
   FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TestClassAlias {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnTestClassAlias",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TestClassAlias
@@ -1306,18 +1374,19 @@ export class BamlSyncClient {
   
   FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "FnTestNamedArgsSingleEnum",
         {
           "myArg": myArg
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1328,18 +1397,19 @@ export class BamlSyncClient {
   
   GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): RaysData {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "GetDataType",
         {
           "text": text
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as RaysData
@@ -1350,18 +1420,19 @@ export class BamlSyncClient {
   
   GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): OrderInfo {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "GetOrderInfo",
         {
           "email": email
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as OrderInfo
@@ -1372,18 +1443,19 @@ export class BamlSyncClient {
   
   GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): SearchParams {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "GetQuery",
         {
           "query": query
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as SearchParams
@@ -1394,18 +1466,19 @@ export class BamlSyncClient {
   
   InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Partial<Record<types.MapKey, string>> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "InOutEnumMapKey",
         {
           "i1": i1,"i2": i2
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Partial<Record<types.MapKey, string>>
@@ -1416,18 +1489,19 @@ export class BamlSyncClient {
   
   InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Partial<Record<"one" | "two" | "three" | "four", string>> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "InOutLiteralStringUnionMapKey",
         {
           "i1": i1,"i2": i2
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Partial<Record<"one" | "two" | "three" | "four", string>>
@@ -1438,18 +1512,19 @@ export class BamlSyncClient {
   
   InOutSingleLiteralStringMapKey(
       m: Partial<Record<"key", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Partial<Record<"key", string>> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "InOutSingleLiteralStringMapKey",
         {
           "m": m
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Partial<Record<"key", string>>
@@ -1460,18 +1535,19 @@ export class BamlSyncClient {
   
   JsonTypeAliasCycle(
       input: JsonValue,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): JsonValue {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "JsonTypeAliasCycle",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as JsonValue
@@ -1482,18 +1558,19 @@ export class BamlSyncClient {
   
   LiteralUnionsTest(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): 1 | true | "string output" {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "LiteralUnionsTest",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as 1 | true | "string output"
@@ -1504,18 +1581,19 @@ export class BamlSyncClient {
   
   MakeBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Checked<BlockConstraint,"cross_field"> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "MakeBlockConstraint",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Checked<BlockConstraint,"cross_field">
@@ -1526,18 +1604,19 @@ export class BamlSyncClient {
   
   MakeNestedBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): NestedBlockConstraint {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "MakeNestedBlockConstraint",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as NestedBlockConstraint
@@ -1548,18 +1627,19 @@ export class BamlSyncClient {
   
   MakeSemanticContainer(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): SemanticContainer {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "MakeSemanticContainer",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as SemanticContainer
@@ -1570,18 +1650,19 @@ export class BamlSyncClient {
   
   MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Record<string, string[]> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "MapAlias",
         {
           "m": m
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Record<string, string[]>
@@ -1592,18 +1673,19 @@ export class BamlSyncClient {
   
   MergeAliasAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): MergeAttrs {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "MergeAliasAttributes",
         {
           "money": money
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as MergeAttrs
@@ -1614,18 +1696,19 @@ export class BamlSyncClient {
   
   MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): DynamicOutput {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "MyFunc",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as DynamicOutput
@@ -1636,18 +1719,19 @@ export class BamlSyncClient {
   
   NestedAlias(
       c: number | string | boolean | number | string[] | Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number | string | boolean | number | string[] | Record<string, string[]> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "NestedAlias",
         {
           "c": c
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number | string | boolean | number | string[] | Record<string, string[]>
@@ -1658,18 +1742,19 @@ export class BamlSyncClient {
   
   NullLiteralClassHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): ClassForNullLiteral {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "NullLiteralClassHello",
         {
           "s": s
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as ClassForNullLiteral
@@ -1680,18 +1765,19 @@ export class BamlSyncClient {
   
   OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "OpenAIWithAnthropicResponseHello",
         {
           "s": s
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1702,18 +1788,19 @@ export class BamlSyncClient {
   
   OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): (OptionalTest_ReturnType | null)[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "OptionalTest_Function",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as (OptionalTest_ReturnType | null)[]
@@ -1724,18 +1811,19 @@ export class BamlSyncClient {
   
   PredictAge(
       name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): FooAny {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PredictAge",
         {
           "name": name
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as FooAny
@@ -1746,18 +1834,19 @@ export class BamlSyncClient {
   
   PredictAgeBare(
       inp: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Checked<number,"too_big"> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PredictAgeBare",
         {
           "inp": inp
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Checked<number,"too_big">
@@ -1768,18 +1857,19 @@ export class BamlSyncClient {
   
   PrimitiveAlias(
       p: number | string | boolean | number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number | string | boolean | number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PrimitiveAlias",
         {
           "p": p
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number | string | boolean | number
@@ -1790,18 +1880,19 @@ export class BamlSyncClient {
   
   PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PromptTestClaude",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1812,18 +1903,19 @@ export class BamlSyncClient {
   
   PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PromptTestClaudeChat",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1834,18 +1926,19 @@ export class BamlSyncClient {
   
   PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PromptTestClaudeChatNoSystem",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1856,18 +1949,19 @@ export class BamlSyncClient {
   
   PromptTestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PromptTestOpenAI",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1878,18 +1972,19 @@ export class BamlSyncClient {
   
   PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PromptTestOpenAIChat",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1900,18 +1995,19 @@ export class BamlSyncClient {
   
   PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PromptTestOpenAIChatNoSystem",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1922,18 +2018,19 @@ export class BamlSyncClient {
   
   PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "PromptTestStreaming",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -1944,18 +2041,19 @@ export class BamlSyncClient {
   
   RecursiveAliasCycle(
       input: RecAliasOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): RecAliasOne {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "RecursiveAliasCycle",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as RecAliasOne
@@ -1966,18 +2064,19 @@ export class BamlSyncClient {
   
   RecursiveClassWithAliasIndirection(
       cls: NodeWithAliasIndirection,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): NodeWithAliasIndirection {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "RecursiveClassWithAliasIndirection",
         {
           "cls": cls
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as NodeWithAliasIndirection
@@ -1988,18 +2087,19 @@ export class BamlSyncClient {
   
   ReturnAliasWithMergedAttributes(
       money: Checked<number,"gt_ten">,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Checked<number,"gt_ten"> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ReturnAliasWithMergedAttributes",
         {
           "money": money
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Checked<number,"gt_ten">
@@ -2010,18 +2110,19 @@ export class BamlSyncClient {
   
   ReturnFailingAssert(
       inp: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ReturnFailingAssert",
         {
           "inp": inp
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number
@@ -2032,18 +2133,19 @@ export class BamlSyncClient {
   
   ReturnJsonEntry(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): JsonTemplate {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ReturnJsonEntry",
         {
           "s": s
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as JsonTemplate
@@ -2054,18 +2156,19 @@ export class BamlSyncClient {
   
   ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): MalformedConstraints {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "ReturnMalformedConstraints",
         {
           "a": a
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as MalformedConstraints
@@ -2076,18 +2179,19 @@ export class BamlSyncClient {
   
   SchemaDescriptions(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Schema {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "SchemaDescriptions",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Schema
@@ -2098,18 +2202,19 @@ export class BamlSyncClient {
   
   SimpleRecursiveListAlias(
       input: RecursiveListAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): RecursiveListAlias {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "SimpleRecursiveListAlias",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as RecursiveListAlias
@@ -2120,18 +2225,19 @@ export class BamlSyncClient {
   
   SimpleRecursiveMapAlias(
       input: RecursiveMapAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): RecursiveMapAlias {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "SimpleRecursiveMapAlias",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as RecursiveMapAlias
@@ -2142,18 +2248,19 @@ export class BamlSyncClient {
   
   StreamBigNumbers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): BigNumbers {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "StreamBigNumbers",
         {
           "digits": digits
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as BigNumbers
@@ -2164,18 +2271,19 @@ export class BamlSyncClient {
   
   StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TwoStoriesOneTitle {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "StreamFailingAssertion",
         {
           "theme": theme,"length": length
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TwoStoriesOneTitle
@@ -2186,18 +2294,19 @@ export class BamlSyncClient {
   
   StreamOneBigNumber(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "StreamOneBigNumber",
         {
           "digits": digits
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number
@@ -2208,18 +2317,19 @@ export class BamlSyncClient {
   
   StreamUnionIntegers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): (number | string)[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "StreamUnionIntegers",
         {
           "digits": digits
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as (number | string)[]
@@ -2230,18 +2340,19 @@ export class BamlSyncClient {
   
   StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): CompoundBigNumbers {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "StreamingCompoundNumbers",
         {
           "digits": digits,"yapping": yapping
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as CompoundBigNumbers
@@ -2252,18 +2363,19 @@ export class BamlSyncClient {
   
   TakeRecAliasDep(
       input: RecursiveAliasDependency,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): RecursiveAliasDependency {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TakeRecAliasDep",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as RecursiveAliasDependency
@@ -2274,18 +2386,19 @@ export class BamlSyncClient {
   
   TellStory(
       story: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TellStory",
         {
           "story": story
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2296,18 +2409,19 @@ export class BamlSyncClient {
   
   TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAnthropic",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2318,18 +2432,19 @@ export class BamlSyncClient {
   
   TestAnthropicShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAnthropicShorthand",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2340,18 +2455,19 @@ export class BamlSyncClient {
   
   TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAws",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2362,18 +2478,19 @@ export class BamlSyncClient {
   
   TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAwsInvalidAccessKey",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2384,18 +2501,19 @@ export class BamlSyncClient {
   
   TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAwsInvalidProfile",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2406,18 +2524,19 @@ export class BamlSyncClient {
   
   TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAwsInvalidRegion",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2428,18 +2547,19 @@ export class BamlSyncClient {
   
   TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAwsInvalidSessionToken",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2450,18 +2570,19 @@ export class BamlSyncClient {
   
   TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzure",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2472,18 +2593,19 @@ export class BamlSyncClient {
   
   TestAzureFailure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzureFailure",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2494,18 +2616,19 @@ export class BamlSyncClient {
   
   TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzureO1NoMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2516,18 +2639,19 @@ export class BamlSyncClient {
   
   TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzureO1WithMaxCompletionTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2538,18 +2662,19 @@ export class BamlSyncClient {
   
   TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzureO1WithMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2560,18 +2685,19 @@ export class BamlSyncClient {
   
   TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzureO3NoMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2582,18 +2708,19 @@ export class BamlSyncClient {
   
   TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzureO3WithMaxCompletionTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2604,18 +2731,19 @@ export class BamlSyncClient {
   
   TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestAzureWithMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2626,18 +2754,19 @@ export class BamlSyncClient {
   
   TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestCaching",
         {
           "input": input,"not_cached": not_cached
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2648,18 +2777,19 @@ export class BamlSyncClient {
   
   TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFallbackClient",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2670,18 +2800,19 @@ export class BamlSyncClient {
   
   TestFallbackStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFallbackStrategy",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2692,18 +2823,19 @@ export class BamlSyncClient {
   
   TestFallbackToShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFallbackToShorthand",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2714,18 +2846,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleBool",
         {
           "myBool": myBool
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2736,18 +2869,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleClass",
         {
           "myArg": myArg
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2758,18 +2892,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleEnumList",
         {
           "myArg": myArg
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2780,18 +2915,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleFloat",
         {
           "myFloat": myFloat
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2802,18 +2938,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleInt",
         {
           "myInt": myInt
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2824,18 +2961,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Record<string, StringToClassEntry> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleMapStringToClass",
         {
           "myMap": myMap
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Record<string, StringToClassEntry>
@@ -2846,18 +2984,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Record<string, Record<string, string>> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleMapStringToMap",
         {
           "myMap": myMap
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Record<string, Record<string, string>>
@@ -2868,18 +3007,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Record<string, string> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleMapStringToString",
         {
           "myMap": myMap
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as Record<string, string>
@@ -2890,18 +3030,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleString",
         {
           "myString": myString
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2912,18 +3053,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleStringArray",
         {
           "myStringArray": myStringArray
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2934,18 +3076,19 @@ export class BamlSyncClient {
   
   TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string[] {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestFnNamedArgsSingleStringList",
         {
           "myArg": myArg
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string[]
@@ -2956,18 +3099,19 @@ export class BamlSyncClient {
   
   TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestGemini",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -2978,18 +3122,19 @@ export class BamlSyncClient {
   
   TestGeminiOpenAiGeneric(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestGeminiOpenAiGeneric",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3000,18 +3145,19 @@ export class BamlSyncClient {
   
   TestGeminiSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestGeminiSystem",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3022,18 +3168,19 @@ export class BamlSyncClient {
   
   TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestGeminiSystemAsChat",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3044,18 +3191,19 @@ export class BamlSyncClient {
   
   TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestImageInput",
         {
           "img": img
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3066,18 +3214,19 @@ export class BamlSyncClient {
   
   TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestImageInputAnthropic",
         {
           "img": img
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3088,18 +3237,19 @@ export class BamlSyncClient {
   
   TestImageListInput(
       imgs: Image[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestImageListInput",
         {
           "imgs": imgs
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3110,18 +3260,19 @@ export class BamlSyncClient {
   
   TestMemory(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): TestMemoryOutput {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestMemory",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as TestMemoryOutput
@@ -3132,18 +3283,19 @@ export class BamlSyncClient {
   
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestMulticlassNamedArgs",
         {
           "myArg": myArg,"myArg2": myArg2
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3154,18 +3306,19 @@ export class BamlSyncClient {
   
   TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestNamedArgsLiteralBool",
         {
           "myBool": myBool
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3176,18 +3329,19 @@ export class BamlSyncClient {
   
   TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestNamedArgsLiteralInt",
         {
           "myInt": myInt
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3198,18 +3352,19 @@ export class BamlSyncClient {
   
   TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestNamedArgsLiteralString",
         {
           "myString": myString
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3220,18 +3375,19 @@ export class BamlSyncClient {
   
   TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOllama",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3242,18 +3398,19 @@ export class BamlSyncClient {
   
   TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAI",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3264,18 +3421,19 @@ export class BamlSyncClient {
   
   TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAIGPT4oMini",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3286,18 +3444,19 @@ export class BamlSyncClient {
   
   TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAILegacyProvider",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3308,18 +3467,19 @@ export class BamlSyncClient {
   
   TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAIO1NoMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3330,18 +3490,19 @@ export class BamlSyncClient {
   
   TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3352,18 +3513,19 @@ export class BamlSyncClient {
   
   TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAIO1WithMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3374,18 +3536,19 @@ export class BamlSyncClient {
   
   TestOpenAIShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAIShorthand",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3396,18 +3559,19 @@ export class BamlSyncClient {
   
   TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAIWithMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3418,18 +3582,19 @@ export class BamlSyncClient {
   
   TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAIWithNullMaxTokens",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3440,18 +3605,19 @@ export class BamlSyncClient {
   
   TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestRetryConstant",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3462,18 +3628,19 @@ export class BamlSyncClient {
   
   TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestRetryExponential",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3484,18 +3651,19 @@ export class BamlSyncClient {
   
   TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestRoundRobinStrategy",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3506,18 +3674,19 @@ export class BamlSyncClient {
   
   TestSingleFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestSingleFallbackClient",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3528,18 +3697,19 @@ export class BamlSyncClient {
   
   TestThinking(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): CustomStory {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestThinking",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as CustomStory
@@ -3550,18 +3720,19 @@ export class BamlSyncClient {
   
   TestUniverseQuestion(
       question: UniverseQuestionInput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): UniverseQuestion {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestUniverseQuestion",
         {
           "question": question
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as UniverseQuestion
@@ -3572,18 +3743,19 @@ export class BamlSyncClient {
   
   TestVertex(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestVertex",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3594,18 +3766,19 @@ export class BamlSyncClient {
   
   TestVertexWithSystemInstructions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): string {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestVertexWithSystemInstructions",
         {
           
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as string
@@ -3616,18 +3789,19 @@ export class BamlSyncClient {
   
   UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): UnionTest_ReturnType {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "UnionTest_Function",
         {
           "input": input
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as UnionTest_ReturnType
@@ -3638,18 +3812,19 @@ export class BamlSyncClient {
   
   UseBlockConstraint(
       inp: BlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "UseBlockConstraint",
         {
           "inp": inp
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number
@@ -3660,18 +3835,19 @@ export class BamlSyncClient {
   
   UseMalformedConstraints(
       a: MalformedConstraints2,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "UseMalformedConstraints",
         {
           "a": a
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number
@@ -3682,18 +3858,19 @@ export class BamlSyncClient {
   
   UseNestedBlockConstraint(
       inp: NestedBlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): number {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "UseNestedBlockConstraint",
         {
           "inp": inp
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as number

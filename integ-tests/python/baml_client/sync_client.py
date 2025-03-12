@@ -43,15 +43,17 @@ class BamlSyncClient:
     __http_request: "HttpRequest"
     __http_stream_request: "HttpStreamRequest"
     __llm_response_parser: LlmResponseParser
+    __baml_options: BamlCallOptions
 
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[BamlCallOptions] = None):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
-      self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager)
+      self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager, baml_options)
       self.__http_request = HttpRequest(self.__runtime, self.__ctx_manager)
       self.__http_stream_request = HttpStreamRequest(self.__runtime, self.__ctx_manager)
       self.__llm_response_parser = LlmResponseParser(self.__runtime, self.__ctx_manager)
       self.__llm_stream_parser = LlmStreamParser(self.__runtime, self.__ctx_manager)
+      self.__baml_options = baml_options or {}
 
     @property
     def stream(self):
@@ -73,19 +75,41 @@ class BamlSyncClient:
     def parse_stream(self):
       return self.__llm_stream_parser
 
+    def with_options(
+      self,
+      tb: Optional[TypeBuilder] = None,
+      client_registry: Optional[baml_py.baml_py.ClientRegistry] = None,
+      collector: Optional[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]] = None,
+    ) -> "BamlSyncClient":
+      """
+      Returns a new instance of BamlSyncClient with explicitly typed baml options
+      for Python 3.8 compatibility.
+      """
+      new_options = {}
+
+      # Override if any keyword arguments were provided.
+      if tb is not None:
+          new_options["tb"] = tb
+      if client_registry is not None:
+          new_options["client_registry"] = client_registry
+      if collector is not None:
+          new_options["collector"] = collector
+      return BamlSyncClient(self.__runtime, self.__ctx_manager, new_options)
+
     
     def AaaSamOutputFormat(
         self,
         recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Recipe:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -105,13 +129,14 @@ class BamlSyncClient:
         data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedListAliasNode:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -131,13 +156,14 @@ class BamlSyncClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["gt_ten"]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -157,13 +183,14 @@ class BamlSyncClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -183,13 +210,14 @@ class BamlSyncClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -209,13 +237,14 @@ class BamlSyncClient:
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -235,13 +264,14 @@ class BamlSyncClient:
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -261,13 +291,14 @@ class BamlSyncClient:
         input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -287,13 +318,14 @@ class BamlSyncClient:
         optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalListAndMap:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -313,13 +345,14 @@ class BamlSyncClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -339,13 +372,14 @@ class BamlSyncClient:
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -365,13 +399,14 @@ class BamlSyncClient:
         input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedList:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -391,13 +426,14 @@ class BamlSyncClient:
         input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> types.Tree:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -417,13 +453,14 @@ class BamlSyncClient:
         cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassToRecAlias:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -443,13 +480,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[types.DynEnumTwo, str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -469,13 +507,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -495,13 +534,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -521,13 +561,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -547,13 +588,14 @@ class BamlSyncClient:
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -573,13 +615,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -599,13 +642,14 @@ class BamlSyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -625,13 +669,14 @@ class BamlSyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -651,13 +696,14 @@ class BamlSyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -677,13 +723,14 @@ class BamlSyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -703,13 +750,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> Union[types.OriginalA, types.OriginalB]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -729,13 +777,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DummyOutput:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -755,13 +804,14 @@ class BamlSyncClient:
         input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicClassTwo:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -781,13 +831,14 @@ class BamlSyncClient:
         input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> types.DynInputOutput:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -807,13 +858,14 @@ class BamlSyncClient:
         input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> List[types.DynInputOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -833,13 +885,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -859,13 +912,14 @@ class BamlSyncClient:
         document: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ContactInfo:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -885,13 +939,14 @@ class BamlSyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> List[Union[types.Hobby, str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -911,13 +966,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -937,13 +993,14 @@ class BamlSyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.Person]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -963,13 +1020,14 @@ class BamlSyncClient:
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> types.ReceiptInfo:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -989,13 +1047,14 @@ class BamlSyncClient:
         resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1015,13 +1074,14 @@ class BamlSyncClient:
         resume: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1041,13 +1101,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[types.ClassOptionalOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1067,13 +1128,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[types.ClassOptionalOutput2]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1093,13 +1155,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.EnumOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1119,13 +1182,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EnumOutput:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1145,13 +1209,14 @@ class BamlSyncClient:
         input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> types.LiteralClassHello:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1171,13 +1236,14 @@ class BamlSyncClient:
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> Union[types.LiteralClassOne, types.LiteralClassTwo]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1197,13 +1263,14 @@ class BamlSyncClient:
         myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1223,13 +1290,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1249,13 +1317,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestOutputClass:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1275,13 +1344,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.TestOutputClass]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1301,13 +1371,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassNested:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1327,13 +1398,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassWithEnum:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1353,13 +1425,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1379,13 +1452,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal[False]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1405,13 +1479,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal[5]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1431,13 +1506,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal["example output"]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1457,13 +1533,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1483,13 +1560,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1509,13 +1587,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassAlias:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1535,13 +1614,14 @@ class BamlSyncClient:
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1561,13 +1641,14 @@ class BamlSyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.RaysData:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1587,13 +1668,14 @@ class BamlSyncClient:
         email: types.Email,
         baml_options: BamlCallOptions = {},
     ) -> types.OrderInfo:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1613,13 +1695,14 @@ class BamlSyncClient:
         query: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SearchParams:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1639,13 +1722,14 @@ class BamlSyncClient:
         i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[types.MapKey, str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1665,13 +1749,14 @@ class BamlSyncClient:
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1691,13 +1776,14 @@ class BamlSyncClient:
         m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[Literal["key"], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1717,13 +1803,14 @@ class BamlSyncClient:
         input: types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonValue:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1743,13 +1830,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[Literal[1], Literal[True], Literal["string output"]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1769,13 +1857,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> Checked[types.BlockConstraint,types.Literal["cross_field"]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1795,13 +1884,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.NestedBlockConstraint:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1821,13 +1911,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.SemanticContainer:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1847,13 +1938,14 @@ class BamlSyncClient:
         m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, List[str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1873,13 +1965,14 @@ class BamlSyncClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MergeAttrs:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1899,13 +1992,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicOutput:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1925,13 +2019,14 @@ class BamlSyncClient:
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
     ) -> Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1951,13 +2046,14 @@ class BamlSyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassForNullLiteral:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -1977,13 +2073,14 @@ class BamlSyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2003,13 +2100,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[Optional[types.OptionalTest_ReturnType]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2029,13 +2127,14 @@ class BamlSyncClient:
         name: str,
         baml_options: BamlCallOptions = {},
     ) -> types.FooAny:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2055,13 +2154,14 @@ class BamlSyncClient:
         inp: str,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["too_big"]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2081,13 +2181,14 @@ class BamlSyncClient:
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
     ) -> Union[int, str, bool, float]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2107,13 +2208,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2133,13 +2235,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2159,13 +2262,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2185,13 +2289,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2211,13 +2316,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2237,13 +2343,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2263,13 +2370,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2289,13 +2397,14 @@ class BamlSyncClient:
         input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> types.RecAliasOne:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2315,13 +2424,14 @@ class BamlSyncClient:
         cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> types.NodeWithAliasIndirection:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2341,13 +2451,14 @@ class BamlSyncClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["gt_ten"]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2367,13 +2478,14 @@ class BamlSyncClient:
         inp: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2393,13 +2505,14 @@ class BamlSyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonTemplate:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2419,13 +2532,14 @@ class BamlSyncClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MalformedConstraints:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2445,13 +2559,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Schema:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2471,13 +2586,14 @@ class BamlSyncClient:
         input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveListAlias:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2497,13 +2613,14 @@ class BamlSyncClient:
         input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveMapAlias:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2523,13 +2640,14 @@ class BamlSyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> types.BigNumbers:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2549,13 +2667,14 @@ class BamlSyncClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitle:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2575,13 +2694,14 @@ class BamlSyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2601,13 +2721,14 @@ class BamlSyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> List[Union[int, str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2627,13 +2748,14 @@ class BamlSyncClient:
         digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
     ) -> types.CompoundBigNumbers:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2653,13 +2775,14 @@ class BamlSyncClient:
         input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveAliasDependency:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2679,13 +2802,14 @@ class BamlSyncClient:
         story: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2705,13 +2829,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2731,13 +2856,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2757,13 +2883,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2783,13 +2910,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2809,13 +2937,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2835,13 +2964,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2861,13 +2991,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2887,13 +3018,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2913,13 +3045,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2939,13 +3072,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2965,13 +3099,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -2991,13 +3126,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3017,13 +3153,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3043,13 +3180,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3069,13 +3207,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3095,13 +3234,14 @@ class BamlSyncClient:
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3121,13 +3261,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3147,13 +3288,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3173,13 +3315,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3199,13 +3342,14 @@ class BamlSyncClient:
         myBool: bool,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3225,13 +3369,14 @@ class BamlSyncClient:
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3251,13 +3396,14 @@ class BamlSyncClient:
         myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3277,13 +3423,14 @@ class BamlSyncClient:
         myFloat: float,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3303,13 +3450,14 @@ class BamlSyncClient:
         myInt: int,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3329,13 +3477,14 @@ class BamlSyncClient:
         myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, types.StringToClassEntry]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3355,13 +3504,14 @@ class BamlSyncClient:
         myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, Dict[str, str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3381,13 +3531,14 @@ class BamlSyncClient:
         myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3407,13 +3558,14 @@ class BamlSyncClient:
         myString: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3433,13 +3585,14 @@ class BamlSyncClient:
         myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3459,13 +3612,14 @@ class BamlSyncClient:
         myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3485,13 +3639,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3511,13 +3666,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3537,13 +3693,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3563,13 +3720,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3589,13 +3747,14 @@ class BamlSyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3615,13 +3774,14 @@ class BamlSyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3641,13 +3801,14 @@ class BamlSyncClient:
         imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3667,13 +3828,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestMemoryOutput:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3693,13 +3855,14 @@ class BamlSyncClient:
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3719,13 +3882,14 @@ class BamlSyncClient:
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3745,13 +3909,14 @@ class BamlSyncClient:
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3771,13 +3936,14 @@ class BamlSyncClient:
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3797,13 +3963,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3823,13 +3990,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3849,13 +4017,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3875,13 +4044,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3901,13 +4071,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3927,13 +4098,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3953,13 +4125,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -3979,13 +4152,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4005,13 +4179,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4031,13 +4206,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4057,13 +4233,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4083,13 +4260,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4109,13 +4287,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4135,13 +4314,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4161,13 +4341,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4187,13 +4368,14 @@ class BamlSyncClient:
         question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> types.UniverseQuestion:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4213,13 +4395,14 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4239,13 +4422,14 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4265,13 +4449,14 @@ class BamlSyncClient:
         input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> types.UnionTest_ReturnType:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4291,13 +4476,14 @@ class BamlSyncClient:
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4317,13 +4503,14 @@ class BamlSyncClient:
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4343,13 +4530,14 @@ class BamlSyncClient:
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.call_function_sync(
@@ -4370,10 +4558,11 @@ class BamlSyncClient:
 class BamlStreamClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
-
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+    __baml_options: BamlCallOptions
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[BamlCallOptions] = None):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
+      self.__baml_options = baml_options or {}
 
     
     def AaaSamOutputFormat(
@@ -4381,13 +4570,14 @@ class BamlStreamClient:
         recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Recipe, types.Recipe]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4414,13 +4604,14 @@ class BamlStreamClient:
         data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.LinkedListAliasNode, types.LinkedListAliasNode]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4447,13 +4638,14 @@ class BamlStreamClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4480,13 +4672,14 @@ class BamlStreamClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4513,13 +4706,14 @@ class BamlStreamClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4546,13 +4740,14 @@ class BamlStreamClient:
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4579,13 +4774,14 @@ class BamlStreamClient:
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4612,13 +4808,14 @@ class BamlStreamClient:
         input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4645,13 +4842,14 @@ class BamlStreamClient:
         optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.OptionalListAndMap, types.OptionalListAndMap]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4678,13 +4876,14 @@ class BamlStreamClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4711,13 +4910,14 @@ class BamlStreamClient:
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4744,13 +4944,14 @@ class BamlStreamClient:
         input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.LinkedList, types.LinkedList]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4777,13 +4978,14 @@ class BamlStreamClient:
         input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Tree, types.Tree]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4810,13 +5012,14 @@ class BamlStreamClient:
         cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassToRecAlias, types.ClassToRecAlias]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4843,13 +5046,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4876,13 +5080,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4909,13 +5114,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4942,13 +5148,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -4975,13 +5182,14 @@ class BamlStreamClient:
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5010,13 +5218,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5043,13 +5252,14 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5076,13 +5286,14 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5110,13 +5321,14 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5144,13 +5356,14 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5178,13 +5391,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5210,13 +5424,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DummyOutput, types.DummyOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5243,13 +5458,14 @@ class BamlStreamClient:
         input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DynamicClassTwo, types.DynamicClassTwo]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5276,13 +5492,14 @@ class BamlStreamClient:
         input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DynInputOutput, types.DynInputOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5309,13 +5526,14 @@ class BamlStreamClient:
         input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5342,13 +5560,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5374,13 +5593,14 @@ class BamlStreamClient:
         document: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ContactInfo, types.ContactInfo]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5407,13 +5627,14 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[Union[types.Hobby, str]]], List[Union[types.Hobby, str]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5440,13 +5661,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[str]], List[str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5473,13 +5695,14 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.Person], List[types.Person]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5506,13 +5729,14 @@ class BamlStreamClient:
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ReceiptInfo, types.ReceiptInfo]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5540,13 +5764,14 @@ class BamlStreamClient:
         resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Resume, types.Resume]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5574,13 +5799,14 @@ class BamlStreamClient:
         resume: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Resume, types.Resume]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5607,13 +5833,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5640,13 +5867,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5673,13 +5901,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5706,13 +5935,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.EnumOutput], types.EnumOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5739,13 +5969,14 @@ class BamlStreamClient:
         input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.LiteralClassHello, types.LiteralClassHello]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5772,13 +6003,14 @@ class BamlStreamClient:
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5805,13 +6037,14 @@ class BamlStreamClient:
         myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5838,13 +6071,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[bool], bool]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5871,13 +6105,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestOutputClass, types.TestOutputClass]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5904,13 +6139,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5937,13 +6173,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestClassNested, types.TestClassNested]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -5970,13 +6207,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestClassWithEnum, types.TestClassWithEnum]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6003,13 +6241,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6036,13 +6275,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Literal[False]], Literal[False]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6069,13 +6309,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Literal[5]], Literal[5]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6102,13 +6343,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Literal["example output"]], Literal["example output"]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6135,13 +6377,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[str]], List[str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6168,13 +6411,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.TestEnum], types.TestEnum]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6201,13 +6445,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestClassAlias, types.TestClassAlias]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6234,13 +6479,14 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6267,13 +6513,14 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.RaysData, types.RaysData]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6300,13 +6547,14 @@ class BamlStreamClient:
         email: types.Email,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.OrderInfo, types.OrderInfo]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6333,13 +6581,14 @@ class BamlStreamClient:
         query: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.SearchParams, types.SearchParams]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6366,13 +6615,14 @@ class BamlStreamClient:
         i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[types.MapKey, Optional[str]], Dict[types.MapKey, str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6400,13 +6650,14 @@ class BamlStreamClient:
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6434,13 +6685,14 @@ class BamlStreamClient:
         m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[Literal["key"], Optional[str]], Dict[Literal["key"], str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6467,13 +6719,14 @@ class BamlStreamClient:
         input: types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.JsonValue, types.JsonValue]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6500,13 +6753,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6533,13 +6787,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint,types.Literal["cross_field"]], Checked[types.BlockConstraint,types.Literal["cross_field"]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6565,13 +6820,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.NestedBlockConstraint, types.NestedBlockConstraint]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6597,13 +6853,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.SemanticContainer, types.SemanticContainer]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6629,13 +6886,14 @@ class BamlStreamClient:
         m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, List[Optional[str]]], Dict[str, List[str]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6662,13 +6920,14 @@ class BamlStreamClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.MergeAttrs, types.MergeAttrs]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6695,13 +6954,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DynamicOutput, types.DynamicOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6728,13 +6988,14 @@ class BamlStreamClient:
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6761,13 +7022,14 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassForNullLiteral, types.ClassForNullLiteral]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6794,13 +7056,14 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6827,13 +7090,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6860,13 +7124,14 @@ class BamlStreamClient:
         name: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.FooAny, types.FooAny]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6893,13 +7158,14 @@ class BamlStreamClient:
         inp: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["too_big"]], Checked[int,types.Literal["too_big"]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6926,13 +7192,14 @@ class BamlStreamClient:
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], Union[int, str, bool, float]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6959,13 +7226,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -6992,13 +7260,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7025,13 +7294,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7058,13 +7328,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7091,13 +7362,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7124,13 +7396,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7157,13 +7430,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7190,13 +7464,14 @@ class BamlStreamClient:
         input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.RecAliasOne, types.RecAliasOne]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7223,13 +7498,14 @@ class BamlStreamClient:
         cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7256,13 +7532,14 @@ class BamlStreamClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7289,13 +7566,14 @@ class BamlStreamClient:
         inp: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7322,13 +7600,14 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.JsonTemplate, types.JsonTemplate]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7355,13 +7634,14 @@ class BamlStreamClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.MalformedConstraints, types.MalformedConstraints]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7388,13 +7668,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Schema, types.Schema]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7421,13 +7702,14 @@ class BamlStreamClient:
         input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.RecursiveListAlias, types.RecursiveListAlias]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7454,13 +7736,14 @@ class BamlStreamClient:
         input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.RecursiveMapAlias, types.RecursiveMapAlias]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7487,13 +7770,14 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.BigNumbers, types.BigNumbers]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7520,13 +7804,14 @@ class BamlStreamClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7554,13 +7839,14 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7587,13 +7873,14 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[Union[Optional[int], Optional[str]]]], List[Union[int, str]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7620,13 +7907,14 @@ class BamlStreamClient:
         digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.CompoundBigNumbers, types.CompoundBigNumbers]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7654,13 +7942,14 @@ class BamlStreamClient:
         input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.RecursiveAliasDependency, types.RecursiveAliasDependency]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7687,13 +7976,14 @@ class BamlStreamClient:
         story: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7720,13 +8010,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7753,13 +8044,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7786,13 +8078,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7819,13 +8112,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7852,13 +8146,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7885,13 +8180,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7918,13 +8214,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7951,13 +8248,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -7984,13 +8282,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8017,13 +8316,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8050,13 +8350,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8083,13 +8384,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8116,13 +8418,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8149,13 +8452,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8182,13 +8486,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8215,13 +8520,14 @@ class BamlStreamClient:
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8249,13 +8555,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8281,13 +8588,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8314,13 +8622,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8347,13 +8656,14 @@ class BamlStreamClient:
         myBool: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8380,13 +8690,14 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8413,13 +8724,14 @@ class BamlStreamClient:
         myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8446,13 +8758,14 @@ class BamlStreamClient:
         myFloat: float,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8479,13 +8792,14 @@ class BamlStreamClient:
         myInt: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8512,13 +8826,14 @@ class BamlStreamClient:
         myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8545,13 +8860,14 @@ class BamlStreamClient:
         myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8578,13 +8894,14 @@ class BamlStreamClient:
         myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, Optional[str]], Dict[str, str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8611,13 +8928,14 @@ class BamlStreamClient:
         myString: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8644,13 +8962,14 @@ class BamlStreamClient:
         myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8677,13 +8996,14 @@ class BamlStreamClient:
         myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[str]], List[str]]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8710,13 +9030,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8743,13 +9064,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8775,13 +9097,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8808,13 +9131,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8841,13 +9165,14 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8874,13 +9199,14 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8907,13 +9233,14 @@ class BamlStreamClient:
         imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8940,13 +9267,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestMemoryOutput, types.TestMemoryOutput]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -8973,13 +9301,14 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9007,13 +9336,14 @@ class BamlStreamClient:
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9040,13 +9370,14 @@ class BamlStreamClient:
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9073,13 +9404,14 @@ class BamlStreamClient:
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9106,13 +9438,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9139,13 +9472,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9172,13 +9506,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9205,13 +9540,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9238,13 +9574,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9271,13 +9608,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9304,13 +9642,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9337,13 +9676,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9370,13 +9710,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9403,13 +9744,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9436,13 +9778,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9468,13 +9811,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9500,13 +9844,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9533,13 +9878,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9565,13 +9911,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.CustomStory, types.CustomStory]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9598,13 +9945,14 @@ class BamlStreamClient:
         question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.UniverseQuestion, types.UniverseQuestion]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9631,13 +9979,14 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9664,13 +10013,14 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9696,13 +10046,14 @@ class BamlStreamClient:
         input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9729,13 +10080,14 @@ class BamlStreamClient:
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9762,13 +10114,14 @@ class BamlStreamClient:
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(
@@ -9795,13 +10148,14 @@ class BamlStreamClient:
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      __tb__ = baml_options.get("tb", None)
+      options = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
       else:
         tb = None
-      __cr__ = baml_options.get("client_registry", None)
-      collector = baml_options.get("collector", None)
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
 
       raw = self.__runtime.stream_function_sync(

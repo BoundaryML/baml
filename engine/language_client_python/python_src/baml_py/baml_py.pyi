@@ -21,7 +21,7 @@ class FunctionResult:
     def __str__(self) -> str: ...
     # Returns True if the function call was successful, False otherwise
     def is_ok(self) -> bool: ...
-    def cast_to(self, enum_module: Any, class_module: Any) -> Any: ...
+    def cast_to(self, enum_module: Any, class_module: Any, partial_class_module: Any, allow_partials: bool) -> Any: ...
 
     # This is a debug function that returns the internal representation of the response
     # This is not to be relied upon and is subject to change
@@ -94,7 +94,7 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
-        collector: Optional[Collector],
+        collectors: List[Collector],
     ) -> FunctionResult: ...
     def call_function_sync(
         self,
@@ -103,7 +103,7 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
-        collector: Optional[Collector],
+        collectors: List[Collector],
     ) -> FunctionResult: ...
     @staticmethod
     def from_files(
@@ -120,7 +120,7 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
-        collector: Optional[Collector],
+        collectors: List[Collector],
     ) -> FunctionResultStream: ...
     def stream_function_sync(
         self,
@@ -130,6 +130,7 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
+        collectors: List[Collector],
     ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...

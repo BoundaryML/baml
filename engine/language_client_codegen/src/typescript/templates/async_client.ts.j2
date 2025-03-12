@@ -15,6 +15,12 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DI
  */
 export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>
 
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+  collector?: Collector | Collector[]
+}
+
 export class BamlAsyncClient {
   private runtime: BamlRuntime
   private ctx_manager: BamlCtxManager
@@ -23,15 +29,21 @@ export class BamlAsyncClient {
   private http_stream_request: HttpStreamRequest
   private llm_response_parser: LlmResponseParser
   private llm_stream_parser: LlmStreamParser
+  private baml_options: BamlCallOptions
 
-  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager) {
+  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager, baml_options?: BamlCallOptions) {
     this.runtime = runtime
     this.ctx_manager = ctx_manager
-    this.stream_client = new BamlStreamClient(runtime, ctx_manager)
+    this.stream_client = new BamlStreamClient(runtime, ctx_manager, baml_options)
     this.http_request = new HttpRequest(runtime, ctx_manager)
     this.http_stream_request = new HttpStreamRequest(runtime, ctx_manager)
     this.llm_response_parser = new LlmResponseParser(runtime, ctx_manager)
     this.llm_stream_parser = new LlmStreamParser(runtime, ctx_manager)
+    this.baml_options = baml_options || {}
+  }
+
+  withOptions(baml_options: BamlCallOptions) {
+    return new BamlAsyncClient(this.runtime, this.ctx_manager, baml_options)
   }
 
   get stream() {
@@ -59,10 +71,11 @@ export class BamlAsyncClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): Promise<{{fn.return_type}}> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "{{fn.name}}",
         {
@@ -71,8 +84,8 @@ export class BamlAsyncClient {
           {%- endfor %}
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as {{fn.return_type}}
@@ -84,7 +97,15 @@ export class BamlAsyncClient {
 }
 
 class BamlStreamClient {
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+  private runtime: BamlRuntime
+  private ctx_manager: BamlCtxManager
+  private baml_options: BamlCallOptions
+
+  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager, baml_options?: BamlCallOptions) {
+    this.runtime = runtime
+    this.ctx_manager = ctx_manager
+    this.baml_options = baml_options || {}
+  }
 
   {% for fn in funcs %}
   {{ fn.name }}(
@@ -94,7 +115,8 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "{{fn.name}}",
         {
@@ -104,8 +126,8 @@ class BamlStreamClient {
         },
         undefined,
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return new BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}>(
