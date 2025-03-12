@@ -1,4 +1,4 @@
-import { b } from './test-setup';
+import { b, b_sync } from './test-setup';
 import { BamlRuntime, Collector, FunctionLog, Usage } from '@boundaryml/baml';
 
 async function gc() {
@@ -285,4 +285,17 @@ describe('Collector Tests', () => {
     expect(collector.usage.inputTokens).toBe(totalInput);
     expect(collector.usage.outputTokens).toBe(totalOutput);
   });
+
+  it('should handle sync calls correctly', async () => {
+    const collector = new Collector("sync-collector");
+    const result = b_sync.TestOpenAIGPT4oMini("sync call", { collector });
+    
+    const logs = collector.logs;
+    expect(logs.length).toBe(1);
+    expect(logs[0].functionName).toBe("TestOpenAIGPT4oMini");
+    expect(logs[0].logType).toBe("call");
+    expect(logs[0].usage).not.toBeNull();
+  });
+  
+  
 });

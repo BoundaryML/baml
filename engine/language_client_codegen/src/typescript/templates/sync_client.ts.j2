@@ -17,9 +17,26 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DI
  */
 export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>;
 
-export class BamlSyncClient {
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+  collector?: Collector | Collector[]
+}
 
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+export class BamlSyncClient {
+  private runtime: BamlRuntime
+  private ctx_manager: BamlCtxManager
+  private baml_options: BamlCallOptions
+
+  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager, baml_options?: BamlCallOptions) {
+    this.runtime = runtime
+    this.ctx_manager = ctx_manager
+    this.baml_options = baml_options || {}
+  }
+
+  withOptions(baml_options: BamlCallOptions) {
+    return new BamlSyncClient(this.runtime, this.ctx_manager, baml_options)
+  }
 
   /*
   * @deprecated NOT IMPLEMENTED as streaming must by async. We
@@ -35,10 +52,11 @@ export class BamlSyncClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: BamlCallOptions
   ): {{fn.return_type}} {
     try {
-      const collector = __baml_options__?.collector ? (Array.isArray(__baml_options__.collector) ? __baml_options__.collector : [__baml_options__.collector]) : [];
+      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "{{fn.name}}",
         {
@@ -47,8 +65,8 @@ export class BamlSyncClient {
           {%- endfor %}
         },
         this.ctx_manager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        options.tb?.__tb(),
+        options.clientRegistry,
         collector,
       )
       return raw.parsed(false) as {{fn.return_type}}

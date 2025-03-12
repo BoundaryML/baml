@@ -32,6 +32,7 @@ export interface Checked<T,CheckName extends string = string> {
     checks: Record<CheckName, Check>,
 }
 
+
 export interface Check {
     name: string,
     expr: string
