@@ -110,7 +110,7 @@ export declare class FunctionResultStream {
 export declare class HttpBody {
   raw(): ArrayBuffer
   text(): string
-  json(): unknown
+  json(): any
 }
 export type HTTPBody = HttpBody
 

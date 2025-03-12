@@ -74,7 +74,7 @@ impl HTTPBody {
             .map_err(from_anyhow_error)
     }
 
-    #[napi]
+    #[napi(ts_return_type = "any")]
     pub fn json(&self, env: Env) -> napi::Result<JsUnknown> {
         serde_value_to_js(env, &self.inner.json().map_err(from_anyhow_error)?)
     }

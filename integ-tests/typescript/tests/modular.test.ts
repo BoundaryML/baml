@@ -39,6 +39,8 @@ describe('Modular Approach Tests', () => {
   it('modular openai gpt4', async () => {
     const client = new OpenAI()
 
+    // as ChatCompletionCreateParamsNonStreaming not necessary in TS since
+    // .json() returns "any".
     const req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
     const res = await client.chat.completions.create(req.body.json() as ChatCompletionCreateParamsNonStreaming)
     const parsed = b.parse.ExtractResume2(res.choices[0].message.content!)

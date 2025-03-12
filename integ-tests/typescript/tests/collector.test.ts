@@ -64,7 +64,7 @@ describe('Collector Tests', () => {
     const request = call.httpRequest;
     expect(request).not.toBeNull();
 
-    const body = request?.body.json() as any;
+    const body = request?.body.json();
 
     expect(typeof body).toBe('object');
     expect(body.messages).toBeDefined();
