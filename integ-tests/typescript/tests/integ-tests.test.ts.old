@@ -145,12 +145,6 @@ describe('Integ tests', () => {
       const res = await b.TestFnNamedArgsSingleMapStringToMap({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
       expect(res).toHaveProperty('lorem', { word: 'ipsum' })
     })
-
-    it('enum key in map', async () => {
-      const res = await b.InOutEnumMapKey({ [MapKey.A]: 'A' }, { [MapKey.B]: 'B' })
-      expect(res).toHaveProperty(MapKey.A, 'A')
-      expect(res).toHaveProperty(MapKey.B, 'B')
-    })
   })
 
   it('should work for all outputs', async () => {

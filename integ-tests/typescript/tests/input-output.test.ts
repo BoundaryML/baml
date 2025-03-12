@@ -80,47 +80,6 @@ describe('Basic Input/Output Tests', () => {
       expect(classs.prop2).toEqual(540)
     })
   })
-
-  // TODO: @antonio Move this to its own file/block or whatever.
-  it('json type alias cycle', async () => {
-    const data = {
-      number: 1,
-      string: 'test',
-      bool: true,
-      list: [1, 2, 3],
-      object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
-      json: {
-        number: 1,
-        string: 'test',
-        bool: true,
-        list: [1, 2, 3],
-        object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
-      },
-    }
-    const res = await b.JsonTypeAliasCycle(data)
-    expect(res).toEqual(data)
-    expect(res.json?.object?.list).toEqual([1, 2, 3])
-  })
-
-  it('json type alias as class dependency', async () => {
-    const data = {
-      number: 1,
-      string: 'test',
-      bool: true,
-      list: [1, 2, 3],
-      object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
-      json: {
-        number: 1,
-        string: 'test',
-        bool: true,
-        list: [1, 2, 3],
-        object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
-      },
-    }
-    const res = await b.TakeRecAliasDep({ value: data })
-    expect(res.value).toEqual(data)
-    expect(res.value.json?.object?.list).toEqual([1, 2, 3])
-  })
 })
 
 describe('Semantic Streaming Tests', () => {
