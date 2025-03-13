@@ -1,6 +1,6 @@
 use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
-use magnus::{class, function, method, prelude::*, Error, RArray, RHash, Ruby};
+use magnus::{class, function, method, prelude::*, Error, RArray, RHash, RModule, Ruby};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -243,6 +243,49 @@ impl BamlRuntimeFfi {
                 )
             })
     }
+
+    pub fn parse_llm_response(
+        ruby: &Ruby,
+        rb_self: &BamlRuntimeFfi,
+        function_name: String,
+        llm_response: String,
+        types: RModule,
+        partial_types: RModule,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
+    ) -> Result<magnus::Value> {
+        let parsed = rb_self
+            .inner
+            .parse_llm_response(
+                function_name.clone(),
+                llm_response,
+                allow_partials,
+                &ctx.inner,
+                type_registry.map(|t| &t.inner),
+                client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+            )
+            .map_err(|e| {
+                Error::new(
+                    ruby.exception_runtime_error(),
+                    format!(
+                        "{:?}",
+                        e.context(format!(
+                            "error while parsing LLM response for function {function_name}"
+                        ))
+                    ),
+                )
+            })?;
+
+        ruby_to_json::RubyToJson::serialize_baml(ruby, types, partial_types, allow_partials, parsed)
+            .map_err(|e| {
+                magnus::Error::new(
+                    ruby.exception_type_error(),
+                    format!("failed coercing BAML value to Ruby value: {:?}", e),
+                )
+            })
+    }
 }
 
 fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<()> {
@@ -317,6 +360,10 @@ fn init(ruby: &Ruby) -> Result<()> {
         method!(BamlRuntimeFfi::stream_function, 6),
     )?;
     runtime_class.define_method("build_request", method!(BamlRuntimeFfi::build_request, 6))?;
+    runtime_class.define_method(
+        "parse_llm_response",
+        method!(BamlRuntimeFfi::parse_llm_response, 8),
+    )?;
 
     FunctionResult::define_in_ruby(&module)?;
     FunctionResultStream::define_in_ruby(&module)?;

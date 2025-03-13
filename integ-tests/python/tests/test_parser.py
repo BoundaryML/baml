@@ -9,27 +9,27 @@ from ..baml_client.sync_client import b as sync_b
 
 def test_parse_llm_response():
     llm_response = """
-    ```json
-    {
-        "len": 5,
-        "head": {
-            "data": 1,
-            "next": {
-                "data": 2,
+        ```json
+        {
+            "len": 5,
+            "head": {
+                "data": 1,
                 "next": {
-                    "data": 3,
+                    "data": 2,
                     "next": {
-                        "data": 4,
+                        "data": 3,
                         "next": {
-                            "data": 5,
-                            "next": null
+                            "data": 4,
+                            "next": {
+                                "data": 5,
+                                "next": null
+                            }
                         }
                     }
                 }
             }
         }
-    }
-    ```
+        ```
     """
 
     parsed = b.parse.BuildLinkedList(llm_response)
@@ -47,27 +47,27 @@ def test_parse_llm_response():
 
 def test_parse_llm_response_sync():
     llm_response = """
-    ```json
-    {
-        "len": 5,
-        "head": {
-            "data": 1,
-            "next": {
-                "data": 2,
+        ```json
+        {
+            "len": 5,
+            "head": {
+                "data": 1,
                 "next": {
-                    "data": 3,
+                    "data": 2,
                     "next": {
-                        "data": 4,
+                        "data": 3,
                         "next": {
-                            "data": 5,
-                            "next": null
+                            "data": 4,
+                            "next": {
+                                "data": 5,
+                                "next": null
+                            }
                         }
                     }
                 }
             }
         }
-    }
-    ```
+        ```
     """
 
     parsed = sync_b.parse.BuildLinkedList(llm_response)
@@ -85,11 +85,11 @@ def test_parse_llm_response_sync():
 
 def test_parse_llm_stream():
     stream = """
-    ```json
-    {
-        "name": "John Doe",
-        "email": "john.doe@example.com",
-    ```
+        ```json
+        {
+            "name": "John Doe",
+            "email": "john.doe@example.com",
+        ```
     """
 
     parsed = b.parse_stream.ExtractResume(stream)
@@ -105,11 +105,11 @@ def test_parse_llm_stream():
 
 def test_parse_llm_stream_sync():
     stream = """
-    ```json
-    {
-        "name": "John Doe",
-        "email": "john.doe@example.com",
-    ```
+        ```json
+        {
+            "name": "John Doe",
+            "email": "john.doe@example.com",
+        ```
     """
 
     parsed = sync_b.parse_stream.ExtractResume(stream)
