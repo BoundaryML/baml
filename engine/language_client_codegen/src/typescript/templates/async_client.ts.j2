@@ -7,6 +7,7 @@ import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
+import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
@@ -25,8 +26,8 @@ export class BamlAsyncClient {
   private runtime: BamlRuntime
   private ctxManager: BamlCtxManager
   private streamClient: BamlStreamClient
-  private httpRequest: HttpRequest
-  private httpStreamRequest: HttpStreamRequest
+  private httpRequest: AsyncHttpRequest
+  private httpStreamRequest: AsyncHttpStreamRequest
   private llmResponseParser: LlmResponseParser
   private llmStreamParser: LlmStreamParser
   private bamlOptions: BamlCallOptions
@@ -35,8 +36,8 @@ export class BamlAsyncClient {
     this.runtime = runtime
     this.ctxManager = ctxManager
     this.streamClient = new BamlStreamClient(runtime, ctxManager, bamlOptions)
-    this.httpRequest = new HttpRequest(runtime, ctxManager)
-    this.httpStreamRequest = new HttpStreamRequest(runtime, ctxManager)
+    this.httpRequest = new AsyncHttpRequest(runtime, ctxManager)
+    this.httpStreamRequest = new AsyncHttpStreamRequest(runtime, ctxManager)
     this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
     this.llmStreamParser = new LlmStreamParser(runtime, ctxManager)
     this.bamlOptions = bamlOptions || {}
@@ -135,66 +136,6 @@ class BamlStreamClient {
         (a): {{ fn.partial_return_type }} => a,
         (a): {{ fn.return_type }} => a,
         this.ctxManager.cloneContext(),
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  {% endfor %}
-}
-
-class HttpRequest {
-  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
-
-  {% for fn in funcs %}
-  async {{ fn.name }}(
-      {% for (name, optional, type) in fn.args -%}
-      {{name}}{% if optional %}?{% endif %}: {{type}},
-      {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "{{fn.name}}",
-        {
-          {% for (name, optional, type) in fn.args -%}
-          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
-          {%- endfor %}
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  {% endfor %}
-}
-
-class HttpStreamRequest {
-  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
-
-  {% for fn in funcs %}
-  async {{ fn.name }}(
-      {% for (name, optional, type) in fn.args -%}
-      {{name}}{% if optional %}?{% endif %}: {{type}},
-      {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "{{fn.name}}",
-        {
-          {% for (name, optional, type) in fn.args -%}
-          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
-          {%- endfor %}
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
       )
     } catch (error) {
       throw toBamlError(error);

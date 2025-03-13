@@ -6,6 +6,7 @@ import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
+import { HttpRequest, HttpStreamRequest } from "./sync_request"
 import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
@@ -92,66 +93,6 @@ export class BamlSyncClient {
       )
       return raw.parsed(false) as {{fn.return_type}}
     } catch (error: any) {
-      throw toBamlError(error);
-    }
-  }
-  {% endfor %}
-}
-
-class HttpRequest {
-  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
-
-  {% for fn in funcs %}
-  {{ fn.name }}(
-      {% for (name, optional, type) in fn.args -%}
-      {{name}}{% if optional %}?{% endif %}: {{type}},
-      {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): HTTPRequest {
-    try {
-      return this.runtime.buildRequestSync(
-        "{{fn.name}}",
-        {
-          {% for (name, optional, type) in fn.args -%}
-          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
-          {%- endfor %}
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  {% endfor %}
-}
-
-class HttpStreamRequest {
-  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
-
-  {% for fn in funcs %}
-  {{ fn.name }}(
-      {% for (name, optional, type) in fn.args -%}
-      {{name}}{% if optional %}?{% endif %}: {{type}},
-      {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): HTTPRequest {
-    try {
-      return this.runtime.buildRequestSync(
-        "{{fn.name}}",
-        {
-          {% for (name, optional, type) in fn.args -%}
-          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
-          {%- endfor %}
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
-      )
-    } catch (error) {
       throw toBamlError(error);
     }
   }
