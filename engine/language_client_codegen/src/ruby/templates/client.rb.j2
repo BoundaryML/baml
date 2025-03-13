@@ -6,6 +6,7 @@ require_relative "inlined"
 require_relative "partial-types"
 require_relative "types"
 require_relative "type-registry"
+require_relative "parser"
 
 module Baml
   @instance = nil
@@ -38,10 +39,10 @@ module Baml
     sig { returns(HttpStreamRequest) }
     attr_reader :stream_request
 
-    sig { returns(LlmResponseParser) }
+    sig { returns(Baml::LlmResponseParser) }
     attr_reader :parse
 
-    sig { returns(LlmStreamParser) }
+    sig { returns(Baml::LlmStreamParser) }
     attr_reader :parse_stream
 
     sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))])).void}
@@ -51,8 +52,8 @@ module Baml
       @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager, baml_options: baml_options)
       @request = HttpRequest.new(runtime: @runtime, ctx_manager: @ctx_manager)
       @stream_request = HttpStreamRequest.new(runtime: @runtime, ctx_manager: @ctx_manager)
-      @parse = LlmResponseParser.new(runtime: @runtime, ctx_manager: @ctx_manager)
-      @parse_stream = LlmStreamParser.new(runtime: @runtime, ctx_manager: @ctx_manager)
+      @parse = Baml::LlmResponseParser.new(runtime: @runtime, ctx_manager: @ctx_manager)
+      @parse_stream = Baml::LlmStreamParser.new(runtime: @runtime, ctx_manager: @ctx_manager)
       @baml_options = baml_options
     end
 
@@ -289,76 +290,6 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         true
-      )
-    end
-    {% endfor %}
-  end
-
-  class LlmResponseParser
-    extend T::Sig
-
-    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
-    def initialize(runtime:, ctx_manager:)
-      @runtime = runtime
-      @ctx_manager = ctx_manager
-    end
-
-    {% for fn in funcs -%}
-    sig {
-      params(
-        llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns({{fn.return_type}})
-    }
-    def {{fn.name}}(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
-      end
-
-      @runtime.parse_llm_response(
-        "{{fn.name}}",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-      )
-    end
-    {% endfor %}
-  end
-
-  class LlmStreamParser
-    extend T::Sig
-
-    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
-    def initialize(runtime:, ctx_manager:)
-      @runtime = runtime
-      @ctx_manager = ctx_manager
-    end
-
-    {% for fn in funcs -%}
-    sig {
-      params(
-        llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns({{fn.partial_return_type}})
-    }
-    def {{fn.name}}(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
-      end
-
-      @runtime.parse_llm_response(
-        "{{fn.name}}",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
       )
     end
     {% endfor %}
