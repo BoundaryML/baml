@@ -21,7 +21,7 @@ require_relative "partial-types"
 require_relative "types"
 
 module Baml
-  class LlmResponseParser
+  class HttpRequest
     extend T::Sig
 
     sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
@@ -32,3803 +32,5123 @@ module Baml
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        recipe: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Recipe)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AaaSamOutputFormat(llm_response:, baml_options: {})
+    def AaaSamOutputFormat(
+        *varargs,
+        recipe:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AaaSamOutputFormat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          recipe: recipe,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        data: Baml::Types::LinkedListAliasNode,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::LinkedListAliasNode)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasThatPointsToRecursiveType(llm_response:, baml_options: {})
+    def AliasThatPointsToRecursiveType(
+        *varargs,
+        data:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasThatPointsToRecursiveType",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          data: data,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Checked[Integer])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasWithMultipleAttrs(llm_response:, baml_options: {})
+    def AliasWithMultipleAttrs(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasWithMultipleAttrs",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          money: money,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputClass(llm_response:, baml_options: {})
+    def AliasedInputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputClass2(llm_response:, baml_options: {})
+    def AliasedInputClass2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputClass2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::InputClassNested,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputClassNested(llm_response:, baml_options: {})
+    def AliasedInputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputClassNested",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.any(Baml::Types::AliasedEnum, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputEnum(llm_response:, baml_options: {})
+    def AliasedInputEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputEnum",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputList(llm_response:, baml_options: {})
+    def AliasedInputList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        optionals: Baml::Types::OptionalListAndMap,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::OptionalListAndMap)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AllowedOptionals(llm_response:, baml_options: {})
+    def AllowedOptionals(
+        *varargs,
+        optionals:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AllowedOptionals",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          optionals: optionals,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        a: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AssertFn(llm_response:, baml_options: {})
+    def AssertFn(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AssertFn may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AssertFn",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          a: a,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        aud: Baml::Audio,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AudioInput(llm_response:, baml_options: {})
+    def AudioInput(
+        *varargs,
+        aud:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AudioInput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AudioInput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          aud: aud,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T::Array[Integer],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::LinkedList)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def BuildLinkedList(llm_response:, baml_options: {})
+    def BuildLinkedList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "BuildLinkedList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::BinaryNode,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Tree)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def BuildTree(llm_response:, baml_options: {})
+    def BuildTree(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildTree may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "BuildTree",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        cls: Baml::Types::ClassToRecAlias,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::ClassToRecAlias)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassThatPointsToRecursiveClassThroughAlias(llm_response:, baml_options: {})
+    def ClassThatPointsToRecursiveClassThroughAlias(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassThatPointsToRecursiveClassThroughAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          cls: cls,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::DynEnumTwo, String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyDynEnumTwo(llm_response:, baml_options: {})
+    def ClassifyDynEnumTwo(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyDynEnumTwo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::Category, String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyMessage(llm_response:, baml_options: {})
+    def ClassifyMessage(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyMessage",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::Category, String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyMessage2(llm_response:, baml_options: {})
+    def ClassifyMessage2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyMessage2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::Category, String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyMessage3(llm_response:, baml_options: {})
+    def ClassifyMessage3(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyMessage3",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        prefix: String,suffix: String,language: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def Completion(llm_response:, baml_options: {})
+    def Completion(
+        *varargs,
+        prefix:,suffix:,language:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("Completion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "Completion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          prefix: prefix,suffix: suffix,language: language,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def CustomTask(llm_response:, baml_options: {})
+    def CustomTask(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("CustomTask may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "CustomTask",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage(llm_response:, baml_options: {})
+    def DescribeImage(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage2(llm_response:, baml_options: {})
+    def DescribeImage2(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage3(llm_response:, baml_options: {})
+    def DescribeImage3(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage3",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage4(llm_response:, baml_options: {})
+    def DescribeImage4(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage4",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::OriginalA, Baml::Types::OriginalB))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DifferentiateUnions(llm_response:, baml_options: {})
+    def DifferentiateUnions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DifferentiateUnions",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::DummyOutput)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DummyOutputFunction(llm_response:, baml_options: {})
+    def DummyOutputFunction(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DummyOutputFunction",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::DynamicClassOne,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::DynamicClassTwo)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DynamicFunc(llm_response:, baml_options: {})
+    def DynamicFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DynamicFunc",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::DynInputOutput,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::DynInputOutput)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DynamicInputOutput(llm_response:, baml_options: {})
+    def DynamicInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DynamicInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T::Array[Baml::Types::DynInputOutput],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[Baml::Types::DynInputOutput])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DynamicListInputOutput(llm_response:, baml_options: {})
+    def DynamicListInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DynamicListInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExpectFailure(llm_response:, baml_options: {})
+    def ExpectFailure(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExpectFailure",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        document: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::ContactInfo)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractContactInfo(llm_response:, baml_options: {})
+    def ExtractContactInfo(
+        *varargs,
+        document:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractContactInfo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          document: document,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        text: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.any(Baml::Types::Hobby, String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractHobby(llm_response:, baml_options: {})
+    def ExtractHobby(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractHobby",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          text: text,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[String])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractNames(llm_response:, baml_options: {})
+    def ExtractNames(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractNames",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        text: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[Baml::Types::Person])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractPeople(llm_response:, baml_options: {})
+    def ExtractPeople(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractPeople",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          text: text,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        email: String,reason: T.any(String, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::ReceiptInfo)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractReceiptInfo(llm_response:, baml_options: {})
+    def ExtractReceiptInfo(
+        *varargs,
+        email:,reason:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractReceiptInfo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          email: email,reason: reason,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        resume: String,img: T.nilable(Baml::Image),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Resume)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractResume(llm_response:, baml_options: {})
+    def ExtractResume(
+        *varargs,
+        resume:,img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractResume",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          resume: resume,img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        resume: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Resume)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractResume2(llm_response:, baml_options: {})
+    def ExtractResume2(
+        *varargs,
+        resume:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractResume2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          resume: resume,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::ClassOptionalOutput))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnClassOptionalOutput(llm_response:, baml_options: {})
+    def FnClassOptionalOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnClassOptionalOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::ClassOptionalOutput2))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnClassOptionalOutput2(llm_response:, baml_options: {})
+    def FnClassOptionalOutput2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnClassOptionalOutput2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.any(Baml::Types::EnumOutput, String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnEnumListOutput(llm_response:, baml_options: {})
+    def FnEnumListOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnEnumListOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::EnumOutput, String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnEnumOutput(llm_response:, baml_options: {})
+    def FnEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnEnumOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::LiteralClassHello,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::LiteralClassHello)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnLiteralClassInputOutput(llm_response:, baml_options: {})
+    def FnLiteralClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnLiteralClassInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnLiteralUnionClassInputOutput(llm_response:, baml_options: {})
+    def FnLiteralUnionClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnLiteralUnionClassInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myString: T.nilable(String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnNamedArgsSingleStringOptional(llm_response:, baml_options: {})
+    def FnNamedArgsSingleStringOptional(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnNamedArgsSingleStringOptional",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myString: myString,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Boolean)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputBool(llm_response:, baml_options: {})
+    def FnOutputBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::TestOutputClass)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClass(llm_response:, baml_options: {})
+    def FnOutputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[Baml::Types::TestOutputClass])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClassList(llm_response:, baml_options: {})
+    def FnOutputClassList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClassList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::TestClassNested)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClassNested(llm_response:, baml_options: {})
+    def FnOutputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClassNested",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::TestClassWithEnum)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClassWithEnum(llm_response:, baml_options: {})
+    def FnOutputClassWithEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClassWithEnum",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputInt(llm_response:, baml_options: {})
+    def FnOutputInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Boolean)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputLiteralBool(llm_response:, baml_options: {})
+    def FnOutputLiteralBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputLiteralBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputLiteralInt(llm_response:, baml_options: {})
+    def FnOutputLiteralInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputLiteralInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputLiteralString(llm_response:, baml_options: {})
+    def FnOutputLiteralString(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputLiteralString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[String])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputStringList(llm_response:, baml_options: {})
+    def FnOutputStringList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputStringList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Baml::Types::TestEnum, String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnTestAliasedEnumOutput(llm_response:, baml_options: {})
+    def FnTestAliasedEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnTestAliasedEnumOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::TestClassAlias)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnTestClassAlias(llm_response:, baml_options: {})
+    def FnTestClassAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnTestClassAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnTestNamedArgsSingleEnum(llm_response:, baml_options: {})
+    def FnTestNamedArgsSingleEnum(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnTestNamedArgsSingleEnum",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        text: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::RaysData)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def GetDataType(llm_response:, baml_options: {})
+    def GetDataType(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetDataType may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "GetDataType",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          text: text,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        email: Baml::Types::Email,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::OrderInfo)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def GetOrderInfo(llm_response:, baml_options: {})
+    def GetOrderInfo(
+        *varargs,
+        email:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "GetOrderInfo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          email: email,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        query: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::SearchParams)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def GetQuery(llm_response:, baml_options: {})
+    def GetQuery(
+        *varargs,
+        query:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetQuery may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "GetQuery",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          query: query,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, String])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def InOutEnumMapKey(llm_response:, baml_options: {})
+    def InOutEnumMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "InOutEnumMapKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          i1: i1,i2: i2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, String])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def InOutLiteralStringUnionMapKey(llm_response:, baml_options: {})
+    def InOutLiteralStringUnionMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "InOutLiteralStringUnionMapKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          i1: i1,i2: i2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        m: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, String])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def InOutSingleLiteralStringMapKey(llm_response:, baml_options: {})
+    def InOutSingleLiteralStringMapKey(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "InOutSingleLiteralStringMapKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          m: m,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def JsonTypeAliasCycle(llm_response:, baml_options: {})
+    def JsonTypeAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "JsonTypeAliasCycle",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Integer, T::Boolean, String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def LiteralUnionsTest(llm_response:, baml_options: {})
+    def LiteralUnionsTest(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "LiteralUnionsTest",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Checked[Baml::Types::BlockConstraint])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MakeBlockConstraint(llm_response:, baml_options: {})
+    def MakeBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MakeBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::NestedBlockConstraint)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MakeNestedBlockConstraint(llm_response:, baml_options: {})
+    def MakeNestedBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MakeNestedBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::SemanticContainer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MakeSemanticContainer(llm_response:, baml_options: {})
+    def MakeSemanticContainer(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MakeSemanticContainer",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        m: T::Hash[String, T::Array[String]],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T::Array[String]])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MapAlias(llm_response:, baml_options: {})
+    def MapAlias(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MapAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MapAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          m: m,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        money: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::MergeAttrs)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MergeAliasAttributes(llm_response:, baml_options: {})
+    def MergeAliasAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MergeAliasAttributes",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          money: money,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::DynamicOutput)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MyFunc(llm_response:, baml_options: {})
+    def MyFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MyFunc may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MyFunc",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def NestedAlias(llm_response:, baml_options: {})
+    def NestedAlias(
+        *varargs,
+        c:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "NestedAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          c: c,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        s: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::ClassForNullLiteral)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def NullLiteralClassHello(llm_response:, baml_options: {})
+    def NullLiteralClassHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "NullLiteralClassHello",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          s: s,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        s: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def OpenAIWithAnthropicResponseHello(llm_response:, baml_options: {})
+    def OpenAIWithAnthropicResponseHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "OpenAIWithAnthropicResponseHello",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          s: s,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def OptionalTest_Function(llm_response:, baml_options: {})
+    def OptionalTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "OptionalTest_Function",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        name: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::FooAny)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PredictAge(llm_response:, baml_options: {})
+    def PredictAge(
+        *varargs,
+        name:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAge may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PredictAge",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          name: name,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Checked[Integer])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PredictAgeBare(llm_response:, baml_options: {})
+    def PredictAgeBare(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PredictAgeBare",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        p: T.any(Integer, String, T::Boolean, Float),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.any(Integer, String, T::Boolean, Float))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PrimitiveAlias(llm_response:, baml_options: {})
+    def PrimitiveAlias(
+        *varargs,
+        p:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PrimitiveAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          p: p,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestClaude(llm_response:, baml_options: {})
+    def PromptTestClaude(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestClaude",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestClaudeChat(llm_response:, baml_options: {})
+    def PromptTestClaudeChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestClaudeChat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestClaudeChatNoSystem(llm_response:, baml_options: {})
+    def PromptTestClaudeChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestClaudeChatNoSystem",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestOpenAI(llm_response:, baml_options: {})
+    def PromptTestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestOpenAI",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestOpenAIChat(llm_response:, baml_options: {})
+    def PromptTestOpenAIChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestOpenAIChat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestOpenAIChatNoSystem(llm_response:, baml_options: {})
+    def PromptTestOpenAIChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestOpenAIChatNoSystem",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestStreaming(llm_response:, baml_options: {})
+    def PromptTestStreaming(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestStreaming",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def RecursiveAliasCycle(llm_response:, baml_options: {})
+    def RecursiveAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "RecursiveAliasCycle",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        cls: Baml::Types::NodeWithAliasIndirection,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::NodeWithAliasIndirection)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def RecursiveClassWithAliasIndirection(llm_response:, baml_options: {})
+    def RecursiveClassWithAliasIndirection(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "RecursiveClassWithAliasIndirection",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          cls: cls,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Checked[Integer])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnAliasWithMergedAttributes(llm_response:, baml_options: {})
+    def ReturnAliasWithMergedAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnAliasWithMergedAttributes",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          money: money,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnFailingAssert(llm_response:, baml_options: {})
+    def ReturnFailingAssert(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnFailingAssert",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        s: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnJsonEntry(llm_response:, baml_options: {})
+    def ReturnJsonEntry(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnJsonEntry",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          s: s,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        a: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::MalformedConstraints)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnMalformedConstraints(llm_response:, baml_options: {})
+    def ReturnMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnMalformedConstraints",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          a: a,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::Schema)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def SchemaDescriptions(llm_response:, baml_options: {})
+    def SchemaDescriptions(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "SchemaDescriptions",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def SimpleRecursiveListAlias(llm_response:, baml_options: {})
+    def SimpleRecursiveListAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "SimpleRecursiveListAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def SimpleRecursiveMapAlias(llm_response:, baml_options: {})
+    def SimpleRecursiveMapAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "SimpleRecursiveMapAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::BigNumbers)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamBigNumbers(llm_response:, baml_options: {})
+    def StreamBigNumbers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamBigNumbers",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          digits: digits,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        theme: String,length: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::TwoStoriesOneTitle)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamFailingAssertion(llm_response:, baml_options: {})
+    def StreamFailingAssertion(
+        *varargs,
+        theme:,length:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamFailingAssertion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          theme: theme,length: length,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamOneBigNumber(llm_response:, baml_options: {})
+    def StreamOneBigNumber(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamOneBigNumber",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          digits: digits,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.any(Integer, String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamUnionIntegers(llm_response:, baml_options: {})
+    def StreamUnionIntegers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamUnionIntegers",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          digits: digits,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,yapping: T::Boolean,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::CompoundBigNumbers)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamingCompoundNumbers(llm_response:, baml_options: {})
+    def StreamingCompoundNumbers(
+        *varargs,
+        digits:,yapping:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamingCompoundNumbers",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          digits: digits,yapping: yapping,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::RecursiveAliasDependency,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::RecursiveAliasDependency)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TakeRecAliasDep(llm_response:, baml_options: {})
+    def TakeRecAliasDep(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TakeRecAliasDep",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        story: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TellStory(llm_response:, baml_options: {})
+    def TellStory(
+        *varargs,
+        story:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TellStory may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TellStory",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          story: story,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAnthropic(llm_response:, baml_options: {})
+    def TestAnthropic(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAnthropic",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAnthropicShorthand(llm_response:, baml_options: {})
+    def TestAnthropicShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAnthropicShorthand",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAws(llm_response:, baml_options: {})
+    def TestAws(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAws may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAws",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidAccessKey(llm_response:, baml_options: {})
+    def TestAwsInvalidAccessKey(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidAccessKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidProfile(llm_response:, baml_options: {})
+    def TestAwsInvalidProfile(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidProfile",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidRegion(llm_response:, baml_options: {})
+    def TestAwsInvalidRegion(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidRegion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidSessionToken(llm_response:, baml_options: {})
+    def TestAwsInvalidSessionToken(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidSessionToken",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzure(llm_response:, baml_options: {})
+    def TestAzure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzure may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzure",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureFailure(llm_response:, baml_options: {})
+    def TestAzureFailure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureFailure",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO1NoMaxTokens(llm_response:, baml_options: {})
+    def TestAzureO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO1NoMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO1WithMaxCompletionTokens(llm_response:, baml_options: {})
+    def TestAzureO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO1WithMaxCompletionTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO1WithMaxTokens(llm_response:, baml_options: {})
+    def TestAzureO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO1WithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO3NoMaxTokens(llm_response:, baml_options: {})
+    def TestAzureO3NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO3NoMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO3WithMaxCompletionTokens(llm_response:, baml_options: {})
+    def TestAzureO3WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO3WithMaxCompletionTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureWithMaxTokens(llm_response:, baml_options: {})
+    def TestAzureWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureWithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,not_cached: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestCaching(llm_response:, baml_options: {})
+    def TestCaching(
+        *varargs,
+        input:,not_cached:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestCaching may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestCaching",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,not_cached: not_cached,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFallbackClient(llm_response:, baml_options: {})
+    def TestFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFallbackClient",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFallbackStrategy(llm_response:, baml_options: {})
+    def TestFallbackStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFallbackStrategy",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFallbackToShorthand(llm_response:, baml_options: {})
+    def TestFallbackToShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFallbackToShorthand",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myBool: T::Boolean,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleBool(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myBool: myBool,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleClass(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleClass(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleEnumList(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleEnumList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleEnumList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myFloat: Float,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleFloat(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleFloat(
+        *varargs,
+        myFloat:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleFloat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myFloat: myFloat,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myInt: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleInt(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myInt: myInt,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleMapStringToClass(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleMapStringToClass(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleMapStringToClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myMap: myMap,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myMap: T::Hash[String, T::Hash[String, String]],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T::Hash[String, String]])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleMapStringToMap(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleMapStringToMap(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleMapStringToMap",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myMap: myMap,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myMap: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, String])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleMapStringToString(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleMapStringToString(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleMapStringToString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myMap: myMap,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myString: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleString(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myString: myString,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myStringArray: T::Array[String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleStringArray(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleStringArray(
+        *varargs,
+        myStringArray:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleStringArray",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myStringArray: myStringArray,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: T::Array[String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[String])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleStringList(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleStringList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleStringList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGemini(llm_response:, baml_options: {})
+    def TestGemini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGemini may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGemini",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGeminiOpenAiGeneric(llm_response:, baml_options: {})
+    def TestGeminiOpenAiGeneric(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGeminiOpenAiGeneric",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGeminiSystem(llm_response:, baml_options: {})
+    def TestGeminiSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGeminiSystem",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGeminiSystemAsChat(llm_response:, baml_options: {})
+    def TestGeminiSystemAsChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGeminiSystemAsChat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestImageInput(llm_response:, baml_options: {})
+    def TestImageInput(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestImageInput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestImageInputAnthropic(llm_response:, baml_options: {})
+    def TestImageInputAnthropic(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestImageInputAnthropic",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        imgs: T::Array[Baml::Image],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestImageListInput(llm_response:, baml_options: {})
+    def TestImageListInput(
+        *varargs,
+        imgs:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestImageListInput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          imgs: imgs,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::TestMemoryOutput)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestMemory(llm_response:, baml_options: {})
+    def TestMemory(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMemory may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestMemory",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestMulticlassNamedArgs(llm_response:, baml_options: {})
+    def TestMulticlassNamedArgs(
+        *varargs,
+        myArg:,myArg2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestMulticlassNamedArgs",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myArg: myArg,myArg2: myArg2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myBool: T::Boolean,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestNamedArgsLiteralBool(llm_response:, baml_options: {})
+    def TestNamedArgsLiteralBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestNamedArgsLiteralBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myBool: myBool,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myInt: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestNamedArgsLiteralInt(llm_response:, baml_options: {})
+    def TestNamedArgsLiteralInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestNamedArgsLiteralInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myInt: myInt,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myString: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestNamedArgsLiteralString(llm_response:, baml_options: {})
+    def TestNamedArgsLiteralString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestNamedArgsLiteralString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          myString: myString,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOllama(llm_response:, baml_options: {})
+    def TestOllama(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOllama may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOllama",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAI(llm_response:, baml_options: {})
+    def TestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAI",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIGPT4oMini(llm_response:, baml_options: {})
+    def TestOpenAIGPT4oMini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIGPT4oMini",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAILegacyProvider(llm_response:, baml_options: {})
+    def TestOpenAILegacyProvider(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAILegacyProvider",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIO1NoMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIO1NoMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIO1WithMaxCompletionTokens(llm_response:, baml_options: {})
+    def TestOpenAIO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIO1WithMaxCompletionTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIO1WithMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIO1WithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIShorthand(llm_response:, baml_options: {})
+    def TestOpenAIShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIShorthand",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIWithMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIWithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIWithNullMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIWithNullMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIWithNullMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestRetryConstant(llm_response:, baml_options: {})
+    def TestRetryConstant(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestRetryConstant",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestRetryExponential(llm_response:, baml_options: {})
+    def TestRetryExponential(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestRetryExponential",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestRoundRobinStrategy(llm_response:, baml_options: {})
+    def TestRoundRobinStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestRoundRobinStrategy",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestSingleFallbackClient(llm_response:, baml_options: {})
+    def TestSingleFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestSingleFallbackClient",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::CustomStory)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestThinking(llm_response:, baml_options: {})
+    def TestThinking(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestThinking may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestThinking",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        question: Baml::Types::UniverseQuestionInput,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::UniverseQuestion)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestUniverseQuestion(llm_response:, baml_options: {})
+    def TestUniverseQuestion(
+        *varargs,
+        question:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestUniverseQuestion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          question: question,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestVertex(llm_response:, baml_options: {})
+    def TestVertex(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertex may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestVertex",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestVertexWithSystemInstructions(llm_response:, baml_options: {})
+    def TestVertexWithSystemInstructions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestVertexWithSystemInstructions",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.any(String, T::Boolean),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Types::UnionTest_ReturnType)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UnionTest_Function(llm_response:, baml_options: {})
+    def UnionTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UnionTest_Function",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: Baml::Types::BlockConstraintForParam,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UseBlockConstraint(llm_response:, baml_options: {})
+    def UseBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UseBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        a: Baml::Types::MalformedConstraints2,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UseMalformedConstraints(llm_response:, baml_options: {})
+    def UseMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UseMalformedConstraints",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          a: a,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: Baml::Types::NestedBlockConstraintForParam,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Integer)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UseNestedBlockConstraint(llm_response:, baml_options: {})
+    def UseNestedBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UseNestedBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     
   end
 
-  class LlmStreamParser
+  class HttpStreamRequest
     extend T::Sig
 
     sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
@@ -3839,3796 +5159,5116 @@ module Baml
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        recipe: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::Recipe))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AaaSamOutputFormat(llm_response:, baml_options: {})
+    def AaaSamOutputFormat(
+        *varargs,
+        recipe:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AaaSamOutputFormat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          recipe: recipe,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        data: Baml::Types::LinkedListAliasNode,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::LinkedListAliasNode))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasThatPointsToRecursiveType(llm_response:, baml_options: {})
+    def AliasThatPointsToRecursiveType(
+        *varargs,
+        data:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasThatPointsToRecursiveType",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          data: data,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Checked[Integer]))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasWithMultipleAttrs(llm_response:, baml_options: {})
+    def AliasWithMultipleAttrs(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasWithMultipleAttrs",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          money: money,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputClass(llm_response:, baml_options: {})
+    def AliasedInputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputClass2(llm_response:, baml_options: {})
+    def AliasedInputClass2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputClass2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::InputClassNested,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputClassNested(llm_response:, baml_options: {})
+    def AliasedInputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputClassNested",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.any(Baml::Types::AliasedEnum, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputEnum(llm_response:, baml_options: {})
+    def AliasedInputEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputEnum",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AliasedInputList(llm_response:, baml_options: {})
+    def AliasedInputList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AliasedInputList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        optionals: Baml::Types::OptionalListAndMap,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::OptionalListAndMap))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AllowedOptionals(llm_response:, baml_options: {})
+    def AllowedOptionals(
+        *varargs,
+        optionals:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AllowedOptionals",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          optionals: optionals,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        a: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AssertFn(llm_response:, baml_options: {})
+    def AssertFn(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AssertFn may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AssertFn",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          a: a,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        aud: Baml::Audio,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def AudioInput(llm_response:, baml_options: {})
+    def AudioInput(
+        *varargs,
+        aud:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("AudioInput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "AudioInput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          aud: aud,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T::Array[Integer],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::LinkedList))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def BuildLinkedList(llm_response:, baml_options: {})
+    def BuildLinkedList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "BuildLinkedList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::BinaryNode,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::Tree))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def BuildTree(llm_response:, baml_options: {})
+    def BuildTree(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("BuildTree may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "BuildTree",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        cls: Baml::Types::ClassToRecAlias,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::ClassToRecAlias))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassThatPointsToRecursiveClassThroughAlias(llm_response:, baml_options: {})
+    def ClassThatPointsToRecursiveClassThroughAlias(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassThatPointsToRecursiveClassThroughAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          cls: cls,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::DynEnumTwo))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyDynEnumTwo(llm_response:, baml_options: {})
+    def ClassifyDynEnumTwo(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyDynEnumTwo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::Category))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyMessage(llm_response:, baml_options: {})
+    def ClassifyMessage(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyMessage",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::Category))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyMessage2(llm_response:, baml_options: {})
+    def ClassifyMessage2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyMessage2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::Category))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ClassifyMessage3(llm_response:, baml_options: {})
+    def ClassifyMessage3(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ClassifyMessage3",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        prefix: String,suffix: String,language: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def Completion(llm_response:, baml_options: {})
+    def Completion(
+        *varargs,
+        prefix:,suffix:,language:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("Completion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "Completion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          prefix: prefix,suffix: suffix,language: language,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T.any(T.nilable(Baml::PartialTypes::BookOrder), T.nilable(Baml::PartialTypes::FlightConfirmation), T.nilable(Baml::PartialTypes::GroceryReceipt))))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def CustomTask(llm_response:, baml_options: {})
+    def CustomTask(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("CustomTask may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "CustomTask",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage(llm_response:, baml_options: {})
+    def DescribeImage(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage2(llm_response:, baml_options: {})
+    def DescribeImage2(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage3(llm_response:, baml_options: {})
+    def DescribeImage3(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage3",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DescribeImage4(llm_response:, baml_options: {})
+    def DescribeImage4(
+        *varargs,
+        classWithImage:,img2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DescribeImage4",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          classWithImage: classWithImage,img2: img2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T.any(T.nilable(Baml::PartialTypes::OriginalA), T.nilable(Baml::PartialTypes::OriginalB))))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DifferentiateUnions(llm_response:, baml_options: {})
+    def DifferentiateUnions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DifferentiateUnions",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::DummyOutput))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DummyOutputFunction(llm_response:, baml_options: {})
+    def DummyOutputFunction(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DummyOutputFunction",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::DynamicClassOne,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::DynamicClassTwo))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DynamicFunc(llm_response:, baml_options: {})
+    def DynamicFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DynamicFunc",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::DynInputOutput,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::DynInputOutput))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DynamicInputOutput(llm_response:, baml_options: {})
+    def DynamicInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DynamicInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T::Array[Baml::Types::DynInputOutput],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(Baml::PartialTypes::DynInputOutput)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def DynamicListInputOutput(llm_response:, baml_options: {})
+    def DynamicListInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "DynamicListInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExpectFailure(llm_response:, baml_options: {})
+    def ExpectFailure(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExpectFailure",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        document: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::ContactInfo))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractContactInfo(llm_response:, baml_options: {})
+    def ExtractContactInfo(
+        *varargs,
+        document:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractContactInfo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          document: document,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        text: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(Baml::Types::Hobby)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractHobby(llm_response:, baml_options: {})
+    def ExtractHobby(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractHobby",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          text: text,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractNames(llm_response:, baml_options: {})
+    def ExtractNames(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractNames",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        text: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(Baml::PartialTypes::Person)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractPeople(llm_response:, baml_options: {})
+    def ExtractPeople(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractPeople",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          text: text,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        email: String,reason: T.any(String, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::ReceiptInfo))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractReceiptInfo(llm_response:, baml_options: {})
+    def ExtractReceiptInfo(
+        *varargs,
+        email:,reason:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractReceiptInfo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          email: email,reason: reason,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        resume: String,img: T.nilable(Baml::Image),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::Resume))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractResume(llm_response:, baml_options: {})
+    def ExtractResume(
+        *varargs,
+        resume:,img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractResume",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          resume: resume,img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        resume: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::Resume))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ExtractResume2(llm_response:, baml_options: {})
+    def ExtractResume2(
+        *varargs,
+        resume:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ExtractResume2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          resume: resume,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::ClassOptionalOutput))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnClassOptionalOutput(llm_response:, baml_options: {})
+    def FnClassOptionalOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnClassOptionalOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::ClassOptionalOutput2))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnClassOptionalOutput2(llm_response:, baml_options: {})
+    def FnClassOptionalOutput2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnClassOptionalOutput2",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(Baml::Types::EnumOutput)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnEnumListOutput(llm_response:, baml_options: {})
+    def FnEnumListOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnEnumListOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::EnumOutput))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnEnumOutput(llm_response:, baml_options: {})
+    def FnEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnEnumOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::LiteralClassHello,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::LiteralClassHello))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnLiteralClassInputOutput(llm_response:, baml_options: {})
+    def FnLiteralClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnLiteralClassInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T.any(T.nilable(Baml::PartialTypes::LiteralClassOne), T.nilable(Baml::PartialTypes::LiteralClassTwo))))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnLiteralUnionClassInputOutput(llm_response:, baml_options: {})
+    def FnLiteralUnionClassInputOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnLiteralUnionClassInputOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myString: T.nilable(String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnNamedArgsSingleStringOptional(llm_response:, baml_options: {})
+    def FnNamedArgsSingleStringOptional(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnNamedArgsSingleStringOptional",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myString: myString,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T::Boolean))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputBool(llm_response:, baml_options: {})
+    def FnOutputBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::TestOutputClass))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClass(llm_response:, baml_options: {})
+    def FnOutputClass(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(Baml::PartialTypes::TestOutputClass)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClassList(llm_response:, baml_options: {})
+    def FnOutputClassList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClassList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::TestClassNested))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClassNested(llm_response:, baml_options: {})
+    def FnOutputClassNested(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClassNested",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::TestClassWithEnum))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputClassWithEnum(llm_response:, baml_options: {})
+    def FnOutputClassWithEnum(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputClassWithEnum",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputInt(llm_response:, baml_options: {})
+    def FnOutputInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T::Boolean))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputLiteralBool(llm_response:, baml_options: {})
+    def FnOutputLiteralBool(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputLiteralBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputLiteralInt(llm_response:, baml_options: {})
+    def FnOutputLiteralInt(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputLiteralInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputLiteralString(llm_response:, baml_options: {})
+    def FnOutputLiteralString(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputLiteralString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnOutputStringList(llm_response:, baml_options: {})
+    def FnOutputStringList(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnOutputStringList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Types::TestEnum))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnTestAliasedEnumOutput(llm_response:, baml_options: {})
+    def FnTestAliasedEnumOutput(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnTestAliasedEnumOutput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::TestClassAlias))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnTestClassAlias(llm_response:, baml_options: {})
+    def FnTestClassAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnTestClassAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def FnTestNamedArgsSingleEnum(llm_response:, baml_options: {})
+    def FnTestNamedArgsSingleEnum(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "FnTestNamedArgsSingleEnum",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        text: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::RaysData))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def GetDataType(llm_response:, baml_options: {})
+    def GetDataType(
+        *varargs,
+        text:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetDataType may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "GetDataType",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          text: text,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        email: Baml::Types::Email,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::OrderInfo))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def GetOrderInfo(llm_response:, baml_options: {})
+    def GetOrderInfo(
+        *varargs,
+        email:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "GetOrderInfo",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          email: email,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        query: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::SearchParams))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def GetQuery(llm_response:, baml_options: {})
+    def GetQuery(
+        *varargs,
+        query:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("GetQuery may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "GetQuery",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          query: query,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T.nilable(String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def InOutEnumMapKey(llm_response:, baml_options: {})
+    def InOutEnumMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "InOutEnumMapKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          i1: i1,i2: i2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        i1: T::Hash[String, String],i2: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T.nilable(String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def InOutLiteralStringUnionMapKey(llm_response:, baml_options: {})
+    def InOutLiteralStringUnionMapKey(
+        *varargs,
+        i1:,i2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "InOutLiteralStringUnionMapKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          i1: i1,i2: i2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        m: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T.nilable(String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def InOutSingleLiteralStringMapKey(llm_response:, baml_options: {})
+    def InOutSingleLiteralStringMapKey(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "InOutSingleLiteralStringMapKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          m: m,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def JsonTypeAliasCycle(llm_response:, baml_options: {})
+    def JsonTypeAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "JsonTypeAliasCycle",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T.any(T.nilable(Integer), T.nilable(T::Boolean), T.nilable(String))))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def LiteralUnionsTest(llm_response:, baml_options: {})
+    def LiteralUnionsTest(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "LiteralUnionsTest",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::BlockConstraint))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MakeBlockConstraint(llm_response:, baml_options: {})
+    def MakeBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MakeBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::NestedBlockConstraint))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MakeNestedBlockConstraint(llm_response:, baml_options: {})
+    def MakeNestedBlockConstraint(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MakeNestedBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::SemanticContainer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MakeSemanticContainer(llm_response:, baml_options: {})
+    def MakeSemanticContainer(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MakeSemanticContainer",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        m: T::Hash[String, T::Array[String]],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T::Array[T.nilable(String)]])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MapAlias(llm_response:, baml_options: {})
+    def MapAlias(
+        *varargs,
+        m:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MapAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MapAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          m: m,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        money: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::MergeAttrs))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MergeAliasAttributes(llm_response:, baml_options: {})
+    def MergeAliasAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MergeAliasAttributes",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          money: money,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::DynamicOutput))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def MyFunc(llm_response:, baml_options: {})
+    def MyFunc(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MyFunc may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "MyFunc",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T.any(T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))), T::Array[T.nilable(String)], T::Hash[String, T::Array[T.nilable(String)]])))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def NestedAlias(llm_response:, baml_options: {})
+    def NestedAlias(
+        *varargs,
+        c:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "NestedAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          c: c,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        s: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::ClassForNullLiteral))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def NullLiteralClassHello(llm_response:, baml_options: {})
+    def NullLiteralClassHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "NullLiteralClassHello",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          s: s,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        s: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def OpenAIWithAnthropicResponseHello(llm_response:, baml_options: {})
+    def OpenAIWithAnthropicResponseHello(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "OpenAIWithAnthropicResponseHello",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          s: s,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(Baml::PartialTypes::OptionalTest_ReturnType)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def OptionalTest_Function(llm_response:, baml_options: {})
+    def OptionalTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "OptionalTest_Function",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        name: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::FooAny))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PredictAge(llm_response:, baml_options: {})
+    def PredictAge(
+        *varargs,
+        name:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAge may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PredictAge",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          name: name,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Checked[Integer]))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PredictAgeBare(llm_response:, baml_options: {})
+    def PredictAgeBare(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PredictAgeBare",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        p: T.any(Integer, String, T::Boolean, Float),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PrimitiveAlias(llm_response:, baml_options: {})
+    def PrimitiveAlias(
+        *varargs,
+        p:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PrimitiveAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          p: p,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestClaude(llm_response:, baml_options: {})
+    def PromptTestClaude(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestClaude",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestClaudeChat(llm_response:, baml_options: {})
+    def PromptTestClaudeChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestClaudeChat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestClaudeChatNoSystem(llm_response:, baml_options: {})
+    def PromptTestClaudeChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestClaudeChatNoSystem",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestOpenAI(llm_response:, baml_options: {})
+    def PromptTestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestOpenAI",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestOpenAIChat(llm_response:, baml_options: {})
+    def PromptTestOpenAIChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestOpenAIChat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestOpenAIChatNoSystem(llm_response:, baml_options: {})
+    def PromptTestOpenAIChatNoSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestOpenAIChatNoSystem",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def PromptTestStreaming(llm_response:, baml_options: {})
+    def PromptTestStreaming(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "PromptTestStreaming",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def RecursiveAliasCycle(llm_response:, baml_options: {})
+    def RecursiveAliasCycle(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "RecursiveAliasCycle",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        cls: Baml::Types::NodeWithAliasIndirection,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::NodeWithAliasIndirection))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def RecursiveClassWithAliasIndirection(llm_response:, baml_options: {})
+    def RecursiveClassWithAliasIndirection(
+        *varargs,
+        cls:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "RecursiveClassWithAliasIndirection",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          cls: cls,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        money: Baml::Checked[Integer],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::Checked[Integer]))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnAliasWithMergedAttributes(llm_response:, baml_options: {})
+    def ReturnAliasWithMergedAttributes(
+        *varargs,
+        money:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnAliasWithMergedAttributes",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          money: money,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnFailingAssert(llm_response:, baml_options: {})
+    def ReturnFailingAssert(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnFailingAssert",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        s: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnJsonEntry(llm_response:, baml_options: {})
+    def ReturnJsonEntry(
+        *varargs,
+        s:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnJsonEntry",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          s: s,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        a: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::MalformedConstraints))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def ReturnMalformedConstraints(llm_response:, baml_options: {})
+    def ReturnMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "ReturnMalformedConstraints",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          a: a,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::Schema))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def SchemaDescriptions(llm_response:, baml_options: {})
+    def SchemaDescriptions(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "SchemaDescriptions",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def SimpleRecursiveListAlias(llm_response:, baml_options: {})
+    def SimpleRecursiveListAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "SimpleRecursiveListAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.anything,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.anything)
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def SimpleRecursiveMapAlias(llm_response:, baml_options: {})
+    def SimpleRecursiveMapAlias(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "SimpleRecursiveMapAlias",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::BigNumbers))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamBigNumbers(llm_response:, baml_options: {})
+    def StreamBigNumbers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamBigNumbers",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          digits: digits,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        theme: String,length: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::TwoStoriesOneTitle))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamFailingAssertion(llm_response:, baml_options: {})
+    def StreamFailingAssertion(
+        *varargs,
+        theme:,length:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamFailingAssertion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          theme: theme,length: length,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamOneBigNumber(llm_response:, baml_options: {})
+    def StreamOneBigNumber(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamOneBigNumber",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          digits: digits,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(T.any(T.nilable(Integer), T.nilable(String)))])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamUnionIntegers(llm_response:, baml_options: {})
+    def StreamUnionIntegers(
+        *varargs,
+        digits:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamUnionIntegers",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          digits: digits,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        digits: Integer,yapping: T::Boolean,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::CompoundBigNumbers))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def StreamingCompoundNumbers(llm_response:, baml_options: {})
+    def StreamingCompoundNumbers(
+        *varargs,
+        digits:,yapping:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "StreamingCompoundNumbers",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          digits: digits,yapping: yapping,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: Baml::Types::RecursiveAliasDependency,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::RecursiveAliasDependency))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TakeRecAliasDep(llm_response:, baml_options: {})
+    def TakeRecAliasDep(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TakeRecAliasDep",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        story: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TellStory(llm_response:, baml_options: {})
+    def TellStory(
+        *varargs,
+        story:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TellStory may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TellStory",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          story: story,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAnthropic(llm_response:, baml_options: {})
+    def TestAnthropic(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAnthropic",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAnthropicShorthand(llm_response:, baml_options: {})
+    def TestAnthropicShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAnthropicShorthand",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAws(llm_response:, baml_options: {})
+    def TestAws(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAws may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAws",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidAccessKey(llm_response:, baml_options: {})
+    def TestAwsInvalidAccessKey(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidAccessKey",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidProfile(llm_response:, baml_options: {})
+    def TestAwsInvalidProfile(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidProfile",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidRegion(llm_response:, baml_options: {})
+    def TestAwsInvalidRegion(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidRegion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAwsInvalidSessionToken(llm_response:, baml_options: {})
+    def TestAwsInvalidSessionToken(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAwsInvalidSessionToken",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzure(llm_response:, baml_options: {})
+    def TestAzure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzure may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzure",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureFailure(llm_response:, baml_options: {})
+    def TestAzureFailure(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureFailure",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO1NoMaxTokens(llm_response:, baml_options: {})
+    def TestAzureO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO1NoMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO1WithMaxCompletionTokens(llm_response:, baml_options: {})
+    def TestAzureO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO1WithMaxCompletionTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO1WithMaxTokens(llm_response:, baml_options: {})
+    def TestAzureO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO1WithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO3NoMaxTokens(llm_response:, baml_options: {})
+    def TestAzureO3NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO3NoMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureO3WithMaxCompletionTokens(llm_response:, baml_options: {})
+    def TestAzureO3WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureO3WithMaxCompletionTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestAzureWithMaxTokens(llm_response:, baml_options: {})
+    def TestAzureWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestAzureWithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,not_cached: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestCaching(llm_response:, baml_options: {})
+    def TestCaching(
+        *varargs,
+        input:,not_cached:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestCaching may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestCaching",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,not_cached: not_cached,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFallbackClient(llm_response:, baml_options: {})
+    def TestFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFallbackClient",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFallbackStrategy(llm_response:, baml_options: {})
+    def TestFallbackStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFallbackStrategy",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFallbackToShorthand(llm_response:, baml_options: {})
+    def TestFallbackToShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFallbackToShorthand",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myBool: T::Boolean,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleBool(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myBool: myBool,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleClass(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleClass(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleEnumList(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleEnumList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleEnumList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myFloat: Float,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleFloat(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleFloat(
+        *varargs,
+        myFloat:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleFloat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myFloat: myFloat,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myInt: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleInt(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myInt: myInt,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myMap: T::Hash[String, Baml::Types::StringToClassEntry],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T.nilable(Baml::PartialTypes::StringToClassEntry)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleMapStringToClass(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleMapStringToClass(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleMapStringToClass",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myMap: myMap,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myMap: T::Hash[String, T::Hash[String, String]],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T::Hash[String, T.nilable(String)]])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleMapStringToMap(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleMapStringToMap(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleMapStringToMap",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myMap: myMap,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myMap: T::Hash[String, String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Hash[String, T.nilable(String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleMapStringToString(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleMapStringToString(
+        *varargs,
+        myMap:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleMapStringToString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myMap: myMap,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myString: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleString(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myString: myString,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myStringArray: T::Array[String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleStringArray(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleStringArray(
+        *varargs,
+        myStringArray:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleStringArray",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myStringArray: myStringArray,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: T::Array[String],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T::Array[T.nilable(String)])
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestFnNamedArgsSingleStringList(llm_response:, baml_options: {})
+    def TestFnNamedArgsSingleStringList(
+        *varargs,
+        myArg:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestFnNamedArgsSingleStringList",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myArg: myArg,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGemini(llm_response:, baml_options: {})
+    def TestGemini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGemini may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGemini",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGeminiOpenAiGeneric(llm_response:, baml_options: {})
+    def TestGeminiOpenAiGeneric(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGeminiOpenAiGeneric",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGeminiSystem(llm_response:, baml_options: {})
+    def TestGeminiSystem(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGeminiSystem",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestGeminiSystemAsChat(llm_response:, baml_options: {})
+    def TestGeminiSystemAsChat(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestGeminiSystemAsChat",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestImageInput(llm_response:, baml_options: {})
+    def TestImageInput(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestImageInput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        img: Baml::Image,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestImageInputAnthropic(llm_response:, baml_options: {})
+    def TestImageInputAnthropic(
+        *varargs,
+        img:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestImageInputAnthropic",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          img: img,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        imgs: T::Array[Baml::Image],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestImageListInput(llm_response:, baml_options: {})
+    def TestImageListInput(
+        *varargs,
+        imgs:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestImageListInput",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          imgs: imgs,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::TestMemoryOutput))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestMemory(llm_response:, baml_options: {})
+    def TestMemory(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMemory may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestMemory",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestMulticlassNamedArgs(llm_response:, baml_options: {})
+    def TestMulticlassNamedArgs(
+        *varargs,
+        myArg:,myArg2:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestMulticlassNamedArgs",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myArg: myArg,myArg2: myArg2,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myBool: T::Boolean,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestNamedArgsLiteralBool(llm_response:, baml_options: {})
+    def TestNamedArgsLiteralBool(
+        *varargs,
+        myBool:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestNamedArgsLiteralBool",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myBool: myBool,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myInt: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestNamedArgsLiteralInt(llm_response:, baml_options: {})
+    def TestNamedArgsLiteralInt(
+        *varargs,
+        myInt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestNamedArgsLiteralInt",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myInt: myInt,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        myString: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestNamedArgsLiteralString(llm_response:, baml_options: {})
+    def TestNamedArgsLiteralString(
+        *varargs,
+        myString:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestNamedArgsLiteralString",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          myString: myString,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOllama(llm_response:, baml_options: {})
+    def TestOllama(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOllama may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOllama",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAI(llm_response:, baml_options: {})
+    def TestOpenAI(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAI",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIGPT4oMini(llm_response:, baml_options: {})
+    def TestOpenAIGPT4oMini(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIGPT4oMini",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAILegacyProvider(llm_response:, baml_options: {})
+    def TestOpenAILegacyProvider(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAILegacyProvider",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIO1NoMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIO1NoMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIO1NoMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIO1WithMaxCompletionTokens(llm_response:, baml_options: {})
+    def TestOpenAIO1WithMaxCompletionTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIO1WithMaxCompletionTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIO1WithMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIO1WithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIO1WithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIShorthand(llm_response:, baml_options: {})
+    def TestOpenAIShorthand(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIShorthand",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIWithMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIWithMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIWithMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestOpenAIWithNullMaxTokens(llm_response:, baml_options: {})
+    def TestOpenAIWithNullMaxTokens(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestOpenAIWithNullMaxTokens",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestRetryConstant(llm_response:, baml_options: {})
+    def TestRetryConstant(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestRetryConstant",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestRetryExponential(llm_response:, baml_options: {})
+    def TestRetryExponential(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestRetryExponential",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestRoundRobinStrategy(llm_response:, baml_options: {})
+    def TestRoundRobinStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestRoundRobinStrategy",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestSingleFallbackClient(llm_response:, baml_options: {})
+    def TestSingleFallbackClient(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestSingleFallbackClient",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::CustomStory))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestThinking(llm_response:, baml_options: {})
+    def TestThinking(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestThinking may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestThinking",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        question: Baml::Types::UniverseQuestionInput,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::UniverseQuestion))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestUniverseQuestion(llm_response:, baml_options: {})
+    def TestUniverseQuestion(
+        *varargs,
+        question:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestUniverseQuestion",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          question: question,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestVertex(llm_response:, baml_options: {})
+    def TestVertex(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertex may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestVertex",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(String))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def TestVertexWithSystemInstructions(llm_response:, baml_options: {})
+    def TestVertexWithSystemInstructions(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "TestVertexWithSystemInstructions",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        input: T.any(String, T::Boolean),
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Baml::PartialTypes::UnionTest_ReturnType))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UnionTest_Function(llm_response:, baml_options: {})
+    def UnionTest_Function(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UnionTest_Function",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          input: input,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: Baml::Types::BlockConstraintForParam,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UseBlockConstraint(llm_response:, baml_options: {})
+    def UseBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UseBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        a: Baml::Types::MalformedConstraints2,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UseMalformedConstraints(llm_response:, baml_options: {})
+    def UseMalformedConstraints(
+        *varargs,
+        a:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UseMalformedConstraints",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          a: a,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        inp: Baml::Types::NestedBlockConstraintForParam,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(T.nilable(Integer))
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def UseNestedBlockConstraint(llm_response:, baml_options: {})
+    def UseNestedBlockConstraint(
+        *varargs,
+        inp:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "UseNestedBlockConstraint",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          inp: inp,
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 

@@ -48,6 +48,20 @@ impl From<RubyClient> for RubyLlmResponseParser {
     }
 }
 
+#[derive(askama::Template)]
+#[template(path = "request.rb.j2", escape = "none")]
+pub(crate) struct RubyHttpRequest {
+    funcs: Vec<RubyFunction>,
+}
+
+impl From<RubyClient> for RubyHttpRequest {
+    fn from(client: RubyClient) -> Self {
+        RubyHttpRequest {
+            funcs: client.funcs,
+        }
+    }
+}
+
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
@@ -61,7 +75,7 @@ pub(crate) fn generate(
     collector.add_template::<RubyClient>("client.rb", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlined.rb", (ir, generator))?;
     collector.add_template::<RubyLlmResponseParser>("parser.rb", (ir, generator))?;
-
+    collector.add_template::<RubyHttpRequest>("request.rb", (ir, generator))?;
     collector.commit(&generator.output_dir())
 }
 
@@ -125,6 +139,15 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for RubyLlmResponseParser {
+    type Error = anyhow::Error;
+
+    fn try_from((ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        let client = RubyClient::try_from((ir, args))?;
+        Ok(client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for RubyHttpRequest {
     type Error = anyhow::Error;
 
     fn try_from((ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {

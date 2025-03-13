@@ -7,7 +7,7 @@ require_relative "partial-types"
 require_relative "types"
 
 module Baml
-  class LlmResponseParser
+  class HttpRequest
     extend T::Sig
 
     sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
@@ -19,31 +19,45 @@ module Baml
     {% for fn in funcs -%}
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns({{fn.return_type}})
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def {{fn.name}}(llm_response:, baml_options: {})
+    def {{fn.name}}(
+        *varargs,
+        {% for (name, _) in fn.args -%}
+        {{name}}:,
+        {%- endfor %}
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "{{fn.name}}",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        false,
+        {
+          {% for (name, _) in fn.args -%}
+          {{name}}: {{name}},
+          {%- endfor %}
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        false
       )
     end
 
     {% endfor %}
   end
 
-  class LlmStreamParser
+  class HttpStreamRequest
     extend T::Sig
 
     sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager).void}
@@ -55,24 +69,38 @@ module Baml
     {% for fn in funcs -%}
     sig {
       params(
-        llm_response: String,
+        varargs: T.untyped,
+        {% for (name, type) in fn.args -%}
+        {{name}}: {{type}},
+        {%- endfor %}
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns({{fn.partial_return_type}})
+      ).returns(Baml::Ffi::HTTPRequest)
     }
-    def {{fn.name}}(llm_response:, baml_options: {})
+    def {{fn.name}}(
+        *varargs,
+        {% for (name, _) in fn.args -%}
+        {{name}}:,
+        {%- endfor %}
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
+      end
       if (baml_options.keys - [:client_registry, :tb]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
-      @runtime.parse_llm_response(
+      @runtime.build_request(
         "{{fn.name}}",
-        llm_response,
-        Baml::Types,
-        Baml::PartialTypes,
-        true,
+        {
+          {% for (name, _) in fn.args -%}
+          {{name}}: {{name}},
+          {%- endfor %}
+        },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        true
       )
     end
 
