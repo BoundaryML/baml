@@ -492,6 +492,7 @@ impl BamlRuntime {
         })
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn build_request_sync(
         &self,
         function_name: String,
