@@ -414,6 +414,9 @@ navigation:
       - section: Generated baml_client
         slug: baml_client
         contents:
+          - page: logging / env vars
+            slug: logging-env-vars
+            path: 03-reference/baml_client/logging.mdx
           - page: TypeBuilder
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry

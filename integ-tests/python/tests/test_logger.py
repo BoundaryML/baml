@@ -1,5 +1,5 @@
 from ..baml_client import b
-from baml_py.logging import set_log_level, get_log_level
+from ..baml_client.logging import set_log_level, get_log_level
 import pytest
 import io
 import contextlib
@@ -7,9 +7,9 @@ import contextlib
 
 @pytest.fixture(scope="function")
 def reset_log_level():
-    previous_level = get_log_level()
+    previous_level = logging.get_log_level()
     yield
-    set_log_level(previous_level)
+    logging.set_log_level(previous_level)
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("reset_log_level")
