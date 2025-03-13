@@ -6,7 +6,6 @@ In this tutorial, you'll learn how to create a robust PII (Personally Identifiab
 
 - Basic understanding of BAML syntax
 - Access to OpenAI API (you'll need an API key)
-- BAML CLI installed and configured
 
 ## Step 1: Define the Data Schema
 
@@ -14,19 +13,20 @@ First, let's define what our PII data structure should look like. Create a new f
 
 ```baml pii_extractor.baml
 class PIIData {
-  index int @description("Index of the PII data item")
-  dataType string @description("Type of PII data (e.g., name, email, phone)")
-  value string @description("The actual PII value found")
+  index int
+  dataType string
+  value string
 }
 
 class PIIExtraction {
-  privateData PIIData[] @description("List of extracted PII data items")
+  privateData PIIData[]
+  containsSensitivePII bool @description("E.g. SSN")
 }
 ```
 
 This schema defines:
 - `PIIData`: A class representing a single piece of PII with its type and value
-- `PIIExtraction`: A container class that holds an array of PII data items
+- `PIIExtraction`: A container class that holds an array of PII data items and a sensitive data flag
 
 ## Step 2: Create the Extraction Function
 
@@ -43,11 +43,13 @@ function ExtractPII(document: string) -> PIIExtraction {
     - Addresses
     - Social security numbers
     - Dates of birth
-    - Any other sensitive personal data
+    - Any other personal data
 
     {{ ctx.output_format }}
 
-    {{ _.role("user") }} {{ document }}
+    {{ _.role("user") }} 
+    
+    {{ document }}
   "#
 }
 ```
