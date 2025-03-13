@@ -475,7 +475,7 @@ impl BamlRuntime {
         // the `build_request` method.
         //
         // Would also be nice if RequestBuilder had getters so we didn't have to
-        // call .build()? above to get
+        // call .build()? above.
         Ok(HTTPRequest {
             request_id: HttpRequestId(uuid::Uuid::new_v4().to_string()),
             url: request.url().to_string(),
