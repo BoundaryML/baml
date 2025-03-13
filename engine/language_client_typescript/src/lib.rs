@@ -25,6 +25,21 @@ pub fn get_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }
 
+#[napi(js_name = "getLogLevel")]
+pub fn get_log_level() -> String {
+    baml_log::get_log_level().as_str().into()
+}
+
+#[napi(js_name = "setLogLevel")]
+pub fn set_log_level(level: String) {
+    let _ = baml_log::set_log_level(baml_log::Level::from_str(&level));
+}
+
+#[napi(js_name = "setLogJson")]
+pub fn set_log_json(use_json: bool) {
+    let _ = baml_log::set_json_mode(use_json);
+}
+
 #[napi::module_init]
 fn module_init() {
     match baml_log::init() {

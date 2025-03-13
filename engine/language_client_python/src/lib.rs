@@ -75,6 +75,11 @@ fn get_version() -> &'static str {
 }
 
 #[pyfunction]
+fn get_log_level() -> PyResult<&'static str> {
+    Ok(baml_log::get_log_level().as_str())
+}
+
+#[pyfunction]
 fn set_log_level(level: &str) -> PyResult<()> {
     baml_log::set_log_level(baml_log::Level::from_str(level))
         .map_err(|e| errors::BamlError::from_anyhow(e))
@@ -114,6 +119,7 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(set_log_level))?;
     m.add_wrapped(wrap_pyfunction!(set_log_json))?;
+    m.add_wrapped(wrap_pyfunction!(get_log_level))?;
     errors::errors(&m)?;
 
     // Initialize the logger

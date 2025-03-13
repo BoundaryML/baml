@@ -215,6 +215,8 @@ export interface BamlLogEvent {
 
 export declare export declare function get_version(): string
 
+export declare export declare function getLogLevel(): string
+
 export declare export declare function invoke_runtime_cli(params: Array<string>): void
 
 export interface LogEventMetadata {
@@ -222,4 +224,8 @@ export interface LogEventMetadata {
   parentId?: string
   rootEventId: string
 }
+
+export declare export declare function setLogJson(useJson: boolean): void
+
+export declare export declare function setLogLevel(level: string): void
 

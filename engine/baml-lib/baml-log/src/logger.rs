@@ -323,6 +323,13 @@ pub fn init() -> Result<(), LogError> {
     result
 }
 
+pub fn get_log_level() -> Level {
+    match CONFIG.read() {
+        Ok(config) => config.level,
+        Err(_) => DEFAULT_LOG_LEVEL,
+    }
+}
+
 /// Set the log level at runtime
 pub fn set_log_level(level: Level) -> Result<(), LogError> {
     match CONFIG.write() {
@@ -330,7 +337,7 @@ pub fn set_log_level(level: Level) -> Result<(), LogError> {
             let old_level = config.level;
             config.level = level;
             if old_level != level {
-                println!("[BAML] Log level set to {}", level.colored());
+                println!("[BAML 🐑] Log level set to {}", level.colored());
             }
             Ok(())
         }

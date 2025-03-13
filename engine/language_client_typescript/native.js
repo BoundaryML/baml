@@ -390,4 +390,7 @@ module.exports.TraceStats = nativeBinding.TraceStats
 module.exports.TypeBuilder = nativeBinding.TypeBuilder
 module.exports.Usage = nativeBinding.Usage
 module.exports.get_version = nativeBinding.get_version
+module.exports.getLogLevel = nativeBinding.getLogLevel
 module.exports.invoke_runtime_cli = nativeBinding.invoke_runtime_cli
+module.exports.setLogJson = nativeBinding.setLogJson
+module.exports.setLogLevel = nativeBinding.setLogLevel

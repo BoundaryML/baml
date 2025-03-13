@@ -6,8 +6,16 @@ def get_version() -> str:
     """Get the version of the BAML Python client."""
     ...
 
-def set_log_level(level: Literal["debug", "info", "warn", "error", "off"] | str) -> None:
+def set_log_level(level: Literal["DEBUG", "INFO", "WARN", "ERROR", "OFF"] | str) -> None:
     """Set the log level for the BAML Python client."""
+    ...
+
+def set_log_json(use_json: bool) -> None:
+    """Set the log JSON mode for the BAML Python client."""
+    ...
+
+def get_log_level() -> str:
+    """Get the log level for the BAML Python client."""
     ...
 
 class FunctionResult:

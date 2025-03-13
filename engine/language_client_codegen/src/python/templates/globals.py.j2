@@ -2,7 +2,7 @@ from __future__ import annotations
 import os
 
 from baml_py import BamlCtxManager, BamlRuntime
-from baml_py.baml_py import BamlError, set_log_level
+from baml_py.baml_py import BamlError
 from .inlinedbaml import get_baml_files
 from typing_extensions import Literal
 from typing import Dict, Any
@@ -24,10 +24,6 @@ def reset_baml_env_vars(env_vars: Dict[str, str]):
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.reset()
   else:
     raise BamlError("Cannot reset BAML environment variables while there are active BAML contexts.")
-
-def set_baml_log_level(level: Literal["debug", "info", "warn", "error", "off"] | str):
-  set_log_level(level)
-
 
 try:
     import dotenv
