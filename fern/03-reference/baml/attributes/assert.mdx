@@ -23,7 +23,7 @@ class Foo {
 ```baml BAML
 class MyClass {
   // @assert will be applied to each element in the array
-  my_field (string @assert(is_valid_email, {{ this.contains("@") }}))[]
+  my_field (string @assert(is_valid_email, {{ this|regex_match("@") }}))[]
 }
 ```
 

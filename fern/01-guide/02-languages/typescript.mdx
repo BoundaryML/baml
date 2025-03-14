@@ -58,7 +58,15 @@ To set up BAML with Typescript do the following:
     npx baml-cli generate
     ```
     ```bash deno
-    deno run -A npm:@boundaryml/baml/baml-cli generate
+    deno run --unstable-sloppy-imports -A npm:@boundaryml/baml/baml-cli generate
+    # Note: ESM is especially important for Deno, so you must explicitly
+    # allow our Node import style, with the `--unstable-sloppy-imports` flag
+    # and in your Deno VSCode configuration:
+    #
+    # {
+    #   "deno.unstable": ["sloppy-imports"] 
+    # }
+
     ```
 
     You can modify your `package.json` so you have a helper prefix in front of your build command.
