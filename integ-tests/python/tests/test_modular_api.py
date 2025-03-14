@@ -60,35 +60,36 @@ async def test_modular_openai_gpt4():
 
     assert parsed == JOHN_DOE_PARSED_RESUME
 
-
-def test_modular_anthropic_claude_3_haiku():
-    client = anthropic.Anthropic()
+@pytest.mark.asyncio
+async def test_modular_anthropic_claude_3_haiku():
+    client = anthropic.AsyncAnthropic()
 
     cr = ClientRegistry()
     cr.set_primary("Claude")
 
-    req = sync_b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {"client_registry": cr})
+    req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {"client_registry": cr})
 
-    response = typing.cast(anthropic.types.Message, client.messages.create(**req.body.json()))
+    response = typing.cast(anthropic.types.Message, await client.messages.create(**req.body.json()))
 
-    parsed = sync_b.parse.ExtractResume2(response.content[0].text)
+    parsed = b.parse.ExtractResume2(response.content[0].text)
 
     assert parsed == JOHN_DOE_PARSED_RESUME
 
-
-def test_modular_google_gemini():
+@pytest.mark.asyncio
+async def test_modular_google_gemini():
     client = genai.Client()
 
     cr = ClientRegistry()
     cr.set_primary("Gemini")
 
-    req = sync_b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {"client_registry": cr})
+    req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {"client_registry": cr})
 
     body = req.body.json()
-    body.pop("safetySettings")
-    response = client.models.generate_content(model="gemini-1.5-pro-001", **body)
+    response = await client.aio.models.generate_content(model="gemini-1.5-pro-001", contents=body["contents"], config={
+        "safety_settings": [body["safetySettings"]]
+    })
 
-    parsed = sync_b.parse.ExtractResume2(response.text)
+    parsed = b.parse.ExtractResume2(response.text)
 
     assert parsed == JOHN_DOE_PARSED_RESUME
 
