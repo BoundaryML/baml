@@ -357,22 +357,25 @@ checking in Python when using the SDKs. Here are some workarounds:
 
 **1. Using `typing.cast`**
 
-<CodeBlocks>
-```python OpenAI
-import typing
-from openai.types.chat import ChatCompletion
+<Tabs>
+  <Tab title="OpenAI" language="openai">
+    ```python OpenAI
+    import typing
+    from openai.types.chat import ChatCompletion
 
-res = typing.cast(ChatCompletion, await client.chat.completions.create(**req.body.json()))
-```
+    res = typing.cast(ChatCompletion, await client.chat.completions.create(**req.body.json()))
+    ```
+  </Tab>
 
-```python Anthropic
-import typing
-from anthropic.types import Message
+  <Tab title="Anthropic" language="anthropic">
+    ```python Anthropic
+    import typing
+    from anthropic.types import Message
 
-res = typing.cast(Message, await client.messages.create(**req.body.json()))
-```
-</CodeBlocks>
-
+    res = typing.cast(Message, await client.messages.create(**req.body.json()))
+    ```
+  </Tab>
+</Tabs>
 
 **2. Manually setting the arguments**
 
@@ -391,22 +394,28 @@ it basically forces us to use this pattern as seen in the
 TypeScript doesn't have optional parameters like Python, it uses objects instead
 so you can just cast to the expected type:
 
-<CodeBlocks>
-```typescript OpenAI
-import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources';
+<Tabs>
+  <Tab title="OpenAI" language="openai">
+    ```typescript OpenAI
+    import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources';
 
-const res = await client.chat.completions.create(req.body.json() as ChatCompletionCreateParamsNonStreaming)
-```
+    const res = await client.chat.completions.create(req.body.json() as ChatCompletionCreateParamsNonStreaming)
+    ```
+  </Tab>
 
-```typescript Anthropic
-import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources';
+  <Tab title="Anthropic" language="anthropic">
+    ```typescript Anthropic
+    import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources';
 
-const res = await client.messages.create(req.body.json() as MessageCreateParamsNonStreaming)
-```
+    const res = await client.messages.create(req.body.json() as MessageCreateParamsNonStreaming)
+    ```
+  </Tab>
 
-```typescript Gemini
-import { GenerateContentRequest } from '@google/generative-ai';
+  <Tab title="Gemini">
+    ```typescript Gemini
+    import { GenerateContentRequest } from '@google/generative-ai';
 
-const res = await model.generateContent(req.body.json() as GenerateContentRequest)
-```
-</CodeBlocks>
+    const res = await model.generateContent(req.body.json() as GenerateContentRequest)
+    ```
+  </Tab>
+</Tabs>
