@@ -1,5 +1,5 @@
 import { b } from '../baml_client'
-import { setLogLevel, getLogLevel } from '@boundaryml/baml/logging'
+import { setLogLevel, getLogLevel } from '../baml_client/config'
 
 describe('Logger tests', () => {
   let originalLogLevel: string

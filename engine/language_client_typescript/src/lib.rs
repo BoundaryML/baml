@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use napi::{Env, JsUndefined};
 use napi_derive::napi;
 
@@ -32,12 +34,17 @@ pub fn get_log_level() -> String {
 
 #[napi(js_name = "setLogLevel")]
 pub fn set_log_level(level: String) {
-    let _ = baml_log::set_log_level(baml_log::Level::from_str(&level));
+    let _ = baml_log::Level::from_str(&level).map(baml_log::set_log_level);
 }
 
-#[napi(js_name = "setLogJson")]
-pub fn set_log_json(use_json: bool) {
+#[napi(js_name = "setLogJsonMode")]
+pub fn set_log_json_mode(use_json: bool) {
     let _ = baml_log::set_json_mode(use_json);
+}
+
+#[napi(js_name = "setLogMaxChunkLength")]
+pub fn set_log_max_chunk_length(length: u32) {
+    let _ = baml_log::set_max_message_length(length as usize);
 }
 
 #[napi::module_init]

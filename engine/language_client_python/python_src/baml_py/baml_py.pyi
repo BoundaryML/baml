@@ -10,12 +10,16 @@ def set_log_level(level: Literal["DEBUG", "INFO", "WARN", "ERROR", "OFF"] | str)
     """Set the log level for the BAML Python client."""
     ...
 
-def set_log_json(use_json: bool) -> None:
+def set_log_json_mode(use_json: bool) -> None:
     """Set the log JSON mode for the BAML Python client."""
     ...
 
 def get_log_level() -> str:
     """Get the log level for the BAML Python client."""
+    ...
+
+def set_log_max_chunk_length(length: int) -> None:
+    """Set the maximum log chunk length for the BAML Python client."""
     ...
 
 class FunctionResult:

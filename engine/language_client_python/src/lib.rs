@@ -81,13 +81,18 @@ fn get_log_level() -> PyResult<&'static str> {
 
 #[pyfunction]
 fn set_log_level(level: &str) -> PyResult<()> {
-    baml_log::set_log_level(baml_log::Level::from_str(level))
-        .map_err(|e| errors::BamlError::from_anyhow(e))
+    let _ = level.parse().map(baml_log::set_log_level);
+    Ok(())
 }
 
 #[pyfunction]
-fn set_log_json(json: bool) -> PyResult<()> {
-    baml_log::set_json_mode(json).map_err(|e| errors::BamlError::from_anyhow(e))
+fn set_log_json_mode(json: bool) -> PyResult<()> {
+    baml_log::set_json_mode(json).map_err(errors::BamlError::from_anyhow)
+}
+
+#[pyfunction]
+fn set_log_max_chunk_length(length: usize) -> PyResult<()> {
+    baml_log::set_max_message_length(length).map_err(errors::BamlError::from_anyhow)
 }
 
 #[pymodule]
@@ -118,8 +123,9 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(set_log_level))?;
-    m.add_wrapped(wrap_pyfunction!(set_log_json))?;
+    m.add_wrapped(wrap_pyfunction!(set_log_json_mode))?;
     m.add_wrapped(wrap_pyfunction!(get_log_level))?;
+    m.add_wrapped(wrap_pyfunction!(set_log_max_chunk_length))?;
     errors::errors(&m)?;
 
     // Initialize the logger

@@ -324,6 +324,11 @@ class GroceryReceipt(BaseModel):
     items: List[Union[str, int, float]]
     totalAmount: float
 
+class Haiku(BaseModel):
+    line1: str
+    line2: str
+    line3: str
+
 class InnerClass(BaseModel):
     prop1: str
     prop2: str

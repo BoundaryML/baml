@@ -65,15 +65,19 @@ static_assertions::assert_impl_all!(BamlTracer: Send, Sync);
 
 /// Trait for types that can be visualized in terminal logs
 pub trait Visualize {
-    fn visualize(&self, max_chunk_size: usize) -> String;
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String;
 }
 
 fn log_str() -> ColoredString {
     "...[log trimmed]...".yellow().dimmed()
 }
 
-pub fn truncate_string(s: &str, max_size: usize) -> String {
-    if max_size > 0 && s.len() > max_size {
+pub fn truncate_string(
+    s: &str,
+    max_message_length: impl Into<baml_log::MaxMessageLength>,
+) -> String {
+    let max_message_length = max_message_length.into();
+    if let Some(max_size) = max_message_length.maybe_truncate_to(s.len()) {
         let half_size = max_size / 2;
         // We use UTF-8 aware char_indices to get the correct byte index (can't just do s[..half_size])
         let start = s
@@ -119,7 +123,8 @@ mod tests {
 }
 
 impl Visualize for FunctionResult {
-    fn visualize(&self, max_chunk_size: usize) -> String {
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String {
+        let max_chunk_size: baml_log::MaxMessageLength = max_chunk_size.into();
         let mut s = vec![];
         if self.event_chain().len() > 1 {
             s.push(format!(
@@ -135,7 +140,12 @@ impl Visualize for FunctionResult {
                     format!("---Parsed Response ({})---", val.0.r#type()).blue()
                 ));
                 let json_str = serde_json::to_string_pretty(&val.serialize_final()).unwrap();
-                s.push(truncate_string(&json_str, max_chunk_size).to_string());
+
+                if let Some(max_size) = max_chunk_size.maybe_truncate_to(json_str.len()) {
+                    s.push(truncate_string(&json_str, max_size).to_string());
+                } else {
+                    s.push(json_str);
+                }
             }
             Some(Err(e)) => {
                 s.push(format!(
@@ -191,15 +201,14 @@ struct BamlEventLoggable<'a> {
     function_name: &'a str,
     span: &'a TracingSpan,
     data: &'a Result<FunctionResult>,
-    max_chunk_size: usize,
 }
 
 impl baml_log::Loggable for BamlEventLoggable<'_> {
-    fn as_baml_log_string(&self) -> String {
+    fn as_baml_log_string(&self, max_message_length: &baml_log::MaxMessageLength) -> String {
         let function_name = format!("Function {}", self.function_name).purple();
         match self.data.as_ref() {
             Ok(response) => {
-                let response = response.visualize(self.max_chunk_size);
+                let response = response.visualize(max_message_length.clone());
                 format!("{}:\n{}", function_name, response)
             }
             Err(error) => {
@@ -208,7 +217,10 @@ impl baml_log::Loggable for BamlEventLoggable<'_> {
         }
     }
 
-    fn as_baml_log_json(&self) -> Result<serde_json::Value, baml_log::LogError> {
+    fn as_baml_log_json(
+        &self,
+        _: &baml_log::MaxMessageLength,
+    ) -> Result<serde_json::Value, baml_log::LogError> {
         serde_json::to_value(self.build_baml_event_json()).map_err(|e| e.into())
     }
 }
@@ -571,7 +583,6 @@ impl BamlTracer {
                 .unwrap_or_default(),
             data: response,
             span: &span,
-            max_chunk_size: self.options.config.max_log_chunk_chars(),
         };
 
         baml_log::elog!(log_level, &event);

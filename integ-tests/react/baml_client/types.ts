@@ -412,6 +412,13 @@ export interface GroceryReceipt {
   
 }
 
+export interface Haiku {
+  line1: string
+  line2: string
+  line3: string
+  
+}
+
 export interface InnerClass {
   prop1: string
   prop2: string

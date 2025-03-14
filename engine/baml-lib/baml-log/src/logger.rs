@@ -1,15 +1,25 @@
 use colored::*;
 use lazy_static::lazy_static;
 use serde::Serialize;
+use std::collections::HashMap;
 use std::env;
+use std::fmt::{self, Display};
 use std::io::{self, Write};
+use std::str::FromStr;
 use std::sync::{Once, RwLock};
 use thiserror::Error;
 
 /// Static initialization guard
 static INIT: Once = Once::new();
 
-const DEFAULT_LOG_LEVEL: Level = Level::Info;
+/// Default values for configuration
+mod defaults {
+    use super::*;
+    pub const LOG_LEVEL: Level = Level::Info;
+    pub const MAX_MESSAGE_LENGTH: usize = 64_000;
+    pub const USE_JSON: bool = false;
+    pub const COLOR_MODE: ColorMode = ColorMode::Auto;
+}
 
 /// Logging levels in order of verbosity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -29,26 +39,6 @@ pub enum Level {
 }
 
 impl Level {
-    /// Parse a level from a string
-    pub fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "off" => Level::Off,
-            "error" => Level::Error,
-            "warn" => Level::Warn,
-            "info" => Level::Info,
-            "debug" => Level::Debug,
-            "trace" => Level::Trace,
-            _ => {
-                bwarn!(
-                    "Invalid BAML_LOG level: {}. Defaulting to {}",
-                    s,
-                    DEFAULT_LOG_LEVEL.colored()
-                );
-                DEFAULT_LOG_LEVEL // Default
-            }
-        }
-    }
-
     /// Convert level to a human-readable string
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -72,6 +62,36 @@ impl Level {
             Level::Trace => "TRACE".normal(),
         }
     }
+
+    fn is_at_least(&self, level: Level) -> bool {
+        self >= &level
+    }
+}
+
+impl Display for Level {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for Level {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "off" => Ok(Level::Off),
+            "error" => Ok(Level::Error),
+            "warn" => Ok(Level::Warn),
+            "info" => Ok(Level::Info),
+            "debug" => Ok(Level::Debug),
+            "trace" => Ok(Level::Trace),
+            _ => {
+                // Instead of using bwarn! macro here (which would cause circular dependency),
+                // we just return default for parse failures
+                Ok(defaults::LOG_LEVEL)
+            }
+        }
+    }
 }
 
 /// Style configuration for terminal output
@@ -85,19 +105,189 @@ pub enum ColorMode {
     Never,
 }
 
-impl ColorMode {
-    /// Parse color mode from a string
-    fn from_str(s: &str) -> Self {
-        match s.to_lowercase().as_str() {
-            "auto" => ColorMode::Auto,
-            "always" => ColorMode::Always,
-            "never" => ColorMode::Never,
-            _ => ColorMode::Auto,
+impl Display for ColorMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ColorMode::Auto => write!(f, "auto"),
+            ColorMode::Always => write!(f, "always"),
+            ColorMode::Never => write!(f, "never"),
         }
     }
 }
 
+impl FromStr for ColorMode {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "auto" => Ok(ColorMode::Auto),
+            "always" => Ok(ColorMode::Always),
+            "never" => Ok(ColorMode::Never),
+            _ => Ok(defaults::COLOR_MODE),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MaxMessageLength {
+    Unlimited,
+    Limited { max_length: usize },
+}
+
+impl MaxMessageLength {
+    pub fn maybe_truncate_to(&self, length: usize) -> Option<usize> {
+        match self {
+            MaxMessageLength::Unlimited => None,
+            MaxMessageLength::Limited { max_length } => {
+                if length > *max_length {
+                    Some(*max_length)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+}
+
+impl From<usize> for MaxMessageLength {
+    fn from(value: usize) -> Self {
+        if value == 0 {
+            MaxMessageLength::Unlimited
+        } else {
+            MaxMessageLength::Limited { max_length: value }
+        }
+    }
+}
+
+/// Trait for config values that can be loaded from environment
+pub trait ConfigValue: Sized {
+    /// Environment variable name
+    fn env_name() -> &'static str;
+
+    /// Get value from environment or return default
+    fn from_env() -> Self {
+        env::var(Self::env_name())
+            .ok()
+            .and_then(|v| Self::parse_value(&v))
+            .unwrap_or_else(|| Self::default_value())
+    }
+
+    /// Parse string value
+    fn parse_value(value: &str) -> Option<Self>;
+
+    /// Default value
+    fn default_value() -> Self;
+
+    /// Update from HashMap of environment variables
+    fn from_map(map: &HashMap<String, String>) -> Option<Self> {
+        map.get(Self::env_name()).and_then(|v| Self::parse_value(v))
+    }
+}
+
+/// Specific config value implementations
+pub struct LogLevelConfig;
+impl ConfigValue for LogLevelConfig {
+    fn env_name() -> &'static str {
+        "BAML_LOG"
+    }
+
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(LogLevelConfig)
+    }
+
+    fn default_value() -> Self {
+        LogLevelConfig
+    }
+}
+
+impl From<LogLevelConfig> for Level {
+    fn from(_: LogLevelConfig) -> Self {
+        env::var(LogLevelConfig::env_name())
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(defaults::LOG_LEVEL)
+    }
+}
+
+pub struct JsonModeConfig;
+impl ConfigValue for JsonModeConfig {
+    fn env_name() -> &'static str {
+        "BAML_LOG_JSON"
+    }
+
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(JsonModeConfig)
+    }
+
+    fn default_value() -> Self {
+        JsonModeConfig
+    }
+}
+
+impl From<JsonModeConfig> for bool {
+    fn from(_: JsonModeConfig) -> Self {
+        env::var(JsonModeConfig::env_name())
+            .map(|val| val.trim().eq_ignore_ascii_case("true") || val.trim() == "1")
+            .unwrap_or(defaults::USE_JSON)
+    }
+}
+
+pub struct ColorModeConfig;
+impl ConfigValue for ColorModeConfig {
+    fn env_name() -> &'static str {
+        "BAML_LOG_COLOR_MODE"
+    }
+
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(ColorModeConfig)
+    }
+
+    fn default_value() -> Self {
+        ColorModeConfig
+    }
+}
+
+impl From<ColorModeConfig> for ColorMode {
+    fn from(_: ColorModeConfig) -> Self {
+        env::var(ColorModeConfig::env_name())
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(defaults::COLOR_MODE)
+    }
+}
+
+pub struct MaxMessageLengthConfig;
+impl ConfigValue for MaxMessageLengthConfig {
+    fn env_name() -> &'static str {
+        "BAML_LOG_MAX_MESSAGE_LENGTH"
+    }
+
+    fn parse_value(value: &str) -> Option<Self> {
+        Some(MaxMessageLengthConfig)
+    }
+
+    fn default_value() -> Self {
+        MaxMessageLengthConfig
+    }
+}
+
+impl From<MaxMessageLengthConfig> for MaxMessageLength {
+    fn from(_: MaxMessageLengthConfig) -> Self {
+        env::var(MaxMessageLengthConfig::env_name())
+            .ok()
+            .and_then(|val| {
+                if val.is_empty() {
+                    Some(MaxMessageLength::Unlimited)
+                } else {
+                    val.parse::<usize>().ok().map(|len| len.into())
+                }
+            })
+            .unwrap_or_else(|| defaults::MAX_MESSAGE_LENGTH.into())
+    }
+}
+
 /// Configuration for the logger
+#[derive(Debug, Clone)]
 struct LogConfig {
     /// Current log level
     level: Level,
@@ -105,64 +295,64 @@ struct LogConfig {
     use_json: bool,
     /// Color output mode
     color_mode: ColorMode,
+    /// Maximum log message length
+    max_message_length: MaxMessageLength,
     /// Whether initialization has completed
     initialized: bool,
 }
 
-lazy_static! {
-    /// Thread-safe configuration with runtime modification support
-    static ref CONFIG: RwLock<LogConfig> = RwLock::new({
-        LogConfig {
-            level: parse_level_from_env(),
-            use_json: parse_json_from_env(),
-            color_mode: parse_color_from_env(),
+impl LogConfig {
+    /// Create a new config with values from environment
+    fn from_env() -> Self {
+        Self {
+            level: LogLevelConfig::from_env().into(),
+            use_json: JsonModeConfig::from_env().into(),
+            color_mode: ColorModeConfig::from_env().into(),
+            max_message_length: MaxMessageLengthConfig::from_env().into(),
             initialized: false,
         }
-    });
-}
+    }
 
-/// Parse log level from BAML_LOG environment variable
-fn parse_level_from_env() -> Level {
-    match env::var("BAML_LOG") {
-        Ok(val) => Level::from_str(&val),
-        Err(_) => DEFAULT_LOG_LEVEL,
+    /// Update config from environment
+    fn reload_from_env(&mut self) {
+        self.level = LogLevelConfig::from_env().into();
+        self.use_json = JsonModeConfig::from_env().into();
+        self.color_mode = ColorModeConfig::from_env().into();
+        self.max_message_length = MaxMessageLengthConfig::from_env().into();
+    }
+
+    /// Update config from a HashMap of environment variables
+    fn update_from_map(&mut self, vars: &HashMap<String, String>) {
+        if let Some(level_config) = LogLevelConfig::from_map(vars) {
+            self.level = level_config.into();
+        }
+
+        if let Some(json_config) = JsonModeConfig::from_map(vars) {
+            self.use_json = json_config.into();
+        }
+
+        if let Some(color_config) = ColorModeConfig::from_map(vars) {
+            self.color_mode = color_config.into();
+        }
+
+        if let Some(length_config) = MaxMessageLengthConfig::from_map(vars) {
+            self.max_message_length = length_config.into();
+        }
+    }
+
+    fn to_logger(&self) -> Logger {
+        Logger {
+            level: self.level,
+            use_json: self.use_json,
+            color_mode: self.color_mode,
+            max_message_length: self.max_message_length,
+        }
     }
 }
 
-/// Parse JSON mode from BAML_LOG_JSON environment variable
-fn parse_json_from_env() -> bool {
-    match env::var("BAML_LOG_JSON") {
-        Ok(val) => val.trim().eq_ignore_ascii_case("true") || val.trim() == "1",
-        Err(_) => false,
-    }
-}
-
-/// Parse color mode from BAML_LOG_STYLE environment variable
-fn parse_color_from_env() -> ColorMode {
-    match env::var("BAML_LOG_STYLE") {
-        Ok(val) => ColorMode::from_str(&val),
-        Err(_) => ColorMode::Auto,
-    }
-}
-
-/// JSON-serializable log entry
-#[derive(Serialize)]
-struct LogEntry<'a> {
-    /// Timestamp in ISO 8601 format
-    timestamp: String,
-    /// Log level as a string
-    level: &'a str,
-    /// Log message
-    message: String,
-    /// Optional module path
-    #[serde(skip_serializing_if = "Option::is_none")]
-    module_path: Option<&'a str>,
-    /// Optional file name
-    #[serde(skip_serializing_if = "Option::is_none")]
-    file: Option<&'a str>,
-    /// Optional line number
-    #[serde(skip_serializing_if = "Option::is_none")]
-    line: Option<u32>,
+lazy_static! {
+    /// Thread-safe configuration with runtime modification support
+    static ref CONFIG: RwLock<LogConfig> = RwLock::new(LogConfig::from_env());
 }
 
 /// Error type for logging operations
@@ -185,135 +375,134 @@ pub enum LogError {
     Config(String),
 }
 
+/// JSON-serializable log entry
+#[derive(Serialize)]
+struct LogEntry<'a> {
+    /// Timestamp in ISO 8601 format
+    timestamp: String,
+    /// Log level as a string
+    level: &'a str,
+    /// Log message
+    message: String,
+    /// Optional module path
+    #[serde(skip_serializing_if = "Option::is_none")]
+    module_path: Option<&'a str>,
+    /// Optional file name
+    #[serde(skip_serializing_if = "Option::is_none")]
+    file: Option<&'a str>,
+    /// Optional line number
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<u32>,
+}
+
 /// Logger instance that can be customized
 pub struct Logger {
     level: Level,
     use_json: bool,
     color_mode: ColorMode,
+    max_message_length: MaxMessageLength,
 }
 
-/// Builder for creating a custom logger instance
-pub struct LoggerBuilder {
-    level: Option<Level>,
-    use_json: Option<bool>,
-    color_mode: Option<ColorMode>,
+/// Trait for creating a type-safe configuration API
+pub trait ConfigSetting<T> {
+    /// Get the current value
+    fn get() -> T;
+
+    /// Set the value
+    fn set(value: T) -> Result<(), LogError>;
 }
 
-impl LoggerBuilder {
-    /// Create a new logger builder with default settings
-    pub fn new() -> Self {
-        Self {
-            level: None,
-            use_json: None,
-            color_mode: None,
+/// Type-safe configuration settings
+pub struct LogLevel;
+impl ConfigSetting<Level> for LogLevel {
+    fn get() -> Level {
+        match CONFIG.read() {
+            Ok(config) => config.level,
+            Err(_) => defaults::LOG_LEVEL,
         }
     }
 
-    /// Set the log level
-    pub fn level(mut self, level: Level) -> Self {
-        self.level = Some(level);
-        self
-    }
-
-    /// Set the JSON formatting mode
-    pub fn json(mut self, enable: bool) -> Self {
-        self.use_json = Some(enable);
-        self
-    }
-
-    /// Set the color mode
-    pub fn color_mode(mut self, mode: ColorMode) -> Self {
-        self.color_mode = Some(mode);
-        self
-    }
-
-    /// Build a logger instance
-    pub fn build(self) -> Logger {
-        Logger {
-            level: self.level.unwrap_or_else(parse_level_from_env),
-            use_json: self.use_json.unwrap_or_else(parse_json_from_env),
-            color_mode: self.color_mode.unwrap_or_else(parse_color_from_env),
-        }
-    }
-}
-
-impl Logger {
-    /// Log a message at the specified level
-    pub fn log(
-        &self,
-        level: Level,
-        message: &str,
-        module_path: Option<&str>,
-        file: Option<&str>,
-        line: Option<u32>,
-    ) -> Result<(), LogError> {
-        if level as usize > self.level as usize {
-            return Ok(());
-        }
-
-        let level_str = level.as_str();
-        let now = chrono::Local::now()
-            .format("%Y-%m-%dT%H:%M:%S%.3f")
-            .to_string();
-
-        if self.use_json {
-            let entry = LogEntry {
-                timestamp: now,
-                level: level_str,
-                message: message.to_string(),
-                module_path,
-                file,
-                line,
-            };
-
-            let json = serde_json::to_string(&entry)?;
-            writeln!(io::stdout(), "{}", json)?;
-        } else {
-            // Configure color control based on mode
-            match self.color_mode {
-                ColorMode::Always => control::set_override(true),
-                ColorMode::Never => control::set_override(false),
-                ColorMode::Auto => {} // Use default detection
+    fn set(value: Level) -> Result<(), LogError> {
+        match CONFIG.write() {
+            Ok(mut config) => {
+                let old_level = config.level;
+                config.level = value;
+                if old_level != value {
+                    println!("[BAML 🐑] Log level set to {}", value.colored());
+                }
+                Ok(())
             }
-
-            let location = if let (Some(file), Some(line)) = (file, line) {
-                format!(" [{}:{}]", file, line)
-            } else {
-                String::new()
-            };
-
-            let module = if let Some(module) = module_path {
-                format!(" ({})", module)
-            } else {
-                String::new()
-            };
-
-            writeln!(
-                io::stdout(),
-                "[{}] {}{}{}: {}",
-                now,
-                level.colored(),
-                location,
-                module,
-                message
-            )?;
+            Err(_) => Err(LogError::LockError),
         }
+    }
+}
 
-        Ok(())
+pub struct JsonMode;
+impl ConfigSetting<bool> for JsonMode {
+    fn get() -> bool {
+        match CONFIG.read() {
+            Ok(config) => config.use_json,
+            Err(_) => defaults::USE_JSON,
+        }
+    }
+
+    fn set(value: bool) -> Result<(), LogError> {
+        match CONFIG.write() {
+            Ok(mut config) => {
+                config.use_json = value;
+                Ok(())
+            }
+            Err(_) => Err(LogError::LockError),
+        }
+    }
+}
+
+pub struct LogColorMode;
+impl ConfigSetting<ColorMode> for LogColorMode {
+    fn get() -> ColorMode {
+        match CONFIG.read() {
+            Ok(config) => config.color_mode,
+            Err(_) => defaults::COLOR_MODE,
+        }
+    }
+
+    fn set(value: ColorMode) -> Result<(), LogError> {
+        match CONFIG.write() {
+            Ok(mut config) => {
+                config.color_mode = value;
+                Ok(())
+            }
+            Err(_) => Err(LogError::LockError),
+        }
+    }
+}
+
+pub struct LogMaxMessageLength;
+impl ConfigSetting<MaxMessageLength> for LogMaxMessageLength {
+    fn get() -> MaxMessageLength {
+        match CONFIG.read() {
+            Ok(config) => config.max_message_length,
+            Err(_) => defaults::MAX_MESSAGE_LENGTH.into(),
+        }
+    }
+
+    fn set(value: MaxMessageLength) -> Result<(), LogError> {
+        match CONFIG.write() {
+            Ok(mut config) => {
+                config.max_message_length = value;
+                Ok(())
+            }
+            Err(_) => Err(LogError::LockError),
+        }
     }
 }
 
 /// Initialize the logger
-///
-/// This function should be called at the start of your program.
-/// It reads configuration from environment variables and sets up the logger.
 pub fn init() -> Result<(), LogError> {
     let mut result = Ok(());
 
     INIT.call_once(|| {
-        // Configure color mode
         if let Ok(mut config) = CONFIG.write() {
-            // Update the initialized flag
             config.initialized = true;
         } else {
             result = Err(LogError::LockError);
@@ -323,80 +512,60 @@ pub fn init() -> Result<(), LogError> {
     result
 }
 
+/// Get the current log level
 pub fn get_log_level() -> Level {
-    match CONFIG.read() {
-        Ok(config) => config.level,
-        Err(_) => DEFAULT_LOG_LEVEL,
-    }
+    LogLevel::get()
 }
 
 /// Set the log level at runtime
 pub fn set_log_level(level: Level) -> Result<(), LogError> {
-    match CONFIG.write() {
-        Ok(mut config) => {
-            let old_level = config.level;
-            config.level = level;
-            if old_level != level {
-                println!("[BAML 🐑] Log level set to {}", level.colored());
-            }
-            Ok(())
-        }
-        Err(_) => Err(LogError::LockError),
-    }
+    LogLevel::set(level)
 }
 
 /// Set the JSON formatting mode at runtime
 pub fn set_json_mode(enable: bool) -> Result<(), LogError> {
-    match CONFIG.write() {
-        Ok(mut config) => {
-            config.use_json = enable;
-            Ok(())
-        }
-        Err(_) => Err(LogError::LockError),
-    }
+    JsonMode::set(enable)
 }
 
 /// Set the color mode at runtime
 pub fn set_color_mode(mode: ColorMode) -> Result<(), LogError> {
+    LogColorMode::set(mode)
+}
+
+/// Set the max message length at runtime
+pub fn set_max_message_length(max_length: usize) -> Result<(), LogError> {
+    LogMaxMessageLength::set(max_length.into())
+}
+
+/// Update configuration from a map of environment variables
+pub fn set_from_env(env_vars: &HashMap<String, String>) -> Result<(), LogError> {
     match CONFIG.write() {
         Ok(mut config) => {
-            config.color_mode = mode;
+            config.update_from_map(env_vars);
             Ok(())
         }
         Err(_) => Err(LogError::LockError),
     }
 }
 
-pub fn set_from_env(env_vars: &std::collections::HashMap<String, String>) -> Result<(), LogError> {
-    if let Some(level) = env_vars
-        .get("BAML_LOG")
-        .map(|s| Level::from_str(s.as_str()))
-    {
-        set_log_level(level)?;
-    }
-    if let Some(use_json) = env_vars.get("BAML_LOG_JSON") {
-        set_json_mode(use_json.trim().eq_ignore_ascii_case("true") || use_json.trim() == "1")?;
-    }
-    if let Some(color_mode) = env_vars
-        .get("BAML_LOG_STYLE")
-        .map(|s| ColorMode::from_str(s))
-    {
-        set_color_mode(color_mode)?;
-    }
-    Ok(())
-}
-
-/// Reload configuration from environment variables
+/// Reload all configuration from environment variables
 pub fn reload_from_env() -> Result<(), LogError> {
     match CONFIG.write() {
         Ok(mut config) => {
-            config.level = parse_level_from_env();
-            config.use_json = parse_json_from_env();
-            config.color_mode = parse_color_from_env();
+            config.reload_from_env();
             Ok(())
         }
         Err(_) => Err(LogError::LockError),
     }
+}
+
+/// Trait for objects that can be logged
+pub trait Loggable {
+    fn as_baml_log_string(&self, max_message_length: &MaxMessageLength) -> String;
+    fn as_baml_log_json(
+        &self,
+        max_message_length: &MaxMessageLength,
+    ) -> Result<serde_json::Value, LogError>;
 }
 
 /// Internal function used by logging macros
@@ -416,21 +585,43 @@ pub fn log_internal(
 
     // Create a temporary logger with the current config
     let logger = match CONFIG.read() {
-        Ok(config) => Logger {
-            level: config.level,
-            use_json: config.use_json,
-            color_mode: config.color_mode,
-        },
+        Ok(config) => config.clone(),
         Err(_) => return, // Can't get config, skip logging
-    };
+    }
+    .to_logger();
 
+    let now = chrono::Local::now()
+        .format("%Y-%m-%dT%H:%M:%S%.3f")
+        .to_string();
     // Log the message
-    let _ = logger.log(level, message, module_path, file, line);
+    let _ = logger.log(now, level, message, module_path, file, line);
 }
 
-pub trait Loggable {
-    fn as_baml_log_string(&self) -> String;
-    fn as_baml_log_json(&self) -> Result<serde_json::Value, LogError>;
+impl Logger {
+    fn log(
+        &self,
+        now: String,
+        level: Level,
+        message: &str,
+        module_path: Option<&str>,
+        file: Option<&str>,
+        line: Option<u32>,
+    ) {
+        // Configure color control based on mode
+        match self.color_mode {
+            ColorMode::Always => control::set_override(true),
+            ColorMode::Never => control::set_override(false),
+            ColorMode::Auto => {} // Use default detection
+        }
+
+        let _ = writeln!(
+            io::stdout(),
+            "{} [BAML 🐑 {}] {}",
+            now,
+            level.colored(),
+            message.trim()
+        );
+    }
 }
 
 /// Internal function used by event logging macros
@@ -450,12 +641,13 @@ pub fn log_event_internal<T: Loggable>(
 
     // Create a temporary logger with the current config
     let config = match CONFIG.read() {
-        Ok(config) => config,
+        Ok(config) => config.clone(),
         Err(_) => return, // Can't get config, skip logging
-    };
+    }
+    .to_logger();
 
     // Skip if level is not enabled
-    if level as usize > config.level as usize {
+    if level.is_at_least(config.level) {
         return;
     }
 
@@ -466,7 +658,7 @@ pub fn log_event_internal<T: Loggable>(
 
     if config.use_json {
         // In JSON mode, use the payload directly
-        if let Ok(json_value) = payload.as_baml_log_json() {
+        if let Ok(json_value) = payload.as_baml_log_json(&config.max_message_length) {
             let mut event_json = serde_json::Map::new();
             event_json.insert("timestamp".to_string(), serde_json::Value::String(now));
             event_json.insert(
@@ -488,9 +680,9 @@ pub fn log_event_internal<T: Loggable>(
         }
     } else {
         // In regular mode, convert payload to a debug string
-        let payload_str = payload.as_baml_log_string();
+        let payload_str = payload.as_baml_log_string(&config.max_message_length);
         // multi-line payloads should be indented
-        let payload_str = if payload_str.contains("\n") {
+        let payload_str = if payload_str.contains('\n') {
             payload_str
                 .lines()
                 .map(|line| format!("    {}", line))

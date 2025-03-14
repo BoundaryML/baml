@@ -42,14 +42,6 @@ where
             line,
         }
     }
-
-    /// Convert the event to a JSON Value
-    pub fn as_value(&self) -> Value {
-        match self.payload.as_baml_log_json() {
-            Ok(value) => value,
-            Err(_) => Value::Null,
-        }
-    }
 }
 
 /// Logs a structured event at the specified level

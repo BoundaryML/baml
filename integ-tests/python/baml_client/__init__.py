@@ -38,9 +38,12 @@ with EnsureBamlPyImport(__version__) as e:
   from . import types
   from . import tracing
   from . import partial_types
-  from .globals import reset_baml_env_vars
+  from . import config
+  from .config import reset_baml_env_vars
+
+  
   from .async_client import b
-  import baml_py.logging as logging
+  
 
 __all__ = [
   "b",

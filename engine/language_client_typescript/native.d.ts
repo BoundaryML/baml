@@ -225,7 +225,9 @@ export interface LogEventMetadata {
   rootEventId: string
 }
 
-export declare export declare function setLogJson(useJson: boolean): void
+export declare export declare function setLogJsonMode(useJson: boolean): void
 
 export declare export declare function setLogLevel(level: string): void
+
+export declare export declare function setLogMaxChunkLength(length: number): void
 
