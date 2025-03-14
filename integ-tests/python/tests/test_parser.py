@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
-
-load_dotenv()
 from ..baml_client import partial_types
 from ..baml_client.types import LinkedList, Node
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
+
+load_dotenv()
 
 
 def test_parse_llm_response():

@@ -1,9 +1,9 @@
 import pytest
 from dotenv import load_dotenv
-
-load_dotenv()
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
+
+load_dotenv()
 
 
 @pytest.mark.asyncio

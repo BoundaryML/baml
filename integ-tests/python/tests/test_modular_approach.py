@@ -5,12 +5,12 @@ from google import genai
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 from dotenv import load_dotenv
-
-load_dotenv()
 from baml_py import ClientRegistry
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 from ..baml_client import types
+
+load_dotenv()
 
 
 JOHN_DOE_TEXT_RESUME = """
