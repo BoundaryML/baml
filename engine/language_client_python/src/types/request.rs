@@ -49,7 +49,11 @@ impl HTTPRequest {
         let dict = PyDict::new(py);
         if let Some(obj) = self.inner.headers.as_object() {
             for (k, v) in obj {
-                dict.set_item(k, v.to_string())?;
+                // serde_json::Value::to_string includes quotes around the
+                // string, we only want the string content not the quotes.
+                if let Some(s) = v.as_str() {
+                    dict.set_item(k, s)?;
+                }
             }
         }
         Ok(dict.into())
