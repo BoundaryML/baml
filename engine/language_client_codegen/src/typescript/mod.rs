@@ -12,7 +12,7 @@ use generate_types::{render_docstring, type_name_for_checks};
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
-    ir::{repr::IntermediateRepr, FieldType, IRHelper},
+    ir::{repr::IntermediateRepr, FieldType, IRHelper, IRHelperExtended},
 };
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};

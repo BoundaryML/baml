@@ -8,7 +8,7 @@ use crate::{field_type_attributes, type_check_attributes, TypeCheckAttributes};
 use super::python_language_features::ToPython;
 use internal_baml_core::ir::{
     repr::{Docstring, IntermediateRepr, Walker},
-    ClassWalker, EnumWalker, IRHelper,
+    ClassWalker, EnumWalker, IRHelper, IRHelperExtended,
 };
 
 #[derive(askama::Template)]
