@@ -2,7 +2,6 @@ import pytest
 import typing
 import anthropic
 import requests
-import asyncio
 from google import genai
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
@@ -97,6 +96,7 @@ def test_modular_google_gemini():
 def test_modular_openai_gpt4_manual_http_request():
     req = sync_b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
 
+    # We can also use data=req.body.raw() or data=req.body.text()
     response = requests.post(url=req.url, headers=req.headers, json=req.body.json())
 
     parsed = sync_b.parse.ExtractResume2(response.json()["choices"][0]["message"]["content"])

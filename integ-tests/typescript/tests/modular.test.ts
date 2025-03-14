@@ -35,7 +35,7 @@ const JOHN_DOE_PARSED_RESUME = {
   skills: ["Python", "JavaScript", "SQL"]
 }
 
-describe('Modular Approach Tests', () => {
+describe('Modular API Tests', () => {
   it('modular openai gpt4', async () => {
     const client = new OpenAI()
 
@@ -78,6 +78,22 @@ describe('Modular Approach Tests', () => {
     const req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {clientRegistry})
     const res = await model.generateContent(req.body.json() as GenerateContentRequest)
     const parsed = b.parse.ExtractResume2(res.response.text())
+
+    expect(parsed).toEqual(JOHN_DOE_PARSED_RESUME)
+  })
+
+  it('modular openai gpt4 manual http request', async () => {
+    const req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
+
+    const res = await fetch(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: JSON.stringify(req.body.json()) // req.body.raw() or req.body.text() works as well
+    })
+
+    const body = await res.json() as any
+
+    const parsed = b.parse.ExtractResume2(body.choices[0].message.content)
 
     expect(parsed).toEqual(JOHN_DOE_PARSED_RESUME)
   })
