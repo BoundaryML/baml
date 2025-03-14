@@ -148,14 +148,16 @@ impl Visualize for FunctionResult {
                 }
             }
             Some(Err(e)) => {
-                s.push(format!(
-                    "{}",
-                    format!("---Parsed Response ({})---", "Error".red()).blue()
-                ));
-                s.push(format!(
-                    "{}",
-                    truncate_string(&e.to_string(), max_chunk_size).red()
-                ));
+                // Do nothing as self.llm_response().visualize() already prints the error
+
+                // s.push(format!(
+                //     "{}",
+                //     format!("---Parsed Response ({})---", "Error".red()).blue()
+                // ));
+                // s.push(format!(
+                //     "{}",
+                //     truncate_string(&e.to_string(), max_chunk_size).red()
+                // ));
             }
             None => {}
         };
@@ -509,7 +511,7 @@ impl BamlTracer {
                 .is_some_and(|r| r.is_ok());
             if is_ok {
                 baml_log::info!(
-                    "{}",
+                    "{}{}",
                     name.map(|s| format!("Function {}:\n", s))
                         .unwrap_or_default()
                         .purple(),
@@ -517,7 +519,7 @@ impl BamlTracer {
                 );
             } else {
                 baml_log::warn!(
-                    "{}",
+                    "{}{}",
                     name.map(|s| format!("Function {}:\n", s))
                         .unwrap_or_default()
                         .purple(),
