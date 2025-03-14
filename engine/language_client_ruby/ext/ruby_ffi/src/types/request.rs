@@ -26,6 +26,10 @@ impl HTTPRequest {
         )
     }
 
+    pub fn id(&self) -> String {
+        self.inner.id.to_string()
+    }
+
     pub fn url(&self) -> String {
         self.inner.url.clone()
     }
@@ -49,6 +53,7 @@ impl HTTPRequest {
         let cls = module.define_class("HTTPRequest", class::object())?;
 
         cls.define_method("to_s", method!(HTTPRequest::to_s, 0))?;
+        cls.define_method("id", method!(HTTPRequest::id, 0))?;
         cls.define_method("url", method!(HTTPRequest::url, 0))?;
         cls.define_method("method", method!(HTTPRequest::method, 0))?;
         cls.define_method("headers", method!(HTTPRequest::headers, 0))?;

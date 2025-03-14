@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use crate::BamlValue;
@@ -15,6 +16,12 @@ pub struct ContentId(pub SpanId);
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct HttpRequestId(pub SpanId);
+
+impl fmt::Display for HttpRequestId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub type TraceTags = serde_json::Map<String, serde_json::Value>;
 
@@ -177,7 +184,7 @@ impl HTTPBody {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPRequest {
     // since LLM requests could be made in parallel, we need to match the response to the request
-    pub request_id: HttpRequestId,
+    pub id: HttpRequestId,
     pub url: String,
     pub method: String,
     pub headers: serde_json::Value,

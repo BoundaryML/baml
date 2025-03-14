@@ -16,6 +16,11 @@ crate::lang_wrapper!(HTTPBody, baml_types::tracing::events::HTTPBody, clone_safe
 #[napi]
 impl HTTPRequest {
     #[napi(getter)]
+    pub fn id(&self) -> String {
+        self.inner.id.to_string()
+    }
+
+    #[napi(getter)]
     pub fn body(&self) -> HTTPBody {
         // TODO: Avoid clone.
         HTTPBody::from(self.inner.body.clone())

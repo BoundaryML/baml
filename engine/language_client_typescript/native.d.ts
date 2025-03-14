@@ -115,6 +115,7 @@ export declare class HttpBody {
 export type HTTPBody = HttpBody
 
 export declare class HttpRequest {
+  get id(): string
   get body(): HttpBody
   toString(): string
   get url(): string

@@ -1,18 +1,21 @@
-import pytest
+import asyncio
 import typing
+import json
+import pytest
 import anthropic
 import requests
 from google import genai
 from openai import AsyncOpenAI
 from openai.types.chat import ChatCompletion
 from dotenv import load_dotenv
-from baml_py import ClientRegistry
+from baml_py import ClientRegistry, HTTPRequest as BamlHttpRequest
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 from ..baml_client import types
 
 load_dotenv()
 
+# Some reusable data across tests.
 
 JOHN_DOE_TEXT_RESUME = """
     John Doe
@@ -46,6 +49,42 @@ JOHN_DOE_PARSED_RESUME = types.Resume(
     skills=["Python", "JavaScript", "SQL"]
 )
 
+JANE_SMITH_TEXT_RESUME = """
+    Jane Smith
+    janesmith@example.com
+    (555) 123-4567
+    Data Scientist
+    Python, R, TensorFlow, PyTorch, SQL
+
+    Education
+    Stanford University (Stanford, CA)
+    Ph.D. in Statistics
+
+    Experience
+    Senior Data Scientist at Netflix (2019 - Present)
+    Machine Learning Engineer at Amazon (2016 - 2019)
+"""
+
+JANE_SMITH_PARSED_RESUME = types.Resume(
+    name="Jane Smith",
+    email="janesmith@example.com",
+    phone="(555) 123-4567",
+    experience=[
+        "Senior Data Scientist at Netflix (2019 - Present)",
+        "Machine Learning Engineer at Amazon (2016 - 2019)"
+    ],
+    education=[
+        types.Education(
+            institution="Stanford University",
+            location="Stanford, CA",
+            degree="Ph.D.",
+            major=["Statistics"],
+            graduation_date=None
+        )
+    ],
+    skills=["Python", "R", "TensorFlow", "PyTorch", "SQL"]
+)
+
 
 @pytest.mark.asyncio
 async def test_modular_openai_gpt4():
@@ -59,6 +98,7 @@ async def test_modular_openai_gpt4():
     parsed = b.parse.ExtractResume2(response.choices[0].message.content)
 
     assert parsed == JOHN_DOE_PARSED_RESUME
+
 
 @pytest.mark.asyncio
 async def test_modular_anthropic_claude_3_haiku():
@@ -74,6 +114,7 @@ async def test_modular_anthropic_claude_3_haiku():
     parsed = b.parse.ExtractResume2(response.content[0].text)
 
     assert parsed == JOHN_DOE_PARSED_RESUME
+
 
 @pytest.mark.asyncio
 async def test_modular_google_gemini():
@@ -103,3 +144,82 @@ def test_modular_openai_gpt4_manual_http_request():
     parsed = sync_b.parse.ExtractResume2(response.json()["choices"][0]["message"]["content"])
 
     assert parsed == JOHN_DOE_PARSED_RESUME
+
+
+def to_openai_jsonl(req: BamlHttpRequest) -> str:
+    line = json.dumps({
+        "custom_id": req.id,
+        "method": "POST",
+        "url": "/v1/chat/completions",
+        "body": req.body.json(),
+    })
+
+    return f"{line}\n"
+
+
+@pytest.mark.asyncio
+async def test_openai_batch_api():
+    client = AsyncOpenAI()
+
+    john_req, jane_req = await asyncio.gather(
+        b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
+        b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME)
+    )
+
+    jsonl = to_openai_jsonl(john_req) + to_openai_jsonl(jane_req)
+
+    batch_input_file = await client.files.create(
+        file=jsonl.encode("utf-8"),
+        purpose="batch",
+    )
+
+    batch = await client.batches.create(
+        input_file_id=batch_input_file.id,
+        endpoint="/v1/chat/completions",
+        completion_window="24h",
+        metadata={
+            "description": "BAML Modular API Python Batch Integ Test"
+        },
+    )
+
+    backoff = 1
+    attempts = 0
+    max_attempts = 15
+
+    # Constant backoff, we'll wait approximately 15 seconds before we give up.
+    while True:
+        batch = await client.batches.retrieve(batch.id)
+        attempts += 1
+
+        if batch.status == "completed":
+            break
+
+        if attempts >= max_attempts:
+            try:
+                await client.batches.cancel(batch.id)
+            finally:
+                pytest.fail("Batch failed to complete in time")
+
+        await asyncio.sleep(backoff)
+        # back_off *= 2 # Exponential backoff.
+
+    # If status == "completed" then output_file_id is not None
+    assert batch.output_file_id is not None
+
+    output = await client.files.content(batch.output_file_id)
+
+    expected = {
+        john_req.id: JOHN_DOE_PARSED_RESUME,
+        jane_req.id: JANE_SMITH_PARSED_RESUME,
+    }
+
+    received: dict[str, types.Resume] = {}
+
+    for line in output.text.splitlines():
+        result = json.loads(line)
+        llm_response = result["response"]["body"]["choices"][0]["message"]["content"]
+
+        parsed = b.parse.ExtractResume2(llm_response)
+        received[result["custom_id"]] = parsed
+
+    assert received == expected

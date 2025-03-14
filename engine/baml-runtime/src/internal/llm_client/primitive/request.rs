@@ -210,7 +210,7 @@ pub(crate) async fn build_and_log_outbound_request(
             callsite: "".to_string(),
             verbosity: TraceLevel::Info,
             content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
-                request_id: http_request_id.clone(),
+                id: http_request_id.clone(),
                 url: built_req.url().to_string(),
                 method: built_req.method().to_string(),
                 headers: json_headers(built_req.headers()),
