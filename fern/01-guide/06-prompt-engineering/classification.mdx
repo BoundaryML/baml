@@ -16,8 +16,9 @@ In this tutorial, you'll learn how to create a simple but effective spam classif
 First, let's define what our classification output should look like. Create a new file called `spam_classifier.baml` and add the following schema:
 
 ```baml
-class SpamClassification {
-  label "SPAM" | "NOT_SPAM" @description("The predicted class label")
+enum MessageType {
+  SPAM
+  NOT_SPAM
 }
 ```
 
@@ -28,27 +29,25 @@ This schema defines a simple classification with two possible labels: `SPAM` or 
 Next, we'll create a function that uses GPT-4 to classify text. Add this to your `spam_classifier.baml` file:
 
 ```baml
-function ClassifyText(text: string) -> SpamClassification {
+function ClassifyText(input: string) -> MessageType {
   client "openai/gpt-4o-mini"
   prompt #"
-    Classify the following text as either SPAM or NOT_SPAM. Common spam indicators include:
-    - Promotional offers that are too good to be true
-    - Urgent requests for money or personal information
-    - Poor grammar and excessive punctuation
-    - Unsolicited business propositions
+    Classify the message. 
 
     {{ ctx.output_format }}
 
-    {{ _.role("user") }} {{ text }}
+    {{ _.role("user") }} 
+    
+    {{ input }}
   "#
 }
 ```
 
 Let's break down what this function does:
-- Takes a `text` input as a string
+- Takes an input as a string
 - Uses the `gpt-4o-mini` model
 - Provides clear guidelines for classification in the prompt
-- Returns a `SpamClassification` object
+- Returns a MessageType
 
 ## Step 3: Test the Classifier
 
@@ -58,14 +57,14 @@ To ensure our classifier works correctly, let's add some test cases:
 test BasicSpamTest {
   functions [ClassifyText]
   args {
-    text "Buy cheap watches now! Limited time offer!!!"
+    input "Buy cheap watches now! Limited time offer!!!"
   }
 }
 
 test NonSpamTest {
   functions [ClassifyText]
   args {
-    text "Hey Sarah, can we meet at 3 PM tomorrow to discuss the project?"
+    input "Hey Sarah, can we meet at 3 PM tomorrow to discuss the project?"
   }
 }
 ```
@@ -99,20 +98,19 @@ Create a new file called `ticket_classifier.baml` and define the possible ticket
 
 ```baml
 enum TicketLabel {
-  ACCOUNT @description("Account-related issues")
-  BILLING @description("Billing and payment related issues")
-  GENERAL_QUERY @description("General product inquiries")
+  ACCOUNT
+  BILLING
+  GENERAL_QUERY
 }
 
 class TicketClassification {
-  labels TicketLabel[] @description("The labels that apply to this support ticket")
+  labels TicketLabel[]
 }
 ```
 
 Notice how this schema differs from our spam classifier:
 - We use an `enum` to define valid labels
 - The `labels` field is an array (`TicketLabel[]`), allowing multiple labels per ticket
-- Each label has a description to help with classification
 
 ## Step 2: Create the Multi-Label Classification Function
 
@@ -124,16 +122,11 @@ function ClassifyTicket(ticket: string) -> TicketClassification {
   prompt #"
     You are a support agent at a tech company. Analyze the support ticket and select all applicable labels.
 
-    Here are some examples:
-    - "My account is locked and I can't access my billing info." -> ACCOUNT, BILLING
-    - "I need help with my subscription." -> ACCOUNT
-    - "How do I change my payment method?" -> BILLING
-    - "Can you tell me the status of my order?" -> BILLING
-    - "I have a question about the product features." -> GENERAL_QUERY
-
     {{ ctx.output_format }}
 
-    {{ _.role("user") }} {{ ticket }}
+    {{ _.role("user") }}
+    
+    {{ ticket }}
   "#
 }
 ```
