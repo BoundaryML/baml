@@ -2,3 +2,4 @@
 **/baml_client/inlinedbaml.ts binary
 **/baml_client/inlined.rb binary
 **/baml_client/** merge=baml_client
+**/baml_client/** linguist-generated=true
