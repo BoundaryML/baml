@@ -42,21 +42,22 @@ b = Baml.Client
 
 describe "Modular API Tests" do
   it "test_modular_openai_gpt4_manual_http_request" do
-    request = b.request.ExtractResume2(resume: JOHN_DOE_TEXT_RESUME)
+    baml_req = b.request.ExtractResume2(resume: JOHN_DOE_TEXT_RESUME)
 
-    uri = URI.parse(request.url)
+    uri = URI.parse(baml_req.url)
     http = Net::HTTP.new(uri.host, uri.port)
     http.use_ssl = uri.scheme == 'https'
 
     req = Net::HTTP::Post.new(uri.path)
-    request.headers.each { |key, value| req[key] = value }
-    # Binary buffer would be request.body.raw.pack("C*")
-    req.body = request.body.json.to_json
+    req.initialize_http_header(baml_req.headers)
+    # Binary buffer would be baml_req.body.raw.pack("C*")
+    req.body = baml_req.body.json.to_json
 
     response = http.request(req)
 
-    parsed_response = JSON.parse(response.body)
-    parsed = b.parse.ExtractResume2(llm_response: parsed_response["choices"][0]["message"]["content"])
+    parsed = b.parse.ExtractResume2(
+      llm_response: JSON.parse(response.body)["choices"][0]["message"]["content"]
+    )
 
     assert_equal parsed.to_json, JOHN_DOE_PARSED_RESUME.to_json
   end
