@@ -3,7 +3,10 @@ import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources';
 import Anthropic from '@anthropic-ai/sdk'
 import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources';
 import { GenerateContentRequest, GoogleGenerativeAI } from '@google/generative-ai';
+import { HTTPRequest as BamlHttpRequest } from '@boundaryml/baml'
+import { Resume } from "../baml_client/types";
 import { b, ClientRegistry } from './test-setup';
+import { Readable } from 'stream';
 
 const JOHN_DOE_TEXT_RESUME = `
     John Doe
@@ -35,6 +38,40 @@ const JOHN_DOE_PARSED_RESUME = {
   skills: ["Python", "JavaScript", "SQL"]
 }
 
+const JANE_SMITH_TEXT_RESUME = `
+    Jane Smith
+    janesmith@example.com
+    (555) 123-4567
+    Data Scientist
+    Python, R, TensorFlow, PyTorch, SQL
+
+    Education
+    Stanford University (Stanford, CA)
+    Ph.D. in Statistics
+
+    Experience
+    Senior Data Scientist at Netflix (2019 - Present)
+    Machine Learning Engineer at Amazon (2016 - 2019)
+`
+
+const JANE_SMITH_PARSED_RESUME = {
+  name: "Jane Smith",
+  email: "janesmith@example.com",
+  phone: "(555) 123-4567",
+  experience: [
+    "Senior Data Scientist at Netflix (2019 - Present)",
+    "Machine Learning Engineer at Amazon (2016 - 2019)"
+  ],
+  education: [{
+    institution: "Stanford University",
+    location: "Stanford, CA",
+    degree: "Ph.D.",
+    major: ["Statistics"],
+    graduation_date: null
+  }],
+  skills: ["Python", "R", "TensorFlow", "PyTorch", "SQL"]
+}
+
 describe('Modular API Tests', () => {
   it('modular openai gpt4', async () => {
     const client = new OpenAI()
@@ -60,7 +97,7 @@ describe('Modular API Tests', () => {
     // Narrow type
     // https://github.com/anthropics/anthropic-sdk-typescript/issues/432
     if (res.content[0].type != "text") {
-      fail(`Unexpected type for content block: ${res.content[0]}`)
+      throw `Unexpected type for content block: ${res.content[0]}`
     }
 
     const parsed = b.parse.ExtractResume2(res.content[0].text)
@@ -87,7 +124,7 @@ describe('Modular API Tests', () => {
 
     const res = await fetch(req.url, {
       method: req.method,
-      headers: req.headers,
+      headers: req.headers as Record<string, string>,
       body: JSON.stringify(req.body.json()) // req.body.raw() or req.body.text() works as well
     })
 
@@ -96,5 +133,90 @@ describe('Modular API Tests', () => {
     const parsed = b.parse.ExtractResume2(body.choices[0].message.content)
 
     expect(parsed).toEqual(JOHN_DOE_PARSED_RESUME)
+  })
+
+  it('openai batch api', async () => {
+    const client = new OpenAI()
+
+    // Helper function to convert BAML HTTP request to OpenAI batch JSONL format
+    const toOpenaiJsonl = (req: BamlHttpRequest): string => {
+      const line = JSON.stringify({
+        custom_id: req.id,
+        method: 'POST',
+        url: '/v1/chat/completions',
+        body: req.body.json(),
+      })
+      return `${line}\n`
+    }
+
+    // Create requests for both resumes
+    const [johnReq, janeReq] = await Promise.all([
+      b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
+      b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME)
+    ])
+
+    const jsonl = toOpenaiJsonl(johnReq) + toOpenaiJsonl(janeReq)
+
+    // Create batch input file
+    const batchInputFile = await client.files.create({
+      file: new File([jsonl], 'batch.jsonl'),
+      purpose: 'batch',
+    })
+
+    // Create batch
+    let batch = await client.batches.create({
+      input_file_id: batchInputFile.id,
+      endpoint: '/v1/chat/completions',
+      completion_window: '24h',
+      metadata: {
+        description: 'BAML Modular API TypeScript Batch Integ Test'
+      },
+    })
+
+    let backoff = 1000 // milliseconds
+    let attempts = 0
+    const maxAttempts = 30
+
+    while (true) {
+      batch = await client.batches.retrieve(batch.id)
+      attempts += 1
+
+      if (batch.status === 'completed') {
+        break
+      }
+
+      if (attempts >= maxAttempts) {
+        try {
+          await client.batches.cancel(batch.id)
+        } finally {
+          throw 'Batch failed to complete in time'
+        }
+      }
+
+      await new Promise(resolve => setTimeout(resolve, backoff))
+      // backoff *= 2 // Exponential backoff
+    }
+
+    // Get output file
+    const output = await client.files.content(batch.output_file_id!)
+
+    // Process results
+    const expected: Record<string, Resume> = {
+      [johnReq.id]: JOHN_DOE_PARSED_RESUME,
+      [janeReq.id]: JANE_SMITH_PARSED_RESUME,
+    }
+
+    const received: Record<string, Resume> = {}
+    const outputJsonl = await output.text()
+
+    for (const line of outputJsonl.split("\n").filter(line => line.trim().length > 0)) {
+      const result = JSON.parse(line.trim())
+      const llmResponse = result.response.body.choices[0].message.content
+
+      const parsed = b.parse.ExtractResume2(llmResponse)
+      received[result.custom_id] = parsed
+    }
+
+    expect(received).toEqual(expected)
   })
 })

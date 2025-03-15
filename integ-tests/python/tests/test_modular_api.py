@@ -184,9 +184,13 @@ async def test_openai_batch_api():
 
     backoff = 1
     attempts = 0
-    max_attempts = 15
+    max_attempts = 30
 
-    # Constant backoff, we'll wait approximately 15 seconds before we give up.
+    # Constant backoff, we'll wait approximately 30 seconds before we give up.
+    # Usually the batch completes in 8 to 15 seconds but sometimes it takes
+    # longer. Note that if this fails it doesn't necessarily mean that there's
+    # a bug in the test or that assertions are wrong, it just means that OpenAI
+    # takes too long to process the batch.
     while True:
         batch = await client.batches.retrieve(batch.id)
         attempts += 1
