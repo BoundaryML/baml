@@ -1,11 +1,11 @@
 import OpenAI from 'openai'
-import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming } from 'openai/resources';
+import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming } from 'openai/resources'
 import Anthropic from '@anthropic-ai/sdk'
-import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources';
-import { GenerateContentRequest, GoogleGenerativeAI } from '@google/generative-ai';
+import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources'
+import { GenerateContentRequest, GoogleGenerativeAI } from '@google/generative-ai'
 import { HTTPRequest as BamlHttpRequest } from '@boundaryml/baml'
-import { Resume } from "../baml_client/types";
-import { b, ClientRegistry } from './test-setup';
+import { Resume } from "../baml_client/types"
+import { b, ClientRegistry } from './test-setup'
 
 const JOHN_DOE_TEXT_RESUME = `
   John Doe

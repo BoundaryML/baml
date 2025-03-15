@@ -420,6 +420,64 @@ so you can just cast to the expected type:
   </Tab>
 </Tabs>
 
+## Streaming
+
+Stream requests and parsing is also supported. Here's an example using OpenAI
+SDK:
+
+<CodeBlocks>
+```python Python
+import typing
+from openai import AsyncOpenAI, AsyncStream
+from openai.types.chat import ChatCompletionChunk
+from baml_client import b
+
+async def run():
+  client = AsyncOpenAI()
+
+  req = await b.stream_request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  stream = typing.cast(
+    AsyncStream[ChatCompletionChunk],
+    await client.chat.completions.create(**req.body.json())
+  )
+
+  llm_response: list[str] = []
+
+  async for chunk in stream:
+    if len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+      llm_response.append(chunk.choices[0].delta.content)
+      # You can parse the partial responses as they come in.
+      print(b.parse_stream.ExtractResume("".join(llm_response)))
+```
+
+```typescript TypeScript
+import OpenAI from 'openai'
+import { ChatCompletionCreateParamsStreaming } from 'openai/resources';
+import { b } from 'baml_client'
+
+async function run() {
+  const client = new OpenAI()
+
+  const req = await b.streamRequest.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  const stream = await client.chat.completions.create(
+    req.body.json() as ChatCompletionCreateParamsStreaming
+  )
+
+  let llmResponse: string[] = []
+
+  for await (const chunk of stream) {
+    if (chunk.choices.length > 0 && chunk.choices[0].delta.content) {
+      llmResponse.push(chunk.choices[0].delta.content)
+      // You can parse the partial responses as they come in.
+      console.log(b.parseStream.ExtractResume(llmResponse.join('')))
+    }
+  }
+}
+```
+</CodeBlocks>
+
 ## OpenAI Batch API Example
 
 Currently, BAML doesn't support OpenAI's [Batch API](https://platform.openai.com/docs/guides/batch)
