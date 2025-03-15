@@ -87,6 +87,12 @@ test EmptyDocument {
 This is what it looks like in BAML playground after running the test:
 <img src="../../assets/guide/pii-scrubber.png"/>
 
+
+<Tip>
+  You can try playing with the functions and tests online at https://www.promptfiddle.com/Pii-data-O4PmJ
+</Tip>
+
+
 ## Step 4: Implementing PII Extraction and Scrubbing
 
 Now you can use the PII extractor to both identify and scrub sensitive information from your documents:
@@ -195,3 +201,55 @@ Now that you have a working PII extractor, you can:
 - Create a more sophisticated prompt to handle edge cases
 - Add error handling for malformed documents
 - Integrate with your data privacy compliance system
+
+## Enhanced Security: Using Local Models
+
+For organizations handling sensitive data, using cloud-based LLMs like OpenAI's GPT models might not be suitable due to data privacy concerns. 
+BAML supports using local models, which keeps all PII processing within your infrastructure.
+
+In this example, we're going to use a Ollama model. 
+For more details on how to use Ollama with BAML, check out [this page](/ref/llm-client-providers/openai-generic-ollama).
+
+
+1. First, define your local model client in `pii_extractor.baml`:
+
+```baml
+// Please ensure you've got ollama set up with llama:3.1 installed
+//
+// ollama pull llama:3.1
+// ollama run llama:3.1
+client<llm> SecureLocalLLM {
+  provider "openai-generic"
+  options {
+    base_url "http://localhost:11434/v1"
+    model "llama3.1:latest"
+    temperature 0 
+    default_role "user"
+  }
+}
+```
+
+2. Update the ExtractPII function to use your local model:
+
+```baml
+function ExtractPII(document: string) -> PIIExtraction {
+  // use a local model instead of openai
+  client SecureLocalLLM
+  prompt #"
+    Extract all personally identifiable information (PII) from the given document. Look for items like:
+    - Names
+    - Email addresses
+    - Phone numbers
+    - Addresses
+    - Social security numbers
+    - Dates of birth
+    - Any other personal data
+
+    {{ ctx.output_format }}
+
+    {{ _.role("user") }} 
+    
+    {{ document }}
+  "#
+}
+```
