@@ -5,13 +5,13 @@ import pytest
 import anthropic
 import requests
 from google import genai
-from openai import AsyncOpenAI
-from openai.types.chat import ChatCompletion
+from openai import AsyncOpenAI, OpenAI, AsyncStream, Stream
+from openai.types.chat import ChatCompletion, ChatCompletionChunk
 from dotenv import load_dotenv
 from baml_py import ClientRegistry, HTTPRequest as BamlHttpRequest
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
-from ..baml_client import types
+from ..baml_client import types, partial_types
 
 load_dotenv()
 
@@ -39,6 +39,23 @@ JOHN_DOE_PARSED_RESUME = types.Resume(
     experience=["Software Engineer at Google (2020 - Present)"],
     education=[
         types.Education(
+            institution="University of California, Berkeley",
+            location="Berkeley, CA",
+            degree="Master's",
+            major=["Computer Science"],
+            graduation_date=None
+        )
+    ],
+    skills=["Python", "JavaScript", "SQL"]
+)
+
+JOHN_DOE_PARSED_RESUME_PARTIAL = partial_types.Resume(
+    name="John Doe",
+    email="johndoe@example.com",
+    phone="(123) 456-7890",
+    experience=["Software Engineer at Google (2020 - Present)"],
+    education=[
+        partial_types.Education(
             institution="University of California, Berkeley",
             location="Berkeley, CA",
             degree="Master's",
@@ -133,6 +150,64 @@ async def test_modular_google_gemini():
     parsed = b.parse.ExtractResume2(response.text)
 
     assert parsed == JOHN_DOE_PARSED_RESUME
+
+
+def test_modular_openai_gpt4_sync():
+    client = OpenAI()
+
+    req = sync_b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
+
+    # Needs cast because of **req.body
+    response = typing.cast(ChatCompletion, client.chat.completions.create(**req.body.json()))
+
+    parsed = sync_b.parse.ExtractResume2(response.choices[0].message.content)
+
+    assert parsed == JOHN_DOE_PARSED_RESUME
+
+
+@pytest.mark.asyncio
+async def test_modular_openai_gpt4_streaming():
+    client = AsyncOpenAI()
+
+    req = await b.stream_request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
+
+    # Needs cast because of **req.body
+    response = typing.cast(
+        AsyncStream[ChatCompletionChunk],
+        await client.chat.completions.create(**req.body.json())
+    )
+
+    llm_response: list[str] = []
+
+    async for chunk in response:
+        if len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+            llm_response.append(chunk.choices[0].delta.content)
+
+    parsed = b.parse_stream.ExtractResume2("".join(llm_response))
+
+    assert parsed == JOHN_DOE_PARSED_RESUME_PARTIAL
+
+
+def test_modular_openai_gpt4_streaming_sync():
+    client = OpenAI()
+
+    req = sync_b.stream_request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
+
+    # Needs cast because of **req.body
+    response = typing.cast(
+        Stream[ChatCompletionChunk],
+        client.chat.completions.create(**req.body.json())
+    )
+
+    llm_response: list[str] = []
+
+    for chunk in response:
+        if len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+            llm_response.append(chunk.choices[0].delta.content)
+
+    parsed = b.parse_stream.ExtractResume2("".join(llm_response))
+
+    assert parsed == JOHN_DOE_PARSED_RESUME_PARTIAL
 
 
 def test_modular_openai_gpt4_manual_http_request():

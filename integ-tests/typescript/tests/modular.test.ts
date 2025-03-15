@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources';
+import { ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming } from 'openai/resources';
 import Anthropic from '@anthropic-ai/sdk'
 import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources';
 import { GenerateContentRequest, GoogleGenerativeAI } from '@google/generative-ai';
@@ -8,18 +8,18 @@ import { Resume } from "../baml_client/types";
 import { b, ClientRegistry } from './test-setup';
 
 const JOHN_DOE_TEXT_RESUME = `
-    John Doe
-    johndoe@example.com
-    (123) 456-7890
-    Software Engineer
-    Python, JavaScript, SQL
+  John Doe
+  johndoe@example.com
+  (123) 456-7890
+  Software Engineer
+  Python, JavaScript, SQL
 
-    Education
-    University of California, Berkeley (Berkeley, CA)
-    Master's in Computer Science
+  Education
+  University of California, Berkeley (Berkeley, CA)
+  Master's in Computer Science
 
-    Experience
-    Software Engineer at Google (2020 - Present)
+  Experience
+  Software Engineer at Google (2020 - Present)
 `
 
 const JOHN_DOE_PARSED_RESUME = {
@@ -38,19 +38,19 @@ const JOHN_DOE_PARSED_RESUME = {
 }
 
 const JANE_SMITH_TEXT_RESUME = `
-    Jane Smith
-    janesmith@example.com
-    (555) 123-4567
-    Data Scientist
-    Python, R, TensorFlow, PyTorch, SQL
+  Jane Smith
+  janesmith@example.com
+  (555) 123-4567
+  Data Scientist
+  Python, R, TensorFlow, PyTorch, SQL
 
-    Education
-    Stanford University (Stanford, CA)
-    Ph.D. in Statistics
+  Education
+  Stanford University (Stanford, CA)
+  Ph.D. in Statistics
 
-    Experience
-    Senior Data Scientist at Netflix (2019 - Present)
-    Machine Learning Engineer at Amazon (2016 - 2019)
+  Experience
+  Senior Data Scientist at Netflix (2019 - Present)
+  Machine Learning Engineer at Amazon (2016 - 2019)
 `
 
 const JANE_SMITH_PARSED_RESUME = {
@@ -130,6 +130,28 @@ describe('Modular API Tests', () => {
     const body = await res.json() as any
 
     const parsed = b.parse.ExtractResume2(body.choices[0].message.content)
+
+    expect(parsed).toEqual(JOHN_DOE_PARSED_RESUME)
+  })
+
+  it('modular openai gpt4 streaming', async () => {
+    const client = new OpenAI()
+
+    const req = await b.streamRequest.ExtractResume2(JOHN_DOE_TEXT_RESUME)
+
+    const stream = await client.chat.completions.create(
+      req.body.json() as ChatCompletionCreateParamsStreaming
+    )
+
+    let llmResponse: string[] = []
+
+    for await (const chunk of stream) {
+      if (chunk.choices.length > 0 && chunk.choices[0].delta.content) {
+        llmResponse.push(chunk.choices[0].delta.content)
+      }
+    }
+
+    const parsed = b.parseStream.ExtractResume2(llmResponse.join(''))
 
     expect(parsed).toEqual(JOHN_DOE_PARSED_RESUME)
   })
