@@ -51,6 +51,7 @@ struct PythonTypeAlias<'ir> {
 #[template(path = "partial_types.py.j2", escape = "none")]
 pub(crate) struct PythonStreamTypes<'ir> {
     partial_classes: Vec<PartialPythonClass<'ir>>,
+    structural_recursive_alias_cycles: Vec<PythonTypeAlias<'ir>>,
 }
 
 /// The Python class corresponding to Partial<TypeDefinedInBaml>
@@ -165,6 +166,14 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonS
                 .walk_classes()
                 .map(PartialPythonClass::from)
                 .collect::<Vec<_>>(),
+            structural_recursive_alias_cycles: {
+                let mut cycles = ir
+                    .walk_alias_cycles()
+                    .map(PythonTypeAlias::from)
+                    .collect::<Vec<_>>();
+                cycles.sort_by_key(|alias| alias.name.clone());
+                cycles
+            },
         })
     }
 }
@@ -391,9 +400,9 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             }
             FieldType::RecursiveTypeAlias(name) => {
                 if wrapped {
-                    format!("types.{name}")
+                    format!("\"{name}\"")
                 } else {
-                    format!("Optional[types.{name}]")
+                    format!("Optional[\"{name}\"]")
                 }
             }
             FieldType::Literal(value) => {
