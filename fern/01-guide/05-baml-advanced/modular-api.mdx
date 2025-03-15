@@ -597,8 +597,8 @@ async function run() {
 
   // Build the batch requests with BAML.
   const [johnReq, janeReq] = await Promise.all([
-    b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
-    b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME)
+    b.request.ExtractResume("John Doe | Software Engineer | BSc in CS"),
+    b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics"),
   ])
 
   const jsonl = toOpenaiJsonl(johnReq) + toOpenaiJsonl(janeReq)
@@ -655,7 +655,7 @@ async function run() {
     const result = JSON.parse(line.trim())
     const llmResponse = result.response.body.choices[0].message.content
 
-    const parsed = b.parse.ExtractResume2(llmResponse)
+    const parsed = b.parse.ExtractResume(llmResponse)
     resumes[result.custom_id] = parsed
   }
 
