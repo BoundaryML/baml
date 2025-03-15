@@ -6,7 +6,6 @@ import { GenerateContentRequest, GoogleGenerativeAI } from '@google/generative-a
 import { HTTPRequest as BamlHttpRequest } from '@boundaryml/baml'
 import { Resume } from "../baml_client/types";
 import { b, ClientRegistry } from './test-setup';
-import { Readable } from 'stream';
 
 const JOHN_DOE_TEXT_RESUME = `
     John Doe

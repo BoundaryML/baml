@@ -348,7 +348,7 @@ async function run() {
 ```
 </CodeBlocks>
 
-## Type Hints
+## Type Checking
 
 ### Python
 
@@ -419,3 +419,208 @@ so you can just cast to the expected type:
     ```
   </Tab>
 </Tabs>
+
+## OpenAI Batch API Example
+
+Currently, BAML doesn't support OpenAI's [Batch API](https://platform.openai.com/docs/guides/batch)
+out of the box, but you can use the modular API to build the prompts and parse
+the responses of batch jobs. Here's an example:
+
+<CodeBlocks>
+```python Python
+import asyncio
+import json
+from openai import AsyncOpenAI
+from baml_py import HTTPRequest as BamlHttpRequest
+from baml_client import b
+from baml_client import types
+
+async def run():
+  client = AsyncOpenAI()
+
+  # Build the batch requests with BAML.
+  john_req, jane_req = await asyncio.gather(
+    b.request.ExtractResume("John Doe | Software Engineer | BSc in CS"),
+    b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics"),
+  )
+
+  # Build the JSONL content.
+  jsonl = to_openai_jsonl(john_req) + to_openai_jsonl(jane_req)
+
+  # Create the batch input file.
+  batch_input_file = await client.files.create(
+    file=jsonl.encode("utf-8"),
+    purpose="batch",
+  )
+
+  # Create the batch.
+  batch = await client.batches.create(
+    input_file_id=batch_input_file.id,
+    endpoint="/v1/chat/completions",
+    completion_window="24h",
+    metadata={
+      "description": "BAML Modular API Python Batch Example"
+    },
+  )
+
+  # Wait for the batch to complete (exponential backoff).
+  backoff = 2
+  attempts = 0
+  max_attempts = 5
+
+  while True:
+    batch = await client.batches.retrieve(batch.id)
+    attempts += 1
+
+    if batch.status == "completed":
+        break
+
+    if attempts >= max_attempts:
+      try:
+        await client.batches.cancel(batch.id)
+      finally:
+        raise Exception("Batch failed to complete in time")
+
+    await asyncio.sleep(backoff)
+    back_off *= 2
+
+  # Retrieve the batch output file.
+  output = await client.files.content(batch.output_file_id)
+
+  # You can match the batch results using the BAML request IDs.
+  expected = {
+    john_req.id: types.Resume(
+      name="John Doe",
+      experience=["Software Engineer"],
+      education=["BSc in CS"]
+    ),
+    jane_req.id: types.Resume(
+      name="Jane Smith",
+      experience=["Data Scientist"],
+      education=["PhD in Statistics"]
+    ),
+  }
+
+  resumes = {}
+
+  for line in output.text.splitlines():
+    result = json.loads(line)
+    llm_response = result["response"]["body"]["choices"][0]["message"]["content"]
+
+    parsed = b.parse.ExtractResume(llm_response)
+    resumes[result["custom_id"]] = parsed
+
+  print(resumes)
+
+  # Should be equal.
+  assert resumes == expected
+
+
+def to_openai_jsonl(req: BamlHttpRequest) -> str:
+  """ Helper that converts a BAML HTTP request to OpenAI JSONL format. """
+  line = json.dumps({
+    "custom_id": req.id, # Important for matching the batch results.
+    "method": "POST",
+    "url": "/v1/chat/completions",
+    "body": req.body.json(),
+  })
+
+  return f"{line}\n"
+```
+
+```typescript TypeScript
+import OpenAI from 'openai'
+import { HTTPRequest as BamlHttpRequest } from '@boundaryml/baml'
+import { Resume } from "baml_client/types"
+import { b } from 'baml_client'
+
+async function run() {
+  const client = new OpenAI()
+
+  // Build the batch requests with BAML.
+  const [johnReq, janeReq] = await Promise.all([
+    b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
+    b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME)
+  ])
+
+  const jsonl = toOpenaiJsonl(johnReq) + toOpenaiJsonl(janeReq)
+
+  // Create batch input file.
+  const batchInputFile = await client.files.create({
+    file: new File([jsonl], 'batch.jsonl'),
+    purpose: 'batch',
+  })
+
+  // Create batch.
+  let batch = await client.batches.create({
+    input_file_id: batchInputFile.id,
+    endpoint: '/v1/chat/completions',
+    completion_window: '24h',
+    metadata: {
+      description: 'BAML Modular API TypeScript Batch Integ Test'
+    },
+  })
+
+  // Wait for the batch to complete (exponential backoff).
+  let backoff = 1000 // ms
+  let attempts = 0
+  const maxAttempts = 30
+
+  while (true) {
+    batch = await client.batches.retrieve(batch.id)
+    attempts += 1
+
+    if (batch.status === 'completed') {
+      break
+    }
+
+    if (attempts >= maxAttempts) {
+      try {
+        await client.batches.cancel(batch.id)
+      } finally {
+        throw 'Batch failed to complete in time'
+      }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, backoff))
+    backoff *= 2
+  }
+
+  // Retrieve the batch output file.
+  const output = await client.files.content(batch.output_file_id!)
+
+  const resumes: Record<string, Resume> = {}
+  const outputJsonl = await output.text()
+
+  // Process the batch results (skip empty lines).
+  for (const line of outputJsonl.split("\n").filter(line => line.trim().length > 0)) {
+    const result = JSON.parse(line.trim())
+    const llmResponse = result.response.body.choices[0].message.content
+
+    const parsed = b.parse.ExtractResume2(llmResponse)
+    resumes[result.custom_id] = parsed
+  }
+
+  // The resumes object should contain this.
+  // With Jest we can compare using `expect(resumes).toEqual(expected)`.
+  const expected: Record<string, Resume> = {
+    [johnReq.id]: JOHN_DOE_PARSED_RESUME,
+    [janeReq.id]: JANE_SMITH_PARSED_RESUME,
+  }
+
+  console.log(resumes)
+}
+
+// Helper function to convert BAML HTTP request to OpenAI batch JSONL format
+function toOpenaiJsonl(req: BamlHttpRequest): string {
+  const line = JSON.stringify({
+    custom_id: req.id,
+    method: 'POST',
+    url: '/v1/chat/completions',
+    body: req.body.json(),
+  })
+
+  return `${line}\n`
+}
+```
+</CodeBlocks>
