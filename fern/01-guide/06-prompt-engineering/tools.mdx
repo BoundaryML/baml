@@ -365,6 +365,8 @@ In our Python code, we'll:
 2. Implement our Agent that continuously will use different tools
 
 ``` Python toolAgent.py
+from baml_client import b
+from baml_client.types import WeatherAPI, CalculatorAPI
 
 def handle_weather(weather: WeatherAPI):
     # Simulate weather API call, but you can implement this with a real API call
