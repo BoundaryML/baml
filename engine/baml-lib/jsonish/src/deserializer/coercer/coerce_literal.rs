@@ -1,7 +1,7 @@
 use std::vec;
 
 use anyhow::Result;
-use baml_types::LiteralValue;
+use baml_types::{CompletionState, LiteralValue};
 use internal_baml_core::ir::FieldType;
 use internal_baml_jinja::CompletionOptions;
 
@@ -54,9 +54,14 @@ impl TypeCoercer for LiteralValue {
                 let (key, inner_value) = obj.iter().next().unwrap();
                 // only extract value if it's a primitive (not an object or array, hoping to god its fixed)
                 match inner_value {
-                    jsonish::Value::Number(_, _) | jsonish::Value::Boolean(_) | jsonish::Value::String(_, _) => {
+                    jsonish::Value::Number(_, _)
+                    | jsonish::Value::Boolean(_)
+                    | jsonish::Value::String(_, _) => {
                         let mut result = self.coerce(ctx, target, Some(&inner_value))?;
-                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(obj.clone(), completion_state.clone())));
+                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(
+                            obj.clone(),
+                            completion_state.clone(),
+                        )));
                         return Ok(result);
                     }
                     _ => {}
@@ -96,6 +101,17 @@ impl TypeCoercer for LiteralValue {
                 let candidates = vec![(literal_str.as_str(), vec![literal_str.clone()])];
 
                 let literal_match = match_string(ctx, target, Some(value), &candidates)?;
+
+                // Fix ambiguous literal parsing:
+                //
+                // value "pay" | "pay_with_card"
+                //
+                // Something like this can't be disambiguated:
+                //
+                // { "value": "pay
+                if value.completion_state() == &CompletionState::Incomplete {
+                    return Err(ctx.incomplete_literal_string(literal_str, value));
+                }
 
                 Ok(BamlValueWithFlags::String(literal_match))
             }
