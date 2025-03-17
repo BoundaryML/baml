@@ -1,6 +1,8 @@
 use crate::internal::llm_client::{
     primitive::request::ResponseType,
-    traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
+    traits::{
+        CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    },
     ResolveMediaUrls,
 };
 use secrecy::ExposeSecret;
@@ -370,8 +372,19 @@ impl ToProviderMessageExt for AnthropicClient {
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
-    let mut map = HashMap::new();
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
     map
+}
+
+impl CompletionToProviderBody for AnthropicClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
+    }
 }

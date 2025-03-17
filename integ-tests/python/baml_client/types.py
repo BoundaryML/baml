@@ -470,8 +470,8 @@ class Resume(BaseModel):
     name: str
     email: str
     phone: str
-    experience: List["Education"]
-    education: List[str]
+    experience: List[str]
+    education: List["Education"]
     skills: List[str]
 
 class Schema(BaseModel):

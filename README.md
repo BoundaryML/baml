@@ -45,13 +45,13 @@
 
 The fundamental building block in BAML is a function. Every prompt is a function that takes in parameters and returns a type.
 
-```baml
+```rust
 function ChatAgent(message: Message[], tone: "happy" | "sad") -> string
 ```
 
 Every function additionally defines which models it uses and what its prompt is.
 
-```baml
+```rust
 function ChatAgent(message: Message[], tone: "happy" | "sad") -> StopTool | ReplyTool {
     client "openai/gpt-4o-mini"
 

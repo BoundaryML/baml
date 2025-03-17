@@ -6256,6 +6256,56 @@ export function useTestFallbackClient(
   throw new Error('Invalid props')
 }
 /**
+ * A specialized hook for the TestFallbackStrategy BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestFallbackStrategy({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestFallbackStrategy({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestFallbackStrategy(props: HookInput<'TestFallbackStrategy', { stream: false }>): HookOutput<'TestFallbackStrategy', { stream: false }>
+export function useTestFallbackStrategy(props?: HookInput<'TestFallbackStrategy', { stream?: true }>): HookOutput<'TestFallbackStrategy', { stream: true }>
+export function useTestFallbackStrategy(
+  props: HookInput<'TestFallbackStrategy', { stream?: boolean }> = {},
+): HookOutput<'TestFallbackStrategy', { stream: true }> | HookOutput<'TestFallbackStrategy', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestFallbackStrategy, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestFallbackStrategy, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
  * A specialized hook for the TestFallbackToShorthand BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -8048,6 +8098,56 @@ export function useTestRetryExponential(
   }
   if (isStreamingProps(props)) {
     return useBamlAction(StreamingActions.TestRetryExponential, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
+ * A specialized hook for the TestRoundRobinStrategy BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestRoundRobinStrategy({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestRoundRobinStrategy({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestRoundRobinStrategy(props: HookInput<'TestRoundRobinStrategy', { stream: false }>): HookOutput<'TestRoundRobinStrategy', { stream: false }>
+export function useTestRoundRobinStrategy(props?: HookInput<'TestRoundRobinStrategy', { stream?: true }>): HookOutput<'TestRoundRobinStrategy', { stream: true }>
+export function useTestRoundRobinStrategy(
+  props: HookInput<'TestRoundRobinStrategy', { stream?: boolean }> = {},
+): HookOutput<'TestRoundRobinStrategy', { stream: true }> | HookOutput<'TestRoundRobinStrategy', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestRoundRobinStrategy, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestRoundRobinStrategy, props)
   }
   throw new Error('Invalid props')
 }

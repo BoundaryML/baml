@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['jotai-devtools', '@baml/playground-common', '@gloo-ai/baml-schema-wasm-web', '@baml/common'],
-  productionBrowserSourceMaps: true,
+  // productionBrowserSourceMaps: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -14,13 +14,8 @@ const nextConfig = {
       topLevelAwait: true,
     }
 
-    config.module.rules.push({
-      test: /\.wasm$/,
-      type: 'asset/resource',
-    })
-
     if (dev) {
-      config.devtool = 'eval-source-map'
+      // config.devtool = 'eval-source-map'
     }
 
     if (!isServer) {
@@ -35,6 +30,24 @@ const nextConfig = {
       }
     }
     return config
+  },
+  headers: async () => {
+    return [
+      {
+        source: '/embed',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'ALLOW-ALL', // Older method, may be ignored by some browsers
+          },
+          // {
+          //   key: 'Content-Security-Policy',
+          //   value:
+          //     "default-src 'self'; frame-ancestors *; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';", // Allow embedding everywhere and remove frame restrictions
+          // },
+        ],
+      },
+    ]
   },
 }
 

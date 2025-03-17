@@ -41,9 +41,18 @@ impl FunctionResult {
             .result_with_constraints_content()
             .map_err(BamlError::from_anyhow)?;
 
-        let parsed = pythonize_strict(py, parsed.clone(), &enum_module, &cls_module, &partial_cls_module, allow_partials);
-
-        Ok(parsed?)
+        // TODO: The .cast_to() function is only called in codegen once at the
+        // end of each Baml function, it should be possible to avoid the
+        // `parsed.clone()` call here. Take a look at how `parse_llm_response`
+        // is implemented in `runtime.rs`.
+        pythonize_strict(
+            py,
+            parsed.clone(),
+            &enum_module,
+            &cls_module,
+            &partial_cls_module,
+            allow_partials,
+        )
     }
 }
 
@@ -75,7 +84,7 @@ fn pythonize_checks<'a>(
     Ok(dict)
 }
 
-fn pythonize_strict(
+pub(crate) fn pythonize_strict(
     py: Python<'_>,
     parsed: ResponseBamlValue,
     enum_module: &Bound<'_, PyModule>,
@@ -94,7 +103,14 @@ fn pythonize_strict(
             let dict = pyo3::types::PyDict::new(py);
             for (key, value) in index_map {
                 let key = key.into_pyobject(py)?;
-                let value = pythonize_strict(py, ResponseBamlValue(value), enum_module, cls_module, partial_cls_module, allow_partials)?;
+                let value = pythonize_strict(
+                    py,
+                    ResponseBamlValue(value),
+                    enum_module,
+                    cls_module,
+                    partial_cls_module,
+                    allow_partials,
+                )?;
                 dict.set_item(key, value)?;
             }
             Ok(dict.into())
@@ -102,7 +118,16 @@ fn pythonize_strict(
         BamlValueWithMeta::List(vec, _) => pyo3::types::PyList::new(
             py,
             vec.into_iter()
-                .map(|v| pythonize_strict(py, ResponseBamlValue(v), enum_module, cls_module, partial_cls_module, allow_partials))
+                .map(|v| {
+                    pythonize_strict(
+                        py,
+                        ResponseBamlValue(v),
+                        enum_module,
+                        cls_module,
+                        partial_cls_module,
+                        allow_partials,
+                    )
+                })
                 .collect::<PyResult<Vec<_>>>()?,
         )?
         .into_py_any(py),
@@ -145,7 +170,14 @@ fn pythonize_strict(
                 .into_iter()
                 .map(|(key, value)| {
                     let subvalue_allow_partials = allow_partials && !value.meta().2.required_done;
-                    let value = pythonize_strict(py, ResponseBamlValue(value), enum_module, cls_module, partial_cls_module, subvalue_allow_partials)?;
+                    let value = pythonize_strict(
+                        py,
+                        ResponseBamlValue(value),
+                        enum_module,
+                        cls_module,
+                        partial_cls_module,
+                        subvalue_allow_partials,
+                    )?;
                     Ok((key.clone(), value))
                 })
                 .collect::<PyResult<Vec<_>>>()?;
@@ -176,8 +208,16 @@ fn pythonize_strict(
                 }
             }
 
-            let target_class = if allow_partials { partial_cls_module } else { cls_module };
-            let backup_class = if allow_partials { cls_module } else {partial_cls_module};
+            let target_class = if allow_partials {
+                partial_cls_module
+            } else {
+                cls_module
+            };
+            let backup_class = if allow_partials {
+                cls_module
+            } else {
+                partial_cls_module
+            };
             let class_type = match target_class.getattr(class_name.as_str()) {
                 Ok(class) => class,
                 // This can be true in the case of dynamic types.
@@ -193,13 +233,18 @@ fn pythonize_strict(
                 Err(_) => unreachable!("The return value for the Err case in class_type would have triggered before we reached this line."),
             };
 
-            let instance = match class_type.call_method("model_validate", (properties_dict.clone(),), None) {
-                Ok(x) => Ok(x),
-                Err(original_error) => match backup_class_type.call_method("model_validate", (properties_dict.clone(),), None) {
+            let instance =
+                match class_type.call_method("model_validate", (properties_dict.clone(),), None) {
                     Ok(x) => Ok(x),
-                    Err(_) => Err(original_error)
-                }
-            }?;
+                    Err(original_error) => match backup_class_type.call_method(
+                        "model_validate",
+                        (properties_dict.clone(),),
+                        None,
+                    ) {
+                        Ok(x) => Ok(x),
+                        Err(_) => Err(original_error),
+                    },
+                }?;
 
             Ok(instance.into())
         }
@@ -208,79 +253,82 @@ fn pythonize_strict(
 
     let (_, checks, completion_state) = meta;
     if checks.is_empty() && !completion_state.display {
-        Ok(py_value_without_constraints)
-    } else {
-
-        // Import the necessary modules and objects
-        let typing = py.import("typing").expect("typing");
-        let literal = typing.getattr("Literal").expect("Literal");
-        let value_with_possible_checks = if !checks.is_empty() {
-
-            // Generate the Python checks
-            let python_checks = pythonize_checks(py, cls_module, &checks).expect("pythonize_checks");
-
-            // Get the type of the original value
-            let value_type = py_value_without_constraints.bind(py).get_type();
-
-
-            // Collect check names as &str and turn them into a Python tuple
-            let check_names: Vec<&str> = checks.iter().map(|check| check.name.as_str()).collect();
-            let literal_args = PyTuple::new_bound(py, check_names);
-
-            // Call Literal[...] dynamically
-            let literal_check_names = literal.get_item(literal_args).expect("get_item");
-
-
-            let class_checked_type_constructor = cls_module.getattr("Checked").expect("getattr(Checked)");
-
-            // Prepare type parameters for Checked[...]
-            let type_parameters_tuple = PyTuple::new(py, [value_type.as_ref(), &literal_check_names]).expect("PyTuple::new");
-
-            // Create the Checked type using __class_getitem__
-            let class_checked_type: Bound<'_, PyAny> = class_checked_type_constructor
-                .call_method1("__class_getitem__", (type_parameters_tuple,)).expect("__class_getitem__");
-
-            // Prepare the properties dictionary
-            let properties_dict = pyo3::types::PyDict::new(py);
-            properties_dict.set_item("value", py_value_without_constraints)?;
-            if !checks.is_empty() {
-                properties_dict.set_item("checks", python_checks)?;
-            }
-
-            // Validate the model with the constructed type
-            let checked_instance =
-                class_checked_type.call_method("model_validate", (properties_dict.clone(),), None).expect("model_validate");
-
-            Ok::<Py<PyAny>, PyErr>(checked_instance.into())
-        } else {
-            Ok(py_value_without_constraints)
-        }?;
-    
-        let value_with_possible_completion_state = if completion_state.display && allow_partials {
-            let value_type = value_with_possible_checks.bind(py).get_type();
-
-            // Prepare the properties dictionary
-            let properties_dict = pyo3::types::PyDict::new(py);
-            properties_dict.set_item("value", value_with_possible_checks)?;
-            properties_dict.set_item("state", format!("{:?}", completion_state.state))?;
-
-            // Prepare type parameters for StreamingState[...]
-            let type_parameters_tuple = PyTuple::new(py, [value_type.as_ref()]).expect("PyTuple::new");
-
-            let class_streaming_state_type_constructor = partial_cls_module.getattr("StreamState").expect("getattr(StreamState)");
-            let class_completion_state_type: Bound<'_, PyAny> = class_streaming_state_type_constructor
-                .call_method1("__class_getitem__", (type_parameters_tuple,))
-                .expect("__class_getitem__ for streaming");
-
-            let streaming_state_instance = class_completion_state_type
-                .call_method("model_validate", (properties_dict.clone(),), None)
-                .expect("model_validate for streaming");
-
-            Ok::<Py<PyAny>, PyErr>(streaming_state_instance.into())
-        } else {
-            Ok(value_with_possible_checks)
-        }?;
-
-        Ok(value_with_possible_completion_state)
+        return Ok(py_value_without_constraints);
     }
+
+    // Import the necessary modules and objects
+    let typing = py.import("typing").expect("typing");
+    let literal = typing.getattr("Literal").expect("Literal");
+
+    let value_with_possible_checks = if !checks.is_empty() {
+        // Generate the Python checks
+        let python_checks = pythonize_checks(py, cls_module, &checks).expect("pythonize_checks");
+
+        // Get the type of the original value
+        let value_type = py_value_without_constraints.bind(py).get_type();
+
+        // Collect check names as &str and turn them into a Python tuple
+        let check_names: Vec<&str> = checks.iter().map(|check| check.name.as_str()).collect();
+        let literal_args = PyTuple::new(py, check_names)?;
+
+        // Call Literal[...] dynamically
+        let literal_check_names = literal.get_item(literal_args).expect("get_item");
+
+        let class_checked_type_constructor =
+            cls_module.getattr("Checked").expect("getattr(Checked)");
+
+        // Prepare type parameters for Checked[...]
+        let type_parameters_tuple =
+            PyTuple::new(py, [value_type.as_ref(), &literal_check_names]).expect("PyTuple::new");
+
+        // Create the Checked type using __class_getitem__
+        let class_checked_type: Bound<'_, PyAny> = class_checked_type_constructor
+            .call_method1("__class_getitem__", (type_parameters_tuple,))
+            .expect("__class_getitem__");
+
+        // Prepare the properties dictionary
+        let properties_dict = pyo3::types::PyDict::new(py);
+        properties_dict.set_item("value", py_value_without_constraints)?;
+        if !checks.is_empty() {
+            properties_dict.set_item("checks", python_checks)?;
+        }
+
+        // Validate the model with the constructed type
+        let checked_instance = class_checked_type
+            .call_method("model_validate", (properties_dict.clone(),), None)
+            .expect("model_validate");
+
+        Ok::<Py<PyAny>, PyErr>(checked_instance.into())
+    } else {
+        Ok(py_value_without_constraints)
+    }?;
+
+    let value_with_possible_completion_state = if completion_state.display && allow_partials {
+        let value_type = value_with_possible_checks.bind(py).get_type();
+
+        // Prepare the properties dictionary
+        let properties_dict = pyo3::types::PyDict::new(py);
+        properties_dict.set_item("value", value_with_possible_checks)?;
+        properties_dict.set_item("state", format!("{:?}", completion_state.state))?;
+
+        // Prepare type parameters for StreamingState[...]
+        let type_parameters_tuple = PyTuple::new(py, [value_type.as_ref()]).expect("PyTuple::new");
+
+        let class_streaming_state_type_constructor = partial_cls_module
+            .getattr("StreamState")
+            .expect("getattr(StreamState)");
+        let class_completion_state_type: Bound<'_, PyAny> = class_streaming_state_type_constructor
+            .call_method1("__class_getitem__", (type_parameters_tuple,))
+            .expect("__class_getitem__ for streaming");
+
+        let streaming_state_instance = class_completion_state_type
+            .call_method("model_validate", (properties_dict.clone(),), None)
+            .expect("model_validate for streaming");
+
+        Ok::<Py<PyAny>, PyErr>(streaming_state_instance.into())
+    } else {
+        Ok(value_with_possible_checks)
+    }?;
+
+    Ok(value_with_possible_completion_state)
 }

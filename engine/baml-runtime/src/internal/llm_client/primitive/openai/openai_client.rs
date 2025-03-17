@@ -23,8 +23,8 @@ use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder, ResponseType,
 };
 use crate::internal::llm_client::traits::{
-    SseResponseTrait, StreamResponse, ToProviderMessage, ToProviderMessageExt,
-    WithClientProperties, WithStreamChat,
+    CompletionToProviderBody, SseResponseTrait, StreamResponse, ToProviderMessage,
+    ToProviderMessageExt, WithClientProperties, WithStreamChat,
 };
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
@@ -161,7 +161,7 @@ impl RequestBuilder for OpenAIClient {
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
             either::Either::Left(prompt) => {
-                body_obj.insert("prompt".into(), json!(prompt));
+                body_obj.extend(convert_completion_prompt_to_body(prompt));
             }
             either::Either::Right(messages) => {
                 body_obj.extend(self.chat_to_message(messages)?);
@@ -436,4 +436,22 @@ impl ToProviderMessageExt for OpenAIClient {
 
         Ok(res)
     }
+}
+
+impl CompletionToProviderBody for OpenAIClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
+    }
+}
+
+// converts completion prompt into JSON body for request
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    map.insert("prompt".into(), json!(prompt));
+    map
 }

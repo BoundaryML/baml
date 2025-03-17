@@ -6,6 +6,8 @@ pub(crate) mod function_result_stream;
 pub(crate) mod function_results;
 pub mod image;
 pub(crate) mod log_collector;
+pub(crate) mod request;
+pub(crate) mod response;
 pub(crate) mod runtime_ctx_manager;
 pub(crate) mod span;
 pub(crate) mod trace_stats;

@@ -1159,8 +1159,8 @@ module Baml
       const :name, T.nilable(String)
       const :email, T.nilable(String)
       const :phone, T.nilable(String)
-      const :experience, T::Array[T.nilable(Baml::PartialTypes::Education)]
-      const :education, T::Array[T.nilable(String)]
+      const :experience, T::Array[T.nilable(String)]
+      const :education, T::Array[T.nilable(Baml::PartialTypes::Education)]
       const :skills, T::Array[T.nilable(String)]
 
       def initialize(props)

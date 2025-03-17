@@ -15,6 +15,7 @@ export {
   Collector,
   FunctionLog,
   Usage,
+  HTTPRequest,
 } from "./native";
 
 export { BamlStream } from "./stream";

@@ -1284,8 +1284,8 @@ module Baml
       const :name, String
       const :email, String
       const :phone, String
-      const :experience, T::Array[Baml::Types::Education]
-      const :education, T::Array[String]
+      const :experience, T::Array[String]
+      const :education, T::Array[Baml::Types::Education]
       const :skills, T::Array[String]
 
       def initialize(props)

@@ -236,7 +236,7 @@ fn build_function_log(
 
             // Raw requests and responses
             TraceData::RawLLMRequest(http_req) => {
-                let rid = http_req.request_id.0.clone();
+                let rid = http_req.id.0.clone();
                 let entry = calls_map.entry(rid).or_default();
                 entry.http_request = Some(http_req.clone());
                 entry.timestamp_first_seen = Some(time_ms);

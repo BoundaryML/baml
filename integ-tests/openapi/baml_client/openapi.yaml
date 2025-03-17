@@ -1670,6 +1670,19 @@ paths:
                 title: TestFallbackClientResponse
                 type: string
       operationId: TestFallbackClient
+  /call/TestFallbackStrategy:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestFallbackStrategy'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestFallbackStrategyResponse
+                type: string
+      operationId: TestFallbackStrategy
   /call/TestFallbackToShorthand:
     post:
       requestBody:
@@ -2148,6 +2161,19 @@ paths:
                 title: TestRetryExponentialResponse
                 type: string
       operationId: TestRetryExponential
+  /call/TestRoundRobinStrategy:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestRoundRobinStrategy'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestRoundRobinStrategyResponse
+                type: string
+      operationId: TestRoundRobinStrategy
   /call/TestSingleFallbackClient:
     post:
       requestBody:
@@ -4242,6 +4268,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestFallbackStrategy:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestFallbackStrategyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestFallbackToShorthand:
       required: true
       content:
@@ -4827,6 +4869,22 @@ components:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required: []
+            additionalProperties: false
+    TestRoundRobinStrategy:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestRoundRobinStrategyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestSingleFallbackClient:
       required: true
@@ -6113,13 +6171,13 @@ components:
         education:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/Education'
         email:
           type: string
         experience:
           type: array
           items:
-            $ref: '#/components/schemas/Education'
+            type: string
         name:
           type: string
         phone:
