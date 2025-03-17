@@ -282,7 +282,7 @@ test_deserializer!(
     "pay"
 );
 
-test_failing_deserializer!(
+test_partial_deserializer_streaming_failure!(
     test_ambiguous_literal_string,
     EMPTY_FILE,
     r#"

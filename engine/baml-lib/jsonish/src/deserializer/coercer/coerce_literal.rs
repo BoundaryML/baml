@@ -1,7 +1,7 @@
 use std::vec;
 
 use anyhow::Result;
-use baml_types::{CompletionState, LiteralValue};
+use baml_types::LiteralValue;
 use internal_baml_core::ir::FieldType;
 use internal_baml_jinja::CompletionOptions;
 
@@ -101,17 +101,6 @@ impl TypeCoercer for LiteralValue {
                 let candidates = vec![(literal_str.as_str(), vec![literal_str.clone()])];
 
                 let literal_match = match_string(ctx, target, Some(value), &candidates)?;
-
-                // Fix ambiguous literal parsing:
-                //
-                // value "pay" | "pay_with_card"
-                //
-                // Something like this can't be disambiguated:
-                //
-                // { "value": "pay
-                if value.completion_state() == &CompletionState::Incomplete {
-                    return Err(ctx.incomplete_literal_string(literal_str, value));
-                }
 
                 Ok(BamlValueWithFlags::String(literal_match))
             }

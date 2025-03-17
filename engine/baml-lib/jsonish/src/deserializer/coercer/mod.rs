@@ -198,18 +198,6 @@ impl ParsingContext<'_> {
         }
     }
 
-    pub(crate) fn incomplete_literal_string(
-        &self,
-        expected: &str,
-        got: &jsonish::Value,
-    ) -> ParsingError {
-        ParsingError {
-            reason: format!("Can't parse incomplete literal string '{got}' into '{expected}'.",),
-            scope: self.scope.clone(),
-            causes: vec![],
-        }
-    }
-
     pub(crate) fn error_internal<T: std::fmt::Display>(&self, error: T) -> ParsingError {
         ParsingError {
             reason: format!("Internal error: {}", error),
