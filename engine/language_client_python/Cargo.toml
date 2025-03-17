@@ -55,6 +55,8 @@ tracing-subscriber = { version = "0.3.18", features = [
   "valuable",
 ] }
 uuid.workspace = true
+either.workspace = true
+ctrlc = "3.4.5"
 
 [build-dependencies]
 pyo3-build-config = "0.21.2"

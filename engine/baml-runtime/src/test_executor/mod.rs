@@ -1,6 +1,6 @@
 mod output_github;
-mod output_pretty;
 mod output_junit;
+mod output_pretty;
 mod test_execution_args;
 
 pub use test_execution_args::TestFilter;
@@ -37,7 +37,13 @@ pub enum TestRunStatus {
 #[allow(async_fn_in_trait)]
 pub trait TestExecutor {
     fn cli_list_tests(&self, args: &TestFilter) -> Result<()>;
-    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize, output_format: &crate::cli::testing::OutputFormat, junit_path: Option<&String>) -> TestRunStatus;
+    async fn cli_run_tests(
+        self: std::sync::Arc<Self>,
+        args: &TestFilter,
+        max_concurrency: usize,
+        output_format: &crate::cli::testing::OutputFormat,
+        junit_path: Option<&String>,
+    ) -> TestRunStatus;
 }
 
 /// Test status.
@@ -69,7 +75,11 @@ type TestExecutionStatusMap = BTreeMap<(String, String), TestExecutionStatus>;
 pub(super) trait RenderTestExecutionStatus {
     fn render_progress(&self, test_status_map: &TestExecutionStatusMap);
 
-    fn render_final(&self, test_status_map: &TestExecutionStatusMap, selected_tests: &BTreeMap<(String, String), String>);
+    fn render_final(
+        &self,
+        test_status_map: &TestExecutionStatusMap,
+        selected_tests: &BTreeMap<(String, String), String>,
+    );
 }
 
 struct AggregateRenderer {
@@ -79,12 +89,18 @@ struct AggregateRenderer {
 impl AggregateRenderer {
     fn new(output_format: &crate::cli::testing::OutputFormat, junit_path: Option<&String>) -> Self {
         let mut renderers: Vec<Box<dyn RenderTestExecutionStatus>> = match output_format {
-            crate::cli::testing::OutputFormat::Pretty => vec![Box::new(output_pretty::PrettyTestExecutionStatusRenderer::new())],
-            crate::cli::testing::OutputFormat::Github => vec![Box::new(output_github::GithubTestExecutionStatusRenderer::new())],
+            crate::cli::testing::OutputFormat::Pretty => vec![Box::new(
+                output_pretty::PrettyTestExecutionStatusRenderer::new(),
+            )],
+            crate::cli::testing::OutputFormat::Github => vec![Box::new(
+                output_github::GithubTestExecutionStatusRenderer::new(),
+            )],
         };
 
         if let Some(junit_path) = junit_path {
-            renderers.push(Box::new(output_junit::JUnitXMLRenderer::new(junit_path.as_str())));
+            renderers.push(Box::new(output_junit::JUnitXMLRenderer::new(
+                junit_path.as_str(),
+            )));
         }
 
         Self { renderers }
@@ -98,7 +114,11 @@ impl RenderTestExecutionStatus for AggregateRenderer {
         }
     }
 
-    fn render_final(&self, test_status_map: &TestExecutionStatusMap, selected_tests: &BTreeMap<(String, String), String>) {
+    fn render_final(
+        &self,
+        test_status_map: &TestExecutionStatusMap,
+        selected_tests: &BTreeMap<(String, String), String>,
+    ) {
         for renderer in self.renderers.iter() {
             renderer.render_final(test_status_map, selected_tests);
         }
@@ -111,7 +131,9 @@ async fn file_reader(path: String) -> Result<Vec<u8>> {
     Ok(file_content)
 }
 
-fn file_reader_pinned(path: &str) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
+fn file_reader_pinned(
+    path: &str,
+) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<u8>, anyhow::Error>> + Send>> {
     Box::pin(file_reader(path.to_string()))
 }
 
@@ -138,7 +160,13 @@ impl TestExecutor for BamlRuntime {
         Ok(())
     }
 
-    async fn cli_run_tests(self: std::sync::Arc<Self>, args: &TestFilter, max_concurrency: usize, output_format: &crate::cli::testing::OutputFormat, junit_path: Option<&String>) -> TestRunStatus {
+    async fn cli_run_tests(
+        self: std::sync::Arc<Self>,
+        args: &TestFilter,
+        max_concurrency: usize,
+        output_format: &crate::cli::testing::OutputFormat,
+        junit_path: Option<&String>,
+    ) -> TestRunStatus {
         let renderer = AggregateRenderer::new(output_format, junit_path);
         let selected_tests = self
             .inner
@@ -147,7 +175,12 @@ impl TestExecutor for BamlRuntime {
             .filter_map(|node_pair| {
                 let (function_name, test_name) = node_pair.name();
                 if args.includes(function_name, test_name) {
-                    node_pair.span().map(|s| ((function_name.to_string(), test_name.to_string()), format!("{}:{}", s.file.path(), s.line_and_column().0.0 + 1)))
+                    node_pair.span().map(|s| {
+                        (
+                            (function_name.to_string(), test_name.to_string()),
+                            format!("{}:{}", s.file.path(), s.line_and_column().0 .0 + 1),
+                        )
+                    })
                 } else {
                     None
                 }
@@ -163,7 +196,8 @@ impl TestExecutor for BamlRuntime {
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
         // Build futures and initial test status map.
-        let (futs, test_status_map): (Vec<_>, BTreeMap<_, _>) = selected_tests.iter()
+        let (futs, test_status_map): (Vec<_>, BTreeMap<_, _>) = selected_tests
+            .iter()
             .map(|((fn_name, tt_name), _)| {
                 let semaphore = semaphore.clone();
                 let tx = tx.clone();
@@ -179,9 +213,19 @@ impl TestExecutor for BamlRuntime {
                     );
 
                     let start_instant = Instant::now();
-                    let _ = tx.send((function_name.clone(), test_name.clone(), TestExecutionStatus::Running));
+                    let _ = tx.send((
+                        function_name.clone(),
+                        test_name.clone(),
+                        TestExecutionStatus::Running,
+                    ));
                     let (result, _) = runtime
-                        .run_test(function_name.as_str(), test_name.as_str(), &ctx_manager, Some(|_| {}))
+                        .run_test(
+                            function_name.as_str(),
+                            test_name.as_str(),
+                            &ctx_manager,
+                            Some(|_| {}),
+                            None,
+                        )
                         .await;
                     let duration = start_instant.elapsed();
                     let _ = tx.send((
@@ -192,7 +236,10 @@ impl TestExecutor for BamlRuntime {
                 });
                 (
                     fut,
-                    ((fn_name.to_string(), tt_name.to_string()), TestExecutionStatus::Pending),
+                    (
+                        (fn_name.to_string(), tt_name.to_string()),
+                        TestExecutionStatus::Pending,
+                    ),
                 )
             })
             .unzip();
@@ -205,7 +252,8 @@ impl TestExecutor for BamlRuntime {
                 async {
                     while let Some((function_name, test_name, status)) = rx.recv().await {
                         let mut status_map = test_status_locked.lock().await;
-                        status_map.insert((function_name.to_string(), test_name.to_string()), status);
+                        status_map
+                            .insert((function_name.to_string(), test_name.to_string()), status);
                         renderer.render_progress(status_map.deref());
 
                         let total_count = status_map.len();
@@ -225,7 +273,9 @@ impl TestExecutor for BamlRuntime {
                             let status_map = test_status_locked.lock().await;
                             let finished_count = status_map
                                 .values()
-                                .filter(|status| matches!(status, TestExecutionStatus::Finished(_, _)))
+                                .filter(|status| {
+                                    matches!(status, TestExecutionStatus::Finished(_, _))
+                                })
                                 .count();
                             let total_count = status_map.len();
 
@@ -258,7 +308,10 @@ impl TestExecutor for BamlRuntime {
 
         match res {
             Ok(_) => {
-                let failed_count = final_status.values().filter(|status| status.is_failed()).count();
+                let failed_count = final_status
+                    .values()
+                    .filter(|status| status.is_failed())
+                    .count();
                 if failed_count > 0 {
                     TestRunStatus::Failed(failed_count)
                 } else {

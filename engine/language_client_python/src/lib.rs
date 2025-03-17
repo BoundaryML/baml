@@ -3,7 +3,6 @@ mod parse_py_type;
 mod runtime;
 mod types;
 
-use ctrlc;
 use pyo3::prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyModuleMethods;
 use pyo3::{wrap_pyfunction, Bound, Python};

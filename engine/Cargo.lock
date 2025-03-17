@@ -920,6 +920,8 @@ dependencies = [
  "baml-cli",
  "baml-runtime",
  "baml-types",
+ "ctrlc",
+ "either",
  "env_logger",
  "futures",
  "indexmap 2.2.6",
