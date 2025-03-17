@@ -22,7 +22,7 @@ jobs:
         with:
           workspaces: engine
       - name: Bindgen
-        run: cargo install -f wasm-bindgen-cli@0.2.100
+        run: cargo install -f wasm-bindgen-cli@0.2.92
         working-directory: engine/baml-schema-wasm
       # Set up Node.js
       - name: Setup Node.js

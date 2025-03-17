@@ -12,6 +12,12 @@
   --tag-primary: #f3f4f6;
 }
 
+.resizer { display:flex; margin:0; padding:0; resize:both; overflow:hidden; border-radius:8px; }
+.resizer > .resized { flex-grow:1; margin:0; padding:0; border:0 }
+
+
+
+
 .dark {
   --background: #0b0d0e;
   --text: #edededE6;
@@ -87,6 +93,14 @@ body, p, ul, h1, h2, h3, h4, h5, h6, span:not(a span) {
 .fern-sidebar-link-container {
   min-height: 26px !important;
   /* padding: 0 1rem !important; */
+}
+
+.fern-layout-toc {
+  max-width: 250px !important;
+}
+
+.fern-layout-content {
+  max-width: 860px !important;
 }
 
 .fern-sidebar-link-container[data-state="active"] {
