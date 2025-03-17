@@ -167,6 +167,7 @@ import asyncio
 
 async def run():
     collector = Collector(name="my-collector")
+    client_registry = ClientRegistry()
     my_b = b.with_options(collector=collector, client_registry=client_registry)
 
     # Run multiple functions in parallel
