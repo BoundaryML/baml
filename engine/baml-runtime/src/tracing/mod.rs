@@ -133,18 +133,21 @@ impl Visualize for FunctionResult {
             ));
         }
         s.push(self.llm_response().visualize(max_chunk_size));
+
         match self.result_with_constraints() {
             Some(Ok(val)) => {
-                s.push(format!(
-                    "{}",
-                    format!("---Parsed Response ({})---", val.0.r#type()).blue()
-                ));
-                let json_str = serde_json::to_string_pretty(&val.serialize_final()).unwrap();
+                if matches!(self.llm_response(), LLMResponse::Success(_)) {
+                    s.push(format!(
+                        "{}",
+                        format!("---Parsed Response ({})---", val.0.r#type()).blue()
+                    ));
+                    let json_str = serde_json::to_string_pretty(&val.serialize_final()).unwrap();
 
-                if let Some(max_size) = max_chunk_size.maybe_truncate_to(json_str.len()) {
-                    s.push(truncate_string(&json_str, max_size).to_string());
-                } else {
-                    s.push(json_str);
+                    if let Some(max_size) = max_chunk_size.maybe_truncate_to(json_str.len()) {
+                        s.push(truncate_string(&json_str, max_size).to_string());
+                    } else {
+                        s.push(json_str);
+                    }
                 }
             }
             Some(Err(e)) => {

@@ -71,7 +71,7 @@ class BamlSyncClient:
       Returns a new instance of BamlSyncClient with explicitly typed baml options
       for Python 3.8 compatibility.
       """
-      new_options = {}
+      new_options: BamlCallOptions = self.__baml_options.copy()
 
       # Override if any keyword arguments were provided.
       if tb is not None:
@@ -90,7 +90,7 @@ class BamlSyncClient:
         {%- endfor %}
         baml_options: BamlCallOptions = {},
     ) -> {{fn.return_type}}:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -134,7 +134,7 @@ class BamlStreamClient:
         {%- endfor %}
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)

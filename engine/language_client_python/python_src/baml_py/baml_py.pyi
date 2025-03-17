@@ -156,6 +156,24 @@ class BamlRuntime:
     def set_log_event_callback(
         self, handler: Optional[Callable[[BamlLogEvent], None]]
     ) -> None: ...
+    async def build_request(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+        is_stream: bool,
+    ) -> HTTPRequest: ...
+    def build_request_sync(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+        is_stream: bool,
+    ) -> HTTPRequest: ...
 
 class LogEventMetadata:
     event_id: str

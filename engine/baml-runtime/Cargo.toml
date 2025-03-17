@@ -113,7 +113,7 @@ colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
-js-sys = "0.3.77"
+js-sys = "=0.3.69"
 reqwest = { version = "0.12.12", features = [
   "stream",
   "json",

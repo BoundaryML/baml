@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources'
 import { GenerateContentRequest, GoogleGenerativeAI } from '@google/generative-ai'
 import { HTTPRequest as BamlHttpRequest } from '@boundaryml/baml'
-import { Resume } from "../baml_client/types"
+import { Resume } from '../baml_client/types'
 import { b, ClientRegistry } from './test-setup'
 
 const JOHN_DOE_TEXT_RESUME = `
@@ -23,18 +23,20 @@ const JOHN_DOE_TEXT_RESUME = `
 `
 
 const JOHN_DOE_PARSED_RESUME = {
-  name: "John Doe",
-  email: "johndoe@example.com",
-  phone: "(123) 456-7890",
-  experience: ["Software Engineer at Google (2020 - Present)"],
-  education: [{
-    institution: "University of California, Berkeley",
-    location: "Berkeley, CA",
-    degree: "Master's",
-    major: ["Computer Science"],
-    graduation_date: null
-  }],
-  skills: ["Python", "JavaScript", "SQL"]
+  name: 'John Doe',
+  email: 'johndoe@example.com',
+  phone: '(123) 456-7890',
+  experience: ['Software Engineer at Google (2020 - Present)'],
+  education: [
+    {
+      institution: 'University of California, Berkeley',
+      location: 'Berkeley, CA',
+      degree: "Master's",
+      major: ['Computer Science'],
+      graduation_date: null,
+    },
+  ],
+  skills: ['Python', 'JavaScript', 'SQL'],
 }
 
 const JANE_SMITH_TEXT_RESUME = `
@@ -54,21 +56,23 @@ const JANE_SMITH_TEXT_RESUME = `
 `
 
 const JANE_SMITH_PARSED_RESUME = {
-  name: "Jane Smith",
-  email: "janesmith@example.com",
-  phone: "(555) 123-4567",
+  name: 'Jane Smith',
+  email: 'janesmith@example.com',
+  phone: '(555) 123-4567',
   experience: [
-    "Senior Data Scientist at Netflix (2019 - Present)",
-    "Machine Learning Engineer at Amazon (2016 - 2019)"
+    'Senior Data Scientist at Netflix (2019 - Present)',
+    'Machine Learning Engineer at Amazon (2016 - 2019)',
   ],
-  education: [{
-    institution: "Stanford University",
-    location: "Stanford, CA",
-    degree: "Ph.D.",
-    major: ["Statistics"],
-    graduation_date: null
-  }],
-  skills: ["Python", "R", "TensorFlow", "PyTorch", "SQL"]
+  education: [
+    {
+      institution: 'Stanford University',
+      location: 'Stanford, CA',
+      degree: 'Ph.D.',
+      major: ['Statistics'],
+      graduation_date: null,
+    },
+  ],
+  skills: ['Python', 'R', 'TensorFlow', 'PyTorch', 'SQL'],
 }
 
 describe('Modular API Tests', () => {
@@ -88,14 +92,14 @@ describe('Modular API Tests', () => {
     const client = new Anthropic()
 
     const clientRegistry = new ClientRegistry()
-    clientRegistry.setPrimary("Claude")
+    clientRegistry.setPrimary('Claude')
 
-    const req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {clientRegistry})
+    const req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, { clientRegistry })
     const res = await client.messages.create(req.body.json() as MessageCreateParamsNonStreaming)
 
     // Narrow type
     // https://github.com/anthropics/anthropic-sdk-typescript/issues/432
-    if (res.content[0].type != "text") {
+    if (res.content[0].type != 'text') {
       throw `Unexpected type for content block: ${res.content[0]}`
     }
 
@@ -106,12 +110,12 @@ describe('Modular API Tests', () => {
 
   it('modular google gemini', async () => {
     const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
-    const model = client.getGenerativeModel({ model: "gemini-1.5-pro-001" })
+    const model = client.getGenerativeModel({ model: 'gemini-1.5-pro-001' })
 
     const clientRegistry = new ClientRegistry()
-    clientRegistry.setPrimary("Gemini")
+    clientRegistry.setPrimary('Gemini')
 
-    const req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {clientRegistry})
+    const req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, { clientRegistry })
     const res = await model.generateContent(req.body.json() as GenerateContentRequest)
     const parsed = b.parse.ExtractResume2(res.response.text())
 
@@ -124,10 +128,10 @@ describe('Modular API Tests', () => {
     const res = await fetch(req.url, {
       method: req.method,
       headers: req.headers as Record<string, string>,
-      body: JSON.stringify(req.body.json()) // req.body.raw() or req.body.text() works as well
+      body: JSON.stringify(req.body.json()), // req.body.raw() or req.body.text() works as well
     })
 
-    const body = await res.json() as any
+    const body = (await res.json()) as any
 
     const parsed = b.parse.ExtractResume2(body.choices[0].message.content)
 
@@ -139,9 +143,7 @@ describe('Modular API Tests', () => {
 
     const req = await b.streamRequest.ExtractResume2(JOHN_DOE_TEXT_RESUME)
 
-    const stream = await client.chat.completions.create(
-      req.body.json() as ChatCompletionCreateParamsStreaming
-    )
+    const stream = await client.chat.completions.create(req.body.json() as ChatCompletionCreateParamsStreaming)
 
     let llmResponse: string[] = []
 
@@ -173,7 +175,7 @@ describe('Modular API Tests', () => {
     // Create requests for both resumes
     const [johnReq, janeReq] = await Promise.all([
       b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
-      b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME)
+      b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME),
     ])
 
     const jsonl = toOpenaiJsonl(johnReq) + toOpenaiJsonl(janeReq)
@@ -190,7 +192,7 @@ describe('Modular API Tests', () => {
       endpoint: '/v1/chat/completions',
       completion_window: '24h',
       metadata: {
-        description: 'BAML Modular API TypeScript Batch Integ Test'
+        description: 'BAML Modular API TypeScript Batch Integ Test',
       },
     })
 
@@ -214,7 +216,7 @@ describe('Modular API Tests', () => {
         }
       }
 
-      await new Promise(resolve => setTimeout(resolve, backoff))
+      await new Promise((resolve) => setTimeout(resolve, backoff))
       // backoff *= 2 // Exponential backoff
     }
 
@@ -230,7 +232,7 @@ describe('Modular API Tests', () => {
     const received: Record<string, Resume> = {}
     const outputJsonl = await output.text()
 
-    for (const line of outputJsonl.split("\n").filter(line => line.trim().length > 0)) {
+    for (const line of outputJsonl.split('\n').filter((line) => line.trim().length > 0)) {
       const result = JSON.parse(line.trim())
       const llmResponse = result.response.body.choices[0].message.content
 
