@@ -1,10 +1,11 @@
 'use client'
 
-import { BamlErrors, toBamlError } from '@boundaryml/baml/errors'
+import type { BamlErrors } from '@boundaryml/baml/errors'
+import { toBamlError } from '@boundaryml/baml/errors'
 import { useCallback, useMemo, useReducer, useTransition } from 'react'
 import * as Actions from './server'
 import * as StreamingActions from './server_streaming'
-import { StreamingServerTypes } from './server_streaming_types'
+import type { StreamingServerTypes } from './server_streaming_types'
 
 /**
  * Type representing a BAML stream response.
