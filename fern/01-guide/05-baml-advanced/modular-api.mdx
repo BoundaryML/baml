@@ -1,4 +1,6 @@
-<info>Available BAML>=0.79.0</info>
+<Info>
+  Requires BAML version >=0.79.0
+</Info>
 
 First and foremost, BAML provides a high level API where functions are a first
 class citizen and their execution is fully transparent to the developer. This
@@ -413,7 +415,7 @@ so you can just cast to the expected type:
     ```
   </Tab>
 
-  <Tab title="Gemini">
+  <Tab title="Gemini" language="Gemini">
     ```typescript Gemini
     import { GenerateContentRequest } from '@google/generative-ai';
 
@@ -617,7 +619,7 @@ async function run() {
     endpoint: '/v1/chat/completions',
     completion_window: '24h',
     metadata: {
-      description: 'BAML Modular API TypeScript Batch Integ Test'
+      description: 'BAML Modular API TypeScript Batch Example'
     },
   })
 
