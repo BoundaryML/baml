@@ -23,4 +23,26 @@ def reset_baml_env_vars(env_vars: Dict[str, str]):
   else:
     raise BamlError("Cannot reset BAML environment variables while there are active BAML contexts.")
 
+
+try:
+    import dotenv
+    from unittest.mock import patch
+
+    # Monkeypatch load_dotenv to call reset_baml_env_vars after execution
+    original_load_dotenv = dotenv.load_dotenv
+
+    def patched_load_dotenv(*args, **kwargs):
+        result = original_load_dotenv(*args, **kwargs)
+        try:
+            reset_baml_env_vars(os.environ.copy())
+        except BamlError:
+            # swallow the error
+            pass
+        return result
+
+    patch('dotenv.load_dotenv', patched_load_dotenv).start()
+except ImportError:
+    # dotenv is not installed, so we do nothing
+    pass
+
 __all__ = []

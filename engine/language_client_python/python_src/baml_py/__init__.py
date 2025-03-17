@@ -15,6 +15,13 @@ from .baml_py import (
     BamlAudioPy as Audio,
     invoke_runtime_cli,
     ClientRegistry,
+    # Collector utilities
+    Collector,
+    FunctionLog,
+    LLMCall,
+    Timing,
+    Usage,
+    HTTPRequest,
 )
 from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
@@ -30,4 +37,11 @@ __all__ = [
     "Image",
     "Audio",
     "invoke_runtime_cli",
+    # Collector types
+    "Collector",
+    "FunctionLog",
+    "LLMCall",
+    "Timing",
+    "Usage",
+    "HTTPRequest",
 ]

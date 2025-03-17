@@ -49,9 +49,11 @@ const functionsAtom = atom((get) => {
   }))
 })
 
-export const isSidebarOpenAtom = atomWithStorage('isSidebarOpen', vscode.isVscode() ? true : false)
+const isEmbed = typeof window !== 'undefined' && window.location.href.includes('embed')
 
-export default function CustomSidebar() {
+export const isSidebarOpenAtom = atomWithStorage('isSidebarOpen', isEmbed ? false : vscode.isVscode() ? true : false)
+
+export default function CustomSidebar({ isEmbed = false }: { isEmbed?: boolean }) {
   const functions = useAtomValue(functionsAtom)
   const [searchTerm, setSearchTerm] = React.useState('')
   const [isOpen, setIsOpen] = useAtom(isSidebarOpenAtom)

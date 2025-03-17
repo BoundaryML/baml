@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 
-use crate::internal::llm_client::{
-    traits::{StreamResponse, WithClient},
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+use crate::{
+    internal::llm_client::{
+        traits::{StreamResponse, WithClient},
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+    },
+    RuntimeContext,
 };
 use anyhow::{Context, Result};
-use baml_types::BamlMap;
+use baml_types::{tracing::events::HttpRequestId, BamlMap};
 use eventsource_stream::Eventsource;
 use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
@@ -16,7 +19,10 @@ use super::{
     anthropic::response_handler::scan_anthropic_response_stream,
     google::response_handler::scan_google_response_stream,
     openai::response_handler::scan_openai_response_stream,
-    request::{make_request, to_prompt, RequestBuilder, ResponseType},
+    request::{
+        build_and_log_outbound_request, execute_request, make_request, to_prompt, EitherResponse,
+        RequestBuilder, ResponseType,
+    },
     vertex::response_handler::scan_vertex_response_stream,
 };
 
@@ -25,11 +31,42 @@ pub async fn make_stream_request(
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     model_name: Option<String>,
     response_type: ResponseType,
+    runtime_context: &RuntimeContext,
+    http_request_id: HttpRequestId,
 ) -> StreamResponse {
-    let (resp, system_start, instant_start) = match make_request(client, prompt, true).await {
+    let (request_id, start_time_system, start_time_instant, built_req) =
+        build_and_log_outbound_request(
+            client,
+            prompt,
+            true,
+            true,
+            runtime_context,
+            http_request_id,
+        )
+        .await?;
+    let resp = match execute_request(
+        client,
+        built_req,
+        request_id,
+        prompt,
+        start_time_system,
+        start_time_instant,
+        runtime_context,
+        false,
+    )
+    .await?
+    {
+        (EitherResponse::Raw(resp), sys, inst) => Ok(resp),
+        (EitherResponse::Consumed(_), _, _) => {
+            unreachable!("We never consume the body in streaming mode unless an error is returned.")
+        }
+    };
+
+    let resp = match resp {
         Ok(v) => v,
         Err(e) => return Err(e),
     };
+
     let client_name = client.context().name.clone();
     let params = client.request_options().clone();
     let prompt = to_prompt(prompt);
@@ -46,8 +83,8 @@ pub async fn make_stream_request(
                     client: client_name.clone(),
                     prompt: prompt.clone(),
                     content: "".to_string(),
-                    start_time: system_start,
-                    latency: instant_start.elapsed(),
+                    start_time: start_time_system,
+                    latency: start_time_instant.elapsed(),
                     model: model_name.clone().unwrap_or("<unknown>".to_string()),
                     request_options: params.clone(),
                     metadata: LLMCompleteResponseMetadata {
@@ -67,9 +104,9 @@ pub async fn make_stream_request(
                                     client: client_name.clone(),
                                     model: model_name.clone(),
                                     prompt: prompt.clone(),
-                                    start_time: system_start,
+                                    start_time: start_time_system,
                                     request_options: params.clone(),
-                                    latency: instant_start.elapsed(),
+                                    latency: start_time_instant.elapsed(),
                                     message: format!("Failed to parse event: {:#?}", e),
                                     code: ErrorCode::UnsupportedResponse(2),
                                 },
@@ -81,8 +118,8 @@ pub async fn make_stream_request(
                             &client_name,
                             &params,
                             &prompt,
-                            &system_start,
-                            &instant_start,
+                            &start_time_system,
+                            &start_time_instant,
                             &model_name,
                             accumulated,
                             event_body,
@@ -91,8 +128,8 @@ pub async fn make_stream_request(
                             &client_name,
                             &params,
                             &prompt,
-                            &system_start,
-                            &instant_start,
+                            &start_time_system,
+                            &start_time_instant,
                             &model_name,
                             accumulated,
                             event_body,
@@ -101,8 +138,8 @@ pub async fn make_stream_request(
                             &client_name,
                             &params,
                             &prompt,
-                            &system_start,
-                            &instant_start,
+                            &start_time_system,
+                            &start_time_instant,
                             &model_name,
                             accumulated,
                             event_body,
@@ -111,8 +148,8 @@ pub async fn make_stream_request(
                             &client_name,
                             &params,
                             &prompt,
-                            &system_start,
-                            &instant_start,
+                            &start_time_system,
+                            &start_time_instant,
                             &model_name,
                             accumulated,
                             event_body,

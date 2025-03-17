@@ -3,6 +3,7 @@ mod parse_py_type;
 mod runtime;
 mod types;
 
+use ctrlc;
 use pyo3::prelude::{pyfunction, pymodule, PyAnyMethods, PyModule, PyResult};
 use pyo3::types::PyModuleMethods;
 use pyo3::{wrap_pyfunction, Bound, Python};
@@ -24,6 +25,11 @@ fn invoke_runtime_cli(py: Python) -> PyResult<u32> {
 }
 
 pub(crate) const MODULE_NAME: &str = "baml_py.baml_py";
+
+#[pyfunction]
+fn get_version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
 
 #[pymodule]
 fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
@@ -57,8 +63,8 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
         }
     }
 
+    m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_class::<runtime::BamlRuntime>()?;
-
     m.add_class::<types::FunctionResult>()?;
     m.add_class::<types::FunctionResultStream>()?;
     m.add_class::<types::SyncFunctionResultStream>()?;
@@ -76,7 +82,12 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<runtime::BamlLogEvent>()?;
     m.add_class::<runtime::LogEventMetadata>()?;
-
+    m.add_class::<types::Collector>()?;
+    m.add_class::<types::FunctionLog>()?;
+    m.add_class::<types::LLMCall>()?;
+    m.add_class::<types::Timing>()?;
+    m.add_class::<types::Usage>()?;
+    m.add_class::<types::HTTPRequest>()?;
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
 
     errors::errors(&m)?;

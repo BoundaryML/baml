@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.78.0](https://github.com/boundaryml/baml/compare/0.77.0..0.78.0) - 2025-03-05
+
+### Bug Fixes
+
+- **(docs)** fix broken links (/ref/baml-client -> /ref/baml_client) and broken code (missing comma) (#1522) - ([a881571](https://github.com/boundaryml/baml/commit/a88157159a660b50d09e88ff107c18f698bea6ee)) - Elijas Dapšauskas
+- Fix broken Next JS Guide Link
+- Allow types to have multiple block-level constraints (#1545) - ([e4dc633](https://github.com/boundaryml/baml/commit/e4dc633807fb9430a414a77d0fed9d43b0361422)) - Greg Hale
+- Resolve all non-google file uris when calling gemini Fixes #1548 (#1553) - ([0fe8e10](https://github.com/boundaryml/baml/commit/0fe8e105593ba233eafcd6f8fadad77c318a2e99)) - hellovai
+
+
+### Features
+
+- **(runtime)** claude now supports image URLs in requests (#1542) - ([c2d35d4](https://github.com/boundaryml/baml/commit/c2d35d4e4b9de908ae1c56a56edbc3f21139f36d)) - Samuel Lijin
+- (Python) Expose tokens / prompt / http response etc through the Collector interface - (pre-alpha release) (#1512) - ([9b21ace](https://github.com/boundaryml/baml/commit/9b21ace306dee4cdcc0c24960da8794bc9cd9028)) - aaronvg
+- Support thinking models from anthropic. (#1555) - ([be1119f](https://github.com/boundaryml/baml/commit/be1119f89ca46cd147c51589dc8c47c1e5f6f3ea)) - hellovai
+- Support VSCode Rename for enums & type aliases (#1552) - ([80ba612](https://github.com/boundaryml/baml/commit/80ba6121c079c82e61dbaec74012f0c0a50c088c)) - Antonio Sarosi
+- Parser improvements (#1536) - ([8f758ef](https://github.com/boundaryml/baml/commit/8f758ef29cee811c124c234304d65bca281ee8d6)) - hellovai
+
+## [0.77.0](https://github.com/boundaryml/baml/compare/0.76.2..0.77.0) - 2025-02-25
+
+### Bug fixes
+
+- Fix truthy bug in jinja and improve static analysis (#1503) - ([b8e3423](https://github.com/boundaryml/baml/commit/b8e34231ef10f80dc2aaaba6bcd84618381f933c)) - Greg Hale
+- Rename Null to None in jinja (#1504) - ([f42567d](https://github.com/boundaryml/baml/commit/f42567d40195841527b9193be154dc517155907a)) - Greg Hale
+- Fixed React Codegen in VSCode (#1490) - ([74b3dbf](https://github.com/boundaryml/baml/commit/74b3dbf35875078e7e4b5be542c2d73702ff82b8)) - Chris Watts
+- Release python GIL more liberally in baml_client.sync_client (#1501) - ([4d7f3d3](https://github.com/boundaryml/baml/commit/4d7f3d361a72cb82839730fcafdbd3915969cfcb)) - hellovai
+
+
+### Features
+
+- VSCode Proxy can now be configured via API Keys UX (#1489) - ([8671527](https://github.com/boundaryml/baml/commit/867152734405c9cf24ecd836e85dadae9315950d)) - hellovai
+- Support renaming of BAML class via LSP (#1518) - ([339068a](https://github.com/boundaryml/baml/commit/339068ac8165f6766f8efbba4e1417745fcc95a3)) - Antonio Sarosi
+
+### Docs / Improvements
+
+- update python installation instruction to use correct package name (#1508) - ([cd1a21b](https://github.com/boundaryml/baml/commit/cd1a21bebc1e7b2c6a94109f7457812ae889b92c)) - Elijas Dapšauskas
+- fix typo (mutliplier -> multiplier) (#1510) - ([c6d4126](https://github.com/boundaryml/baml/commit/c6d41264f8405da0312b00f0a845d18a270ea79f)) - Elijas Dapšauskas
+- Update ruby.mdx (#1506) - ([22b35a4](https://github.com/boundaryml/baml/commit/22b35a43518217d75b0050ec03da138991b53e48)) - aaronvg
+- Update overview.mdx (#1507) - ([2b19892](https://github.com/boundaryml/baml/commit/2b1989238b8bced47e08dbff58b5f856a337e139)) - aaronvg
+- remove await in python snippet in typebuilder.mdx (#1495) - ([d30220d](https://github.com/boundaryml/baml/commit/d30220d980cc3a06a0bb8f7a873c4f9229bbbd50)) - hellovai
+
+
+
 ## [0.76.2](https://github.com/boundaryml/baml/compare/0.76.1..0.76.2) - 2025-02-18
 
 ### Bug Fixes

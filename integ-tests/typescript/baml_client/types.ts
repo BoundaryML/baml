@@ -32,6 +32,7 @@ export interface Checked<T,CheckName extends string = string> {
     checks: Record<CheckName, Check>,
 }
 
+
 export interface Check {
     name: string,
     expr: string
@@ -271,6 +272,13 @@ export interface CompoundBigNumbers {
 export interface ContactInfo {
   primary: PhoneNumber | EmailAddress
   secondary?: PhoneNumber | EmailAddress | null
+  
+}
+
+export interface CustomStory {
+  title: string
+  characters: string[]
+  content: string
   
 }
 
@@ -624,8 +632,8 @@ export interface Resume {
   name: string
   email: string
   phone: string
-  experience: Education[]
-  education: string[]
+  experience: string[]
+  education: Education[]
   skills: string[]
   
 }

@@ -22,7 +22,7 @@ export function findTopLevelParent(filePath: string) {
 }
 
 /**
- * Non-recursively gathers files with .baml or .json extensions from a given directory,
+ * Non-recursively gathers files with .baml extensions from a given directory,
  * avoiding processing the same directory more than once.
  *
  * @param {vscode.Uri} uri - The URI of the directory to search.
@@ -66,7 +66,7 @@ export function gatherFiles(rootPath: string, debug = false): URI[] {
 
         if (fileStat.isDirectory()) {
           addDir(fileUri)
-        } else if (filePath.endsWith('.baml') || filePath.endsWith('.json')) {
+        } else if (filePath.endsWith('.baml')) {
           fileList.push(fileUri)
         }
       })
@@ -82,5 +82,5 @@ export function gatherFiles(rootPath: string, debug = false): URI[] {
 export function convertToTextDocument(filePath: URI): TextDocument {
   const fileContent = fs.readFileSync(filePath.fsPath, 'utf-8')
   const fileExtension = path.extname(filePath.fsPath)
-  return TextDocument.create(filePath.toString(), fileExtension === '.baml' ? 'baml' : 'json', 1, fileContent)
+  return TextDocument.create(filePath.toString(), fileExtension.replace('.', ''), 1, fileContent)
 }

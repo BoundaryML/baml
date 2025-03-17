@@ -1,11 +1,13 @@
-import type { BamlRuntime, FunctionResult, BamlCtxManager, Image, Audio, ClientRegistry } from "@boundaryml/baml"
-import { toBamlError } from "@boundaryml/baml"
+import type { BamlRuntime, FunctionResult, BamlCtxManager, Image, Audio, ClientRegistry, Collector } from "@boundaryml/baml"
+import { toBamlError, type HTTPRequest } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type * as types from "./types"
 import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
+import { HttpRequest, HttpStreamRequest } from "./sync_request"
+import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 /**
@@ -17,9 +19,30 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DI
  */
 export type RecursivePartialNull<T> = MovedRecursivePartialNull<T>;
 
-export class BamlSyncClient {
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+  collector?: Collector | Collector[]
+}
 
-  constructor(private runtime: BamlRuntime, private ctx_manager: BamlCtxManager) {}
+export class BamlSyncClient {
+  private httpRequest: HttpRequest
+  private httpStreamRequest: HttpStreamRequest
+  private llmResponseParser: LlmResponseParser
+  private llmStreamParser: LlmStreamParser
+  private bamlOptions: BamlCallOptions
+
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager, private bamlOptions?: BamlCallOptions) {
+    this.httpRequest = new HttpRequest(runtime, ctxManager)
+    this.httpStreamRequest = new HttpStreamRequest(runtime, ctxManager)
+    this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
+    this.llmStreamParser = new LlmStreamParser(runtime, ctxManager)
+    this.bamlOptions = bamlOptions || {}
+  }
+
+  withOptions(bamlOptions: BamlCallOptions) {
+    return new BamlSyncClient(this.runtime, this.ctxManager, bamlOptions)
+  }
 
   /*
   * @deprecated NOT IMPLEMENTED as streaming must by async. We
@@ -30,26 +53,45 @@ export class BamlSyncClient {
     throw new Error("stream is not available in BamlSyncClient. Use `import { b } from 'baml_client/async_client")
   }
 
+  get request() {
+    return this.httpRequest
+  }
+
+  get streamRequest() {
+    return this.httpStreamRequest
+  }
+
+  get parse() {
+    return this.llmResponseParser
+  }
+
+  get parseStream() {
+    return this.llmStreamParser
+  }
+
   {% for fn in funcs %}
   {{ fn.name }}(
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+      __baml_options__?: BamlCallOptions
   ): {{fn.return_type}} {
     try {
-    const raw = this.runtime.callFunctionSync(
-      "{{fn.name}}",
-      {
-        {% for (name, optional, type) in fn.args -%}
-        "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
-        {%- endfor %}
-      },
-      this.ctx_manager.cloneContext(),
-      __baml_options__?.tb?.__tb(),
-      __baml_options__?.clientRegistry,
-    )
-    return raw.parsed(false) as {{fn.return_type}}
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.callFunctionSync(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as {{fn.return_type}}
     } catch (error: any) {
       throw toBamlError(error);
     }

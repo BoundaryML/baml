@@ -1,13 +1,15 @@
 use crate::internal::llm_client::{
     primitive::request::ResponseType,
-    traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
+    traits::{
+        CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    },
     ResolveMediaUrls,
 };
 use secrecy::ExposeSecret;
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
+use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -23,7 +25,7 @@ use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
         primitive::{
-            anthropic::types::{AnthropicMessageResponse, StopReason},
+            anthropic::types::AnthropicMessageResponse,
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
@@ -115,8 +117,9 @@ impl WithNoCompletion for AnthropicClient {}
 impl WithStreamChat for AnthropicClient {
     async fn stream_chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         let model_name = self
             .request_options()
@@ -128,6 +131,8 @@ impl WithStreamChat for AnthropicClient {
             either::Either::Right(prompt),
             model_name,
             ResponseType::Anthropic,
+            ctx,
+            http_request_id,
         )
         .await
     }
@@ -149,7 +154,7 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -172,7 +177,7 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
@@ -234,6 +239,8 @@ impl RequestBuilder for AnthropicClient {
             }
         }
 
+        log::trace!("request body: {:?}", body_obj);
+
         if stream {
             body_obj.insert("stream".into(), true.into());
         }
@@ -247,7 +254,12 @@ impl RequestBuilder for AnthropicClient {
 }
 
 impl WithChat for AnthropicClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
         let model_name = self
             .request_options()
             .get("model")
@@ -259,6 +271,8 @@ impl WithChat for AnthropicClient {
             either::Either::Right(prompt),
             false,
             ResponseType::Anthropic,
+            ctx,
+            http_request_id,
         )
         .await
     }
@@ -294,10 +308,12 @@ impl ToProviderMessage for AnthropicClient {
                     "BAML internal error (Anthropic): file should have been resolved to base64"
                 )
             }
-            BamlMediaContent::Url(_) => {
-                anyhow::bail!(
-                    "BAML internal error (Anthropic): media URL should have been resolved to base64"
-                )
+            BamlMediaContent::Url(url) => {
+                content.insert("type".into(), media.media_type.to_string().into());
+                let mut source = serde_json::Map::new();
+                source.insert("type".into(), "url".into());
+                source.insert("url".into(), url.url.clone().into());
+                content.insert("source".into(), source.into());
             }
         }
         Ok(content)
@@ -356,8 +372,19 @@ impl ToProviderMessageExt for AnthropicClient {
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
-    let mut map = HashMap::new();
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
     map
+}
+
+impl CompletionToProviderBody for AnthropicClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
+    }
 }

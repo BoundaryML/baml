@@ -129,7 +129,8 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="wasm-pack test --chrome . --features=wasm"
       #command="wasm-pack test --node . --features=wasm"
-      command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
+      # command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
+      command="cargo test --features=internal internal -- --nocapture"
     else
       command="cargo build --features=wasm --target=wasm32-unknown-unknown"
       command="cargo build"
@@ -161,7 +162,7 @@ case "$_path" in
         --ext rs,hb,hbs,j2,toml \
         --watch "${_repo_root}/engine" \
         --ignore 'target/**' \
-        --exec "${command}"
+        --exec "${command}" --verbose
     else
       eval "${command}"
     fi
@@ -193,8 +194,8 @@ case "$_path" in
     command="${command} && uv run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
-      # command="${command} && BAML_LOG=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_aws_bedrock_invalid_region"
-      command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
+      command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_should_work_with_image_url"
+      # command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

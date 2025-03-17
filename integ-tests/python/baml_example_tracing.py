@@ -5,14 +5,10 @@ from dotenv import load_dotenv
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import os
+from baml_client.tracing import trace, flush
 
 load_dotenv()
 os.environ['BOUNDARY_BASE_URL'] = 'http://localhost:4040'
-
-import baml_py
-from baml_client import b
-from baml_client.types import NamedArgsSingleEnumList, NamedArgsSingleClass
-from baml_client.tracing import trace, set_tags, flush, on_log_event
 
 class TraceRequestHandler(BaseHTTPRequestHandler):
 

@@ -5,7 +5,7 @@ mod minijinja;
 pub mod rpc;
 pub mod tracing;
 
-mod baml_value;
+pub mod baml_value;
 mod field_type;
 mod generator;
 mod value_expr;

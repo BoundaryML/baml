@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "ambassador",
  "anyhow",
@@ -898,7 +898,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.1.0"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -937,11 +937,12 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
 name = "baml-runtime"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "ambassador",
  "anyhow",
@@ -965,6 +966,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
+ "console_error_panic_hook",
  "console_log",
  "criterion",
  "dashmap",
@@ -1004,6 +1006,7 @@ dependencies = [
  "mime_guess",
  "minijinja",
  "notify-debouncer-full",
+ "once_cell",
  "pin-project-lite",
  "pretty_assertions",
  "regex",
@@ -1015,8 +1018,9 @@ dependencies = [
  "secrecy",
  "send_wrapper 0.6.0",
  "serde",
- "serde-wasm-bindgen 0.6.5",
+ "serde-wasm-bindgen",
  "serde_json",
+ "serial_test",
  "shell-escape",
  "static_assertions",
  "stream-cancel",
@@ -1025,9 +1029,11 @@ dependencies = [
  "strum_macros",
  "test-log",
  "thiserror 2.0.9",
+ "time",
  "tokio",
  "tokio-stream",
  "tracing",
+ "tracing-core",
  "tracing-subscriber",
  "url",
  "uuid",
@@ -1037,6 +1043,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wasm-logger",
+ "wasmtimer",
  "web-sys",
  "web-time",
  "which",
@@ -1044,7 +1051,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1055,6 +1062,7 @@ dependencies = [
  "dissimilar",
  "either",
  "expect-test",
+ "futures-timer",
  "getrandom",
  "indexmap 2.2.6",
  "indoc",
@@ -1065,8 +1073,9 @@ dependencies = [
  "js-sys",
  "jsonish",
  "log",
+ "once_cell",
  "serde",
- "serde-wasm-bindgen 0.4.5",
+ "serde-wasm-bindgen",
  "serde_json",
  "time",
  "url",
@@ -1076,13 +1085,14 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wasm-logger",
+ "wasmtimer",
  "web-sys",
  "web-time",
 ]
 
 [[package]]
 name = "baml-types"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1096,13 +1106,15 @@ dependencies = [
  "serde_json",
  "strum",
  "time",
+ "tokio",
  "tracing-core",
+ "uuid",
  "web-time",
 ]
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.0.1"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1215,7 +1227,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1262,32 +1274,6 @@ dependencies = [
  "memchr",
  "regex-automata 0.4.7",
  "serde",
-]
-
-[[package]]
-name = "btrace"
-version = "0.76.2"
-dependencies = [
- "anyhow",
- "baml-types",
- "base64 0.22.1",
- "bytes",
- "futures-timer",
- "hostname",
- "js-sys",
- "log",
- "reqwest",
- "serde",
- "serde_json",
- "time",
- "tokio",
- "tokio-stream",
- "tracing-core",
- "uuid",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "web-time",
 ]
 
 [[package]]
@@ -2779,7 +2765,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2804,7 +2790,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2841,7 +2827,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -2854,7 +2840,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2875,7 +2861,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2894,7 +2880,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2919,7 +2905,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -2931,7 +2917,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2952,7 +2938,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3063,7 +3049,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.76.2"
+version = "0.78.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -4031,6 +4017,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e484fd2c8b4cb67ab05a318f1fd6fa8f199fcc30819f08f07d200809dba26c15"
 dependencies = [
  "cfg-if",
+ "either",
  "indoc",
  "libc",
  "memoffset",
@@ -4632,6 +4619,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "scc"
+version = "2.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea091f6cac2595aa38993f04f4ee692ed43757035c36e67c180b6828356385b1"
+dependencies = [
+ "sdd",
+]
+
+[[package]]
 name = "schannel"
 version = "0.1.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4661,6 +4657,12 @@ dependencies = [
  "ring",
  "untrusted",
 ]
+
+[[package]]
+name = "sdd"
+version = "3.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b07779b9b918cc05650cb30f404d4d7835d26df37c235eded8a6832e2fb82cca"
 
 [[package]]
 name = "secrecy"
@@ -4733,17 +4735,6 @@ dependencies = [
 
 [[package]]
 name = "serde-wasm-bindgen"
-version = "0.4.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3b4c031cd0d9014307d82b8abf653c0290fbdaeb4c02d00c63cf52f728628bf"
-dependencies = [
- "js-sys",
- "serde",
- "wasm-bindgen",
-]
-
-[[package]]
-name = "serde-wasm-bindgen"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8302e169f0eddcc139c70f139d19d6467353af16f9fce27e8c30158036a1e16b"
@@ -4779,7 +4770,8 @@ dependencies = [
 [[package]]
 name = "serde_magnus"
 version = "0.9.0"
-source = "git+https://github.com/BoundaryML/serde-magnus.git?branch=sam%2Fmagnus-0.7.1#c547ef5ef475087ce57322b8e74c4a73ee2ab84b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51b8b945a2dadb221f1c5490cfb411cab6c3821446b8eca50ee07e5a3893ec51"
 dependencies = [
  "magnus",
  "serde",
@@ -4819,6 +4811,31 @@ dependencies = [
  "ryu",
  "serde",
  "unsafe-libyaml",
+]
+
+[[package]]
+name = "serial_test"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b258109f244e1d6891bf1053a55d63a5cd4f8f4c30cf9a1280989f80e7a1fa9"
+dependencies = [
+ "futures",
+ "log",
+ "once_cell",
+ "parking_lot",
+ "scc",
+ "serial_test_derive",
+]
+
+[[package]]
+name = "serial_test_derive"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d69265a08751de7844521fd15003ae0a888e035773ba05695c5c759a6f89eef"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
 ]
 
 [[package]]
@@ -5848,6 +5865,20 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wasmtimer"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0048ad49a55b9deb3953841fa1fc5858f0efbcb7a18868c899a360269fac1b23"
+dependencies = [
+ "futures",
+ "js-sys",
+ "parking_lot",
+ "pin-utils",
+ "slab",
+ "wasm-bindgen",
 ]
 
 [[package]]

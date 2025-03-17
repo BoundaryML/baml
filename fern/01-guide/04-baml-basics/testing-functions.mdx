@@ -27,10 +27,28 @@ test Test1 {
     // input is the first argument of ClassifyMessage
     input "Can't access my account using my usual login credentials, and each attempt results in an error message stating 'Invalid username or password.' I have tried resetting my password using the 'Forgot Password' link, but I haven't received the promised password reset email."
   }
-  @@assert( {{ this == AccountIssue }})
+  // 'this' is the output of the function
+  @@assert( {{ this == "AccountIssue" }})
 }
 ```
-See the [interactive examples](https://promptfiddle.com)
+
+### Try it! Press 'Run Test' below!
+ <div class="resizer">
+<iframe
+  class="resized"
+  src="https://promptfiddle.com/embed?id=testing_functions"
+ 
+  height="640"
+  style="border: none;"
+  resize="both"
+  overflow="auto"
+  msallowfullscreen
+></iframe>
+</div>
+
+
+
+See more [interactive examples](https://promptfiddle.com)
 
 The BAML playground will give you a starting snippet to copy that will match your function signature.
 
@@ -317,7 +335,7 @@ attributes, see [Checks and Asserts](/guide/baml-advanced/checks-and-asserts)
 
 ## Dynamic Types Tests
 
-Classes and enums marked with the [`@@dynamic`](/ref/baml-client/type-builder)
+Classes and enums marked with the [`@@dynamic`](/ref/baml_client/type-builder)
 attribute can be modified in tests using the `type_builder` and `dynamic`
 blocks.
 
@@ -325,3 +343,17 @@ blocks.
 
 The `type_builder` block can contain new types scoped to the parent `test` block
 and also `dynamic` blocks that act as modifiers for dynamic classes or enums.
+
+### Try it! Press 'Run Test' below!
+ <div class="resizer">
+<iframe
+  class="resized"
+  src="https://promptfiddle.com/embed?id=dynamic_types"
+ 
+  height="640"
+  style="border: none;"
+  resize="both"
+  overflow="auto"
+  msallowfullscreen
+></iframe>
+</div>

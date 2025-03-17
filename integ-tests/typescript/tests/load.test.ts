@@ -1,13 +1,7 @@
-import { b } from "../baml_client"
-// import { ChartJSNodeCanvas } from 'chartjs-node-canvas';
-// import { Chart, registerables } from 'chart.js';
+import { b } from "./test-setup"
 import fs from 'fs';
 
 // BAML_LOG=info infisical run --env=test -- npx tsx tests/load.test.ts
-
-// Register Chart.js components
-// Chart.register(...registerables);
-
 
 
 type MemoryEvent = {

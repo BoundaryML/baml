@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.76.2",
+  "version": "0.78.0",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -32,7 +32,9 @@
     "./type_builder.d.ts",
     "./type_builder.js",
     "./errors.d.ts",
-    "./errors.js"
+    "./errors.js",
+    "./safe_imports.d.ts",
+    "./safe_imports.js"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",

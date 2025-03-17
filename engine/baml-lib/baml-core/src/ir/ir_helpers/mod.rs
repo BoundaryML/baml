@@ -2,7 +2,11 @@ mod error_utils;
 pub mod scope_diagnostics;
 mod to_baml_arg;
 
+use std::collections::HashSet;
+
 use indexmap::IndexMap;
+use internal_baml_diagnostics::Span;
+use internal_baml_schema_ast::ast::{WithIdentifier, WithSpan};
 use itertools::Itertools;
 
 use self::scope_diagnostics::ScopeStack;
@@ -14,6 +18,7 @@ use crate::{
         TypeAlias,
     },
 };
+
 use anyhow::Result;
 use baml_types::{
     BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
@@ -50,6 +55,11 @@ pub trait IRHelper {
         function: &'a FunctionWalker<'a>,
         test_name: &str,
     ) -> Result<TestCaseWalker<'a>>;
+
+    fn find_class_locations(&self, type_name: &str) -> Vec<Span>;
+    fn find_enum_locations(&self, type_name: &str) -> Vec<Span>;
+    fn find_type_alias_locations(&self, type_name: &str) -> Vec<Span>;
+
     fn check_function_params<'a>(
         &'a self,
         function: &'a FunctionWalker<'a>,
@@ -231,6 +241,203 @@ impl IRHelper for IntermediateRepr {
                 error_not_found!("template string", template_string_name, &template_strings)
             }
         }
+    }
+
+    fn find_class_locations(&self, class_name: &str) -> Vec<Span> {
+        let mut locations = vec![];
+
+        for cls in self.walk_classes() {
+            // First look for the definition of the class.
+            if cls.name() == class_name {
+                locations.push(
+                    cls.item
+                        .attributes
+                        .identifier_span
+                        .as_ref()
+                        .unwrap()
+                        .to_owned(),
+                );
+            }
+
+            // After that we'll find all the references to this class in the
+            // fields of other classes.
+            for field in cls.walk_fields() {
+                field
+                    .elem()
+                    .r#type
+                    .attributes
+                    .symbol_spans
+                    .iter()
+                    .for_each(|(name, spans)| {
+                        if name == class_name {
+                            locations.extend(spans.iter().cloned());
+                        }
+                    });
+            }
+        }
+
+        // Now do the same for type aliases.
+        for alias in self.walk_type_aliases() {
+            alias
+                .elem()
+                .r#type
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == class_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        // Then find function inputs and outputs pointing to this class.
+        for func in self.walk_functions() {
+            func.item
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == class_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        locations
+    }
+
+    fn find_enum_locations(&self, enum_name: &str) -> Vec<Span> {
+        let mut locations = vec![];
+
+        // First look for the definition of the enum.
+        for enm in self.walk_enums() {
+            if enm.name() == enum_name {
+                locations.push(
+                    enm.item
+                        .attributes
+                        .identifier_span
+                        .as_ref()
+                        .unwrap()
+                        .to_owned(),
+                );
+            }
+        }
+
+        // Then find all the references to this enum in the fields of other
+        // classes.
+        for cls in self.walk_classes() {
+            for field in cls.walk_fields() {
+                field
+                    .elem()
+                    .r#type
+                    .attributes
+                    .symbol_spans
+                    .iter()
+                    .for_each(|(name, spans)| {
+                        if name == enum_name {
+                            locations.extend(spans.iter().cloned());
+                        }
+                    });
+            }
+        }
+
+        // Now do the same for type aliases.
+        for alias in self.walk_type_aliases() {
+            alias
+                .elem()
+                .r#type
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == enum_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        // Then find function inputs and outputs pointing to this enum.
+        for func in self.walk_functions() {
+            func.item
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == enum_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        locations
+    }
+
+    fn find_type_alias_locations(&self, type_alias_name: &str) -> Vec<Span> {
+        let mut locations = vec![];
+
+        // First look for the definition of the type alias.
+        for alias in self.walk_type_aliases() {
+            if alias.name() == type_alias_name {
+                locations.push(
+                    alias
+                        .item
+                        .attributes
+                        .identifier_span
+                        .as_ref()
+                        .unwrap()
+                        .to_owned(),
+                );
+            }
+        }
+
+        // Then find all the references to this type alias in the fields of other
+        // classes.
+        for cls in self.walk_classes() {
+            for field in cls.walk_fields() {
+                field
+                    .elem()
+                    .r#type
+                    .attributes
+                    .symbol_spans
+                    .iter()
+                    .for_each(|(name, spans)| {
+                        if name == type_alias_name {
+                            locations.extend(spans.iter().cloned());
+                        }
+                    });
+            }
+        }
+
+        // Now do the same for type aliases.
+        for alias in self.walk_type_aliases() {
+            alias
+                .elem()
+                .r#type
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == type_alias_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        // Then find function inputs and outputs pointing to this type alias.
+        for func in self.walk_functions() {
+            func.item
+                .attributes
+                .symbol_spans
+                .iter()
+                .for_each(|(name, spans)| {
+                    if name == type_alias_name {
+                        locations.extend(spans.iter().cloned());
+                    }
+                });
+        }
+
+        locations
     }
 
     fn check_function_params<'a>(

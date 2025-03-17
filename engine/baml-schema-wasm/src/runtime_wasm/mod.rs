@@ -5,6 +5,7 @@ use anyhow::Context;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
+use baml_runtime::tracingv2::storage::storage::Collector;
 use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
@@ -31,6 +32,7 @@ use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -748,9 +750,9 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::FinishReasonError {
                             message, ..
                         } => Some(message.clone()),
-                        baml_runtime::errors::ExposedError::ClientHttpError {
-                            message, ..
-                        } => Some(message.clone()),
+                        baml_runtime::errors::ExposedError::ClientHttpError { message, .. } => {
+                            Some(message.clone())
+                        }
                     },
                     None => Some(format!("{e:#}")),
                 }
@@ -1240,6 +1242,89 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
+    pub fn is_valid_class(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_class(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_enum(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_enum(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_type_alias(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_type_alias(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_function(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_function(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_class_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_enum_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_type_alias_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
     pub fn get_function_at_position(
         &self,
         file_name: &str,
@@ -1522,7 +1607,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None)
+            .create_ctx(test_type_builder.as_ref(), None, None)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1575,7 +1660,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None)
+            .create_ctx(test_type_builder.as_ref(), None, None)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1623,9 +1708,9 @@ impl WasmFunction {
         get_baml_src_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
-
         let function_name = self.name.clone();
 
+        // Create the closure to handle partial responses:
         let cb = Box::new(move |r| {
             let this = JsValue::NULL;
             let res = WasmFunctionResponse {
@@ -1635,12 +1720,15 @@ impl WasmFunction {
             on_partial_response.call1(&this, &res).unwrap();
         });
 
+        // Create your evaluation context, etc.
         let ctx = rt.create_ctx_manager(
             BamlValue::String("wasm".to_string()),
             js_fn_to_baml_src_reader(get_baml_src_cb),
         );
+
+        // Now pass collector_arc to your runtime's run_test
         let (test_response, span) = rt
-            .run_test(&function_name, &test_name, &ctx, Some(cb))
+            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
             .await;
 
         log::info!("test_response: {:#?}", test_response);

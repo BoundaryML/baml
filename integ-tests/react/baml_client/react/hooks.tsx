@@ -398,7 +398,7 @@ export function useAaaSamOutputFormat(
  *
  * **Input Types:**
  *
- * - list: LinkedListAliasNode
+ * - data: LinkedListAliasNode
  *
  *
  * **Return Type:**
@@ -4002,6 +4002,56 @@ export function useNullLiteralClassHello(
   throw new Error('Invalid props')
 }
 /**
+ * A specialized hook for the OpenAIWithAnthropicResponseHello BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - s: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useOpenAIWithAnthropicResponseHello({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useOpenAIWithAnthropicResponseHello({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useOpenAIWithAnthropicResponseHello(props: HookInput<'OpenAIWithAnthropicResponseHello', { stream: false }>): HookOutput<'OpenAIWithAnthropicResponseHello', { stream: false }>
+export function useOpenAIWithAnthropicResponseHello(props?: HookInput<'OpenAIWithAnthropicResponseHello', { stream?: true }>): HookOutput<'OpenAIWithAnthropicResponseHello', { stream: true }>
+export function useOpenAIWithAnthropicResponseHello(
+  props: HookInput<'OpenAIWithAnthropicResponseHello', { stream?: boolean }> = {},
+): HookOutput<'OpenAIWithAnthropicResponseHello', { stream: true }> | HookOutput<'OpenAIWithAnthropicResponseHello', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.OpenAIWithAnthropicResponseHello, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.OpenAIWithAnthropicResponseHello, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
  * A specialized hook for the OptionalTest_Function BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -6206,6 +6256,56 @@ export function useTestFallbackClient(
   throw new Error('Invalid props')
 }
 /**
+ * A specialized hook for the TestFallbackStrategy BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestFallbackStrategy({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestFallbackStrategy({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestFallbackStrategy(props: HookInput<'TestFallbackStrategy', { stream: false }>): HookOutput<'TestFallbackStrategy', { stream: false }>
+export function useTestFallbackStrategy(props?: HookInput<'TestFallbackStrategy', { stream?: true }>): HookOutput<'TestFallbackStrategy', { stream: true }>
+export function useTestFallbackStrategy(
+  props: HookInput<'TestFallbackStrategy', { stream?: boolean }> = {},
+): HookOutput<'TestFallbackStrategy', { stream: true }> | HookOutput<'TestFallbackStrategy', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestFallbackStrategy, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestFallbackStrategy, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
  * A specialized hook for the TestFallbackToShorthand BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -6764,9 +6864,9 @@ export function useTestFnNamedArgsSingleStringArray(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
+ * - **Non‑streaming:** string[]
+ * - **Streaming Partial:** (string | null)[]
+ * - **Streaming Final:** string[]
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -7506,6 +7606,56 @@ export function useTestOpenAI(
   throw new Error('Invalid props')
 }
 /**
+ * A specialized hook for the TestOpenAIGPT4oMini BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestOpenAIGPT4oMini({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestOpenAIGPT4oMini({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestOpenAIGPT4oMini(props: HookInput<'TestOpenAIGPT4oMini', { stream: false }>): HookOutput<'TestOpenAIGPT4oMini', { stream: false }>
+export function useTestOpenAIGPT4oMini(props?: HookInput<'TestOpenAIGPT4oMini', { stream?: true }>): HookOutput<'TestOpenAIGPT4oMini', { stream: true }>
+export function useTestOpenAIGPT4oMini(
+  props: HookInput<'TestOpenAIGPT4oMini', { stream?: boolean }> = {},
+): HookOutput<'TestOpenAIGPT4oMini', { stream: true }> | HookOutput<'TestOpenAIGPT4oMini', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestOpenAIGPT4oMini, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestOpenAIGPT4oMini, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
  * A specialized hook for the TestOpenAILegacyProvider BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -7952,6 +8102,56 @@ export function useTestRetryExponential(
   throw new Error('Invalid props')
 }
 /**
+ * A specialized hook for the TestRoundRobinStrategy BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestRoundRobinStrategy({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestRoundRobinStrategy({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestRoundRobinStrategy(props: HookInput<'TestRoundRobinStrategy', { stream: false }>): HookOutput<'TestRoundRobinStrategy', { stream: false }>
+export function useTestRoundRobinStrategy(props?: HookInput<'TestRoundRobinStrategy', { stream?: true }>): HookOutput<'TestRoundRobinStrategy', { stream: true }>
+export function useTestRoundRobinStrategy(
+  props: HookInput<'TestRoundRobinStrategy', { stream?: boolean }> = {},
+): HookOutput<'TestRoundRobinStrategy', { stream: true }> | HookOutput<'TestRoundRobinStrategy', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestRoundRobinStrategy, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestRoundRobinStrategy, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
  * A specialized hook for the TestSingleFallbackClient BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -7996,6 +8196,56 @@ export function useTestSingleFallbackClient(
   }
   if (isStreamingProps(props)) {
     return useBamlAction(StreamingActions.TestSingleFallbackClient, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
+ * A specialized hook for the TestThinking BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** CustomStory
+ * - **Streaming Partial:** partial_types.CustomStory
+ * - **Streaming Final:** CustomStory
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestThinking({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestThinking({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestThinking(props: HookInput<'TestThinking', { stream: false }>): HookOutput<'TestThinking', { stream: false }>
+export function useTestThinking(props?: HookInput<'TestThinking', { stream?: true }>): HookOutput<'TestThinking', { stream: true }>
+export function useTestThinking(
+  props: HookInput<'TestThinking', { stream?: boolean }> = {},
+): HookOutput<'TestThinking', { stream: true }> | HookOutput<'TestThinking', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestThinking, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestThinking, props)
   }
   throw new Error('Invalid props')
 }

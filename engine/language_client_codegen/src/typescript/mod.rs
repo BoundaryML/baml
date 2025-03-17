@@ -164,6 +164,7 @@ struct TypescriptFunction {
 #[template(path = "index.ts.j2", escape = "none")]
 struct TypescriptInit {
     default_client_mode: GeneratorDefaultClientMode,
+    version: String,
 }
 
 #[derive(askama::Template)]
@@ -181,6 +182,54 @@ struct InlinedBaml {
 #[derive(askama::Template)]
 #[template(path = "tracing.ts.j2", escape = "none")]
 struct TypescriptTracing {}
+
+#[derive(askama::Template)]
+#[template(path = "parser.ts.j2", escape = "none")]
+struct TypscriptLlmParser {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+impl From<TypescriptClient> for TypscriptLlmParser {
+    fn from(ts_client: TypescriptClient) -> Self {
+        Self {
+            funcs: ts_client.funcs,
+            types: ts_client.types,
+        }
+    }
+}
+
+#[derive(askama::Template)]
+#[template(path = "async_request.ts.j2", escape = "none")]
+struct AsyncTypescriptRequest {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+impl From<TypescriptClient> for AsyncTypescriptRequest {
+    fn from(ts_client: TypescriptClient) -> Self {
+        Self {
+            funcs: ts_client.funcs,
+            types: ts_client.types,
+        }
+    }
+}
+
+#[derive(askama::Template)]
+#[template(path = "sync_request.ts.j2", escape = "none")]
+struct SyncTypescriptRequest {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+impl From<TypescriptClient> for SyncTypescriptRequest {
+    fn from(ts_client: TypescriptClient) -> Self {
+        Self {
+            funcs: ts_client.funcs,
+            types: ts_client.types,
+        }
+    }
+}
 
 pub(crate) fn generate(
     ir: &IntermediateRepr,
@@ -200,6 +249,9 @@ pub(crate) fn generate(
     collector.add_template::<AsyncTypescriptClient>("async_client.ts", (ir, generator))?;
     collector.add_template::<SyncTypescriptClient>("sync_client.ts", (ir, generator))?;
     collector.add_template::<TypescriptGlobals>("globals.ts", (ir, generator))?;
+    collector.add_template::<TypscriptLlmParser>("parser.ts", (ir, generator))?;
+    collector.add_template::<AsyncTypescriptRequest>("async_request.ts", (ir, generator))?;
+    collector.add_template::<SyncTypescriptRequest>("sync_request.ts", (ir, generator))?;
     collector.add_template::<TypescriptTracing>("tracing.ts", (ir, generator))?;
     collector.add_template::<TypescriptInit>("index.ts", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.ts", (ir, generator))?;
@@ -305,6 +357,33 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
     }
 }
 
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypscriptLlmParser {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncTypescriptRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for SyncTypescriptRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
     type Error = anyhow::Error;
 
@@ -337,6 +416,8 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptIni
     fn try_from((_, gen): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
         Ok(TypescriptInit {
             default_client_mode: gen.default_client_mode.clone(),
+            // TODO: Should we use gen.version
+            version: env!("CARGO_PKG_VERSION").to_string(),
         })
     }
 }

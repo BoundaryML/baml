@@ -3,6 +3,8 @@ use crate::parse_ts_types;
 use crate::types::client_registry::ClientRegistry;
 use crate::types::function_result_stream::FunctionResultStream;
 use crate::types::function_results::FunctionResult;
+use crate::types::log_collector::Collector;
+use crate::types::request::HTTPRequest;
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::types::trace_stats::TraceStats;
 use crate::types::type_builder::TypeBuilder;
@@ -103,6 +105,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -119,9 +122,21 @@ impl BamlRuntime {
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
 
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
+
         let fut = async move {
             let result = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
+                .call_function(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    Some(collector_list),
+                )
                 .await;
 
             result
@@ -142,6 +157,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -156,12 +172,17 @@ impl BamlRuntime {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
         let (result, _event_id) = self.inner.call_function_sync(
             function_name,
             &args_map,
             &ctx_mng,
             tb.as_ref(),
             cb.as_ref(),
+            Some(collector_list),
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -179,6 +200,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -192,6 +214,10 @@ impl BamlRuntime {
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let client_registry = client_registry.map(|cb| cb.inner.clone());
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
         let stream = self
             .inner
             .stream_function(
@@ -200,6 +226,7 @@ impl BamlRuntime {
                 &ctx,
                 tb.as_ref(),
                 client_registry.as_ref(),
+                Some(collector_list),
             )
             .map_err(from_anyhow_error)?;
 
@@ -223,6 +250,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
+        collectors: Vec<&Collector>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -236,6 +264,10 @@ impl BamlRuntime {
         let ctx = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let client_registry = client_registry.map(|cb| cb.inner.clone());
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| c.inner.clone())
+            .collect::<Vec<_>>();
         let stream = self
             .inner
             .stream_function(
@@ -244,6 +276,7 @@ impl BamlRuntime {
                 &ctx,
                 tb.as_ref(),
                 client_registry.as_ref(),
+                Some(collector_list),
             )
             .map_err(from_anyhow_error)?;
 
@@ -253,6 +286,124 @@ impl BamlRuntime {
         };
 
         Ok(FunctionResultStream::new(stream, cb, tb, client_registry))
+    }
+
+    #[napi(ts_return_type = "Promise<HTTPRequest>")]
+    pub fn build_request(
+        &self,
+        env: Env,
+        function_name: String,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> napi::Result<JsObject> {
+        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+
+        if !args.is_map() {
+            return Err(invalid_argument_error(&format!(
+                "Expected a map of arguments, got: {}",
+                args.r#type()
+            )));
+        }
+        let args_map = args.as_map_owned().unwrap();
+
+        let baml_runtime = self.inner.clone();
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
+        let fut = async move {
+            baml_runtime
+                .build_request(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    stream,
+                )
+                .await
+                .map(HTTPRequest::from)
+                .map_err(from_anyhow_error)
+        };
+
+        env.execute_tokio_future(fut, |&mut _, data| Ok(data))
+    }
+
+    #[napi]
+    pub fn build_request_sync(
+        &self,
+        env: Env,
+        function_name: String,
+        #[napi(ts_arg_type = "{ [name: string]: any }")] args: JsObject,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> napi::Result<HTTPRequest> {
+        let args = parse_ts_types::js_object_to_baml_value(env, args)?;
+
+        if !args.is_map() {
+            return Err(invalid_argument_error(&format!(
+                "Expected a map of arguments, got: {}",
+                args.r#type()
+            )));
+        }
+        let args_map = args.as_map_owned().unwrap();
+
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
+        self.inner
+            .build_request_sync(
+                function_name,
+                &args_map,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+                stream,
+            )
+            .map(HTTPRequest::from)
+            .map_err(from_anyhow_error)
+    }
+
+    #[napi]
+    pub fn parse_llm_response(
+        &self,
+        env: Env,
+        function_name: String,
+        llm_response: String,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> napi::Result<serde_json::Value> {
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
+        let parsed = self
+            .inner
+            .parse_llm_response(
+                function_name,
+                llm_response,
+                allow_partials,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+            )
+            .map_err(from_anyhow_error)?;
+
+        let value = serde_json::to_value(if allow_partials {
+            parsed.serialize_partial()
+        } else {
+            parsed.serialize_final()
+        });
+
+        value.map_err(|e| napi::Error::from_reason(format!("Could not parse LLM response: {e}")))
     }
 
     #[napi]

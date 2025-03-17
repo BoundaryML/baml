@@ -24,6 +24,7 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
     __task: Optional[threading.Thread]
     __event_queue: queue.Queue[Optional[FunctionResult]]
     __future: concurrent.futures.Future[FunctionResult]
+    __is_done: bool
 
     def __init__(
         self,
@@ -39,6 +40,7 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         self.__task = None
         self.__event_queue = queue.Queue()
         self.__future = concurrent.futures.Future()  # Initialize the future here
+        self.__is_done = False
 
     def __enqueue(self, data: FunctionResult) -> None:
         self.__event_queue.put_nowait(data)
@@ -48,15 +50,21 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
             retval = await self.__ffi_stream.done(self.__ctx_manager)
 
             self.__future.set_result(retval)
+           
             return retval
         except Exception as e:
             self.__future.set_exception(e)
             raise
         finally:
+            # Remove the callback, so that the ffi_stream can be GC'd
+            # If we don't do this, the ffi_stream *and* this BamlStream object
+            # will never get collected since they circularly reference each other.
+            self.__ffi_stream.on_event(None)  # type: ignore
+            self.__is_done = True
             self.__event_queue.put_nowait(None)
 
     def __drive_to_completion_in_bg(self) -> concurrent.futures.Future[FunctionResult]:
-        if self.__task is None:
+        if self.__task is None and not self.__is_done:
             self.__task = threading.Thread(target=self.threading_target, daemon=True)
             self.__task.start()
         return self.__future
@@ -68,13 +76,22 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
         # TODO: This is deliberately __aiter__ and not __iter__ because we want to
         # ensure that the caller is using an async for loop.
         # Eventually we do not want to create a new thread for each stream.
-        self.__drive_to_completion_in_bg()
-        while True:
-            event = self.__event_queue.get()
-            if event is None:
-                break
-            if event.is_ok():
-                yield self.__partial_coerce(event)
+        try:
+            self.__drive_to_completion_in_bg()
+            while True:
+                try:
+                    event = self.__event_queue.get_nowait()
+                    if event is None:
+                        break
+                    if event.is_ok():
+                        yield self.__partial_coerce(event)
+                except queue.Empty:
+                    await asyncio.sleep(0.050)
+        except Exception as e:
+            raise e
+        finally:
+            if self.__task and self.__task.is_alive():
+                self.__task.join(timeout=5.0)
 
     async def get_final_response(self):
         final = self.__drive_to_completion_in_bg()
@@ -106,6 +123,7 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
         self.__event_queue = queue.Queue()
         self.__result = None
         self.__exception = None
+        self.__is_done = False
 
     def __enqueue(self, data: FunctionResult) -> None:
         self.__event_queue.put_nowait(data)
@@ -114,15 +132,21 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
         try:
             retval = self.__ffi_stream.done(self.__ctx_manager)
             self.__result = retval
+            # Remove the callback, so that the ffi_stream can be GC'd
+            # If we don't do this, the ffi_stream *and* this BamlStream object
+            # will never get collected since they circularly reference each other.
+            self.__ffi_stream.on_event(None)  # type: ignore
+
             return retval
         except Exception as e:
             self.__exception = e
             raise e
         finally:
+            self.__is_done = True
             self.__event_queue.put_nowait(None)
 
     def __drive_to_completion_in_bg(self):
-        if self.__task is None:
+        if self.__task is None and not self.__is_done:
             self.__task = threading.Thread(target=self.__threading_target, daemon=True)
             self.__task.start()
 
@@ -133,12 +157,19 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
         # TODO: This is deliberately __iter__ and not __aiter__ because we want to
         # ensure that the caller is NOT using an async for loop.
         self.__drive_to_completion_in_bg()
-        while True:
-            event = self.__event_queue.get()
-            if event is None:
-                break
-            if event.is_ok():
-                yield self.__partial_coerce(event)
+
+        try:
+            while True:
+                event = self.__event_queue.get()
+                if event is None:
+                    break
+                if event.is_ok():
+                    yield self.__partial_coerce(event)
+        except Exception as e:
+            raise e
+        finally:
+            if self.__task and self.__task.is_alive():
+                self.__task.join(timeout=5.0)
 
     def get_final_response(self):
         self.__drive_to_completion_in_bg()

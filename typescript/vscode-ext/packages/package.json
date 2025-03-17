@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.76.2",
+  "version": "0.78.0",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",
@@ -16,14 +16,12 @@
   ],
   "activationEvents": [
     "onLanguage:baml",
-    "onLanguage:python",
-    "onLanguage:json"
+    "onLanguage:python"
   ],
   "main": "./vscode/out/extension.js",
   "contributes": {
     "activationEvents": [
       "onLanguage:baml",
-      "onLanguage:json",
       "onLanguage:python"
     ],
     "configuration": {
@@ -193,3 +191,4 @@
   },
   "preview": false
 }
+

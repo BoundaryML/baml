@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{BamlMap, BamlValue};
+use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlValue};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
+use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
 
 use crate::{
@@ -21,19 +22,21 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl, WithRetryPolicy,
-        WithSingleCallable, WithStreamable,
+        CompletionToProviderBody, ToProviderMessage, WithClient, WithClientProperties, WithPrompt,
+        WithRenderRawCurl, WithRetryPolicy, WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
+
+pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
 
 mod anthropic;
 mod aws;
 mod google;
 mod openai;
 pub(super) mod request;
-mod vertex;
 mod stream_request;
+mod vertex;
 
 // use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
 // use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
@@ -198,6 +201,73 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
     }
 }
 
+impl LLMPrimitiveProvider {
+    pub fn chat_to_message(
+        &self,
+        chat: &[RenderedChatMessage],
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        use super::traits::ToProviderMessageExt;
+
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Anthropic(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Google(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Vertex(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        }
+    }
+
+    pub fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        Ok(match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Anthropic(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Google(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Vertex(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        })
+    }
+
+    pub async fn build_request(
+        &self,
+        prompt: either::Either<&String, &[RenderedChatMessage]>,
+        allow_proxy: bool,
+        stream: bool,
+    ) -> Result<reqwest::RequestBuilder> {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Anthropic(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Google(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Vertex(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        }
+    }
+}
+
 impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
     async fn render_prompt(
         &'ir self,
@@ -226,8 +296,9 @@ impl WithSingleCallable for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
+        http_request_id: HttpRequestId,
     ) -> LLMResponse {
-        match_llm_provider!(self, single_call, async, ctx, prompt)
+        match_llm_provider!(self, single_call, async, ctx, prompt, http_request_id)
     }
 }
 
@@ -236,8 +307,9 @@ impl WithStreamable for LLMPrimitiveProvider {
         &self,
         ctx: &RuntimeContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
+        http_request_id: HttpRequestId,
     ) -> super::traits::StreamResponse {
-        match_llm_provider!(self, stream, async, ctx, prompt)
+        match_llm_provider!(self, stream, async, ctx, prompt, http_request_id)
     }
 }
 
@@ -273,7 +345,76 @@ impl LLMPrimitiveProvider {
         &match_llm_provider!(self, context).name
     }
 
+    pub fn provider_name(&self) -> &str {
+        &match_llm_provider!(self, context).provider
+    }
+
     pub fn request_options(&self) -> &BamlMap<String, serde_json::Value> {
         match_llm_provider!(self, request_options)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::internal::llm_client::traits::WithClient;
+
+    use super::request::RequestBuilder;
+    use anyhow::Result;
+
+    pub struct MockClient {
+        model_features: crate::internal::llm_client::ModelFeatures,
+        context: internal_baml_jinja::RenderContext_Client,
+        request_options: baml_types::BamlMap<String, serde_json::Value>,
+    }
+
+    impl MockClient {
+        pub fn new() -> Self {
+            Self {
+                model_features: crate::internal::llm_client::ModelFeatures {
+                    completion: false,
+                    chat: false,
+                    max_one_system_prompt: false,
+                    resolve_media_urls: crate::internal::llm_client::ResolveMediaUrls::Always,
+                    allowed_metadata: crate::internal::llm_client::AllowedRoleMetadata::All,
+                },
+                context: internal_baml_jinja::RenderContext_Client {
+                    name: "mock".to_string(),
+                    provider: "mock".to_string(),
+                    default_role: "user".to_string(),
+                    allowed_roles: vec![],
+                },
+                request_options: baml_types::BamlMap::new(),
+            }
+        }
+    }
+
+    impl WithClient for MockClient {
+        fn model_features(&self) -> &crate::internal::llm_client::ModelFeatures {
+            &self.model_features
+        }
+
+        fn context(&self) -> &internal_baml_jinja::RenderContext_Client {
+            &self.context
+        }
+    }
+
+    impl RequestBuilder for MockClient {
+        async fn build_request(
+            &self,
+            prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
+            allow_proxy: bool,
+            stream: bool,
+            expose_secrets: bool,
+        ) -> Result<reqwest::RequestBuilder> {
+            unimplemented!("Not used in tests")
+        }
+
+        fn request_options(&self) -> &baml_types::BamlMap<String, serde_json::Value> {
+            &self.request_options
+        }
+
+        fn http_client(&self) -> &reqwest::Client {
+            unimplemented!("Not used in tests")
+        }
     }
 }

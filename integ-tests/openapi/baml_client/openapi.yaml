@@ -1045,6 +1045,19 @@ paths:
                 title: NullLiteralClassHelloResponse
                 $ref: '#/components/schemas/ClassForNullLiteral'
       operationId: NullLiteralClassHello
+  /call/OpenAIWithAnthropicResponseHello:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/OpenAIWithAnthropicResponseHello'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: OpenAIWithAnthropicResponseHelloResponse
+                type: string
+      operationId: OpenAIWithAnthropicResponseHello
   /call/OptionalTest_Function:
     post:
       requestBody:
@@ -1657,6 +1670,19 @@ paths:
                 title: TestFallbackClientResponse
                 type: string
       operationId: TestFallbackClient
+  /call/TestFallbackStrategy:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestFallbackStrategy'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestFallbackStrategyResponse
+                type: string
+      operationId: TestFallbackStrategy
   /call/TestFallbackToShorthand:
     post:
       requestBody:
@@ -1819,7 +1845,9 @@ paths:
             application/json:
               schema:
                 title: TestFnNamedArgsSingleStringListResponse
-                type: string
+                type: array
+                items:
+                  type: string
       operationId: TestFnNamedArgsSingleStringList
   /call/TestGemini:
     post:
@@ -2003,6 +2031,19 @@ paths:
                 title: TestOpenAIResponse
                 type: string
       operationId: TestOpenAI
+  /call/TestOpenAIGPT4oMini:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIGPT4oMini'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIGPT4oMiniResponse
+                type: string
+      operationId: TestOpenAIGPT4oMini
   /call/TestOpenAILegacyProvider:
     post:
       requestBody:
@@ -2120,6 +2161,19 @@ paths:
                 title: TestRetryExponentialResponse
                 type: string
       operationId: TestRetryExponential
+  /call/TestRoundRobinStrategy:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestRoundRobinStrategy'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestRoundRobinStrategyResponse
+                type: string
+      operationId: TestRoundRobinStrategy
   /call/TestSingleFallbackClient:
     post:
       requestBody:
@@ -2133,6 +2187,19 @@ paths:
                 title: TestSingleFallbackClientResponse
                 type: string
       operationId: TestSingleFallbackClient
+  /call/TestThinking:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestThinking'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestThinkingResponse
+                $ref: '#/components/schemas/CustomStory'
+      operationId: TestThinking
   /call/TestUniverseQuestion:
     post:
       requestBody:
@@ -2250,13 +2317,13 @@ components:
             title: AliasThatPointsToRecursiveTypeRequest
             type: object
             properties:
-              list:
+              data:
                 $ref: '#/components/schemas/LinkedListAliasNode'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required:
-            - list
+            - data
             additionalProperties: false
     AliasWithMultipleAttrs:
       required: true
@@ -3456,6 +3523,22 @@ components:
             required:
             - s
             additionalProperties: false
+    OpenAIWithAnthropicResponseHello:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: OpenAIWithAnthropicResponseHelloRequest
+            type: object
+            properties:
+              s:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - s
+            additionalProperties: false
     OptionalTest_Function:
       required: true
       content:
@@ -4185,6 +4268,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestFallbackStrategy:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestFallbackStrategyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestFallbackToShorthand:
       required: true
       content:
@@ -4617,6 +4716,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenAIGPT4oMini:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIGPT4oMiniRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestOpenAILegacyProvider:
       required: true
       content:
@@ -4755,6 +4870,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    TestRoundRobinStrategy:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestRoundRobinStrategyRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestSingleFallbackClient:
       required: true
       content:
@@ -4767,6 +4898,22 @@ components:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
             required: []
+            additionalProperties: false
+    TestThinking:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestThinkingRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     TestUniverseQuestion:
       required: true
@@ -5209,6 +5356,22 @@ components:
           - $ref: '#/components/schemas/EmailAddress'
       required:
       - primary
+      additionalProperties: false
+    CustomStory:
+      type: object
+      properties:
+        characters:
+          type: array
+          items:
+            type: string
+        content:
+          type: string
+        title:
+          type: string
+      required:
+      - characters
+      - content
+      - title
       additionalProperties: false
     CustomTaskResult:
       type: object
@@ -6008,13 +6171,13 @@ components:
         education:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/Education'
         email:
           type: string
         experience:
           type: array
           items:
-            $ref: '#/components/schemas/Education'
+            type: string
         name:
           type: string
         phone:

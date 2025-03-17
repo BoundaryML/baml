@@ -1,4 +1,4 @@
-import { toBamlError } from '.'
+import { asBamlError } from './errors'
 import { FunctionResult, FunctionResultStream, RuntimeContextManager } from './native'
 
 export class BamlStream<PartialOutputType, FinalOutputType> {
@@ -27,6 +27,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
       return retval
     } finally {
       this.eventQueue.push(null)
+      this.ffiStream.onEvent(undefined)
     }
   }
 
@@ -91,7 +92,7 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
             controller.close()
             return
           } catch (err: unknown) {
-            const bamlError = toBamlError(err instanceof Error ? err : new Error(String(err)))
+            const bamlError = asBamlError(err instanceof Error ? err : new Error(String(err)))
             controller.enqueue(encoder.encode(JSON.stringify({ error: bamlError })))
             controller.close()
             return

@@ -2,7 +2,7 @@ use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::ResponseType;
 use crate::internal::llm_client::primitive::stream_request::make_stream_request;
 use crate::internal::llm_client::traits::{
-    ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
 };
 use crate::internal::llm_client::ResolveMediaUrls;
 #[cfg(target_arch = "wasm32")]
@@ -12,7 +12,7 @@ use crate::{
     internal::llm_client::{
         primitive::{
             request::{make_parsed_request, make_request, RequestBuilder},
-            vertex::types::{FinishReason, VertexResponse},
+            vertex::types::VertexResponse,
         },
         traits::{
             SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
@@ -24,6 +24,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
+use baml_types::tracing::events::HttpRequestId;
 use chrono::{Duration, Utc};
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -116,9 +117,18 @@ impl WithStreamChat for VertexClient {
         &self,
         ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         //incomplete, streaming response object is returned
-        make_stream_request(self, either::Either::Right(prompt), Some(self.properties.model.clone()), ResponseType::Vertex).await
+        make_stream_request(
+            self,
+            either::Either::Right(prompt),
+            Some(self.properties.model.clone()),
+            ResponseType::Vertex,
+            ctx,
+            http_request_id,
+        )
+        .await
     }
 }
 
@@ -252,7 +262,12 @@ impl RequestBuilder for VertexClient {
 }
 
 impl WithChat for VertexClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
         let model_name = self.properties.model.clone();
         //non-streaming, complete response is returned
         make_parsed_request(
@@ -261,14 +276,18 @@ impl WithChat for VertexClient {
             either::Either::Right(prompt),
             false,
             ResponseType::Vertex,
+            ctx,
+            http_request_id,
         )
         .await
     }
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
-    let mut map = HashMap::new();
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
         "parts": [{
@@ -369,5 +388,14 @@ impl ToProviderMessageExt for VertexClient {
                 .into(),
         );
         Ok(res)
+    }
+}
+
+impl CompletionToProviderBody for VertexClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
     }
 }

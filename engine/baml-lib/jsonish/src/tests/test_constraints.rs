@@ -154,3 +154,18 @@ test_failing_deserializer!(
     r#"THREE"#,
     FieldType::Enum("MyEnum".to_string())
 );
+
+const MULTIPLE_BLOCK_LEVEL_CONSTRAINTS: &str = r#"
+class Foo {
+  foo int
+  @@assert(hi2, {{ this.foo < 0 }})
+  @@assert(hi, {{ this.foo > 0 }})
+}
+"#;
+
+test_failing_deserializer!(
+    test_multiple_block_level_constraints,
+    MULTIPLE_BLOCK_LEVEL_CONSTRAINTS,
+    r#"{"foo": 1}"#,
+    FieldType::Class("Foo".to_string())
+);

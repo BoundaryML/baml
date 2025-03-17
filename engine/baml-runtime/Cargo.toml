@@ -38,12 +38,12 @@ indexmap.workspace = true
 indoc.workspace = true
 # instant = "0.1"  # do not use this or wasm-timer - use web-time instead
 json_comments = "0.2.2"
-jsonish = { path = "../baml-lib/jsonish" }
+jsonish.workspace = true
 internal-baml-codegen.workspace = true
-baml-types = { path = "../baml-lib/baml-types" }
-internal-llm-client = { path = "../baml-lib/llm-client" }
-internal-baml-core = { path = "../baml-lib/baml-core" }
-internal-baml-jinja = { path = "../baml-lib/jinja-runtime" }
+baml-types.workspace = true
+internal-llm-client.workspace = true
+internal-baml-core.workspace = true
+internal-baml-jinja.workspace = true
 log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
@@ -63,11 +63,12 @@ tokio = { version = "1", default-features = false, features = [
 tokio-stream = "0.1.15"
 # NOTE(sam): adding this caused a build error, I suspect because tower uses nightly features or something
 # tower = "0.5.0"
-uuid = { version = "1.8.0", features = ["v4", "serde"] }
+uuid.workspace = true
 web-time.workspace = true
 static_assertions.workspace = true
 mime_guess = "=2.0.5"
 mime = "0.3.17"
+regex.workspace = true
 
 # For tracing
 envy = "0.4.2"
@@ -92,6 +93,7 @@ aws-smithy-json = "0.60.7"
 pretty_assertions = "1.4.0"
 valuable = { version = "0.1.0", features = ["derive"] }
 tracing = { version = "0.1.40", features = ["valuable"] }
+tracing-core = { version = "0.1.31" }
 tracing-subscriber = { version = "0.3.18", features = [
   "json",
   "env-filter",
@@ -99,6 +101,8 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 thiserror = "2.0.1"
 log-once = "0.4.1"
+once_cell.workspace = true
+time.workspace = true
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -135,6 +139,7 @@ web-sys = { version = "0.3.69", features = [
   "SubtleCrypto",
   "Window",
 ] }
+wasmtimer = "0.4.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = "1.5.3"
@@ -173,8 +178,5 @@ rstest = "0.22.0"
 wasm-bindgen-test = "0.3.42"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
-
-# [[ bench ]]
-# name = "bench"
-# path = "benches/bench.rs"
-# harness = false
+serial_test = "3.2.0"
+console_error_panic_hook = "0.1.7"

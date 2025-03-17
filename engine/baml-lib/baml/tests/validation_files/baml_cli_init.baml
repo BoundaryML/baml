@@ -69,7 +69,7 @@ retry_policy Exponential {
   strategy {
     type exponential_backoff
     delay_ms 300
-    mutliplier 1.5
+    multiplier 1.5
     max_delay_ms 10000
   }
 }

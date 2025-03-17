@@ -13,6 +13,10 @@ The way it works is:
 
 It's common for people to think of "function calling" or "tool use" separately from "structured outputs" (even OpenAI has separate parameters for them), but at BAML, we think it's simpler and more impactful to think of them equivalently. This is because, at the end of the day, you are looking to get something processable back from your LLM. Whether it's extracting data from a document or calling the Weather API, you need a standard representation of that output, which is where BAML lives.
 
+<Frame caption="Baml Control Flow">
+  <img src="../../assets/guide/tool-calling.png" alt="Tool-Calling"/>
+</Frame>
+
 In BAML, you can get represent a `tool` or a `function` you want to call as a BAML `class`, and make the function output be that class definition.
 
 ```baml BAML
@@ -95,7 +99,7 @@ function UseTool(user_message: string) -> WeatherAPI | MyOtherAPI {
 }
 ```
 
-<Tip>If you use [VSCode Playground](/guides/installation-editors/vs-code-extension), you can see what we inject into the prompt, with full transparency.</Tip>
+<Tip>If you use [VSCode Playground](/guide/installation-editors/vs-code-extension), you can see what we inject into the prompt, with full transparency.</Tip>
 
 Call the function like this:
 
@@ -322,3 +326,102 @@ Keep in mind that "JSON mode" is nearly the same thing as "prompting", but it en
 BAML does not use JSON mode since it allows developers to use better prompting techniques like chain-of-thought, to allow the LLM to express its reasoning before printing out the actual schema. BAML's parser can find the json schema(s) out of free-form text for you. Read more about different approaches to structured generation [here](https://www.boundaryml.com/blog/schema-aligned-parsing)
 
 BAML will still support native function-calling APIs in the future (please let us know more about your use-case so we can prioritize accordingly)
+
+
+## Create an Agent that utilizes these Tools 
+
+We can create an Agent or an "agentic loop" that continuously uses tools in a program simply by adding a while loop in our code. 
+In this example, we'll have two tools:
+1. An API that queries the weather.
+2. An API that does basic calculations on numbers. 
+
+This is what it looks in the BAML file:
+
+``` Rust tools.baml
+class WeatherAPI {
+  city string
+  time string @description("Current time in ISO8601 format")
+}
+
+class CalculatorAPI {
+  operation "add" | "subtract" | "multiply" | "divide"
+  numbers float[]
+}
+
+function SelectTool(message: string) -> WeatherAPI | CalculatorAPI {
+  client "openai/gpt-4o"
+  prompt #"
+    Given a message, extract info.
+
+    {{ ctx.output_format }}
+
+    {{ _.role("user") }} {{ message }}
+  "#
+}
+```
+
+In our Python code, we'll:
+1. Implement our APIs
+2. Implement our Agent that continuously will use different tools
+
+``` Python toolAgent.py
+from baml_client import b
+from baml_client.types import WeatherAPI, CalculatorAPI
+
+def handle_weather(weather: WeatherAPI):
+    # Simulate weather API call, but you can implement this with a real API call
+    return f"The weather in {weather.city} at {weather.time} is sunny."
+
+def handle_calculator(calc: CalculatorAPI):
+    numbers = calc.numbers
+    if calc.operation == "add":
+        result = sum(numbers)
+    elif calc.operation == "subtract":
+        result = numbers[0] - sum(numbers[1:])
+    elif calc.operation == "multiply":
+        result = 1
+        for n in numbers:
+            result *= n
+    elif calc.operation == "divide":
+        result = numbers[0]
+        for n in numbers[1:]:
+            result /= n
+    return f"The result is {result}"
+
+def main():
+    print("Agent started! Type 'exit' to quit.")
+    
+    while True:
+        # Get user input
+        user_input = input("You: ")
+        if user_input.lower() == 'exit':
+            break
+
+        # Call the BAML function to select tool
+        tool_response = b.SelectTool(user_input)
+
+        # Handle the tool response
+        if isinstance(tool_response, WeatherAPI):
+            result = handle_weather(tool_response)
+            print(f"Agent (Weather): {result}")
+        
+        elif isinstance(tool_response, CalculatorAPI):
+            result = handle_calculator(tool_response)
+            print(f"Agent (Calculator): {result}")
+
+if __name__ == "__main__":
+    main()
+```
+
+We can test this by asking things like:
+1. What is the weather in Seattle?
+2. What's 5+2?
+
+This is the output:
+``` output.txt
+Agent started! Type 'exit' to quit.
+You: What's the weather in Seattle
+Agent (Weather): The weather in Seattle at 2023-10-02T12:00:00Z is sunny.
+You: What's 5+2
+Agent (Calculator): The result is 7.0
+```
