@@ -49,7 +49,7 @@ Thanks for trying out BAML!
             );
             anyhow::bail!("--preview is not set")
         }
-        log::info!("Starting BAML development server on port {}", self.port);
+        baml_log::info!("Starting BAML development server on port {}", self.port);
 
         let t = BamlRuntime::get_tokio_singleton()?;
 
@@ -89,15 +89,6 @@ your feedback to do so.
 Thanks for trying out BAML!
 "#
             );
-            //             log::info!(
-            //                 r#"BAML development server listening on localhost:{}, watching {}
-
-            // Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
-            // "#,
-            //                 self.port,
-            //                 self.from.display(),
-            //                 self.port
-            //             );
 
             for result in rx {
                 match result {
@@ -123,7 +114,7 @@ Thanks for trying out BAML!
                                     server.b.write().await.deref_mut(),
                                     &mut new_runtime,
                                 );
-                                log::info!(
+                                baml_log::info!(
                                     "Reloaded runtime in {}ms ({})",
                                     elapsed.as_millis(),
                                     match events.len() {

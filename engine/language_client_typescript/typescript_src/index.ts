@@ -1,6 +1,8 @@
-export * from "./safe_imports";
+export * from './safe_imports'
 
-export * from "./errors";
+export * from './errors'
+
+export * from './logging'
 
 export {
   BamlRuntime,
@@ -16,7 +18,7 @@ export {
   FunctionLog,
   Usage,
   HTTPRequest,
-} from "./native";
+} from './native'
 
-export { BamlStream } from "./stream";
-export { BamlCtxManager } from "./async_context_vars";
+export { BamlStream } from './stream'
+export { BamlCtxManager } from './async_context_vars'

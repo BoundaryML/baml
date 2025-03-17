@@ -80,14 +80,13 @@ impl Collector {
     #[napi(js_name = "__functionSpanCount")]
     pub fn function_span_count() -> u32 {
         let span_count = BAML_TRACER.lock().unwrap().function_span_count();
-        log::info!("Function span count: {}", span_count);
         span_count as u32
     }
 
     #[napi(js_name = "__printStorage")]
     pub fn print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        log::info!("Storage: {:#?}", tracer);
+        println!("Storage: {:#?}", tracer);
     }
 }
 

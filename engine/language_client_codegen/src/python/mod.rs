@@ -15,6 +15,10 @@ use self::python_language_features::{PythonLanguageFeatures, ToPython};
 use crate::{dir_writer::FileCollector, field_type_attributes};
 
 #[derive(askama::Template)]
+#[template(path = "config.py.j2", escape = "none")]
+struct PythonConfig {}
+
+#[derive(askama::Template)]
 #[template(path = "async_client.py.j2", escape = "none")]
 struct AsyncPythonClient {
     funcs: Vec<PythonFunction>,
@@ -126,9 +130,18 @@ pub(crate) fn generate(
     collector.add_template::<PythonSyncHttpRequest>("sync_request.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.py", (ir, generator))?;
+    collector.add_template::<PythonConfig>("config.py", (ir, generator))?;
     collector.add_template::<PythonInit>("__init__.py", (ir, generator))?;
 
     collector.commit(&generator.output_dir())
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(PythonConfig {})
+    }
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonTracing {

@@ -86,7 +86,7 @@ class BamlSyncClient:
       Returns a new instance of BamlSyncClient with explicitly typed baml options
       for Python 3.8 compatibility.
       """
-      new_options = {}
+      new_options: BamlCallOptions = self.__baml_options.copy()
 
       # Override if any keyword arguments were provided.
       if tb is not None:
@@ -103,7 +103,7 @@ class BamlSyncClient:
         recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Recipe:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -130,7 +130,7 @@ class BamlSyncClient:
         data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedListAliasNode:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -157,7 +157,7 @@ class BamlSyncClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["gt_ten"]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -184,7 +184,7 @@ class BamlSyncClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -211,7 +211,7 @@ class BamlSyncClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -238,7 +238,7 @@ class BamlSyncClient:
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -265,7 +265,7 @@ class BamlSyncClient:
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -292,7 +292,7 @@ class BamlSyncClient:
         input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -319,7 +319,7 @@ class BamlSyncClient:
         optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalListAndMap:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -346,7 +346,7 @@ class BamlSyncClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -373,7 +373,7 @@ class BamlSyncClient:
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -400,7 +400,7 @@ class BamlSyncClient:
         input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedList:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -427,7 +427,7 @@ class BamlSyncClient:
         input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> types.Tree:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -454,7 +454,7 @@ class BamlSyncClient:
         cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassToRecAlias:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -481,7 +481,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[types.DynEnumTwo, str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -508,7 +508,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -535,7 +535,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -562,7 +562,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -589,7 +589,7 @@ class BamlSyncClient:
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -616,7 +616,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -643,7 +643,7 @@ class BamlSyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -670,7 +670,7 @@ class BamlSyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -697,7 +697,7 @@ class BamlSyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -724,7 +724,7 @@ class BamlSyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -751,7 +751,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> Union[types.OriginalA, types.OriginalB]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -778,7 +778,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DummyOutput:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -805,7 +805,7 @@ class BamlSyncClient:
         input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicClassTwo:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -832,7 +832,7 @@ class BamlSyncClient:
         input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> types.DynInputOutput:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -859,7 +859,7 @@ class BamlSyncClient:
         input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> List[types.DynInputOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -886,7 +886,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -913,7 +913,7 @@ class BamlSyncClient:
         document: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ContactInfo:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -940,7 +940,7 @@ class BamlSyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> List[Union[types.Hobby, str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -967,7 +967,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -994,7 +994,7 @@ class BamlSyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.Person]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1021,7 +1021,7 @@ class BamlSyncClient:
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> types.ReceiptInfo:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1048,7 +1048,7 @@ class BamlSyncClient:
         resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1075,7 +1075,7 @@ class BamlSyncClient:
         resume: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1102,7 +1102,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[types.ClassOptionalOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1129,7 +1129,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[types.ClassOptionalOutput2]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1156,7 +1156,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.EnumOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1183,7 +1183,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EnumOutput:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1210,7 +1210,7 @@ class BamlSyncClient:
         input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> types.LiteralClassHello:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1237,7 +1237,7 @@ class BamlSyncClient:
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> Union[types.LiteralClassOne, types.LiteralClassTwo]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1264,7 +1264,7 @@ class BamlSyncClient:
         myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1291,7 +1291,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1318,7 +1318,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestOutputClass:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1345,7 +1345,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.TestOutputClass]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1372,7 +1372,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassNested:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1399,7 +1399,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassWithEnum:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1426,7 +1426,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1453,7 +1453,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal[False]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1480,7 +1480,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal[5]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1507,7 +1507,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal["example output"]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1534,7 +1534,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1561,7 +1561,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1588,7 +1588,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassAlias:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1615,7 +1615,7 @@ class BamlSyncClient:
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1642,7 +1642,7 @@ class BamlSyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.RaysData:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1669,7 +1669,7 @@ class BamlSyncClient:
         email: types.Email,
         baml_options: BamlCallOptions = {},
     ) -> types.OrderInfo:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1696,7 +1696,7 @@ class BamlSyncClient:
         query: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SearchParams:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1723,7 +1723,7 @@ class BamlSyncClient:
         i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[types.MapKey, str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1750,7 +1750,7 @@ class BamlSyncClient:
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1777,7 +1777,7 @@ class BamlSyncClient:
         m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[Literal["key"], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1804,7 +1804,7 @@ class BamlSyncClient:
         input: types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonValue:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1831,7 +1831,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[Literal[1], Literal[True], Literal["string output"]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1858,7 +1858,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> Checked[types.BlockConstraint,types.Literal["cross_field"]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1885,7 +1885,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.NestedBlockConstraint:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1912,7 +1912,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.SemanticContainer:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1939,7 +1939,7 @@ class BamlSyncClient:
         m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, List[str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1966,7 +1966,7 @@ class BamlSyncClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MergeAttrs:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1993,7 +1993,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicOutput:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2020,7 +2020,7 @@ class BamlSyncClient:
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
     ) -> Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2047,7 +2047,7 @@ class BamlSyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassForNullLiteral:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2074,7 +2074,7 @@ class BamlSyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2101,7 +2101,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[Optional[types.OptionalTest_ReturnType]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2128,7 +2128,7 @@ class BamlSyncClient:
         name: str,
         baml_options: BamlCallOptions = {},
     ) -> types.FooAny:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2155,7 +2155,7 @@ class BamlSyncClient:
         inp: str,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["too_big"]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2182,7 +2182,7 @@ class BamlSyncClient:
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
     ) -> Union[int, str, bool, float]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2209,7 +2209,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2236,7 +2236,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2263,7 +2263,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2290,7 +2290,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2317,7 +2317,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2344,7 +2344,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2371,7 +2371,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2398,7 +2398,7 @@ class BamlSyncClient:
         input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> types.RecAliasOne:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2425,7 +2425,7 @@ class BamlSyncClient:
         cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> types.NodeWithAliasIndirection:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2452,7 +2452,7 @@ class BamlSyncClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["gt_ten"]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2479,7 +2479,7 @@ class BamlSyncClient:
         inp: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2506,7 +2506,7 @@ class BamlSyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonTemplate:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2533,7 +2533,7 @@ class BamlSyncClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MalformedConstraints:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2560,7 +2560,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Schema:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2587,7 +2587,7 @@ class BamlSyncClient:
         input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveListAlias:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2614,7 +2614,7 @@ class BamlSyncClient:
         input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveMapAlias:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2641,7 +2641,7 @@ class BamlSyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> types.BigNumbers:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2668,7 +2668,7 @@ class BamlSyncClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitle:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2695,7 +2695,7 @@ class BamlSyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2722,7 +2722,7 @@ class BamlSyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> List[Union[int, str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2749,7 +2749,7 @@ class BamlSyncClient:
         digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
     ) -> types.CompoundBigNumbers:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2776,7 +2776,7 @@ class BamlSyncClient:
         input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveAliasDependency:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2803,7 +2803,7 @@ class BamlSyncClient:
         story: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2830,7 +2830,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2857,7 +2857,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2884,7 +2884,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2911,7 +2911,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2938,7 +2938,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2965,7 +2965,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2992,7 +2992,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3019,7 +3019,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3046,7 +3046,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3073,7 +3073,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3100,7 +3100,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3127,7 +3127,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3154,7 +3154,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3181,7 +3181,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3208,7 +3208,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3235,7 +3235,7 @@ class BamlSyncClient:
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3262,7 +3262,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3289,7 +3289,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3316,7 +3316,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3343,7 +3343,7 @@ class BamlSyncClient:
         myBool: bool,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3370,7 +3370,7 @@ class BamlSyncClient:
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3397,7 +3397,7 @@ class BamlSyncClient:
         myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3424,7 +3424,7 @@ class BamlSyncClient:
         myFloat: float,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3451,7 +3451,7 @@ class BamlSyncClient:
         myInt: int,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3478,7 +3478,7 @@ class BamlSyncClient:
         myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, types.StringToClassEntry]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3505,7 +3505,7 @@ class BamlSyncClient:
         myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, Dict[str, str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3532,7 +3532,7 @@ class BamlSyncClient:
         myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3559,7 +3559,7 @@ class BamlSyncClient:
         myString: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3586,7 +3586,7 @@ class BamlSyncClient:
         myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3613,7 +3613,7 @@ class BamlSyncClient:
         myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3640,7 +3640,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3667,7 +3667,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3694,7 +3694,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3721,7 +3721,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3748,7 +3748,7 @@ class BamlSyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3775,7 +3775,7 @@ class BamlSyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3802,7 +3802,7 @@ class BamlSyncClient:
         imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3829,7 +3829,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestMemoryOutput:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3856,7 +3856,7 @@ class BamlSyncClient:
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3883,7 +3883,7 @@ class BamlSyncClient:
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3910,7 +3910,7 @@ class BamlSyncClient:
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3937,7 +3937,7 @@ class BamlSyncClient:
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3964,7 +3964,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3986,12 +3986,39 @@ class BamlSyncClient:
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
+    def TestOllamaHaiku(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.Haiku:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.call_function_sync(
+        "TestOllamaHaiku",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(types.Haiku, raw.cast_to(types, types, partial_types, False))
+    
     def TestOpenAI(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4018,7 +4045,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4045,7 +4072,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4072,7 +4099,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4099,7 +4126,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4126,7 +4153,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4153,7 +4180,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4180,7 +4207,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4207,7 +4234,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4234,7 +4261,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4261,7 +4288,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4288,7 +4315,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4315,7 +4342,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4342,7 +4369,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4369,7 +4396,7 @@ class BamlSyncClient:
         question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> types.UniverseQuestion:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4396,7 +4423,7 @@ class BamlSyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4423,7 +4450,7 @@ class BamlSyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4450,7 +4477,7 @@ class BamlSyncClient:
         input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> types.UnionTest_ReturnType:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4477,7 +4504,7 @@ class BamlSyncClient:
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4504,7 +4531,7 @@ class BamlSyncClient:
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4531,7 +4558,7 @@ class BamlSyncClient:
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4571,7 +4598,7 @@ class BamlStreamClient:
         recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Recipe, types.Recipe]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4605,7 +4632,7 @@ class BamlStreamClient:
         data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.LinkedListAliasNode, types.LinkedListAliasNode]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4639,7 +4666,7 @@ class BamlStreamClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4673,7 +4700,7 @@ class BamlStreamClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4707,7 +4734,7 @@ class BamlStreamClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4741,7 +4768,7 @@ class BamlStreamClient:
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4775,7 +4802,7 @@ class BamlStreamClient:
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4809,7 +4836,7 @@ class BamlStreamClient:
         input: List[types.AliasedEnum] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4843,7 +4870,7 @@ class BamlStreamClient:
         optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.OptionalListAndMap, types.OptionalListAndMap]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4877,7 +4904,7 @@ class BamlStreamClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4911,7 +4938,7 @@ class BamlStreamClient:
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4945,7 +4972,7 @@ class BamlStreamClient:
         input: List[int] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.LinkedList, types.LinkedList]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4979,7 +5006,7 @@ class BamlStreamClient:
         input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Tree, types.Tree]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5013,7 +5040,7 @@ class BamlStreamClient:
         cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassToRecAlias, types.ClassToRecAlias]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5047,7 +5074,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5081,7 +5108,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5115,7 +5142,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5149,7 +5176,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5183,7 +5210,7 @@ class BamlStreamClient:
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5219,7 +5246,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5253,7 +5280,7 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5287,7 +5314,7 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5322,7 +5349,7 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5357,7 +5384,7 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5392,7 +5419,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5425,7 +5452,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DummyOutput, types.DummyOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5459,7 +5486,7 @@ class BamlStreamClient:
         input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DynamicClassTwo, types.DynamicClassTwo]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5493,7 +5520,7 @@ class BamlStreamClient:
         input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DynInputOutput, types.DynInputOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5527,7 +5554,7 @@ class BamlStreamClient:
         input: List[types.DynInputOutput] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5561,7 +5588,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5594,7 +5621,7 @@ class BamlStreamClient:
         document: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ContactInfo, types.ContactInfo]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5628,7 +5655,7 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[Union[types.Hobby, str]]], List[Union[types.Hobby, str]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5662,7 +5689,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[str]], List[str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5696,7 +5723,7 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.Person], List[types.Person]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5730,7 +5757,7 @@ class BamlStreamClient:
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ReceiptInfo, types.ReceiptInfo]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5765,7 +5792,7 @@ class BamlStreamClient:
         resume: str,img: Optional[baml_py.Image] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Resume, types.Resume]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5800,7 +5827,7 @@ class BamlStreamClient:
         resume: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Resume, types.Resume]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5834,7 +5861,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5868,7 +5895,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5902,7 +5929,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5936,7 +5963,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.EnumOutput], types.EnumOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5970,7 +5997,7 @@ class BamlStreamClient:
         input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.LiteralClassHello, types.LiteralClassHello]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6004,7 +6031,7 @@ class BamlStreamClient:
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6038,7 +6065,7 @@ class BamlStreamClient:
         myString: Optional[str] = None,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6072,7 +6099,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[bool], bool]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6106,7 +6133,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestOutputClass, types.TestOutputClass]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6140,7 +6167,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6174,7 +6201,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestClassNested, types.TestClassNested]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6208,7 +6235,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestClassWithEnum, types.TestClassWithEnum]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6242,7 +6269,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6276,7 +6303,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Literal[False]], Literal[False]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6310,7 +6337,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Literal[5]], Literal[5]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6344,7 +6371,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Literal["example output"]], Literal["example output"]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6378,7 +6405,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[str]], List[str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6412,7 +6439,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[types.TestEnum], types.TestEnum]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6446,7 +6473,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestClassAlias, types.TestClassAlias]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6480,7 +6507,7 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6514,7 +6541,7 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.RaysData, types.RaysData]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6548,7 +6575,7 @@ class BamlStreamClient:
         email: types.Email,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.OrderInfo, types.OrderInfo]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6582,7 +6609,7 @@ class BamlStreamClient:
         query: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.SearchParams, types.SearchParams]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6616,7 +6643,7 @@ class BamlStreamClient:
         i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[types.MapKey, Optional[str]], Dict[types.MapKey, str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6651,7 +6678,7 @@ class BamlStreamClient:
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6686,7 +6713,7 @@ class BamlStreamClient:
         m: Dict[Literal["key"], str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[Literal["key"], Optional[str]], Dict[Literal["key"], str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6720,7 +6747,7 @@ class BamlStreamClient:
         input: types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.JsonValue, types.JsonValue]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6754,7 +6781,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6788,7 +6815,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint,types.Literal["cross_field"]], Checked[types.BlockConstraint,types.Literal["cross_field"]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6821,7 +6848,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.NestedBlockConstraint, types.NestedBlockConstraint]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6854,7 +6881,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.SemanticContainer, types.SemanticContainer]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6887,7 +6914,7 @@ class BamlStreamClient:
         m: Dict[str, List[str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, List[Optional[str]]], Dict[str, List[str]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6921,7 +6948,7 @@ class BamlStreamClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.MergeAttrs, types.MergeAttrs]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6955,7 +6982,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.DynamicOutput, types.DynamicOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6989,7 +7016,7 @@ class BamlStreamClient:
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7023,7 +7050,7 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.ClassForNullLiteral, types.ClassForNullLiteral]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7057,7 +7084,7 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7091,7 +7118,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7125,7 +7152,7 @@ class BamlStreamClient:
         name: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.FooAny, types.FooAny]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7159,7 +7186,7 @@ class BamlStreamClient:
         inp: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["too_big"]], Checked[int,types.Literal["too_big"]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7193,7 +7220,7 @@ class BamlStreamClient:
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], Union[int, str, bool, float]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7227,7 +7254,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7261,7 +7288,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7295,7 +7322,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7329,7 +7356,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7363,7 +7390,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7397,7 +7424,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7431,7 +7458,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7465,7 +7492,7 @@ class BamlStreamClient:
         input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.RecAliasOne, types.RecAliasOne]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7499,7 +7526,7 @@ class BamlStreamClient:
         cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7533,7 +7560,7 @@ class BamlStreamClient:
         money: Checked[int,types.Literal["gt_ten"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7567,7 +7594,7 @@ class BamlStreamClient:
         inp: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7601,7 +7628,7 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.JsonTemplate, types.JsonTemplate]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7635,7 +7662,7 @@ class BamlStreamClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.MalformedConstraints, types.MalformedConstraints]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7669,7 +7696,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Schema, types.Schema]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7703,7 +7730,7 @@ class BamlStreamClient:
         input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.RecursiveListAlias, types.RecursiveListAlias]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7737,7 +7764,7 @@ class BamlStreamClient:
         input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[types.RecursiveMapAlias, types.RecursiveMapAlias]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7771,7 +7798,7 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.BigNumbers, types.BigNumbers]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7805,7 +7832,7 @@ class BamlStreamClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7840,7 +7867,7 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7874,7 +7901,7 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[Union[Optional[int], Optional[str]]]], List[Union[int, str]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7908,7 +7935,7 @@ class BamlStreamClient:
         digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.CompoundBigNumbers, types.CompoundBigNumbers]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7943,7 +7970,7 @@ class BamlStreamClient:
         input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.RecursiveAliasDependency, types.RecursiveAliasDependency]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7977,7 +8004,7 @@ class BamlStreamClient:
         story: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8011,7 +8038,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8045,7 +8072,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8079,7 +8106,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8113,7 +8140,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8147,7 +8174,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8181,7 +8208,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8215,7 +8242,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8249,7 +8276,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8283,7 +8310,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8317,7 +8344,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8351,7 +8378,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8385,7 +8412,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8419,7 +8446,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8453,7 +8480,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8487,7 +8514,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8521,7 +8548,7 @@ class BamlStreamClient:
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8556,7 +8583,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8589,7 +8616,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8623,7 +8650,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8657,7 +8684,7 @@ class BamlStreamClient:
         myBool: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8691,7 +8718,7 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8725,7 +8752,7 @@ class BamlStreamClient:
         myArg: List[types.NamedArgsSingleEnumList] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8759,7 +8786,7 @@ class BamlStreamClient:
         myFloat: float,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8793,7 +8820,7 @@ class BamlStreamClient:
         myInt: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8827,7 +8854,7 @@ class BamlStreamClient:
         myMap: Dict[str, types.StringToClassEntry] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8861,7 +8888,7 @@ class BamlStreamClient:
         myMap: Dict[str, Dict[str, str]] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8895,7 +8922,7 @@ class BamlStreamClient:
         myMap: Dict[str, str] = {},
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, Optional[str]], Dict[str, str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8929,7 +8956,7 @@ class BamlStreamClient:
         myString: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8963,7 +8990,7 @@ class BamlStreamClient:
         myStringArray: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8997,7 +9024,7 @@ class BamlStreamClient:
         myArg: List[str] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[str]], List[str]]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9031,7 +9058,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9065,7 +9092,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9098,7 +9125,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9132,7 +9159,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9166,7 +9193,7 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9200,7 +9227,7 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9234,7 +9261,7 @@ class BamlStreamClient:
         imgs: List[baml_py.Image] = [],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9268,7 +9295,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.TestMemoryOutput, types.TestMemoryOutput]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9302,7 +9329,7 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9337,7 +9364,7 @@ class BamlStreamClient:
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9371,7 +9398,7 @@ class BamlStreamClient:
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9405,7 +9432,7 @@ class BamlStreamClient:
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9439,7 +9466,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9468,12 +9495,46 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def TestOllamaHaiku(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.Haiku, types.Haiku]:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.stream_function_sync(
+        "TestOllamaHaiku",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.Haiku, types.Haiku](
+        raw,
+        lambda x: cast(partial_types.Haiku, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.Haiku, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
     def TestOpenAI(
         self,
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9507,7 +9568,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9541,7 +9602,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9575,7 +9636,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9609,7 +9670,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9643,7 +9704,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9677,7 +9738,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9711,7 +9772,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9745,7 +9806,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9779,7 +9840,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9812,7 +9873,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9845,7 +9906,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9879,7 +9940,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9912,7 +9973,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.CustomStory, types.CustomStory]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9946,7 +10007,7 @@ class BamlStreamClient:
         question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.UniverseQuestion, types.UniverseQuestion]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9980,7 +10041,7 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10014,7 +10075,7 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10047,7 +10108,7 @@ class BamlStreamClient:
         input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10081,7 +10142,7 @@ class BamlStreamClient:
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10115,7 +10176,7 @@ class BamlStreamClient:
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10149,7 +10210,7 @@ class BamlStreamClient:
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[int], int]:
-      options = {**self.__baml_options, **(baml_options or {})}
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)

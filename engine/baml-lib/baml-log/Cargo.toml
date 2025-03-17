@@ -1,0 +1,16 @@
+[package]
+edition = "2021"
+name = "baml-log"
+version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+description = "Logging library for BAML for end user logging"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json.workspace = true
+anyhow.workspace = true
+thiserror = "2.0.12"
+colored = "2"
+lazy_static = "1.5.0"
+chrono = "0.4.40"

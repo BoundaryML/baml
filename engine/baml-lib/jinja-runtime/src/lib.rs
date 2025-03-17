@@ -298,9 +298,8 @@ pub enum RenderedPrompt {
 impl std::fmt::Display for RenderedPrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            RenderedPrompt::Completion(s) => write!(f, "[{}] {}", "completion".dimmed(), s),
+            RenderedPrompt::Completion(s) => write!(f, "{}", s),
             RenderedPrompt::Chat(messages) => {
-                write!(f, "[{}] ", "chat".dimmed())?;
                 for message in messages {
                     writeln!(
                         f,

@@ -204,6 +204,11 @@ class GroceryReceipt(BaseModel):
     items: List[Union[str, int, float]]
     totalAmount: Optional[float] = None
 
+class Haiku(BaseModel):
+    line1: Optional[str] = None
+    line2: Optional[str] = None
+    line3: Optional[str] = None
+
 class InnerClass(BaseModel):
     prop1: Optional[str] = None
     prop2: Optional[str] = None

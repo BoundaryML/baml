@@ -1,0 +1,126 @@
+---
+title: config (logging / environment variables)
+---
+
+Various settings are configurable via environment variables.
+
+| Setting | Environment Variable | Description | Default |
+| ------- | -------------------- | ----------- | ------- |
+| Logging Level | `BAML_LOG` | The logging level to use (`INFO`, `DEBUG`, `TRACE`, `WARN`, `ERROR`, `OFF`) | `INFO` |
+| Text / JSON Mode | `BAML_LOG_JSON` | Whether to log in JSON format or human-readable format (`1`, `0`) | `0` |
+| Max Log Chunk Size | `BAML_LOG_MAX_MESSAGE_LENGTH` | How large of a prompt / response will be logged (`0` for no limit) | `64000` |
+| Log Color Mode | `BAML_LOG_COLOR_MODE` | Whether to color the log output (`auto`, `always`, `never`) | `auto` |
+
+Setting can also be modified via functions in `baml_client.config`.
+
+
+<Tabs>
+  <Tab title="python">
+  ```python
+  from baml_client.config import set_from_env, set_log_level, 
+                                 set_log_json_mode, set_log_max_message_length,
+                                 get_log_level, reset_baml_env_vars
+  ```
+
+  ### set_log_level
+
+  Environment variable: `BAML_LOG`
+
+  ```python
+  def set_log_level(level: "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF"):
+    ...
+  ```
+  
+  ### set_log_json_mode
+
+  Environment variable: `BAML_LOG_JSON`
+
+  Switches the log output between JSON and human-readable format.
+
+  ```python
+  def set_log_json_mode(enable: bool):
+  ```
+
+  ### set_log_max_message_length
+
+  `0` for unlimited
+
+  Environment variable: `BAML_LOG_MAX_MESSAGE_LENGTH`
+
+  ```python
+  def set_log_max_message_length(length: int):
+  ```
+
+  ### get_log_level
+
+  ```python
+  def get_log_level() -> "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF":
+  ```
+
+  ### reset_baml_env_vars
+
+  Resets the environment variables to the values in the provided dictionary.
+  Will also reset any logging related environment variables to those passed in (if set explicitly).
+
+  ```python
+  def reset_baml_env_vars(env: Dict[str, str]):
+  ```
+  </Tab>
+
+  <Tab title="typescript">
+  ```typescript
+  import { setLogLevel, setLogJsonMode, 
+           setLogMaxMessageLength, getLogLevel,
+           resetBamlEnvVars } from '@/baml_client/config';
+  ```
+
+  ### setLogLevel
+  Environment variable: `BAML_LOG`
+
+  ```typescript
+  setLogLevel(level: "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF"): void;
+  ```
+
+  ### setLogJsonMode
+  Environment variable: `BAML_LOG_JSON`
+
+  Switches the log output between JSON and human-readable format.
+
+  ```typescript
+  setLogJsonMode(enable: boolean): void;
+  ``` 
+
+  ### setLogMaxMessageLength
+  Environment variable: `BAML_LOG_MAX_MESSAGE_LENGTH`
+
+  `0` for unlimited
+  ```typescript
+  setLogMaxMessageLength(length: number): void;
+  ```
+
+  ### getLogLevel
+
+  ```typescript
+  getLogLevel(): "INFO" | "DEBUG" | "TRACE" | "WARN" | "ERROR" | "OFF";
+  ```
+
+  ### resetBamlEnvVars
+
+  Resets the environment variables to the values in the provided dictionary.
+  Will also reset any logging related environment variables to those passed in (if set explicitly).
+
+  ```typescript
+  resetBamlEnvVars(env: Record<string, string | undefined>): void;
+  ```  
+  
+  </Tab>
+  <Tab title="ruby">
+```ruby
+# not implemented yet
+# please use environment variables instead
+```
+  </Tab>
+</Tabs>
+
+<hr />
+<Markdown src="/snippets/setting-env-vars.mdx" />

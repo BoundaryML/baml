@@ -157,6 +157,7 @@ impl BamlRuntime {
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
+        baml_log::set_from_env(&copy)?;
 
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(&path)?,
@@ -176,6 +177,7 @@ impl BamlRuntime {
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
+        baml_log::set_from_env(&copy)?;
 
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,

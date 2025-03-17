@@ -1,7 +1,25 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Literal, Union
+from __future__ import annotations
+from typing_extensions import Literal
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 def get_version() -> str:
     """Get the version of the BAML Python client."""
+    ...
+
+def set_log_level(level: Literal["DEBUG", "INFO", "WARN", "ERROR", "OFF"] | str) -> None:
+    """Set the log level for the BAML Python client."""
+    ...
+
+def set_log_json_mode(use_json: bool) -> None:
+    """Set the log JSON mode for the BAML Python client."""
+    ...
+
+def get_log_level() -> str:
+    """Get the log level for the BAML Python client."""
+    ...
+
+def set_log_max_chunk_length(length: int) -> None:
+    """Set the maximum log chunk length for the BAML Python client."""
     ...
 
 class FunctionResult:
@@ -138,6 +156,24 @@ class BamlRuntime:
     def set_log_event_callback(
         self, handler: Optional[Callable[[BamlLogEvent], None]]
     ) -> None: ...
+    async def build_request(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+        is_stream: bool,
+    ) -> HTTPRequest: ...
+    def build_request_sync(
+        self,
+        function_name: str,
+        args: Dict[str, Any],
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+        is_stream: bool,
+    ) -> HTTPRequest: ...
 
 class LogEventMetadata:
     event_id: str

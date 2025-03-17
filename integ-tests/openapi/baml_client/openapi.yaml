@@ -2018,6 +2018,19 @@ paths:
                 title: TestOllamaResponse
                 type: string
       operationId: TestOllama
+  /call/TestOllamaHaiku:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOllamaHaiku'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOllamaHaikuResponse
+                $ref: '#/components/schemas/Haiku'
+      operationId: TestOllamaHaiku
   /call/TestOpenAI:
     post:
       requestBody:
@@ -4700,6 +4713,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOllamaHaiku:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOllamaHaikuRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestOpenAI:
       required: true
       content:
@@ -5693,6 +5722,20 @@ components:
       - receiptId
       - storeName
       - totalAmount
+      additionalProperties: false
+    Haiku:
+      type: object
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+        line3:
+          type: string
+      required:
+      - line1
+      - line2
+      - line3
       additionalProperties: false
     Hobby:
       enum:

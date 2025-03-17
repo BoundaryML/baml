@@ -7556,6 +7556,56 @@ export function useTestOllama(
   throw new Error('Invalid props')
 }
 /**
+ * A specialized hook for the TestOllamaHaiku BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** Haiku
+ * - **Streaming Partial:** partial_types.Haiku
+ * - **Streaming Final:** Haiku
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestOllamaHaiku({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestOllamaHaiku({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestOllamaHaiku(props: HookInput<'TestOllamaHaiku', { stream: false }>): HookOutput<'TestOllamaHaiku', { stream: false }>
+export function useTestOllamaHaiku(props?: HookInput<'TestOllamaHaiku', { stream?: true }>): HookOutput<'TestOllamaHaiku', { stream: true }>
+export function useTestOllamaHaiku(
+  props: HookInput<'TestOllamaHaiku', { stream?: boolean }> = {},
+): HookOutput<'TestOllamaHaiku', { stream: true }> | HookOutput<'TestOllamaHaiku', { stream: false }> {
+  if (isNotStreamingProps(props)) {
+    return useBamlAction(Actions.TestOllamaHaiku, props)
+  }
+  if (isStreamingProps(props)) {
+    return useBamlAction(StreamingActions.TestOllamaHaiku, props)
+  }
+  throw new Error('Invalid props')
+}
+/**
  * A specialized hook for the TestOpenAI BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

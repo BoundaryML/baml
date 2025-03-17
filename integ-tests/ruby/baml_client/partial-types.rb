@@ -58,6 +58,7 @@ module Baml
     class FormatterTest2 < T::Struct; end
     class FormatterTest3 < T::Struct; end
     class GroceryReceipt < T::Struct; end
+    class Haiku < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
     class InputClass < T::Struct; end
@@ -663,6 +664,22 @@ module Baml
           storeName: props[:storeName],
           items: props[:items],
           totalAmount: props[:totalAmount],
+        )
+
+        @props = props
+      end
+    end
+    class Haiku < T::Struct
+      include Baml::Sorbet::Struct
+      const :line1, T.nilable(String)
+      const :line2, T.nilable(String)
+      const :line3, T.nilable(String)
+
+      def initialize(props)
+        super(
+          line1: props[:line1],
+          line2: props[:line2],
+          line3: props[:line3],
         )
 
         @props = props

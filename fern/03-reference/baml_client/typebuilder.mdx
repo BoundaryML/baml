@@ -214,6 +214,7 @@ TypeBuilder provides methods for building different kinds of types:
 | `literal_bool(value: boolean)` | `FieldType` | Creates a literal boolean type | `tb.literal_bool(true)` |
 | `list(type: FieldType)` | `FieldType` | Makes a type into a list | `tb.list(tb.string())` |
 | `union(types: FieldType[])` | `FieldType` | Creates a union of types | `tb.union([tb.string(), tb.int()])` |
+| `map(key: FieldType, value: FieldType)` | `FieldType` | Creates a map type | `tb.map(tb.string(), tb.int())` |
 | `add_class(name: string)` | `ClassBuilder` | Creates a new class | `tb.add_class("User")` |
 | `add_enum(name: string)` | `EnumBuilder` | Creates a new enum | `tb.add_enum("Category")` |
 

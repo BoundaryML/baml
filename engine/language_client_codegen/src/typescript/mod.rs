@@ -174,6 +174,10 @@ struct TypescriptGlobals {
 }
 
 #[derive(askama::Template)]
+#[template(path = "config.ts.j2", escape = "none")]
+struct TypescriptConfig {}
+
+#[derive(askama::Template)]
 #[template(path = "inlinedbaml.ts.j2", escape = "none")]
 struct InlinedBaml {
     file_map: Vec<(String, String)>,
@@ -249,6 +253,7 @@ pub(crate) fn generate(
     collector.add_template::<AsyncTypescriptClient>("async_client.ts", (ir, generator))?;
     collector.add_template::<SyncTypescriptClient>("sync_client.ts", (ir, generator))?;
     collector.add_template::<TypescriptGlobals>("globals.ts", (ir, generator))?;
+    collector.add_template::<TypescriptConfig>("config.ts", (ir, generator))?;
     collector.add_template::<TypscriptLlmParser>("parser.ts", (ir, generator))?;
     collector.add_template::<AsyncTypescriptRequest>("async_request.ts", (ir, generator))?;
     collector.add_template::<SyncTypescriptRequest>("sync_request.ts", (ir, generator))?;
@@ -274,6 +279,14 @@ pub(crate) fn generate(
     }
 
     collector.commit(&generator.output_dir())
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(TypescriptConfig {})
+    }
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncTypescriptClient {
