@@ -3,6 +3,7 @@ use std::sync::Arc;
 use anyhow::Result;
 use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlValue};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
+use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
 
 use crate::{
@@ -21,11 +22,13 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        WithClient, WithClientProperties, WithPrompt, WithRenderRawCurl, WithRetryPolicy,
-        WithSingleCallable, WithStreamable,
+        CompletionToProviderBody, ToProviderMessage, WithClient, WithClientProperties, WithPrompt,
+        WithRenderRawCurl, WithRetryPolicy, WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
+
+pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
 
 mod anthropic;
 mod aws;
@@ -198,6 +201,73 @@ impl TryFrom<(&ClientWalker<'_>, &RuntimeContext)> for LLMPrimitiveProvider {
     }
 }
 
+impl LLMPrimitiveProvider {
+    pub fn chat_to_message(
+        &self,
+        chat: &[RenderedChatMessage],
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        use super::traits::ToProviderMessageExt;
+
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Anthropic(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Google(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Vertex(client) => client.chat_to_message(chat),
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        }
+    }
+
+    pub fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        Ok(match self {
+            LLMPrimitiveProvider::OpenAI(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Anthropic(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Google(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Vertex(client) => client.completion_to_provider_body(prompt),
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        })
+    }
+
+    pub async fn build_request(
+        &self,
+        prompt: either::Either<&String, &[RenderedChatMessage]>,
+        allow_proxy: bool,
+        stream: bool,
+    ) -> Result<reqwest::RequestBuilder> {
+        match self {
+            LLMPrimitiveProvider::OpenAI(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Anthropic(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Google(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Vertex(client) => {
+                client
+                    .build_request(prompt, allow_proxy, stream, true)
+                    .await
+            }
+            LLMPrimitiveProvider::Aws(client) => {
+                anyhow::bail!("Prompt exposure for AWS client is not supported")
+            }
+        }
+    }
+}
+
 impl<'ir> WithPrompt<'ir> for LLMPrimitiveProvider {
     async fn render_prompt(
         &'ir self,
@@ -338,11 +408,11 @@ mod tests {
         ) -> Result<reqwest::RequestBuilder> {
             unimplemented!("Not used in tests")
         }
-    
+
         fn request_options(&self) -> &baml_types::BamlMap<String, serde_json::Value> {
             &self.request_options
         }
-    
+
         fn http_client(&self) -> &reqwest::Client {
             unimplemented!("Not used in tests")
         }

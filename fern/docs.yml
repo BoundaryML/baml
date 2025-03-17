@@ -160,6 +160,9 @@ navigation:
           - page: Checks and Asserts
             icon: fa-regular fa-check-circle
             path: 01-guide/05-baml-advanced/checks-and-asserts.mdx
+          - page: Modular API
+            icon: fa-regular fa-cubes
+            path: 01-guide/05-baml-advanced/modular-api.mdx
       - section: Boundary Cloud
         contents:
           # - section: Functions

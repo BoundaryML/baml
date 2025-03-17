@@ -2,7 +2,7 @@ use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::ResponseType;
 use crate::internal::llm_client::primitive::stream_request::make_stream_request;
 use crate::internal::llm_client::traits::{
-    ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
 };
 use crate::internal::llm_client::ResolveMediaUrls;
 #[cfg(target_arch = "wasm32")]
@@ -284,8 +284,10 @@ impl WithChat for VertexClient {
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
-    let mut map = HashMap::new();
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
         "parts": [{
@@ -386,5 +388,14 @@ impl ToProviderMessageExt for VertexClient {
                 .into(),
         );
         Ok(res)
+    }
+}
+
+impl CompletionToProviderBody for VertexClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
     }
 }

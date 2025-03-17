@@ -21,6 +21,7 @@ from .baml_py import (
     LLMCall,
     Timing,
     Usage,
+    HTTPRequest,
 )
 from .stream import BamlStream, BamlSyncStream
 from .ctx_manager import CtxManager as BamlCtxManager
@@ -42,4 +43,5 @@ __all__ = [
     "LLMCall",
     "Timing",
     "Usage",
+    "HTTPRequest",
 ]

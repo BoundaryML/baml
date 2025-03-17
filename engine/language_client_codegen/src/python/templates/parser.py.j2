@@ -1,0 +1,90 @@
+from typing import Any, Dict, List, Optional, Union, TypedDict, Type, Literal, cast
+from typing_extensions import NotRequired
+
+import baml_py
+
+from . import types, partial_types
+from .types import Checked, Check
+from .type_builder import TypeBuilder
+
+
+class BamlCallOptions(TypedDict, total=False):
+    tb: NotRequired[TypeBuilder]
+    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+
+
+class LlmResponseParser:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+
+    {% for fn in funcs %}
+    def {{ fn.name }}(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> {{fn.return_type}}:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "{{fn.name}}",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        False,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast({{fn.return_type}}, parsed)
+    {% endfor %}
+
+
+class LlmStreamParser:
+    __runtime: baml_py.BamlRuntime
+    __ctx_manager: baml_py.BamlCtxManager
+
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager):
+      self.__runtime = runtime
+      self.__ctx_manager = ctx_manager
+
+    {% for fn in funcs %}
+    def {{ fn.name }}(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> {{fn.partial_return_type}}:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "{{fn.name}}",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        True,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast({{fn.partial_return_type}}, parsed)
+    {% endfor %}
+
+
+__all__ = ["LlmResponseParser", "LlmStreamParser"]

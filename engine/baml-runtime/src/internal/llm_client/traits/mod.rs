@@ -77,6 +77,13 @@ pub trait ToProviderMessage: WithClient {
     ) -> Result<Map<String, serde_json::Value>>;
 }
 
+pub trait CompletionToProviderBody {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value>;
+}
+
 fn merge_messages(chat: &[RenderedChatMessage]) -> Vec<RenderedChatMessage> {
     let mut chat = chat.to_owned();
     let mut i = 0;

@@ -21,28 +21,28 @@ function ExtractResume2(resume: string) -> Resume {
 
 
 class WithReasoning {
-    value string
-    reasoning string @description(#"
+  value string
+  reasoning string @description(#"
         Why the value is a good fit.
     "#)
 }
 
 
 class SearchParams {
-    dateRange int? @description(#"
+  dateRange int? @description(#"
         In ISO duration format, e.g. P1Y2M10D.
     "#)
-    location string[]
-    jobTitle WithReasoning? @description(#"
+  location string[]
+  jobTitle WithReasoning? @description(#"
         An exact job title, not a general category.
     "#)
-    company WithReasoning? @description(#"
+  company WithReasoning? @description(#"
         The exact name of the company, not a product or service.
     "#)
-    description WithReasoning[] @description(#"
+  description WithReasoning[] @description(#"
         Any specific projects or features the user is looking for.
     "#)
-    tags (Tag | string)[]
+  tags (Tag | string)[]
 }
 
 enum Tag {
@@ -79,8 +79,8 @@ function GetQuery(query: string) -> SearchParams {
 }
 
 class RaysData {
-    dataType DataType
-    value Resume | Event
+  dataType DataType
+  value Resume | Event
 }
 
 enum DataType {
@@ -89,10 +89,10 @@ enum DataType {
 }
 
 class Event {
-    title string
-    date string
-    location string
-    description string
+  title string
+  date string
+  location string
+  description string
 }
 
 function GetDataType(text: string) -> RaysData {

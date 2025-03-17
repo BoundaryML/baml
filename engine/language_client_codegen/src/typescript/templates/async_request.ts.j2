@@ -1,0 +1,73 @@
+import type { BamlRuntime, BamlCtxManager, ClientRegistry, Image, Audio } from "@boundaryml/baml"
+import { toBamlError, HTTPRequest } from "@boundaryml/baml"
+import type { Checked, Check } from "./types"
+import type * as types from "./types"
+import type {
+  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
+} from "./types"
+import type TypeBuilder from "./type_builder"
+
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+}
+
+export class AsyncHttpRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for fn in funcs %}
+  async {{ fn.name }}(
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}},
+      {%- endfor %}
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}
+
+export class AsyncHttpStreamRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for fn in funcs %}
+  async {{ fn.name }}(
+      {% for (name, optional, type) in fn.args -%}
+      {{name}}{% if optional %}?{% endif %}: {{type}},
+      {%- endfor %}
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "{{fn.name}}",
+        {
+          {% for (name, optional, type) in fn.args -%}
+          "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}

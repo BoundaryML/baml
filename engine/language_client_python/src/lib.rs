@@ -120,6 +120,7 @@ fn baml_py(m: Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::LLMCall>()?;
     m.add_class::<types::Timing>()?;
     m.add_class::<types::Usage>()?;
+    m.add_class::<types::HTTPRequest>()?;
     m.add_wrapped(wrap_pyfunction!(invoke_runtime_cli))?;
     m.add_wrapped(wrap_pyfunction!(get_version))?;
     m.add_wrapped(wrap_pyfunction!(set_log_level))?;

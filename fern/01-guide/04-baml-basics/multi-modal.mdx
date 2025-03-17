@@ -21,6 +21,7 @@ function DescribeMedia(img: image) -> string {
 
 // See the "testing functions" Guide for more on testing Multimodal functions
 test Test {
+  functions [DescribeMedia]
   args {
     img {
       url "https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png"
@@ -29,6 +30,21 @@ test Test {
 }
 ```
 See how to [test images in the playground](/guide/baml-basics/testing-functions#images).
+
+## Try it! Press 'Run Test' below!
+ <div class="resizer">
+<iframe
+  class="resized"
+  src="https://promptfiddle.com/embed?id=multimodal"
+ 
+  height="640"
+  style="border: none;"
+  resize="both"
+  overflow="auto"
+  msallowfullscreen
+></iframe>
+</div>
+
 
 ## Calling Multimodal BAML Functions
 
