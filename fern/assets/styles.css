@@ -108,11 +108,7 @@ body, p, ul, h1, h2, h3, h4, h5, h6, span:not(a span) {
   width: 100% !important;
 }
 
-.fern-layout-guide {
-  max-width: 860px !important;
-  margin-left: 10px !important;
-  margin-right: 10px !important;
-}
+
 
 .fern-sidebar-link-container[data-state="active"] {
   background-color: var(--tag-primary) !important;
