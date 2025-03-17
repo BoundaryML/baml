@@ -42,6 +42,24 @@ impl From<PythonClient> for SyncPythonClient {
     }
 }
 
+impl From<PythonClient> for PythonLlmResponseParser {
+    fn from(value: PythonClient) -> Self {
+        Self { funcs: value.funcs }
+    }
+}
+
+impl From<PythonClient> for PythonAsyncHttpRequest {
+    fn from(value: PythonClient) -> Self {
+        Self { funcs: value.funcs }
+    }
+}
+
+impl From<PythonClient> for PythonSyncHttpRequest {
+    fn from(value: PythonClient) -> Self {
+        Self { funcs: value.funcs }
+    }
+}
+
 struct PythonFunction {
     name: String,
     partial_return_type: String,
@@ -67,6 +85,24 @@ struct PythonGlobals {}
 struct PythonTracing {}
 
 #[derive(askama::Template)]
+#[template(path = "parser.py.j2", escape = "none")]
+struct PythonLlmResponseParser {
+    funcs: Vec<PythonFunction>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "async_request.py.j2", escape = "none")]
+struct PythonAsyncHttpRequest {
+    funcs: Vec<PythonFunction>,
+}
+
+#[derive(askama::Template)]
+#[template(path = "sync_request.py.j2", escape = "none")]
+struct PythonSyncHttpRequest {
+    funcs: Vec<PythonFunction>,
+}
+
+#[derive(askama::Template)]
 #[template(path = "inlinedbaml.py.j2", escape = "none")]
 struct InlinedBaml {
     file_map: Vec<(String, String)>,
@@ -85,6 +121,9 @@ pub(crate) fn generate(
     collector.add_template::<AsyncPythonClient>("async_client.py", (ir, generator))?;
     collector.add_template::<SyncPythonClient>("sync_client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
+    collector.add_template::<PythonLlmResponseParser>("parser.py", (ir, generator))?;
+    collector.add_template::<PythonAsyncHttpRequest>("async_request.py", (ir, generator))?;
+    collector.add_template::<PythonSyncHttpRequest>("sync_request.py", (ir, generator))?;
     collector.add_template::<PythonTracing>("tracing.py", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.py", (ir, generator))?;
     collector.add_template::<PythonInit>("__init__.py", (ir, generator))?;
@@ -140,6 +179,33 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncPythonCl
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for SyncPythonClient {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let python_client = PythonClient::try_from(params)?;
+        Ok(python_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonLlmResponseParser {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let python_client = PythonClient::try_from(params)?;
+        Ok(python_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonAsyncHttpRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let python_client = PythonClient::try_from(params)?;
+        Ok(python_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonSyncHttpRequest {
     type Error = anyhow::Error;
 
     fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {

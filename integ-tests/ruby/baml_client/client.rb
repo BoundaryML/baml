@@ -20,6 +20,8 @@ require_relative "inlined"
 require_relative "partial-types"
 require_relative "types"
 require_relative "type-registry"
+require_relative "request"
+require_relative "parser"
 
 module Baml
   @instance = nil
@@ -27,7 +29,7 @@ module Baml
 
   def self.do_not_use_directly_unless_you_know_what_youre_doing_runtime
     if @do_not_use_directly_unless_you_know_what_youre_doing_runtime.nil?
-      @do_not_use_directly_unless_you_know_what_youre_doing_runtime =  Baml::Ffi::BamlRuntime.from_files("baml_src", Baml::Inlined::FILE_MAP, ENV)
+      @do_not_use_directly_unless_you_know_what_youre_doing_runtime = Baml::Ffi::BamlRuntime.from_files("baml_src", Baml::Inlined::FILE_MAP, ENV)
     end
     @do_not_use_directly_unless_you_know_what_youre_doing_runtime
   end
@@ -46,11 +48,27 @@ module Baml
     sig { returns(BamlStreamClient) }
     attr_reader :stream
 
+    sig { returns(Baml::HttpRequest) }
+    attr_reader :request
+
+    sig { returns(Baml::HttpStreamRequest) }
+    attr_reader :stream_request
+
+    sig { returns(Baml::LlmResponseParser) }
+    attr_reader :parse
+
+    sig { returns(Baml::LlmStreamParser) }
+    attr_reader :parse_stream
+
     sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))])).void}
     def initialize(runtime:, ctx_manager: nil, baml_options: nil)
       @runtime = runtime
       @ctx_manager = ctx_manager || runtime.create_context_manager()
       @stream = BamlStreamClient.new(runtime: @runtime, ctx_manager: @ctx_manager, baml_options: baml_options)
+      @request = Baml::HttpRequest.new(runtime: @runtime, ctx_manager: @ctx_manager)
+      @stream_request = Baml::HttpStreamRequest.new(runtime: @runtime, ctx_manager: @ctx_manager)
+      @parse = Baml::LlmResponseParser.new(runtime: @runtime, ctx_manager: @ctx_manager)
+      @parse_stream = Baml::LlmStreamParser.new(runtime: @runtime, ctx_manager: @ctx_manager)
       @baml_options = baml_options
     end
 
@@ -82,16 +100,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -137,16 +155,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -192,16 +210,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -247,16 +265,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -302,16 +320,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -357,16 +375,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -412,16 +430,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -467,16 +485,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -522,16 +540,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -577,16 +595,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -632,16 +650,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -687,16 +705,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -742,16 +760,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -797,16 +815,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -852,16 +870,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -907,16 +925,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -962,16 +980,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1017,16 +1035,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1072,16 +1090,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1127,16 +1145,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1182,16 +1200,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1237,16 +1255,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1292,16 +1310,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1347,16 +1365,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1402,16 +1420,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1457,16 +1475,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1512,16 +1530,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1567,16 +1585,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1622,16 +1640,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1677,16 +1695,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1732,16 +1750,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1787,16 +1805,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1842,16 +1860,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1897,16 +1915,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -1952,16 +1970,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2007,16 +2025,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2062,16 +2080,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2117,16 +2135,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2172,16 +2190,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2227,16 +2245,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2282,16 +2300,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2337,16 +2355,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2392,16 +2410,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2447,16 +2465,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2502,16 +2520,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2557,16 +2575,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2612,16 +2630,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2667,16 +2685,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2722,16 +2740,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2777,16 +2795,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2832,16 +2850,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2887,16 +2905,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2942,16 +2960,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -2997,16 +3015,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3052,16 +3070,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3107,16 +3125,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3162,16 +3180,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3217,16 +3235,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3272,16 +3290,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3327,16 +3345,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3382,16 +3400,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3437,16 +3455,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3492,16 +3510,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3547,16 +3565,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3602,16 +3620,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3657,16 +3675,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3712,16 +3730,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3767,16 +3785,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3822,16 +3840,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3877,16 +3895,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3932,16 +3950,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -3987,16 +4005,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4042,16 +4060,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4097,16 +4115,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4152,16 +4170,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4207,16 +4225,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4262,16 +4280,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4317,16 +4335,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4372,16 +4390,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4427,16 +4445,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4482,16 +4500,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4537,16 +4555,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4592,16 +4610,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4647,16 +4665,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4702,16 +4720,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4757,16 +4775,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4812,16 +4830,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4867,16 +4885,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4922,16 +4940,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -4977,16 +4995,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5032,16 +5050,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5087,16 +5105,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5142,16 +5160,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5197,16 +5215,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5252,16 +5270,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5307,16 +5325,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5362,16 +5380,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5417,16 +5435,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5472,16 +5490,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5527,16 +5545,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5582,16 +5600,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5637,16 +5655,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5692,16 +5710,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5747,16 +5765,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5802,16 +5820,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5857,16 +5875,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5912,16 +5930,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -5967,16 +5985,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6022,16 +6040,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6077,16 +6095,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6132,16 +6150,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6187,16 +6205,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6242,16 +6260,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6297,16 +6315,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6352,16 +6370,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6407,16 +6425,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6462,16 +6480,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6517,16 +6535,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6540,6 +6558,61 @@ module Baml
         "TestFallbackClient",
         {
           
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(String)
+    }
+    def TestFallbackStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.call_function(
+        "TestFallbackStrategy",
+        {
+          input: input,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -6572,16 +6645,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6627,16 +6700,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6682,16 +6755,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6737,16 +6810,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6792,16 +6865,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6847,16 +6920,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6902,16 +6975,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -6957,16 +7030,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7012,16 +7085,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7067,16 +7140,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7122,16 +7195,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7177,16 +7250,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7232,16 +7305,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7287,16 +7360,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7342,16 +7415,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7397,16 +7470,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7452,16 +7525,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7507,16 +7580,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7562,16 +7635,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7617,16 +7690,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7672,16 +7745,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7727,16 +7800,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7782,16 +7855,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7837,16 +7910,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7892,16 +7965,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -7947,16 +8020,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8002,16 +8075,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8057,16 +8130,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8112,16 +8185,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8167,16 +8240,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8222,16 +8295,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8277,16 +8350,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8332,16 +8405,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8387,16 +8460,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8442,16 +8515,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8497,16 +8570,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8520,6 +8593,61 @@ module Baml
         "TestRetryExponential",
         {
           
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(String)
+    }
+    def TestRoundRobinStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.call_function(
+        "TestRoundRobinStrategy",
+        {
+          input: input,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -8552,16 +8680,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8607,16 +8735,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8662,16 +8790,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8717,16 +8845,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8772,16 +8900,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8827,16 +8955,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8882,16 +9010,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8937,16 +9065,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -8992,16 +9120,16 @@ module Baml
       # Merge options from initialization with those passed to the method
       # Passed options take precedence over initialization options
       effective_options = {}
-      
+
       if @baml_options
         effective_options = @baml_options.dup
       end
-      
+
       # Override with any options passed to this specific call
       baml_options.each do |key, value|
         effective_options[key] = value
       end
-      
+
       # Use the merged options for the rest of the method
       baml_options = effective_options
 
@@ -14359,6 +14487,51 @@ module Baml
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::BamlStream[String])
     }
+    def TestFallbackStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      baml_options = (@baml_options || {}).merge(baml_options)
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.stream_function(
+        "TestFallbackStrategy",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::BamlStream[String])
+    }
     def TestFallbackToShorthand(
         *varargs,
         input:,
@@ -15960,6 +16133,51 @@ module Baml
         "TestRetryExponential",
         {
           
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::BamlStream[String])
+    }
+    def TestRoundRobinStrategy(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      baml_options = (@baml_options || {}).merge(baml_options)
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.stream_function(
+        "TestRoundRobinStrategy",
+        {
+          input: input,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),

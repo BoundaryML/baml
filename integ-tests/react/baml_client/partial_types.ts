@@ -426,8 +426,8 @@ export namespace partial_types {
         name?: (string | null)
         email?: (string | null)
         phone?: (string | null)
-        experience?: (partial_types.Education | null)[]
-        education?: (string | null)[]
+        experience?: (string | null)[]
+        education?: (partial_types.Education | null)[]
         skills?: (string | null)[]
     }
     

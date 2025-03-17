@@ -632,8 +632,8 @@ export interface Resume {
   name: string
   email: string
   phone: string
-  experience: Education[]
-  education: string[]
+  experience: string[]
+  education: Education[]
   skills: string[]
   
 }

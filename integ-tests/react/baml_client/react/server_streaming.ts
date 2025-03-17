@@ -2290,6 +2290,25 @@ export const TestFallbackClient = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestFallbackStrategy" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFallbackStrategy = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestFallbackStrategy(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestFallbackToShorthand" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -2963,6 +2982,25 @@ export const TestRetryConstant = async (
 export const TestRetryExponential = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TestRetryExponential(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestRoundRobinStrategy" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestRoundRobinStrategy = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestRoundRobinStrategy(
+    input,
   );
   return Promise.resolve(stream.toStreamable());
 };

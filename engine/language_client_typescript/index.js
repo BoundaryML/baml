@@ -14,7 +14,7 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlCtxManager = exports.BamlStream = exports.Usage = exports.FunctionLog = exports.Collector = exports.BamlLogEvent = exports.ClientRegistry = exports.invoke_runtime_cli = exports.Audio = exports.ClientBuilder = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
+exports.BamlCtxManager = exports.BamlStream = exports.HTTPRequest = exports.Usage = exports.FunctionLog = exports.Collector = exports.BamlLogEvent = exports.ClientRegistry = exports.invoke_runtime_cli = exports.Audio = exports.ClientBuilder = exports.Image = exports.FunctionResultStream = exports.FunctionResult = exports.BamlRuntime = void 0;
 __exportStar(require("./safe_imports"), exports);
 __exportStar(require("./errors"), exports);
 var native_1 = require("./native");
@@ -30,6 +30,7 @@ Object.defineProperty(exports, "BamlLogEvent", { enumerable: true, get: function
 Object.defineProperty(exports, "Collector", { enumerable: true, get: function () { return native_1.Collector; } });
 Object.defineProperty(exports, "FunctionLog", { enumerable: true, get: function () { return native_1.FunctionLog; } });
 Object.defineProperty(exports, "Usage", { enumerable: true, get: function () { return native_1.Usage; } });
+Object.defineProperty(exports, "HTTPRequest", { enumerable: true, get: function () { return native_1.HTTPRequest; } });
 var stream_1 = require("./stream");
 Object.defineProperty(exports, "BamlStream", { enumerable: true, get: function () { return stream_1.BamlStream; } });
 var async_context_vars_1 = require("./async_context_vars");

@@ -26,18 +26,33 @@ use anyhow::Context;
 use anyhow::Result;
 
 use baml_types::tracing::events::FunctionId;
+use baml_types::tracing::events::HTTPBody;
+use baml_types::tracing::events::HTTPRequest;
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::BamlMap;
 use baml_types::BamlValue;
 use baml_types::Constraint;
 use cfg_if::cfg_if;
 use client_registry::ClientRegistry;
 use indexmap::IndexMap;
+use internal::llm_client::llm_provider::LLMProvider;
+use internal::llm_client::orchestrator::OrchestrationScope;
+use internal::llm_client::primitive::json_body;
+use internal::llm_client::primitive::json_headers;
+use internal::llm_client::primitive::JsonBodyInput;
+use internal::llm_client::retry_policy::CallablePolicy;
+use internal::prompt_renderer::PromptRenderer;
 use internal_baml_core::configuration::CloudProject;
 use internal_baml_core::configuration::CodegenGenerator;
 use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
+use internal_baml_core::ir::FunctionWalker;
+use internal_llm_client::AllowedRoleMetadata;
+use internal_llm_client::ClientSpec;
+use jsonish::ResponseBamlValue;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
+use runtime_interface::InternalClientLookup;
 use serde_json::json;
 use std::sync::OnceLock;
 use tracingv2::storage::storage::Collector;
@@ -189,6 +204,32 @@ impl BamlRuntime {
 }
 
 impl BamlRuntime {
+    pub async fn render_prompt(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
+        node_index: Option<usize>,
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedRoleMetadata)> {
+        self.inner
+            .render_prompt(function_name, ctx, params, node_index)
+            .await
+    }
+
+    pub fn llm_provider_from_function(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<Arc<LLMProvider>> {
+        let renderer = PromptRenderer::from_function(
+            &self.inner.get_function(&function_name, &ctx)?,
+            self.inner.ir(),
+            &ctx,
+        )?;
+
+        self.inner.get_llm_provider(renderer.client_spec(), ctx)
+    }
+
     pub fn get_test_params_and_constraints(
         &self,
         function_name: &str,
@@ -398,6 +439,96 @@ impl BamlRuntime {
         )
     }
 
+    pub async fn build_request(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> Result<HTTPRequest> {
+        let ctx = context_manager.create_ctx(tb, cb, None)?;
+
+        let provider = self.llm_provider_from_function(&function_name, &ctx)?;
+
+        let prompt = self
+            .render_prompt(&function_name, &ctx, &params, None)
+            .await
+            .map(|(prompt, ..)| prompt)?;
+
+        let request = match prompt {
+            RenderedPrompt::Chat(chat) => provider
+                .build_request(either::Either::Right(&chat), true, stream, &ctx, self)
+                .await?
+                .build()?,
+
+            RenderedPrompt::Completion(completion) => provider
+                .build_request(either::Either::Left(&completion), true, stream, &ctx, self)
+                .await?
+                .build()?,
+        };
+
+        // TODO: Too much work to get the requeset body, we're building a serde
+        // map and then serialize it into bytes and then parse it back again
+        // into a map. We can extract the initial map directly if we refactor
+        // the `build_request` method.
+        //
+        // Would also be nice if RequestBuilder had getters so we didn't have to
+        // call .build()? above.
+        Ok(HTTPRequest {
+            id: HttpRequestId(uuid::Uuid::new_v4().to_string()),
+            url: request.url().to_string(),
+            method: request.method().to_string(),
+            headers: json_headers(request.headers()),
+            body: HTTPBody::new(
+                request
+                    .body()
+                    .map(reqwest::Body::as_bytes)
+                    .flatten()
+                    .unwrap_or_default()
+                    .into(),
+            ),
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn build_request_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> Result<HTTPRequest> {
+        let fut = self.build_request(function_name, params, context_manager, tb, cb, stream);
+        self.async_runtime.block_on(fut)
+    }
+
+    // TODO: Should this have an async version? Parse in a different thread and
+    // allow the async runtime to schedule other futures? Do it only if the
+    // input is very large?
+    pub fn parse_llm_response(
+        &self,
+        function_name: String,
+        llm_response: String,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> Result<ResponseBamlValue> {
+        let ctx = ctx.create_ctx(tb, cb, None)?;
+
+        let renderer = PromptRenderer::from_function(
+            &self.inner.get_function(&function_name, &ctx)?,
+            self.inner.ir(),
+            &ctx,
+        )?;
+
+        renderer.parse(&self.inner.ir(), &llm_response, allow_partials)
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     fn generate_client(
         &self,
@@ -526,6 +657,20 @@ impl BamlRuntime {
                     })
             })
             .collect()
+    }
+}
+
+impl<'a> InternalClientLookup<'a> for BamlRuntime {
+    fn get_llm_provider(
+        &'a self,
+        client_spec: &ClientSpec,
+        ctx: &RuntimeContext,
+    ) -> Result<Arc<LLMProvider>> {
+        self.inner.get_llm_provider(client_spec, ctx)
+    }
+
+    fn get_retry_policy(&self, policy_name: &str, ctx: &RuntimeContext) -> Result<CallablePolicy> {
+        self.inner.get_retry_policy(policy_name, ctx)
     }
 }
 

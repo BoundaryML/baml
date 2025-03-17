@@ -15,6 +15,8 @@ crate::lang_wrapper!(
     clone_safe
 );
 
+use super::{HTTPRequest, HTTPResponse};
+
 #[pymethods]
 impl Collector {
     #[new]
@@ -344,13 +346,7 @@ impl LLMStreamCall {
     }
 }
 
-crate::lang_wrapper!(
-    HTTPRequest,
-    baml_types::tracing::events::HTTPRequest,
-    clone_safe
-);
-
-fn serde_value_to_py(py: Python<'_>, value: &JsonValue) -> PyResult<PyObject> {
+pub(crate) fn serde_value_to_py(py: Python<'_>, value: &JsonValue) -> PyResult<PyObject> {
     match value {
         JsonValue::Null => Ok(py.None()),
         JsonValue::Bool(b) => b.into_py_any(py),
@@ -380,93 +376,6 @@ fn serde_value_to_py(py: Python<'_>, value: &JsonValue) -> PyResult<PyObject> {
             }
             Ok(pydict.into_any().unbind())
         }
-    }
-}
-#[pymethods]
-impl HTTPRequest {
-    /// Return the raw JSON string, as originally stored.
-    #[getter]
-    pub fn body_raw(&self) -> String {
-        serde_json::to_string(&self.inner.body).unwrap_or("None".to_string())
-    }
-
-    /// Parse `body` as JSON (serde_json::Value) and recursively
-    /// convert it into a Python dict / list / etc.
-    #[getter]
-    pub fn body(&self, py: Python<'_>) -> PyResult<PyObject> {
-        // Recursively convert to Python objects:
-        serde_value_to_py(py, &self.inner.body)
-    }
-
-    pub fn __repr__(&self) -> String {
-        format!(
-            "HTTPRequest(url={}, method={}, headers={}, body={})",
-            self.inner.url,
-            self.inner.method,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap()
-        )
-    }
-
-    #[getter]
-    pub fn url(&self) -> String {
-        self.inner.url.clone()
-    }
-
-    #[getter]
-    pub fn method(&self) -> String {
-        self.inner.method.clone()
-    }
-
-    #[getter]
-    pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new(py);
-        if let Some(obj) = self.inner.headers.as_object() {
-            for (k, v) in obj {
-                dict.set_item(k, v.to_string())?;
-            }
-        }
-        Ok(dict.into())
-    }
-}
-crate::lang_wrapper!(
-    HTTPResponse,
-    baml_types::tracing::events::HTTPResponse,
-    clone_safe
-);
-
-// TODO: print each of these as actual json pretty strings or python dicts
-#[pymethods]
-impl HTTPResponse {
-    pub fn __repr__(&self) -> String {
-        format!(
-            "HTTPResponse(status={}, headers={}, body={})",
-            self.inner.status,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap()
-        )
-    }
-
-    #[getter]
-    pub fn status(&self) -> u16 {
-        self.inner.status
-    }
-
-    #[getter]
-    pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Py<PyDict>> {
-        let dict = PyDict::new(py);
-        if let Some(obj) = self.inner.headers.as_object() {
-            for (k, v) in obj {
-                dict.set_item(k, v.to_string())?;
-            }
-        }
-        Ok(dict.into())
-    }
-
-    // note the body may be an error string, not a dict
-    #[getter]
-    pub fn body(&self, py: Python<'_>) -> PyResult<PyObject> {
-        serde_value_to_py(py, &self.inner.body)
     }
 }
 

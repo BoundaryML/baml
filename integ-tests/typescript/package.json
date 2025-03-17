@@ -32,11 +32,14 @@
     "typescript": "^5.4.2"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
     "@aws-sdk/client-sts": "^3.721.0",
     "@boundaryml/baml": "link:../../engine/language_client_typescript",
+    "@google/generative-ai": "^0.24.0",
     "chart.js": "^4.4.7",
     "chartjs-node-canvas": "^4.1.6",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "openai": "^4.87.3"
   },
   "packageManager": "pnpm@9.12.0+sha512.4abf725084d7bcbafbd728bfc7bee61f2f791f977fd87542b3579dcb23504d170d46337945e4c66485cd12d588a0c0e570ed9c477e7ccdd8507cf05f3f92eaca"
 }
