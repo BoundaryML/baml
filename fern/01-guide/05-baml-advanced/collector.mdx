@@ -172,88 +172,6 @@ run
 </Tab>
 </Tabs>
 
-### Working with Multiple Functions
-
-The Collector works seamlessly with BAML's [`id`](/ref/baml_client/id) functionality for tracking multiple function calls. This is particularly useful when running functions in parallel.
-
-<Tabs>
-<Tab title="Python" language="python">
-```python
-from baml_client import b
-from baml_py import Collector
-
-def run():
-    collector = Collector(name="multi-function-collector")
-    # You can use `b.id` to include the id along with the return value
-    first_id, resume = b.id.ExtractResume("...", baml_options={"collector": collector})
-    second_id, invoice = b.id.ExtractResume("...", baml_options={"collector": collector})
-
-    # List of all requests
-    print(collector.logs)
-
-    # The first request usage is available
-    print(collector.id(first_id).usage)
-
-    # The second request usage is also available
-    print(collector.id(second_id).usage)
-
-    # The total usage of all requests
-    print(collector.usage)
-```
-</Tab>
-
-<Tab title="TypeScript" language="typescript">
-```typescript
-import {b} from 'baml_client'
-import {Collector} from '@boundaryml/baml'
-
-async function run() {
-    const collector = new Collector("multi-function-collector")
-    const [{ id: first_id, data: resume }, { id: second_id, data: invoice }] = await Promise.all([
-        b.id.ExtractResume("...", { collector }),
-        b.id.ExtractResume("...", { collector })
-    ])
-
-    // List of all requests
-    console.log(collector.logs)
-
-    // The first request usage is available
-    console.log(collector.id(first_id)?.usage)
-
-    // The second request usage is also available
-    console.log(collector.id(second_id)?.usage)
-
-    // The total usage of all requests
-    console.log(collector.usage)
-}
-```
-</Tab>
-
-<Tab title="Ruby" language="ruby">
-```ruby
-require_relative "baml_client/client"
-
-def run
-    collector = Baml::Collector.new(name: "multi-function-collector")
-    first_id, resume = Baml.Client.id.test_openai_gpt4o_mini(input: 'First call', baml_options: { collector: collector })
-    second_id, invoice = Baml.Client.id.test_openai_gpt4o_mini(input: 'Second call', baml_options: { collector: collector })
-
-    # List of all requests
-    print(collector.logs)
-
-    # The first request usage is available
-    print(collector.id(first_id).usage)
-
-    # The second request usage is also available
-    print(collector.id(second_id).usage)
-
-    # The total usage of all requests
-    print(collector.usage)
-end
-```
-</Tab>
-</Tabs>
-
 ### Managing Collector State
 
 <Tabs>
@@ -560,7 +478,6 @@ The `HttpResponse` class has the following properties:
 
 ## Related Topics
 - [Using with_options](/ref/baml_client/with-options) - Learn how to configure logging globally
-- [Function IDs](/ref/baml_client/id) - Track specific function calls
 - [TypeBuilder](/ref/baml_client/type-builder) - Build custom types for your BAML functions
 - [Client Registry](/ref/baml_client/client-registry) - Manage LLM clients and their configurations
 

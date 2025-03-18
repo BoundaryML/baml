@@ -156,7 +156,7 @@ print(collector.last.usage)
 
 ### Parallel Execution
 
-When running functions in parallel, `with_options` helps maintain consistent configuration across all calls. This works seamlessly with the [`Collector`](./collector) and [`id`](./id) functionality.
+When running functions in parallel, `with_options` helps maintain consistent configuration across all calls. This works seamlessly with the [`Collector`](./collector) functionality.
 
 <Tabs>
 <Tab title="Python" language="python">
@@ -313,15 +313,8 @@ The configured client maintains the same interface as the base `baml_client`, so
 
 ## Related Topics
 - [Collector](/ref/baml_client/collector) - Track function calls and usage metrics
-- [Function IDs](/ref/baml_client/id) - Track specific function calls
 - [TypeBuilder](/ref/baml_client/type-builder) - Build custom types for your functions
 - [Client Registry](/ref/baml_client/client-registry) - Manage LLM clients and their configurations
-
-## Best Practices
-1. Use `with_options` when you need consistent configuration across multiple function calls
-2. Configure logging and client registry at the start of your application
-3. Create separate configured clients for different parts of your application that need different settings
-4. Use the configured client's properties to access logs and metrics
 
 <Info>
 The configured client maintains the same interface as the base client, so you can use all the same functions and methods.
