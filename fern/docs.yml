@@ -516,7 +516,7 @@ navigation:
             path: 03-reference/baml/clients/strategy/fallback.mdx
           - page: "Round Robin"
             path: 03-reference/baml/clients/strategy/round-robin.mdx
-  
+
       - section: Prompt Syntax
         contents:
           - page: What is jinja?
@@ -734,7 +734,7 @@ redirects:
   - source: "/docs/snippets/clients/providers/azure"
     destination: "/ref/llm-client-providers/open-ai-from-azure"
   - source: "/docs/snippets/clients/providers/gemini"
-    destination: "/ref/llm-client-providers/google-ai-studio"
+    destination: "/ref/llm-client-providers/google-ai-gemini"
   - source: "/docs/snippets/clients/providers/groq"
     destination: "/ref/llm-client-providers/openai-generic-groq"
   - source: "/docs/snippets/clients/providers/huggingface"
@@ -745,6 +745,8 @@ redirects:
     destination: "/ref/llm-client-providers/open-ai"
   - source: "/docs/snippets/clients/providers/openai-generic"
     destination: "/ref/llm-client-providers/openai-generic"
+  - source: "/docs/snippets/clients/providers/google-vertex"
+    destination: "/ref/llm-client-providers/google-vertex"
   - source: "/docs/snippets/clients/providers/openrouter"
     destination: "/ref/llm-client-providers/openai-generic-open-router"
   - source: "/docs/snippets/clients/providers/together"
