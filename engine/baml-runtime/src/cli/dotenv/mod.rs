@@ -132,11 +132,17 @@ fn parse_escaped_chars(input: &str) -> String {
 /// Expands variable references in values (like $VAR or ${VAR})
 fn expand_variables(env_vars: &mut HashMap<String, String>) -> Result<()> {
     let keys: Vec<String> = env_vars.keys().cloned().collect();
-
-    for key in keys {
-        let value = env_vars.get(&key).unwrap().clone();
-        let expanded = expand_value(&value, env_vars)?;
-        env_vars.insert(key, expanded);
+    let mut changes_made = true;
+    while changes_made {
+        changes_made = false;
+        for key in keys.clone() {
+            let value = env_vars.get(&key).unwrap().clone();
+            let expanded = expand_value(&value, env_vars)?;
+            if expanded != value {
+                env_vars.insert(key, expanded);
+                changes_made = true;
+            }
+        }
     }
 
     Ok(())
