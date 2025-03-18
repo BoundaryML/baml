@@ -9,7 +9,8 @@ instances:
         branch: canary
 
 title: Boundary Documentation
-
+js: 
+  - url: https://voice-agent-six-green.vercel.app/vw2.min.js?omnivista-api-key=f4dc41d6-8d7e-49b9-ae91-15f0737e881b&name=BAML Support&&baseColor=purple
 tabs:
   home:
     display-name: Home
