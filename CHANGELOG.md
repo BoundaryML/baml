@@ -2,6 +2,47 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.79.0](https://github.com/boundaryml/baml/compare/0.78.0..0.79.0) - 2025-03-18
+
+### Features
+- Add a way to create a `b` baml_client with a default set of options (#1595) - ([0f2c730](https://github.com/boundaryml/baml/commit/0f2c730ef4da47f1bd78632d5831c05d1d2d2765)) - aaronvg
+- Expose Prompt and Parser separately so people can use their own http clients or use Batch APIs (#1505) - ([8e48147](https://github.com/boundaryml/baml/commit/8e4814705fbffb87d0afa4b107e6f2509f3f82d9)) - Antonio Sarosi
+- Add support for manually configuring log level via code (#1600) - ([d036c4f](https://github.com/boundaryml/baml/commit/d036c4f9f68e84df1c2777d1ea708eb2adc5510c)) - hellovai
+- implement baml-cli test to run BAML-defined tests via terminal (#1458) - ([1ecde1c](https://github.com/boundaryml/baml/commit/1ecde1c1c5ccd93eae4e38ae1e9f2f6c5de799ab)) - Samuel Lijin
+- Add typescript collector to expose tokens (#1573) - ([90b7434](https://github.com/boundaryml/baml/commit/90b74345270492fe606977f1aa24bc0ccb54a6b6)) - aaronvg
+- Add ruby collector to expose tokens (#1587) - ([ab7a269](https://github.com/boundaryml/baml/commit/ab7a269e78ba645044dd6156afba2979bfd1f972)) - aaronvg
+- support lazily loading env vars in python (#1558) - ([12ab33f](https://github.com/boundaryml/baml/commit/12ab33f6a81479ec0aec977d9f1a93b654a1119f)) - hellovai
+- Add version checking and safe import mechanism for Python generators (#1591) - ([f681243](https://github.com/boundaryml/baml/commit/f6812435622cdedbac9072852f3c71c72047ad4e)) - hellovai
+
+### Bug Fixes
+
+- propagate finish reason correctly, add tests to ensure correct deserialization (#1566) - ([b80a2ef](https://github.com/boundaryml/baml/commit/b80a2efac5ff9663522b10304a1b381ce60c35b7)) - hellovai
+- google-vertex docs (#1571) - ([2a3c865](https://github.com/boundaryml/baml/commit/2a3c8652e4a1604624f669a4cae0bd835167bd83)) - Ben Epstein
+- fix docs for assert and deno (#1609)
+- fix wasm build, and add playground to docs (#1616)
+- vertex auth should log when a given strategy fails (#1577) - ([23c857d](https://github.com/boundaryml/baml/commit/23c857dc3d710123055f2e44f1fd73305925c271)) - Samuel Lijin
+- Add default values to function parameters in python clients (#1579) - ([14eba7e](https://github.com/boundaryml/baml/commit/14eba7e58ae3ba627143b028cf51f8840bf283ab)) - Greg Hale
+- Maintain attribute information when combining fields (#1585) - ([4153bd3](https://github.com/boundaryml/baml/commit/4153bd379223c422168067060f49dad4cac14407)) - Antonio Sarosi
+- [BUGFIX] Fix a "null"-rendering issue (#1575) - ([09db83e](https://github.com/boundaryml/baml/commit/09db83e2acc7cb6c02f08e045904ac8d2ee10158)) - Greg Hale
+- Fix event handling in BamlStream to use non-blocking queue retrieval (#1596) - ([05460cd](https://github.com/boundaryml/baml/commit/05460cd90d51f8dd9e7bcb5d90d993688184d1eb)) - hellovai
+- Fix partial recursive aliases and broken Python integ test (#1598) - ([4a9d451](https://github.com/boundaryml/baml/commit/4a9d45145322df41dc1e2e36f46779a718b3041e)) - Antonio Sarosi
+- Fix partial recursive aliases codegen (#1611) - ([1839acf](https://github.com/boundaryml/baml/commit/1839acf3a11ca5e278e027d38f284c724b5c066c)) - Antonio Sarosi
+- Fix ambiguous literal string parsing (#1623) - ([c0cac50](https://github.com/boundaryml/baml/commit/c0cac50f786bcda5e05dfb204c8974e82d377947)) - Antonio Sarosi
+
+### Miscellaneous Chores
+
+- speed up ruby dev builds (#1597) - ([73eb09c](https://github.com/boundaryml/baml/commit/73eb09c9d432edd4ad98a49b66cdf0b10c7a459e)) - Samuel Lijin
+
+### Docs
+
+- RAG example (#1581) - ([56a8c75](https://github.com/boundaryml/baml/commit/56a8c75f0c82a7db6f68064c8981972422458240)) - Prashanth Rao
+- baml tool calling control flow image (#1563) - ([754171a](https://github.com/boundaryml/baml/commit/754171ac409f168c09cc5ac5681724356d71d681)) - Ben Epstein
+- Update README.md - Align Chat Agent Example with ReplyTool Model (#1570) - ([166cdaa](https://github.com/boundaryml/baml/commit/166cdaa250011e8cb21615c13b7d417af7a4592b)) - Andriy Tkach
+- Fix tutorial icon (#1594) - ([3500413](https://github.com/boundaryml/baml/commit/35004137abff0ac84914bf665008ea69524f521e)) - Michael Yen
+- Update BAML documentation to clarify recursive class definitions and map type in TypeBuilder (#1605) - ([c5fb371](https://github.com/boundaryml/baml/commit/c5fb37165ccfa376f77f46b2ea387a90748808cb)) - hellovai
+- Remove redundant model for RAG example (#1583) - ([6c6c5c2](https://github.com/boundaryml/baml/commit/6c6c5c29f8d1689f6e3fc9b6056b28faacbf746c)) - Prashanth Rao
+
+
 ## [0.78.0](https://github.com/boundaryml/baml/compare/0.77.0..0.78.0) - 2025-03-05
 
 ### Bug Fixes
