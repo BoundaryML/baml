@@ -15,7 +15,7 @@ import { areTestsRunningAtom, showEnvDialogAtom } from '../atoms'
 import { ThemeProvider } from '../../theme/ThemeProvider'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import EnvVars from '../side-bar/env-vars'
-const PromptPreview = () => {
+const PromptPreview = ({ isEmbed = false }: { isEmbed?: boolean }) => {
   const areTestsRunning = useAtomValue(areTestsRunningAtom)
   const ref = useRef<ImperativePanelHandle>(null)
 

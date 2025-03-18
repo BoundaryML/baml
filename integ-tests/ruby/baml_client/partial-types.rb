@@ -58,6 +58,7 @@ module Baml
     class FormatterTest2 < T::Struct; end
     class FormatterTest3 < T::Struct; end
     class GroceryReceipt < T::Struct; end
+    class Haiku < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
     class InputClass < T::Struct; end
@@ -668,6 +669,22 @@ module Baml
         @props = props
       end
     end
+    class Haiku < T::Struct
+      include Baml::Sorbet::Struct
+      const :line1, T.nilable(String)
+      const :line2, T.nilable(String)
+      const :line3, T.nilable(String)
+
+      def initialize(props)
+        super(
+          line1: props[:line1],
+          line2: props[:line2],
+          line3: props[:line3],
+        )
+
+        @props = props
+      end
+    end
     class InnerClass < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
@@ -1159,8 +1176,8 @@ module Baml
       const :name, T.nilable(String)
       const :email, T.nilable(String)
       const :phone, T.nilable(String)
-      const :experience, T::Array[T.nilable(Baml::PartialTypes::Education)]
-      const :education, T::Array[T.nilable(String)]
+      const :experience, T::Array[T.nilable(String)]
+      const :education, T::Array[T.nilable(Baml::PartialTypes::Education)]
       const :skills, T::Array[T.nilable(String)]
 
       def initialize(props)

@@ -27,6 +27,9 @@ export declare class BamlRuntime {
   callFunctionSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResult
   streamFunction(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResultStream
   streamFunctionSync(functionName: string, args: { [name: string]: any }, cb: ((err: any, param: FunctionResult) => void) | undefined, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, clientRegistry: ClientRegistry | undefined | null, collectors: Array<Collector>): FunctionResultStream
+  buildRequest(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, stream: boolean): Promise<HTTPRequest>
+  buildRequestSync(functionName: string, args: { [name: string]: any }, ctx: RuntimeContextManager, tb: TypeBuilder | undefined | null, cb: ClientRegistry | undefined | null, stream: boolean): HTTPRequest
+  parseLlmResponse(functionName: string, llmResponse: string, allowPartials: boolean, ctx: RuntimeContextManager, tb?: TypeBuilder | undefined | null, cb?: ClientRegistry | undefined | null): any
   setLogEventCallback(func?: undefined | ((err: any, param: BamlLogEvent) => void)): void
   flush(): void
   drainStats(): TraceStats
@@ -104,9 +107,16 @@ export declare class FunctionResultStream {
   done(rctx: RuntimeContextManager): Promise<FunctionResult>
 }
 
+export declare class HttpBody {
+  raw(): ArrayBuffer
+  text(): string
+  json(): any
+}
+export type HTTPBody = HttpBody
+
 export declare class HttpRequest {
-  get bodyRaw(): string
-  get body(): any
+  get id(): string
+  get body(): HttpBody
   toString(): string
   get url(): string
   get method(): string
@@ -215,6 +225,8 @@ export interface BamlLogEvent {
 
 export declare export declare function get_version(): string
 
+export declare export declare function getLogLevel(): string
+
 export declare export declare function invoke_runtime_cli(params: Array<string>): void
 
 export interface LogEventMetadata {
@@ -222,4 +234,10 @@ export interface LogEventMetadata {
   parentId?: string
   rootEventId: string
 }
+
+export declare export declare function setLogJsonMode(useJson: boolean): void
+
+export declare export declare function setLogLevel(level: string): void
+
+export declare export declare function setLogMaxChunkLength(length: number): void
 

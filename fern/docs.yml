@@ -163,6 +163,9 @@ navigation:
           - page: Checks and Asserts
             icon: fa-regular fa-check-circle
             path: 01-guide/05-baml-advanced/checks-and-asserts.mdx
+          - page: Modular API
+            icon: fa-regular fa-cubes
+            path: 01-guide/05-baml-advanced/modular-api.mdx
       - section: Boundary Cloud
         contents:
           # - section: Functions
@@ -417,13 +420,17 @@ navigation:
       - section: Generated baml_client
         slug: baml_client
         contents:
-          - page: id(..)
-            path: 03-reference/baml_client/id.mdx
           - page: with_options(..)
             path: 03-reference/baml_client/with_options.mdx
           - page: Collector
             path: 03-reference/baml_client/collector.mdx
             slug: collector
+          - page: logging / env vars
+            slug: config
+            path: 03-reference/baml_client/config.mdx
+          - page: AsyncClient / SyncClient
+            slug: client
+            path: 03-reference/baml_client/client.mdx
           - page: TypeBuilder
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry

@@ -1,3 +1,4 @@
+use std::fmt;
 use std::sync::Arc;
 
 use crate::BamlValue;
@@ -15,6 +16,12 @@ pub struct ContentId(pub SpanId);
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
 pub struct HttpRequestId(pub SpanId);
+
+impl fmt::Display for HttpRequestId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 pub type TraceTags = serde_json::Map<String, serde_json::Value>;
 
@@ -130,14 +137,58 @@ pub struct LoggedLLMRequest {
     pub prompt: Prompt,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HTTPBody {
+    raw: Vec<u8>,
+}
+
+// TODO: Cache parsed JSON and UTF-8 text in order to avoid parsing the bytes
+// on every access (not trivial because we'd need &mut self or interior
+// mutability).
+impl HTTPBody {
+    pub fn new(body: Vec<u8>) -> Self {
+        Self { raw: body }
+    }
+
+    pub fn raw(&self) -> &[u8] {
+        &self.raw
+    }
+
+    pub fn text(&self) -> anyhow::Result<&str> {
+        std::str::from_utf8(&self.raw).map_err(|e| anyhow::anyhow!("HTTP body is not UTF-8: {}", e))
+    }
+
+    pub fn json(&self) -> anyhow::Result<serde_json::Value> {
+        serde_json::from_str(self.text()?)
+            .map_err(|e| anyhow::anyhow!("HTTP body is not JSON: {}", e))
+    }
+
+    /// Returns the HTTP body as a [`serde_json::Value`].
+    ///
+    /// If the body is not UTF-8 or JSON, it is returned as an array of bytes.
+    /// Used as input for [`serde_json::to_string_pretty`].
+    pub fn as_serde_value(&self) -> serde_json::Value {
+        self.json()
+            .or_else(|_e| self.text().map(|s| serde_json::Value::String(s.into())))
+            .unwrap_or_else(|_e| {
+                serde_json::Value::Array(
+                    self.raw()
+                        .iter()
+                        .map(|byte| serde_json::Value::from(*byte))
+                        .collect(),
+                )
+            })
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPRequest {
     // since LLM requests could be made in parallel, we need to match the response to the request
-    pub request_id: HttpRequestId,
+    pub id: HttpRequestId,
     pub url: String,
     pub method: String,
     pub headers: serde_json::Value,
-    pub body: serde_json::Value,
+    pub body: HTTPBody,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

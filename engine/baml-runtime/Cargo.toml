@@ -41,12 +41,14 @@ json_comments = "0.2.2"
 jsonish.workspace = true
 internal-baml-codegen.workspace = true
 baml-types.workspace = true
+baml-log.workspace = true
 internal-llm-client.workspace = true
 internal-baml-core.workspace = true
 internal-baml-jinja.workspace = true
 log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
+regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true
 secrecy.workspace = true
@@ -67,7 +69,6 @@ web-time.workspace = true
 static_assertions.workspace = true
 mime_guess = "=2.0.5"
 mime = "0.3.17"
-regex.workspace = true
 
 # For tracing
 envy = "0.4.2"
@@ -102,6 +103,7 @@ thiserror = "2.0.1"
 log-once = "0.4.1"
 once_cell.workspace = true
 time.workspace = true
+tempfile = "3.19.0"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -112,15 +114,20 @@ colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
-js-sys = "0.3.77"
-reqwest = { version = "0.12.12", features = ["stream", "json", "native-tls-vendored", "native-tls-alpn"] }
+js-sys = "=0.3.69"
+reqwest = { version = "0.12.12", features = [
+  "stream",
+  "json",
+  "native-tls-vendored",
+  "native-tls-alpn",
+] }
 # 
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 serde-wasm-bindgen = "0.6.5"
 uuid = { version = "1.8.0", features = ["v4", "serde", "js"] }
 # WARNING: Do not add serde-serialize feature to wasm-bindgen.
 # It may produce a dependency cycle in projects that use wasm and import baml.
-wasm-bindgen = "^0.2.100"
+wasm-bindgen = "^0.2.74"
 wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3.69", features = [
   "Crypto",
@@ -150,6 +157,8 @@ tokio = { version = "1", features = ["full"] }
 reqwest.workspace = true
 walkdir = "2.5.0"
 which = "6.0.3"
+indicatif = "0.17"
+junit-report = "0.8.3"
 
 
 [features]
@@ -167,13 +176,8 @@ expect-test = "1.1.0"
 indoc.workspace = true
 either = "1.8.1"
 rstest = "0.22.0"
-wasm-bindgen-test = "0.3.50"
+wasm-bindgen-test = "0.3.42"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 serial_test = "3.2.0"
 console_error_panic_hook = "0.1.7"
-
-[ benches ]
-name = "bench"
-path = "benches/bench.rs"
-harness = false

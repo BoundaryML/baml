@@ -46,7 +46,7 @@ pub fn validate_streaming_state(
         ir,
         baml_value_with_streaming_state_and_behavior,
         allow_partials,
-        0
+        0,
     )?;
     Ok(top_level_node)
 }
@@ -91,15 +91,15 @@ fn process_node(
         BamlValueWithMeta::Int(i, _) => Ok(BamlValueWithMeta::Int(i, new_meta)),
         BamlValueWithMeta::Float(f, _) => Ok(BamlValueWithMeta::Float(f, new_meta)),
         BamlValueWithMeta::Bool(b, _) => Ok(BamlValueWithMeta::Bool(b, new_meta)),
-        BamlValueWithMeta::List(items, _) => {
-            Ok(BamlValueWithMeta::List(
+        BamlValueWithMeta::List(items, _) => Ok(BamlValueWithMeta::List(
             items
                 .into_iter()
-                .filter_map(|item| process_node(ir, item, allow_partials_in_sub_nodes, depth+1).ok())
+                .filter_map(|item| {
+                    process_node(ir, item, allow_partials_in_sub_nodes, depth + 1).ok()
+                })
                 .collect(),
             new_meta,
-        ))
-    },
+        )),
         BamlValueWithMeta::Class(ref class_name, value_fields, _) => {
             let value_field_names: IndexSet<String> = value_fields
                 .keys()
@@ -157,7 +157,7 @@ fn process_node(
                         .as_ref()
                         .map_or(false, |b| b.state);
                     let completion_state = field_value.meta().0.clone();
-                    match process_node(ir, field_value, allow_partials_in_sub_nodes, depth+1) {
+                    match process_node(ir, field_value, allow_partials_in_sub_nodes, depth + 1) {
                         Ok(res) => Some((field_name, res)),
                         _ => {
                             let state = Completion {
@@ -218,7 +218,7 @@ fn process_node(
             let new_kvs = kvs
                 .into_iter()
                 .filter_map(|(k, v)| {
-                    process_node(ir, v, allow_partials_in_sub_nodes, depth+1)
+                    process_node(ir, v, allow_partials_in_sub_nodes, depth + 1)
                         .ok()
                         .map(|v| (k, v))
                 })
@@ -330,7 +330,9 @@ fn required_done(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
         FieldType::Tuple(_) => false,
         FieldType::RecursiveTypeAlias(_) => false,
         FieldType::Class(_) => false,
-        FieldType::Union(_) => false,
+        // TODO: This rule is pretty aggressive. For example in the case of
+        // Class | Enum it would not allow classes to be streamed.
+        FieldType::Union(options) => options.iter().any(|option| required_done(ir, option)),
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
         }
@@ -343,10 +345,7 @@ fn completion_state(flags: &Vec<Flag>) -> CompletionState {
     if flags.iter().any(|f| matches!(f, Flag::Pending)) {
         CompletionState::Pending
     } else {
-        if flags
-            .iter()
-            .any(|f| matches!(f, Flag::Incomplete))
-        {
+        if flags.iter().any(|f| matches!(f, Flag::Incomplete)) {
             CompletionState::Incomplete
         } else {
             CompletionState::Complete

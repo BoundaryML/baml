@@ -13,12 +13,14 @@
 # flake8: noqa: E501,F401,F821
 # pylint: disable=unused-import,line-too-long
 # fmt: off
+from __future__ import annotations
 import os
 
 from baml_py import BamlCtxManager, BamlRuntime
 from baml_py.baml_py import BamlError
 from .inlinedbaml import get_baml_files
-from typing import Dict
+from typing_extensions import Literal
+from typing import Dict, Any
 
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntime.from_files(
   "baml_src",
@@ -38,7 +40,6 @@ def reset_baml_env_vars(env_vars: Dict[str, str]):
   else:
     raise BamlError("Cannot reset BAML environment variables while there are active BAML contexts.")
 
-
 try:
     import dotenv
     from unittest.mock import patch
@@ -46,7 +47,7 @@ try:
     # Monkeypatch load_dotenv to call reset_baml_env_vars after execution
     original_load_dotenv = dotenv.load_dotenv
 
-    def patched_load_dotenv(*args, **kwargs):
+    def patched_load_dotenv(*args: Any, **kwargs: Any) -> Any:
         result = original_load_dotenv(*args, **kwargs)
         try:
             reset_baml_env_vars(os.environ.copy())

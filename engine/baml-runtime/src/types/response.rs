@@ -1,14 +1,15 @@
 pub use crate::internal::llm_client::LLMResponse;
 use crate::{
+    errors::ExposedError, internal::llm_client::orchestrator::OrchestrationScope,
     test_constraints::TestConstraintsResult,
-    errors::ExposedError,
-    internal::llm_client::orchestrator::OrchestrationScope,
 };
 use anyhow::Result;
 use colored::*;
 
 use baml_types::{BamlValue, BamlValueWithMeta};
-use jsonish::{deserializer::deserialize_flags::Flag, BamlValueWithFlags, ResponseBamlValue, SerializeMode};
+use jsonish::{
+    deserializer::deserialize_flags::Flag, BamlValueWithFlags, ResponseBamlValue, SerializeMode,
+};
 
 #[derive(Debug)]
 pub struct FunctionResult {
@@ -97,7 +98,7 @@ impl FunctionResult {
 
     pub fn parsed(&self) -> &Option<Result<ResponseBamlValue>> {
         match self.event_chain.last() {
-            Some((_,_,result)) => result,
+            Some((_, _, result)) => result,
             None => &None,
         }
     }
@@ -105,20 +106,16 @@ impl FunctionResult {
     pub fn result_with_constraints(&self) -> &Option<Result<ResponseBamlValue>> {
         match self.event_chain.last() {
             Some((_, _, result)) => result,
-            None => &None
+            None => &None,
         }
     }
 
     pub fn result_with_constraints_content(&self) -> Result<&ResponseBamlValue> {
         self.result_with_constraints()
             .as_ref()
-            .map(|res| {
-                match res {
-                    Ok(val) => Ok(val),
-                    Err(err) => {
-                        Err(anyhow::anyhow!(self.format_err(err)))
-                    }
-                }
+            .map(|res| match res {
+                Ok(val) => Ok(val),
+                Err(err) => Err(anyhow::anyhow!(self.format_err(err))),
             })
             .unwrap_or_else(|| Err(anyhow::anyhow!(self.llm_response().clone())))
     }
@@ -143,16 +140,19 @@ impl FunctionResult {
             // The only branch that should be hit is LLMResponse::Success(_) since we
             // only call this function when we have a successful response.
             message: match self.llm_response() {
-                LLMResponse::Success(_) =>
-                    format!("Failed to parse LLM response: {}", actual_error),
+                LLMResponse::Success(_) => {
+                    format!("Failed to parse LLM response: {}", actual_error)
+                }
                 LLMResponse::LLMFailure(err) => format!(
                     "LLM Failure: {} ({}) - {}",
                     err.message, err.code, actual_error
                 ),
-                LLMResponse::UserFailure(err) =>
-                    format!("User Failure: {} - {}", err, actual_error),
-                LLMResponse::InternalFailure(err) =>
-                    format!("Internal Failure: {} - {}", err, actual_error),
+                LLMResponse::UserFailure(err) => {
+                    format!("User Failure: {} - {}", err, actual_error)
+                }
+                LLMResponse::InternalFailure(err) => {
+                    format!("Internal Failure: {} - {}", err, actual_error)
+                }
             },
         }
     }
@@ -172,6 +172,16 @@ impl std::fmt::Display for TestResponse {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+/// A test may result in one of 3 following states:
+///
+///   1. pass
+///   2. at least one @check failed
+///   3. at least one @assert failed
+///
+/// NeedsHumanEval corresponds to (2) and Fail corresponds to (3).
+///
+/// (There was a broader design conversation when we made this decision about
+/// value transforms and what it means for a check to "fail".)
 pub enum TestStatus<'a> {
     Pass,
     NeedsHumanEval(Vec<String>),
@@ -256,6 +266,26 @@ impl TestResponse {
             }
         } else {
             TestStatus::Fail(TestFailReason::TestLLMFailure(func_res.llm_response()))
+        }
+    }
+}
+
+impl std::fmt::Display for TestFailReason<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::TestUnspecified(e) => write!(f, "{}", e),
+            Self::TestLLMFailure(r) => write!(f, "{}", r),
+            Self::TestParseFailure(e) => write!(f, "{}", e),
+            Self::TestFinishReasonFailed(e) => write!(f, "{}", e),
+            Self::TestConstraintsFailure { checks, failed_assert } => {
+                for (check, pass) in checks {
+                    write!(f, "{} - {}", check, if *pass { "passed" } else { "failed" })?;
+                }
+                if let Some(failed_assert) = failed_assert {
+                    write!(f, "{}", failed_assert)?;
+                }
+                Ok(())
+            }
         }
     }
 }

@@ -24,7 +24,7 @@ fn raise_baml_validation_error(prompt: String, message: String, raw_output: Stri
     })
 }
 
-#[allow(non_snake_case)]    
+#[allow(non_snake_case)]
 fn raise_baml_client_http_error(client_name: String, message: String, status_code: u16) -> PyErr {
     Python::with_gil(|py| {
         let internal_monkeypatch = py.import("baml_py.internal_monkeypatch").unwrap();
@@ -34,7 +34,6 @@ fn raise_baml_client_http_error(client_name: String, message: String, status_cod
         PyErr::from_value(inst)
     })
 }
-
 
 #[allow(non_snake_case)]
 fn raise_baml_client_finish_reason_error(
@@ -72,7 +71,8 @@ pub fn errors(parent_module: &Bound<'_, PyModule>) -> PyResult<()> {
 }
 
 impl BamlError {
-    pub fn from_anyhow(err: anyhow::Error) -> PyErr {
+    pub fn from_anyhow(err: impl Into<anyhow::Error>) -> PyErr {
+        let err = err.into();
         if let Some(er) = err.downcast_ref::<ExposedError>() {
             match er {
                 ExposedError::ValidationError {
@@ -99,7 +99,11 @@ impl BamlError {
                     client_name,
                     message,
                     status_code,
-                } => raise_baml_client_http_error(client_name.clone(), message.clone(), status_code.to_u16()),
+                } => raise_baml_client_http_error(
+                    client_name.clone(),
+                    message.clone(),
+                    status_code.to_u16(),
+                ),
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
             PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {}", er))
@@ -122,7 +126,11 @@ impl BamlError {
                     | baml_runtime::internal::llm_client::ErrorCode::ServerError
                     | baml_runtime::internal::llm_client::ErrorCode::ServiceUnavailable
                     | baml_runtime::internal::llm_client::ErrorCode::UnsupportedResponse(_) => {
-                        raise_baml_client_http_error(failed.client.clone(), failed.message.clone(), failed.code.to_u16())
+                        raise_baml_client_http_error(
+                            failed.client.clone(),
+                            failed.message.clone(),
+                            failed.code.to_u16(),
+                        )
                     }
                 },
                 LLMResponse::UserFailure(msg) => {

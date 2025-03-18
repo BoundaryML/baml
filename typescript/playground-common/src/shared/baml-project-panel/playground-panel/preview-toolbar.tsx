@@ -126,7 +126,7 @@ export default function Component() {
         </DropdownMenu>
         <TooltipProvider>
           <Tooltip delayDuration={100}>
-            <TooltipTrigger>
+            <TooltipTrigger asChild>
               <Button
                 variant='ghost'
                 size='sm'
@@ -145,7 +145,7 @@ export default function Component() {
         </TooltipProvider>
         <TooltipProvider>
           <Tooltip delayDuration={100}>
-            <TooltipTrigger>
+            <TooltipTrigger asChild>
               <Button variant='ghost' size='sm' className={cn('hover:text-purple-500')} onClick={handleCopy}>
                 {showCopied ? 'Copied!' : <Copy className='w-4 h-4' />}
               </Button>

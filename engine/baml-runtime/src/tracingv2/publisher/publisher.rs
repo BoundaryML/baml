@@ -65,7 +65,6 @@ impl TracePublisher {
                             }
                         },
                         PublisherMessage::Flush(flush_ack) => {
-                            // log::info!("Got a flush event");
                             // Flush the current buffer if it has any pending events.
                             if !buffer.is_empty() {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
@@ -92,7 +91,6 @@ impl TracePublisher {
     ///   2. Append the JSON to a file (using async file I/O on macOS).
     ///   3. Post the JSON to an HTTP API with up to 3 retries.
     async fn process_batch(&self, batch: Vec<Arc<TraceEvent>>) {
-        // log::info!("Processing batch {:#?}", batch);
         // Assemble the upload request structure.
         let upload_request = TraceEventUploadRequest::V1 {
             project_id: "project123".to_string(),
@@ -150,7 +148,6 @@ impl TracePublisher {
 // but that's ok since noone uses our wasm build in node for logging.
 // https://github.com/whizsid/wasmtimer-rs/issues/26
 pub async fn flush() {
-    // log::info!("flushing");
     let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
     if let Err(e) = PUBLISHING_CHANNEL.send(PublisherMessage::Flush(ack_tx)) {
         log::error!("Failed to send flush request: {:?}", e);
@@ -161,7 +158,7 @@ pub async fn flush() {
     let timeout_duration = Duration::from_secs(3);
 
     match timeout(timeout_duration, ack_rx).await {
-        Ok(Ok(())) => log::info!("Flush acknowledged successfully."),
+        Ok(Ok(())) => baml_log::info!("Flush acknowledged successfully."),
         Ok(Err(e)) => log::error!("Flush acknowledgement error: {:?}", e),
         Err(_) => log::error!("Flush timed out after {:?}", timeout_duration),
     }

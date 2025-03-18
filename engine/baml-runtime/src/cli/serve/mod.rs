@@ -272,12 +272,6 @@ impl Server {
             return (StatusCode::FORBIDDEN, format!("{}\n", e.trim())).into_response();
         }
 
-        // log::info!(
-        //     "incoming request triggering middleware, basic auth is {:?} and x-baml-api-key is {:?}",
-        //     basic_auth,
-        //     baml_api_key
-        // );
-
         next.run(request).await
     }
 
@@ -327,7 +321,7 @@ impl Server {
         // out of the box.
         //
         // .with_graceful_shutdown(signal::ctrl_c());
-        log::info!(
+        baml_log::info!(
             r#"BAML-over-HTTP listening on port {}, serving from {}
 
 Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
@@ -755,20 +749,20 @@ mod tests {
             "client_registry should be Some"
         );
         let client_registry = baml_options.client_registry.unwrap();
-        
-        
+
         let provider = ClientProvider::OpenAI(OpenAIClientProviderVariant::Base);
         let retry_policy = None;
-        let options = BamlMap::from_iter(vec![(
-            "model".to_string(),
-            BamlValue::String("gpt-4o".to_string()),
-        ), (
-            "api_key".to_string(),
-            BamlValue::String("[redacted]".to_string()),
-        ), (
-            "base_url".to_string(),
-            BamlValue::String("[redacted]".to_string()),
-        ),]);
+        let options = BamlMap::from_iter(vec![
+            ("model".to_string(), BamlValue::String("gpt-4o".to_string())),
+            (
+                "api_key".to_string(),
+                BamlValue::String("[redacted]".to_string()),
+            ),
+            (
+                "base_url".to_string(),
+                BamlValue::String("[redacted]".to_string()),
+            ),
+        ]);
         let client_property =
             ClientProperty::new("testing".into(), provider, retry_policy, options);
 

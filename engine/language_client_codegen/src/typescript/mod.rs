@@ -174,6 +174,10 @@ struct TypescriptGlobals {
 }
 
 #[derive(askama::Template)]
+#[template(path = "config.ts.j2", escape = "none")]
+struct TypescriptConfig {}
+
+#[derive(askama::Template)]
 #[template(path = "inlinedbaml.ts.j2", escape = "none")]
 struct InlinedBaml {
     file_map: Vec<(String, String)>,
@@ -182,6 +186,54 @@ struct InlinedBaml {
 #[derive(askama::Template)]
 #[template(path = "tracing.ts.j2", escape = "none")]
 struct TypescriptTracing {}
+
+#[derive(askama::Template)]
+#[template(path = "parser.ts.j2", escape = "none")]
+struct TypscriptLlmParser {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+impl From<TypescriptClient> for TypscriptLlmParser {
+    fn from(ts_client: TypescriptClient) -> Self {
+        Self {
+            funcs: ts_client.funcs,
+            types: ts_client.types,
+        }
+    }
+}
+
+#[derive(askama::Template)]
+#[template(path = "async_request.ts.j2", escape = "none")]
+struct AsyncTypescriptRequest {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+impl From<TypescriptClient> for AsyncTypescriptRequest {
+    fn from(ts_client: TypescriptClient) -> Self {
+        Self {
+            funcs: ts_client.funcs,
+            types: ts_client.types,
+        }
+    }
+}
+
+#[derive(askama::Template)]
+#[template(path = "sync_request.ts.j2", escape = "none")]
+struct SyncTypescriptRequest {
+    funcs: Vec<TypescriptFunction>,
+    types: Vec<String>,
+}
+
+impl From<TypescriptClient> for SyncTypescriptRequest {
+    fn from(ts_client: TypescriptClient) -> Self {
+        Self {
+            funcs: ts_client.funcs,
+            types: ts_client.types,
+        }
+    }
+}
 
 pub(crate) fn generate(
     ir: &IntermediateRepr,
@@ -201,6 +253,10 @@ pub(crate) fn generate(
     collector.add_template::<AsyncTypescriptClient>("async_client.ts", (ir, generator))?;
     collector.add_template::<SyncTypescriptClient>("sync_client.ts", (ir, generator))?;
     collector.add_template::<TypescriptGlobals>("globals.ts", (ir, generator))?;
+    collector.add_template::<TypescriptConfig>("config.ts", (ir, generator))?;
+    collector.add_template::<TypscriptLlmParser>("parser.ts", (ir, generator))?;
+    collector.add_template::<AsyncTypescriptRequest>("async_request.ts", (ir, generator))?;
+    collector.add_template::<SyncTypescriptRequest>("sync_request.ts", (ir, generator))?;
     collector.add_template::<TypescriptTracing>("tracing.ts", (ir, generator))?;
     collector.add_template::<TypescriptInit>("index.ts", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlinedbaml.ts", (ir, generator))?;
@@ -223,6 +279,14 @@ pub(crate) fn generate(
     }
 
     collector.commit(&generator.output_dir())
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(TypescriptConfig {})
+    }
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncTypescriptClient {
@@ -303,6 +367,33 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptCli
             partial_return_types,
             types,
         })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypscriptLlmParser {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for AsyncTypescriptRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for SyncTypescriptRequest {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
     }
 }
 

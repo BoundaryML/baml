@@ -11,7 +11,7 @@ use baml_runtime::BamlRuntime;
 pub(crate) struct RuntimeCli {
     /// Specifies a subcommand to run.
     #[command(subcommand)]
-    command: Commands,
+    pub(crate) command: Commands,
 }
 
 #[derive(Subcommand, Debug)]
@@ -28,21 +28,24 @@ pub(crate) enum Commands {
     #[command(about = "Starts a development server")]
     Dev(baml_runtime::cli::dev::DevArgs),
 
-    #[command(subcommand, about = "Authenticate with Boundary Cloud")]
+    #[command(subcommand, about = "Authenticate with Boundary Cloud", hide = true)]
     Auth(crate::auth::AuthCommands),
 
-    #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)")]
+    #[command(about = "Login to Boundary Cloud (alias for `baml auth login`)", hide = true)]
     Login(crate::auth::LoginArgs),
 
-    #[command(about = "Deploy a BAML project to Boundary Cloud")]
+    #[command(about = "Deploy a BAML project to Boundary Cloud", hide = true)]
     Deploy(crate::deploy::DeployArgs),
 
     #[command(about = "Format BAML source files", name = "fmt", hide = true)]
     Format(crate::format::FormatArgs),
+
+    #[command(about = "Run BAML tests")]
+    Test(baml_runtime::cli::testing::TestArgs),
 }
 
 impl RuntimeCli {
-    pub fn run(&mut self, defaults: RuntimeCliDefaults) -> Result<()> {
+    pub fn run(&mut self, defaults: RuntimeCliDefaults) -> Result<crate::ExitCode> {
         // NB: we spawn a runtime here but block_on inside the match arms
         // because 'baml-cli dev' and 'baml-cli serve' cannot block_on
         let t = tokio::runtime::Runtime::new()?;
@@ -51,29 +54,69 @@ impl RuntimeCli {
         match &mut self.command {
             Commands::Generate(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                args.run(defaults)
+                match args.run(defaults) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
             }
-            Commands::Init(args) => args.run(defaults),
+            Commands::Init(args) => {
+                match args.run(defaults) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
+            },
             Commands::Serve(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                args.run()
+                match args.run() {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
             }
             Commands::Dev(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                args.run(defaults)
+                match args.run(defaults) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
             }
-            Commands::Auth(args) => t.block_on(async { args.run_async().await }),
-            Commands::Login(args) => t.block_on(async { args.run_async().await }),
+            Commands::Auth(args) => {
+                match t.block_on(async { args.run_async().await }) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
+            }
+            Commands::Login(args) => {
+                match t.block_on(async { args.run_async().await }) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
+            }
             Commands::Deploy(args) => {
                 args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                t.block_on(async { args.run_async().await })
+                match t.block_on(async { args.run_async().await }) {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
             }
             Commands::Format(args) => {
                 // We deliberately don't apply parse_baml_src_path here
                 // see format.rs for more details
                 // args.from = BamlRuntime::parse_baml_src_path(&args.from)?;
-                args.run()
+                match args.run() {
+                    Ok(()) => Ok(crate::ExitCode::Success),
+                    Err(_) => Ok(crate::ExitCode::Other),
+                }
             }
+            Commands::Test(args) => {
+                let res = t.block_on(async { args.run().await })?;
+                match res {
+                    baml_runtime::cli::testing::TestRunResult::Success => Ok(crate::ExitCode::Success),
+                    baml_runtime::cli::testing::TestRunResult::HumanEvalRequired => Ok(crate::ExitCode::HumanEvalRequired),
+                    baml_runtime::cli::testing::TestRunResult::TestFailure => Ok(crate::ExitCode::TestFailure),
+                    baml_runtime::cli::testing::TestRunResult::TestCancelled => Ok(crate::ExitCode::TestCancelled),
+                    baml_runtime::cli::testing::TestRunResult::NoTestsRun => Ok(crate::ExitCode::NoTestsRun),
+                }
+            },
         }
     }
 }

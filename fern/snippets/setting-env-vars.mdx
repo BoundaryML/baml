@@ -1,76 +1,109 @@
-To set environment variables:
+## Setting Environment Variables
 
-<AccordionGroup>
-  <Accordion title="In the VSCode Playground">
+### In the VSCode Playground
 
-   
-Once you open a `.baml` file, in VSCode, you should see a small button over every BAML function: `Open Playground`.
+Once you open a `.baml` file in VSCode, you should see a small button over every BAML function: `Open Playground`. Then you should be able to set environment variables in the settings tab.
 
-Then you should be able to set environment variables in the settings tab.
-
-<img src="/assets/vscode/code-lens.png" />
+<img src="/assets/vscode/code-lens.png" alt="VSCode Code Lens" />
 
 Or type `BAML Playground` in the VSCode Command Bar (`CMD + Shift + P` or `CTRL + Shift + P`) to open the playground.
 
-  </Accordion>
+### For Your App (Default)
 
-  <Accordion title="For your app (default)">
-    BAML will expect these to be set already in your program **before** you import the baml_client in Python/ TS / etc.
+BAML will do its best to load environment variables from your program. Any of the following strategies for setting env vars are compatible with BAML:
 
-    Any of the following strategies for setting env vars are compatible with BAML:
-    - setting them in your shell before running your program
-    - in your `Dockerfile`
-    - in your `next.config.js`
-    - in your Kubernetes manifest
-    - from secrets-store.csi.k8s.io
-    - from a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
-    - from a `.env` file (using `dotenv` cli)
-    - using account credentials for ephemeral token generation (e.g. Vertex AI Auth Tokens)
+- Setting them in your shell before running your program
+- In your `Dockerfile`
+- In your `next.config.js`
+- In your Kubernetes manifest
+- From `secrets-store.csi.k8s.io`
+- From a secrets provider such as [Infisical](https://infisical.com/) / [Doppler](https://www.doppler.com/)
+- From a `.env` file (using `dotenv` CLI)
+- Using account credentials for ephemeral token generation (e.g., Vertex AI Auth Tokens)
+- `python-dotenv` package in Python or `dotenv` package in Node.js
 
-    ```bash
-    export MY_SUPER_SECRET_API_KEY="..."
-    python my_program_using_baml.py
-    ```
-  </Accordion>
-  
-  <Accordion title="For your app (manually)">
-    <Info>
-    Requires BAML Version 0.57+
-    </Info>
+```bash
+export MY_SUPER_SECRET_API_KEY="..."
+python my_program_using_baml.py
+```
 
-    If you don't want BAML to try to auto-load your env vars, you can call manually `reset_baml_env_vars`
-with the current environment variables.
-    <CodeBlocks>
+<Tabs>
+  <Tab title="python">
+    > **Warning**: If you are using the `python-dotenv` package, please check the import order for some edge cases.
 
-    ```python Python
-
-    from baml_client import b
-    from baml_client import reset_baml_env_vars
-    import os
+    ```python
     import dotenv
-
+    from baml_client import b
+    # This will work regardless of import order, since dotenv is imported as a module
     dotenv.load_dotenv()
-    reset_baml_env_vars(dict(os.environ))
     ```
 
-    ```typescript TypeScript
+    ```python
+    from baml_client import b
+    from dotenv import load_dotenv
+    # This will work since load_dotenv is imported after baml_client
+    load_dotenv()
+    ```
+
+    ```python
+    from dotenv import load_dotenv
+    from baml_client import b
+    # This will not work as expected since baml_client is imported AFTER load_dotenv
+    load_dotenv()
+    ```
+  </Tab>
+  <Tab title="typescript">
+    
+    ```typescript
     import dotenv from 'dotenv'
-    // Wait to import the BAML client until after loading environment variables
-    import { b, resetBamlEnvVars } from 'baml-client'
+    import { b } from './baml_client'
 
+    // This should "just work"!
     dotenv.config()
-    resetBamlEnvVars(process.env)
     ```
-
-    ```ruby Ruby (beta)
+  </Tab>
+  <Tab title="ruby">
+    ```ruby
     require 'dotenv/load'
 
     # Wait to import the BAML client until after loading environment variables
     # reset_baml_env_vars is not yet implemented in the Ruby client
     require 'baml_client'
     ```
+  </Tab>
+</Tabs>
 
 
-    </CodeBlocks>
-  </Accordion>
-</AccordionGroup>
+### For Your App (Manually)
+
+<Info>
+Requires BAML Version 0.57+
+</Info>
+
+Reset the environment variables to those manually set in your code.
+
+<Tabs>
+  <Tab title="python">
+    ```python
+    from baml_client import b
+    from baml_client.config import reset_baml_env_vars
+
+    # This will load the environment variables from the .env file
+    reset_baml_env_vars({ "OPENAI_API_KEY": "sk-super-secret-key" })
+    ```
+  </Tab>
+  <Tab title="typescript">
+    ```typescript
+    // Wait to import the BAML client until after loading environment variables
+    import { b } from './baml_client'
+    import { resetBamlEnvVars } from './baml_client/config'
+
+    resetBamlEnvVars({ "OPENAI_API_KEY": "sk-super-secret-key" })
+    ```
+  </Tab>
+  <Tab title="ruby">
+    ```ruby
+    # not implemented yet
+    ```
+  </Tab>
+</Tabs>

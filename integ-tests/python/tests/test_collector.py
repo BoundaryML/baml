@@ -1,5 +1,5 @@
 import pytest
-from dotenv import load_dotenv
+import dotenv
 from openai.types.chat import ChatCompletion
 
 from ..baml_client import b
@@ -9,22 +9,23 @@ import gc
 import sys
 import asyncio
 
-load_dotenv()
+dotenv.load_dotenv()
 
+def function_span_count():
+    return Collector.__function_span_count()  # type: ignore
 
 @pytest.fixture(autouse=True)
 def ensure_collector_is_empty():
-    assert Collector.__function_span_count() == 0
+    assert function_span_count() == 0
     yield
     gc.collect()
-    assert Collector.__function_span_count() == 0
+    assert function_span_count() == 0
 
 
 @pytest.mark.asyncio
 async def test_collector_async_no_stream_success():
-    print("### function_span_count", Collector.__function_span_count())
     # garbage collected!
-    assert Collector.__function_span_count() == 0
+    assert function_span_count() == 0
 
     collector = Collector(name="my-collector")
     function_logs = collector.logs
@@ -68,11 +69,12 @@ async def test_collector_async_no_stream_success():
     request = call.http_request
     assert request is not None
     print(f"### request.body: {request.body} \n {type(request.body)}", file=sys.stderr)
-    assert isinstance(request.body, dict)
-    assert "messages" in request.body
-    assert "content" in request.body["messages"][0]
-    assert request.body["messages"][0]["content"] is not None
-    assert request.body["model"] == "gpt-4o-mini"
+    body = request.body.json()
+    assert isinstance(body, dict)
+    assert "messages" in body
+    assert "content" in body["messages"][0]
+    assert body["messages"][0]["content"] is not None
+    assert body["model"] == "gpt-4o-mini"
 
     # Verify http response
     response = call.http_response
@@ -112,7 +114,7 @@ async def test_collector_async_no_stream_success():
     gc.collect()
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
-    assert Collector.__function_span_count() > 0
+    assert function_span_count() > 0
 
 
 @pytest.mark.asyncio
@@ -132,7 +134,7 @@ async def test_collector_async_no_stream_no_getting_logs():
     gc.collect()
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
-    assert Collector.__function_span_count() > 0
+    assert function_span_count() > 0
 
 
 @pytest.mark.asyncio
@@ -190,8 +192,9 @@ async def test_collector_async_stream_success():
     request = call.http_request
     assert request is not None
     print(f"### request.body: {request.body} \n {type(request.body)}", file=sys.stderr)
-    assert isinstance(request.body, dict)
-    assert "messages" in request.body
+    body = request.body.json()
+    assert isinstance(body, dict)
+    assert "messages" in body
 
     # Verify http response
     response = call.http_response
@@ -213,7 +216,7 @@ async def test_collector_async_stream_success():
     gc.collect()
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
-    assert Collector.__function_span_count() > 0
+    assert function_span_count() > 0
 
 
 @pytest.mark.asyncio
@@ -237,8 +240,8 @@ async def test_collector_async_multiple_calls_usage():
 
     # Capture usage after second call and verify it's the sum of both calls
     second_call_usage = function_logs[1].usage
-    total_input = first_call_usage.input_tokens + second_call_usage.input_tokens
-    total_output = first_call_usage.output_tokens + second_call_usage.output_tokens
+    total_input = (first_call_usage.input_tokens or 0) + (second_call_usage.input_tokens or 0)
+    total_output = (first_call_usage.output_tokens or 0) + (second_call_usage.output_tokens or 0)
     assert collector.usage.input_tokens == total_input
     assert collector.usage.output_tokens == total_output
 
@@ -284,10 +287,10 @@ async def test_collector_multiple_collectors():
     # Verify coll1 usage is now the sum of both calls
     usage_second_call_coll1 = logs1[1].usage
     total_input = (
-        usage_first_call_coll1.input_tokens + usage_second_call_coll1.input_tokens
+        (usage_first_call_coll1.input_tokens or 0) + (usage_second_call_coll1.input_tokens or 0)
     )
     total_output = (
-        usage_first_call_coll1.output_tokens + usage_second_call_coll1.output_tokens
+        (usage_first_call_coll1.output_tokens or 0) + (usage_second_call_coll1.output_tokens or 0)
     )
     assert coll1.usage.input_tokens == total_input
     assert coll1.usage.output_tokens == total_output
@@ -319,8 +322,8 @@ async def test_collector_mixed_async_sync_calls():
     # Verify the second call's usage
     usage_second_call = logs[1].usage
     assert logs[1].timing.start_time_utc_ms > logs[0].timing.start_time_utc_ms
-    total_input = usage_first_call.input_tokens + usage_second_call.input_tokens
-    total_output = usage_first_call.output_tokens + usage_second_call.output_tokens
+    total_input = (usage_first_call.input_tokens or 0) + (usage_second_call.input_tokens or 0)
+    total_output = (usage_first_call.output_tokens or 0) + (usage_second_call.output_tokens or 0)
     assert collector.usage.input_tokens == total_input
     assert collector.usage.output_tokens == total_output
 
