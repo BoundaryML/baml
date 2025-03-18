@@ -284,7 +284,7 @@ AFTER=after_multiline
         std::fs::write(".env", content)?;
 
         // Call dotenv
-        dotenv()?;
+        dotenv(None)?;
 
         // Check that variables were set in environment
         assert_eq!(env::var("TEST_VAR1").ok(), Some("from_dotenv".to_string()));

@@ -13,7 +13,9 @@ pub mod request;
 mod runtime;
 pub mod runtime_interface;
 pub mod test_constraints;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod test_executor;
+
 pub mod tracing;
 pub mod tracingv2;
 pub mod type_builder;
