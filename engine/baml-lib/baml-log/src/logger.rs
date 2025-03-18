@@ -428,7 +428,7 @@ impl ConfigSetting<Level> for LogLevel {
                 let old_level = config.level;
                 config.level = value;
                 if old_level != value {
-                    println!("[BAML 🐑] Log level set to {}", value.colored());
+                    println!("[BAML] Log level set to {}", value.colored());
                 }
                 Ok(())
             }
@@ -616,7 +616,7 @@ impl Logger {
 
         let _ = writeln!(
             io::stdout(),
-            "{} [BAML 🐑 {}] {}",
+            "{} [BAML {}] {}",
             now,
             level.colored(),
             message.trim()
@@ -701,7 +701,7 @@ pub fn log_event_internal<T: Loggable>(
 
         let _ = writeln!(
             io::stdout(),
-            "{} [BAML 🐑 {}] {}",
+            "{} [BAML {}] {}",
             now,
             level.colored(),
             payload_str.trim()
