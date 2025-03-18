@@ -248,11 +248,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
                                 .inputs()
                                 .iter()
                                 .map(|(name, r#type)| {
-                                    (
-                                        name.to_string(),
-                                        r#type.to_type_ref(ir, false),
-                                        default_value_for_parameter_type(r#type),
-                                    )
+                                    (name.to_string(), r#type.to_type_ref(ir, false), None)
                                 })
                                 .collect(),
                         })
