@@ -289,7 +289,7 @@ class BamlSyncClient:
     
     def AliasedInputList(
         self,
-        input: List[types.AliasedEnum] = [],
+        input: List[types.AliasedEnum],
         baml_options: BamlCallOptions = {},
     ) -> str:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -397,7 +397,7 @@ class BamlSyncClient:
     
     def BuildLinkedList(
         self,
-        input: List[int] = [],
+        input: List[int],
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedList:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -856,7 +856,7 @@ class BamlSyncClient:
     
     def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput] = [],
+        input: List[types.DynInputOutput],
         baml_options: BamlCallOptions = {},
     ) -> List[types.DynInputOutput]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -1045,7 +1045,7 @@ class BamlSyncClient:
     
     def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image] = None,
+        resume: str,img: Optional[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -1261,7 +1261,7 @@ class BamlSyncClient:
     
     def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str] = None,
+        myString: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> str:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -1720,7 +1720,7 @@ class BamlSyncClient:
     
     def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
+        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[types.MapKey, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -1747,7 +1747,7 @@ class BamlSyncClient:
     
     def InOutLiteralStringUnionMapKey(
         self,
-        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -1774,7 +1774,7 @@ class BamlSyncClient:
     
     def InOutSingleLiteralStringMapKey(
         self,
-        m: Dict[Literal["key"], str] = {},
+        m: Dict[Literal["key"], str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[Literal["key"], str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -1936,7 +1936,7 @@ class BamlSyncClient:
     
     def MapAlias(
         self,
-        m: Dict[str, List[str]] = {},
+        m: Dict[str, List[str]],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, List[str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -3394,7 +3394,7 @@ class BamlSyncClient:
     
     def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList] = [],
+        myArg: List[types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
     ) -> str:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -3475,7 +3475,7 @@ class BamlSyncClient:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry] = {},
+        myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, types.StringToClassEntry]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -3502,7 +3502,7 @@ class BamlSyncClient:
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
-        myMap: Dict[str, Dict[str, str]] = {},
+        myMap: Dict[str, Dict[str, str]],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, Dict[str, str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -3529,7 +3529,7 @@ class BamlSyncClient:
     
     def TestFnNamedArgsSingleMapStringToString(
         self,
-        myMap: Dict[str, str] = {},
+        myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -3583,7 +3583,7 @@ class BamlSyncClient:
     
     def TestFnNamedArgsSingleStringArray(
         self,
-        myStringArray: List[str] = [],
+        myStringArray: List[str],
         baml_options: BamlCallOptions = {},
     ) -> str:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -3610,7 +3610,7 @@ class BamlSyncClient:
     
     def TestFnNamedArgsSingleStringList(
         self,
-        myArg: List[str] = [],
+        myArg: List[str],
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -3799,7 +3799,7 @@ class BamlSyncClient:
     
     def TestImageListInput(
         self,
-        imgs: List[baml_py.Image] = [],
+        imgs: List[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> str:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -4833,7 +4833,7 @@ class BamlStreamClient:
     
     def AliasedInputList(
         self,
-        input: List[types.AliasedEnum] = [],
+        input: List[types.AliasedEnum],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -4969,7 +4969,7 @@ class BamlStreamClient:
     
     def BuildLinkedList(
         self,
-        input: List[int] = [],
+        input: List[int],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.LinkedList, types.LinkedList]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -5551,7 +5551,7 @@ class BamlStreamClient:
     
     def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput] = [],
+        input: List[types.DynInputOutput],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -5789,7 +5789,7 @@ class BamlStreamClient:
     
     def ExtractResume(
         self,
-        resume: str,img: Optional[baml_py.Image] = None,
+        resume: str,img: Optional[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[partial_types.Resume, types.Resume]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -6062,7 +6062,7 @@ class BamlStreamClient:
     
     def FnNamedArgsSingleStringOptional(
         self,
-        myString: Optional[str] = None,
+        myString: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -6640,7 +6640,7 @@ class BamlStreamClient:
     
     def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str] = {},i2: Dict[types.MapKey, str] = {},
+        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[types.MapKey, Optional[str]], Dict[types.MapKey, str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -6675,7 +6675,7 @@ class BamlStreamClient:
     
     def InOutLiteralStringUnionMapKey(
         self,
-        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str] = {},
+        i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -6710,7 +6710,7 @@ class BamlStreamClient:
     
     def InOutSingleLiteralStringMapKey(
         self,
-        m: Dict[Literal["key"], str] = {},
+        m: Dict[Literal["key"], str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[Literal["key"], Optional[str]], Dict[Literal["key"], str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -6911,7 +6911,7 @@ class BamlStreamClient:
     
     def MapAlias(
         self,
-        m: Dict[str, List[str]] = {},
+        m: Dict[str, List[str]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, List[Optional[str]]], Dict[str, List[str]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -8749,7 +8749,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList] = [],
+        myArg: List[types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -8851,7 +8851,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry] = {},
+        myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -8885,7 +8885,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
-        myMap: Dict[str, Dict[str, str]] = {},
+        myMap: Dict[str, Dict[str, str]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -8919,7 +8919,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleMapStringToString(
         self,
-        myMap: Dict[str, str] = {},
+        myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Dict[str, Optional[str]], Dict[str, str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -8987,7 +8987,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleStringArray(
         self,
-        myStringArray: List[str] = [],
+        myStringArray: List[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -9021,7 +9021,7 @@ class BamlStreamClient:
     
     def TestFnNamedArgsSingleStringList(
         self,
-        myArg: List[str] = [],
+        myArg: List[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[List[Optional[str]], List[str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -9258,7 +9258,7 @@ class BamlStreamClient:
     
     def TestImageListInput(
         self,
-        imgs: List[baml_py.Image] = [],
+        imgs: List[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[Optional[str], str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
