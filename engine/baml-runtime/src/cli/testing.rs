@@ -1,7 +1,9 @@
+use crate::cli::dotenv;
 use crate::test_executor::TestExecutor;
 use crate::{test_executor::TestFilter, BamlRuntime};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Args, Clone, Debug)]
@@ -9,48 +11,72 @@ pub struct TestArgs {
     #[arg(long, help = "path/to/baml_src", default_value = ".", global = true)]
     pub from: PathBuf,
 
-    #[arg(
-        long,
-        help = "Specific functions or tests to include tests for. If none provided, runs all tests",
-        global = true
-    )]
+    /// Only list selected tests
+    #[arg(long, default_value_t = false)]
+    list: bool,
+
+    #[arg(long, global = true, short = 'i')]
+    /// Specific functions or tests to include tests for. If none provided, runs all tests
+    ///
+    /// Can chain multiple include filters together
+    ///
+    /// Examples:
+    ///
+    /// -i "wild_card*" will match any functions or tests that start with "wild_card"
+    ///
+    /// -i "FunctionName::TestName" will match the specific test "TestName" in the function "FunctionName"
+    ///
+    /// -i "FunctionName::" will run all tests in the function "FunctionName"
+    ///
+    /// -i "::TestName" will run the test "TestName" in any function
+    ///
+    /// -i "Get*::*Bar" will match any functions that start with "Get" and have a test that ends with "Bar"
+    ///
+    /// -i "Foo::" -i "Bar::" will run all tests in the functions "Foo" and "Bar"
     pub include: Vec<String>,
 
-    #[arg(
-        long,
-        help = "Specific functions or tests to exclude tests for. Takes precedence over --include. If none provided, runs all tests",
-        global = true
-    )]
+    #[arg(long, global = true, short = 'x')]
+    /// Specific functions or tests to exclude tests for. Takes precedence over --include. If none provided, runs all tests
+    ///
+    /// Uses the same syntax as --include
     pub exclude: Vec<String>,
 
-    #[command(subcommand)]
-    pub command: Option<TestCommand>,
-}
+    #[arg(
+        long,
+        help = "Number of tests to run in parallel",
+        default_value_t = 10
+    )]
+    parallel: usize,
 
-#[derive(Subcommand, Clone, Debug)]
-pub enum TestCommand {
-    /// List all available tests
-    List,
-    /// Run specified tests
-    Run {
-        #[arg(long, help = "Number of tests to run in parallel", default_value_t = 10)]
-        parallel: usize,
+    #[arg(long, help = "Pass if no tests are selected", default_value_t = false)]
+    pass_if_no_tests: bool,
 
-        #[arg(long, help = "Pass if no tests are selected", default_value_t = false)]
-        pass_if_no_tests: bool,
+    #[arg(
+        long,
+        help = "Fail if any tests need human evaluation",
+        default_value_t = true
+    )]
+    require_human_eval: bool,
 
-        #[arg(long, help = "Fail if any tests need human evaluation", default_value_t = true)]
-        require_human_eval: bool,
+    #[arg(long, help = "Output format to use for test results", default_value_t = OutputFormat::Pretty, hide = true)]
+    output_format: OutputFormat,
 
-        #[arg(long, help = "Output format to use for test results", default_value_t = OutputFormat::Pretty)]
-        output_format: OutputFormat,
+    #[arg(
+        long,
+        help = "Output JUnit XML results",
+        default_value_t = false,
+        hide = true
+    )]
+    junit: bool,
 
-        #[arg(long, help = "Output JUnit XML results", default_value_t = false)]
-        junit: bool,
+    #[arg(long, help = "JUnit XML output file, example: --junit-path=junit-report.xml", default_value_t = String::from("junit-report.xml"), hide = true)]
+    junit_path: String,
 
-        #[arg(long, help = "JUnit XML output file, example: --junit-path=junit-report.xml", default_value_t = String::from("junit-report.xml"))]
-        junit_path: String,
-    },
+    #[arg(long, default_value_t = true)]
+    dotenv: bool,
+
+    #[arg(long)]
+    dotenv_path: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -92,6 +118,12 @@ impl TestArgs {
     pub async fn run(&self) -> Result<TestRunResult> {
         let from = BamlRuntime::parse_baml_src_path(&self.from)?;
 
+        if self.dotenv {
+            if let Some(env_path) = dotenv::dotenv(self.dotenv_path.clone())? {
+                baml_log::warn!("Loading environment variables from {}", env_path.display());
+            }
+        }
+
         let runtime = BamlRuntime::from_directory(&from, std::env::vars().collect())?;
         let runtime = std::sync::Arc::new(runtime);
 
@@ -100,39 +132,46 @@ impl TestArgs {
             self.exclude.iter().map(|s| s.as_str()),
         );
 
-        match &self.command {
-            Some(TestCommand::List) | None => {
-                // Default to list if no subcommand is provided
-                runtime.cli_list_tests(&test_execution_args)?;
-            }
-            Some(TestCommand::Run {
+        if self.list {
+            runtime.cli_list_tests(&test_execution_args)?;
+        } else {
+            let TestArgs {
                 parallel,
                 pass_if_no_tests,
                 require_human_eval,
                 output_format,
                 junit,
                 junit_path,
-            }) => {
-                match runtime.cli_run_tests(&test_execution_args, *parallel, output_format, if *junit { Some(junit_path) } else { None }).await {
-                    crate::test_executor::TestRunStatus::NoTests => {
-                        if *pass_if_no_tests {
-                            return Ok(TestRunResult::Success)
-                        } else {
-                            return Ok(TestRunResult::NoTestsRun)
-                        }
+                ..
+            } = self;
+
+            match runtime
+                .cli_run_tests(
+                    &test_execution_args,
+                    *parallel,
+                    output_format,
+                    if *junit { Some(junit_path) } else { None },
+                )
+                .await
+            {
+                crate::test_executor::TestRunStatus::NoTests => {
+                    if *pass_if_no_tests {
+                        return Ok(TestRunResult::Success);
+                    } else {
+                        return Ok(TestRunResult::NoTestsRun);
                     }
-                    crate::test_executor::TestRunStatus::Passed => {                    }
-                    crate::test_executor::TestRunStatus::NeedsEval => {
-                        if *require_human_eval {
-                            return Ok(TestRunResult::HumanEvalRequired)
-                        }
+                }
+                crate::test_executor::TestRunStatus::Passed => {}
+                crate::test_executor::TestRunStatus::NeedsEval => {
+                    if *require_human_eval {
+                        return Ok(TestRunResult::HumanEvalRequired);
                     }
-                    crate::test_executor::TestRunStatus::Failed(_) => {
-                        return Ok(TestRunResult::TestFailure)
-                    }
-                    crate::test_executor::TestRunStatus::Cancelled => {
-                        return Ok(TestRunResult::TestCancelled)
-                    }
+                }
+                crate::test_executor::TestRunStatus::Failed(_) => {
+                    return Ok(TestRunResult::TestFailure)
+                }
+                crate::test_executor::TestRunStatus::Cancelled => {
+                    return Ok(TestRunResult::TestCancelled)
                 }
             }
         }

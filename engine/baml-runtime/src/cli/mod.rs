@@ -1,4 +1,5 @@
 pub mod dev;
+mod dotenv;
 pub mod generate;
 pub mod init;
 pub mod serve;

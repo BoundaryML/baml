@@ -103,6 +103,7 @@ thiserror = "2.0.1"
 log-once = "0.4.1"
 once_cell.workspace = true
 time.workspace = true
+tempfile = "3.19.0"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

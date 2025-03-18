@@ -30,7 +30,6 @@ default-members = [
 
 [workspace.dependencies]
 anyhow = "1.0"
-array-macro = "2"
 askama = "0.12.1"
 baml-cli = { path = "cli" }
 baml-types = { path = "baml-lib/baml-types" }
@@ -54,7 +53,6 @@ jsonish = { path = "baml-lib/jsonish" }
 internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
-internal-baml-schema-ast = { path = "baml-lib/schema-ast" }
 internal-llm-client = { path = "baml-lib/llm-client" }
 log = "0.4.20"
 # TODO: disable imports, etc

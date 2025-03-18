@@ -1,3 +1,4 @@
+use colored::*;
 mod output_github;
 mod output_junit;
 mod output_pretty;
@@ -56,7 +57,7 @@ pub enum TestExecutionStatus {
     Running,
     Finished(Result<TestResponse>, std::time::Duration),
     /// We say "excluded" instead of "skipped" as inspired by cargo, and for consistency with --exclude.
-    /// cargo test makes an expplicit distinction between "marked with #[ignore]" and "excluded by cargo test flags"
+    /// cargo test makes an explicit distinction between "marked with #[ignore]" and "excluded by cargo test flags"
     Excluded,
 }
 
@@ -153,8 +154,20 @@ impl TestExecutor for BamlRuntime {
             })
             .collect::<BTreeSet<_>>();
 
-        for (function_name, test_name) in func_test_pairs {
-            println!("{}::{}", function_name, test_name);
+        println!("Found {} tests", func_test_pairs.len());
+
+        if !func_test_pairs.is_empty() {
+            println!("{}", "--------------------------------".dimmed());
+            for (function_name, test_name) in func_test_pairs {
+                println!("{}::{}", function_name, test_name);
+            }
+            println!("{}", "--------------------------------".dimmed());
+
+            println!(
+                "{}",
+                "To run these tests, rerun using the \"run\" command:".blue()
+            );
+            println!("{}", "baml-cli test run [args]".blue());
         }
 
         Ok(())
