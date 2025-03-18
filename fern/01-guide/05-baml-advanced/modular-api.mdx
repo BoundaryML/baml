@@ -54,6 +54,8 @@ async function run() {
 ```ruby Ruby
 require_relative 'baml_client'
 
+b = Baml.Client
+
 def run
   # HTTP request + LLM response parsing.
   resume = b.ExtractResume("John Doe | Software Engineer | BSc in CS")
@@ -83,7 +85,7 @@ def run():
   res = requests.post(url=req.url, headers=req.headers, json=req.body.json())
 
   # Parse the LLM response.
-  parsed = b.parse.ExtractResume(res.json())
+  parsed = b.parse.ExtractResume(response.json()["choices"][0]["message"]["content"])
 
   # Fully parsed Resume type.
   print(parsed)
@@ -120,6 +122,8 @@ require 'uri'
 require 'json'
 
 require_relative 'baml_client'
+
+b = Baml.Client
 
 def run
   # Get the HTTP request object.

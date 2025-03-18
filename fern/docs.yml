@@ -420,6 +420,9 @@ navigation:
           - page: logging / env vars
             slug: config
             path: 03-reference/baml_client/config.mdx
+          - page: AsyncClient / SyncClient
+            slug: client
+            path: 03-reference/baml_client/client.mdx
           - page: TypeBuilder
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
