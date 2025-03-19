@@ -1,18 +1,21 @@
+from baml_py.errors import BamlInvalidArgumentError, BamlClientError
 import pytest
 import dotenv
 from openai.types.chat import ChatCompletion
 
 from ..baml_client import b
 from ..baml_client.sync_client import b as b_sync
-from baml_py import Collector
+from baml_py import ClientRegistry, Collector
 import gc
 import sys
 import asyncio
 
 dotenv.load_dotenv()
 
+
 def function_span_count():
     return Collector.__function_span_count()  # type: ignore
+
 
 @pytest.fixture(autouse=True)
 def ensure_collector_is_empty():
@@ -240,8 +243,12 @@ async def test_collector_async_multiple_calls_usage():
 
     # Capture usage after second call and verify it's the sum of both calls
     second_call_usage = function_logs[1].usage
-    total_input = (first_call_usage.input_tokens or 0) + (second_call_usage.input_tokens or 0)
-    total_output = (first_call_usage.output_tokens or 0) + (second_call_usage.output_tokens or 0)
+    total_input = (first_call_usage.input_tokens or 0) + (
+        second_call_usage.input_tokens or 0
+    )
+    total_output = (first_call_usage.output_tokens or 0) + (
+        second_call_usage.output_tokens or 0
+    )
     assert collector.usage.input_tokens == total_input
     assert collector.usage.output_tokens == total_output
 
@@ -286,11 +293,11 @@ async def test_collector_multiple_collectors():
 
     # Verify coll1 usage is now the sum of both calls
     usage_second_call_coll1 = logs1[1].usage
-    total_input = (
-        (usage_first_call_coll1.input_tokens or 0) + (usage_second_call_coll1.input_tokens or 0)
+    total_input = (usage_first_call_coll1.input_tokens or 0) + (
+        usage_second_call_coll1.input_tokens or 0
     )
-    total_output = (
-        (usage_first_call_coll1.output_tokens or 0) + (usage_second_call_coll1.output_tokens or 0)
+    total_output = (usage_first_call_coll1.output_tokens or 0) + (
+        usage_second_call_coll1.output_tokens or 0
     )
     assert coll1.usage.input_tokens == total_input
     assert coll1.usage.output_tokens == total_output
@@ -322,8 +329,12 @@ async def test_collector_mixed_async_sync_calls():
     # Verify the second call's usage
     usage_second_call = logs[1].usage
     assert logs[1].timing.start_time_utc_ms > logs[0].timing.start_time_utc_ms
-    total_input = (usage_first_call.input_tokens or 0) + (usage_second_call.input_tokens or 0)
-    total_output = (usage_first_call.output_tokens or 0) + (usage_second_call.output_tokens or 0)
+    total_input = (usage_first_call.input_tokens or 0) + (
+        usage_second_call.input_tokens or 0
+    )
+    total_output = (usage_first_call.output_tokens or 0) + (
+        usage_second_call.output_tokens or 0
+    )
     assert collector.usage.input_tokens == total_input
     assert collector.usage.output_tokens == total_output
 
@@ -361,3 +372,31 @@ async def test_collector_parallel_async_calls():
     # total_output = usage_call1.output_tokens + usage_call2.output_tokens
     # assert collector.usage.input_tokens == total_input
     # assert collector.usage.output_tokens == total_output
+
+
+@pytest.mark.asyncio
+async def test_collector_failures_arg_type():
+    collector = Collector(name="my-collector")
+    with pytest.raises(BamlInvalidArgumentError):
+        value: str = 124  # type: ignore (We want to test the error)
+        await b.TestOpenAIGPT4oMini(value, baml_options={"collector": collector})
+    assert len(collector.logs) == 1
+    last_log = collector.last
+    assert last_log is not None
+    assert last_log.function_name == "TestOpenAIGPT4oMini"
+
+
+@pytest.mark.asyncio
+async def test_collector_failures_client_registry():
+    collector = Collector(name="my-collector")
+    client_registry = ClientRegistry()
+    client_registry.set_primary("DoesNotExist")
+    with pytest.raises(BamlClientError):
+        await b.TestOpenAIGPT4oMini(
+            "hi there",
+            baml_options={"collector": collector, "client_registry": client_registry},
+        )
+    assert len(collector.logs) == 1
+    last_log = collector.last
+    assert last_log is not None
+    assert last_log.function_name == "TestOpenAIGPT4oMini"
