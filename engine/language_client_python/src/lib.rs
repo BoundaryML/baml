@@ -8,7 +8,7 @@ use pyo3::types::PyModuleMethods;
 use pyo3::{wrap_pyfunction, Bound, Python};
 
 #[pyfunction]
-fn invoke_runtime_cli(py: Python) -> PyResult<u32> {
+fn invoke_runtime_cli(py: Python) -> PyResult<i32> {
     match baml_cli::run_cli(
         py.import("sys")?
             .getattr("argv")?

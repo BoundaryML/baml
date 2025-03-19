@@ -227,7 +227,7 @@ export declare export declare function get_version(): string
 
 export declare export declare function getLogLevel(): string
 
-export declare export declare function invoke_runtime_cli(params: Array<string>): void
+export declare export declare function invoke_runtime_cli(params: Array<string>): number
 
 export interface LogEventMetadata {
   eventId: string

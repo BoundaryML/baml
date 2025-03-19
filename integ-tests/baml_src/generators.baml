@@ -13,7 +13,7 @@ generator lang_typescript {
 generator lang_typescript_react {
   output_type typescript/react
   output_dir "../react"
-  version "0.80.1"
+  version "0.79.1"
 }
 
 generator lang_ruby {

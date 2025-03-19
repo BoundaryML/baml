@@ -20,7 +20,7 @@ impl GenerateArgs {
         let result = self.generate_clients(defaults);
 
         if let Err(e) = result {
-            log::error!("Error generating clients: {:?}", e);
+            baml_log::error!("Error generating clients: {:?}", e);
             return Err(e);
         }
 

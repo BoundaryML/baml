@@ -12,14 +12,17 @@ pub(crate) use runtime::BamlRuntime;
 use tracing_subscriber::{self, EnvFilter};
 
 #[napi(js_name = "invoke_runtime_cli")]
-pub fn run_cli(env: Env, params: Vec<String>) -> napi::Result<JsUndefined> {
-    baml_cli::run_cli(
+pub fn run_cli(env: Env, params: Vec<String>) -> napi::Result<i32> {
+    let exit_code = baml_cli::run_cli(
         params,
         baml_runtime::RuntimeCliDefaults {
             output_type: baml_types::GeneratorOutputType::Typescript,
         },
     )?;
-    env.get_undefined()
+
+    println!("exit_code: {:?}", exit_code);
+
+    Ok(exit_code.into())
 }
 
 #[napi(js_name = "get_version")]
