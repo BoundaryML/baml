@@ -19,4 +19,5 @@ pub(super) use diagnostic::DocumentDiagnosticRequestHandler;
 pub(super) use format::DocumentFormatting;
 pub use go_to_definition::GotoDefinition;
 pub(super) use hover::Hover;
+pub use rename::Rename;
 type FormatResponse = Option<Vec<lsp_types::TextEdit>>;

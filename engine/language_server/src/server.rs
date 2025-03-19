@@ -320,6 +320,7 @@ impl Server {
             definition_provider: Some(lsp_types::OneOf::Left(true)),
             document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
+            rename_provider: Some(lsp_types::OneOf::Left(true)),
             text_document_sync: Some(TextDocumentSyncCapability::Options(
                 TextDocumentSyncOptions {
                     open_close: Some(true),

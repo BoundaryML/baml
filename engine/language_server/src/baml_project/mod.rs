@@ -202,6 +202,8 @@ impl BamlProject {
 
         rt.inner.diagnostics.clone()
     }
+
+
 }
 
 pub trait BamlRuntimeExt {
@@ -220,8 +222,13 @@ pub trait BamlRuntimeExt {
     ) -> Option<WasmParentFunction>;
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation>;
+    fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
     fn list_functions(&self) -> Vec<WasmFunction>;
     fn list_generators(&self) -> Vec<WasmGeneratorConfig>;
+    fn is_valid_class(&self, symbol: &str) -> bool;
+    fn is_valid_enum(&self, symbol: &str) -> bool;
+    fn is_valid_type_alias(&self, symbol: &str) -> bool;
+    fn is_valid_function(&self, symbol: &str) -> bool;
 }
 
 impl BamlRuntimeExt for BamlRuntime {
@@ -237,6 +244,40 @@ impl BamlRuntimeExt for BamlRuntime {
                     start_line: generator.span.line_and_column().0 .0,
                     end_line: generator.span.line_and_column().1 .0,
                 },
+            })
+            .collect()
+    }
+
+    fn is_valid_class(&self, symbol: &str) -> bool {
+        self.inner.ir.find_class(symbol).is_ok()
+    }
+
+    fn is_valid_enum(&self, symbol: &str) -> bool {
+        self.inner.ir.find_enum(symbol).is_ok()
+    }
+
+    fn is_valid_type_alias(&self, symbol: &str) -> bool {
+        self.inner.ir.find_type_alias(symbol).is_ok()
+    }
+
+    fn is_valid_function(&self, symbol: &str) -> bool {
+        self.inner.ir.find_function(symbol).is_ok()
+    }
+
+    fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.inner.ir
+            .find_class_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
             })
             .collect()
     }
