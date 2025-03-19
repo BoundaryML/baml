@@ -301,7 +301,7 @@ fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<u
                 "{:?}",
                 e.context("error while invoking baml-cli".to_string())
             ),
-        ))
+        )),
     }
 }
 

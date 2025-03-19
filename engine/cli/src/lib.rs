@@ -40,6 +40,25 @@ impl From<ExitCode> for i32 {
     }
 }
 
+impl From<ExitCode> for u32 {
+    fn from(exit_code: ExitCode) -> Self {
+        match exit_code {
+            // All tests passed
+            ExitCode::Success => 0,
+            // All tests completed, but some required human evaluation
+            ExitCode::HumanEvalRequired => 1,
+            // Some tests failed
+            ExitCode::TestFailure => 2,
+            // Execution was interrupted
+            ExitCode::TestCancelled => 3,
+            // Some internal error occurred
+            ExitCode::Other | ExitCode::InvalidArgs => 4,
+            // No tests were found
+            ExitCode::NoTestsRun => 5,
+        }
+    }
+}
+
 pub fn run_cli(
     argv: Vec<String>,
     caller_type: baml_runtime::RuntimeCliDefaults,
