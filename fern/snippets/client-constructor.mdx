@@ -5,19 +5,19 @@ The configuration modifies the URL request BAML runtime makes.
 
 | Provider Name    | Docs                                                                | Notes                                                      |
 | ---------------- | ------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `anthropic`      | [Anthropic](/docs/snippets/clients/providers/anthropic)             |                                                            |
-| `aws-bedrock`    | [AWS Bedrock](/docs/snippets/clients/providers/aws-bedrock)         |                                                            |
-| `azure-openai`   | [Azure OpenAI](/docs/snippets/clients/providers/azure)              |                                                            |
-| `google-ai`      | [Google AI](/docs/snippets/clients/providers/gemini)                |                                                            |
-| `openai`         | [OpenAI](/docs/snippets/clients/providers/openai)                   |                                                            |
-| `openai-generic` | [OpenAI (generic)](/docs/snippets/clients/providers/openai-generic) | Any model provider that supports an OpenAI-compatible API  |
-| `vertex-ai`      | [Vertex AI](/docs/snippets/clients/providers/google-vertex)         |                                                            |
+| `anthropic`      | [Anthropic](/ref/llm-client-providers/anthropic)             |                                                            |
+| `aws-bedrock`    | [AWS Bedrock](/ref/llm-client-providers/aws-bedrock)         |                                                            |
+| `azure-openai`   | [Azure OpenAI](/ref/llm-client-providers/open-ai-from-azure)              |                                                            |
+| `google-ai`      | [Google AI](/ref/llm-client-providers/google-ai-gemini)                |                                                            |
+| `openai`         | [OpenAI](/ref/llm-client-providers/open-ai)                   |                                                            |
+| `openai-generic` | [OpenAI (generic)](/ref/llm-client-providers/openai-generic) | Any model provider that supports an OpenAI-compatible API  |
+| `vertex-ai`      | [Vertex AI](/ref/llm-client-providers/google-vertex)         |                                                            |
 
 We also have some special providers that allow composing clients together:
 | Provider Name  | Docs                             | Notes                                                      |
 | -------------- | -------------------------------- | ---------------------------------------------------------- |
-| `fallback`     | [Fallback](/docs/snippets/clients/fallback)             | Used to chain models conditional on failures               |
-| `round-robin`  | [Round Robin](/docs/snippets/clients/round-robin)       | Used to load balance                                       |
+| `fallback`     | [Fallback](/ref/llm-client-strategies/fallback)             | Used to chain models conditional on failures               |
+| `round-robin`  | [Round Robin](/ref/llm-client-strategies/round-robin)       | Used to load balance                                       |
 
 </ParamField>
 

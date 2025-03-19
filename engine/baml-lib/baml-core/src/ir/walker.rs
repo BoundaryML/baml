@@ -199,8 +199,8 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
         self.item.0.elem.name() == function_name && self.item.1.elem.name == test_name
     }
 
-    pub fn name(&self) -> String {
-        format!("{}::{}", self.item.0.elem.name(), self.item.1.elem.name)
+    pub fn name(&self) -> (&'a str, &'a str) {
+        (&self.item.0.elem.name(), &self.item.1.elem.name)
     }
 
     pub fn args(&self) -> &IndexMap<String, UnresolvedValue<()>> {

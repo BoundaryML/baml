@@ -296,7 +296,9 @@ fn required_done(ir: &impl IRHelperExtended, field_type: &FieldType) -> bool {
         FieldType::Tuple(_) => false,
         FieldType::RecursiveTypeAlias(_) => false,
         FieldType::Class(_) => false,
-        FieldType::Union(_) => false,
+        // TODO: This rule is pretty aggressive. For example in the case of
+        // Class | Enum it would not allow classes to be streamed.
+        FieldType::Union(options) => options.iter().any(|option| required_done(ir, option)),
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
         }

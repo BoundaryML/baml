@@ -63,10 +63,13 @@ describe('Collector Tests', () => {
     // Verify request/response
     const request = call.httpRequest;
     expect(request).not.toBeNull();
-    expect(typeof request?.body).toBe('object');
-    expect(request?.body.messages).toBeDefined();
-    expect(request?.body.messages[0].content).not.toBeNull();
-    expect(request?.body.model).toBe("gpt-4o-mini");
+
+    const body = request?.body.json();
+
+    expect(typeof body).toBe('object');
+    expect(body.messages).toBeDefined();
+    expect(body.messages[0].content).not.toBeNull();
+    expect(body.model).toBe("gpt-4o-mini");
 
     // Verify http response
     const response = call.httpResponse;
@@ -86,7 +89,7 @@ describe('Collector Tests', () => {
     const callUsage = call.usage;
     expect(callUsage?.inputTokens).toBeGreaterThan(0);
     expect(callUsage?.outputTokens).toBeGreaterThan(0);
-    
+
     // Usage matches log usage
     expect(callUsage?.inputTokens).toBe(log?.usage.inputTokens);
     expect(callUsage?.outputTokens).toBe(log?.usage.outputTokens);
@@ -124,7 +127,7 @@ describe('Collector Tests', () => {
 
     const res = await stream.getFinalResponse();
     console.log(`### res: ${res}`);
-    
+
     const updatedLogs = collector.logs;
     expect(updatedLogs.length).toBe(1);
 
@@ -154,7 +157,7 @@ describe('Collector Tests', () => {
     const request = call.httpRequest;
     expect(request).not.toBeNull();
     expect(typeof request?.body).toBe('object');
-    expect(request?.body.messages).toBeDefined();
+    expect((request?.body.json() as any).messages).toBeDefined();
 
     // For streaming, httpResponse might be null since it's streaming
     const response = call.httpResponse;

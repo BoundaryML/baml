@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401,F821
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-__version__ = "0.78.0"
+__version__ = "0.80.0"
 
 try:
   from baml_py.safe_import import EnsureBamlPyImport
@@ -38,7 +38,8 @@ with EnsureBamlPyImport(__version__) as e:
   from . import types
   from . import tracing
   from . import partial_types
-  from .globals import reset_baml_env_vars
+  from . import config
+  from .config import reset_baml_env_vars
 
   
   from .async_client import b
@@ -50,4 +51,5 @@ __all__ = [
   "tracing",
   "types",
   "reset_baml_env_vars",
+  "logging",
 ]

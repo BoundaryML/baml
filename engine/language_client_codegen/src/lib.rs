@@ -196,7 +196,7 @@ impl GenerateClient for GeneratorOutputType {
         #[cfg(not(target_arch = "wasm32"))]
         {
             for cmd in gen.on_generate.iter() {
-                log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
+                baml_log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
                 let status = std::process::Command::new("sh")
                     .arg("-c")
                     .arg(cmd)
@@ -314,7 +314,9 @@ pub fn type_check_attributes(ir: &IntermediateRepr) -> HashSet<TypeCheckAttribut
 /// TODO: This should use `distribute_metadata` instead of pattern matching.
 fn field_type_attributes(field_type: &FieldType) -> Option<TypeCheckAttributes> {
     match field_type {
-        FieldType::WithMetadata { base, constraints, .. } => {
+        FieldType::WithMetadata {
+            base, constraints, ..
+        } => {
             let direct_sub_attributes = field_type_attributes(base);
             let mut check_names = TypeCheckAttributes(
                 constraints

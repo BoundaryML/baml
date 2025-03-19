@@ -155,7 +155,7 @@ macro_rules! test_partial_deserializer_streaming_failure {
     ($name:ident, $file_content:expr, $raw_string:expr, $target_type:expr) => {
         #[test_log::test]
         fn $name() {
-            let ir = load_test_ir($file_content);
+            let ir = crate::helpers::load_test_ir($file_content);
             let target =
                 crate::helpers::render_output_format(&ir, &$target_type, &Default::default())
                     .unwrap();

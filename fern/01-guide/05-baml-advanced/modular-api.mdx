@@ -1,0 +1,692 @@
+<Info>
+  Requires BAML version >=0.79.0
+</Info>
+
+First and foremost, BAML provides a high level API where functions are a first
+class citizen and their execution is fully transparent to the developer. This
+means that you can simply call a BAML function and everything from prompt
+rendering, HTTP request building, LLM API network call and response parsing is
+handled for you. Basic example:
+
+```baml BAML
+class Resume {
+  name string
+  experience string[]
+  education string[]
+}
+
+function ExtractResume(resume: string) -> Resume {
+  client "openai/gpt-4o"
+  prompt #"
+    Extract the following information from the resume:
+
+    ---
+    {{ resume }}
+    ---
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+Now we can use this function in our server code after running `baml-cli generate`:
+
+<CodeBlocks>
+```python Python
+from baml_client import b
+
+async def run():
+  # HTTP request + LLM response parsing.
+  resume = await b.ExtractResume("John Doe | Software Engineer | BSc in CS")
+  print(resume)
+```
+
+```typescript TypeScript
+import { b } from 'baml_client'
+
+async function run() {
+  // HTTP request + LLM response parsing.
+  const resume = await b.ExtractResume("John Doe | Software Engineer | BSc in CS")
+  console.log(resume)
+}
+```
+
+```ruby Ruby
+require_relative 'baml_client'
+
+b = Baml.Client
+
+def run
+  # HTTP request + LLM response parsing.
+  resume = b.ExtractResume("John Doe | Software Engineer | BSc in CS")
+  puts resume
+end
+```
+</CodeBlocks>
+
+However, sometimes we may want to execute a function without so much abstraction
+or have access to the HTTP request before sending it. For this, BAML provides a
+lower level API that exposes the HTTP request and LLM response parser to the
+caller. Here's an example that uses the `requests` library in Python, the
+`fetch` API in Node.js and the `Net::HTTP` library in Ruby to manually send an
+HTTP request to OpenAI's API and parse the LLM response.
+
+<CodeBlocks>
+```python Python
+import requests
+# requests is not async so for simplicity we'll use the sync client.
+from baml_client.sync_client import b
+
+def run():
+  # Get the HTTP request object.
+  req = b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  # Send the HTTP request.
+  res = requests.post(url=req.url, headers=req.headers, json=req.body.json())
+
+  # Parse the LLM response.
+  parsed = b.parse.ExtractResume(response.json()["choices"][0]["message"]["content"])
+
+  # Fully parsed Resume type.
+  print(parsed)
+```
+
+```typescript TypeScript
+import { b } from 'baml_client'
+
+async function run() {
+  // Get the HTTP request object.
+  const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  // Send the HTTP request.
+  const res = await fetch(req.url, {
+    method: req.method,
+    headers: req.headers,
+    body: JSON.stringify(req.body.json())
+  })
+
+  // Parse the HTTP body.
+  const body = await res.json() as any
+
+  // Parse the LLM response.
+  const parsed = b.parse.ExtractResume(body.choices[0].message.content)
+
+  // Fully parsed Resume type.
+  console.log(parsed)
+}
+```
+
+```ruby Ruby
+require 'net/http'
+require 'uri'
+require 'json'
+
+require_relative 'baml_client'
+
+b = Baml.Client
+
+def run
+  # Get the HTTP request object.
+  baml_req = b.request.ExtractResume(resume: "John Doe | Software Engineer | BSc in CS")
+
+  # Construct the Ruby HTTP client.
+  uri = URI.parse(baml_req.url)
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = uri.scheme == 'https'
+
+  # Construct the Ruby HTTP request.
+  req = Net::HTTP::Post.new(uri.path)
+  req.initialize_http_header(baml_req.headers)
+  req.body = baml_req.body.json.to_json
+
+  # Send the HTTP request.
+  response = http.request(req)
+
+  # Parse the LLM response.
+  parsed = b.parse.ExtractResume(
+    llm_response: JSON.parse(response.body)["choices"][0]["message"]["content"]
+  )
+
+  # Fully parsed Resume type.
+  puts parsed
+end
+```
+</CodeBlocks>
+
+Note that `request.body.json()` returns an object (dict in Python, hash in Ruby)
+which we are then serializing to JSON, but `request.body` also exposes the raw
+binary buffer so we can skip the serialization:
+
+<CodeBlocks>
+```python Python
+res = requests.post(url=req.url, headers=req.headers, data=req.body.raw())
+```
+
+```typescript TypeScript
+const res = await fetch(req.url, {
+  method: req.method,
+  headers: req.headers,
+  body: req.body.raw()
+})
+```
+
+```ruby Ruby
+req.body = baml_req.body.raw.pack("C*")
+```
+</CodeBlocks>
+
+## Using Provider SDKs
+
+We can use the same modular API with the official SDKs. Here are some examples:
+
+### [OpenAI](https://platform.openai.com/docs/quickstart?api-mode=chat)
+
+<CodeBlocks>
+```python Python
+from openai import AsyncOpenAI
+from baml_client import b
+
+async def run():
+  # Initialize the OpenAI client.
+  client = AsyncOpenAI()
+
+  # Get the HTTP request object.
+  req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  # Use the openai library to send the request.
+  res = await client.chat.completions.create(**req.body.json())
+
+  # Parse the LLM response.
+  parsed = b.parse.ExtractResume(res.choices[0].message.content)
+
+  # Fully parsed Resume type.
+  print(parsed)
+```
+
+```typescript TypeScript
+import OpenAI from 'openai'
+import { b } from 'baml_client'
+
+async function run() {
+  // Initialize the OpenAI client.
+  const client = new OpenAI()
+
+  // Get the HTTP request object.
+  const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  // Use the openai library to send the request.
+  const res = await client.chat.completions.create(req.body.json())
+
+  // Parse the LLM response.
+  const parsed = b.parse.ExtractResume(res.choices[0].message.content!)
+
+  // Fully parsed Resume type.
+  console.log(parsed)
+}
+```
+</CodeBlocks>
+
+### [Anthropic](https://docs.anthropic.com/en/api/client-sdks)
+
+Remember that the client is defined in the BAML function (or you can use the
+[client registry](./client-registry.mdx)):
+
+```baml BAML {2}
+function ExtractResume(resume: string) -> Resume {
+  client "anthropic/claude-3-haiku"
+  // Prompt here...
+}
+```
+
+<CodeBlocks>
+```python Python
+import anthropic
+from baml_client import b
+
+async def run():
+  # Initialize the Anthropic client.
+  client = anthropic.AsyncAnthropic()
+
+  # Get the HTTP request object.
+  req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  # Use the anthropic library to send the request.
+  res = await client.messages.create(**req.body.json())
+
+  # Parse the LLM response.
+  parsed = b.parse.ExtractResume(res.content[0].text)
+
+  # Fully parsed Resume type.
+  print(parsed)
+```
+
+```typescript TypeScript
+import Anthropic from '@anthropic-ai/sdk'
+import { b } from 'baml_client'
+
+async function run() {
+  // Initialize the Anthropic client.
+  const client = new Anthropic()
+
+  // Get the HTTP request object.
+  const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  // Use the anthropic library to send the request.
+  const res = await client.messages.create(req.body.json())
+
+  // Narrow type so that TS doesn't complain below.
+  // https://github.com/anthropics/anthropic-sdk-typescript/issues/432
+  if (res.content[0].type != "text") {
+    return console.error("Unexpected type for content block: ", res.content[0])
+  }
+
+  // Parse the LLM response.
+  const parsed = b.parse.ExtractResume(res.content[0].text)
+
+  // Fully parsed Resume type.
+  console.log(parsed)
+}
+```
+</CodeBlocks>
+
+### [Google Gemini](https://ai.google.dev/gemini-api/docs/quickstart)
+
+Remember that the client is defined in the BAML function (or you can use the
+[client registry](./client-registry.mdx)):
+
+```baml BAML {2}
+function ExtractResume(resume: string) -> Resume {
+  client "google-ai/gemini-1.5-pro-001"
+  // Prompt here...
+}
+```
+
+<CodeBlocks>
+```python Python
+from google import genai
+from baml_client import b
+
+async def run():
+  # Initialize the Gemini client.
+  client = genai.Client()
+
+  # Get the HTTP request object.
+  req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  # Get the request body.
+  body = req.body.json()
+
+  # Use the gemini library to send the request.
+  res = await client.aio.models.generate_content(
+    model="gemini-1.5-pro-001",
+    contents=body["contents"],
+    config={
+      "safety_settings": [body["safetySettings"]] # REST API uses camelCase
+    }
+  )
+
+  # Parse the LLM response.
+  parsed = b.parse.ExtractResume(res.text)
+
+  # Fully parsed Resume type.
+  print(parsed)
+```
+
+```typescript TypeScript
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { b } from 'baml_client'
+
+async function run() {
+  // Initialize the Gemini client.
+  const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
+  const model = client.getGenerativeModel({ model: "gemini-1.5-pro-001" })
+
+  // Get the HTTP request object.
+  const req = await b.request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  // Use the gemini library to send the request.
+  const res = await model.generateContent(req.body.json())
+
+  // Parse the LLM response.
+  const parsed = b.parse.ExtractResume(res.response.text())
+
+  // Fully parsed Resume type.
+  console.log(parsed)
+}
+```
+</CodeBlocks>
+
+## Type Checking
+
+### Python
+
+The return type of `request.body.json()` is `Any` so you won't get full type
+checking in Python when using the SDKs. Here are some workarounds:
+
+**1. Using `typing.cast`**
+
+<Tabs>
+  <Tab title="OpenAI" language="openai">
+    ```python OpenAI
+    import typing
+    from openai.types.chat import ChatCompletion
+
+    res = typing.cast(ChatCompletion, await client.chat.completions.create(**req.body.json()))
+    ```
+  </Tab>
+
+  <Tab title="Anthropic" language="anthropic">
+    ```python Anthropic
+    import typing
+    from anthropic.types import Message
+
+    res = typing.cast(Message, await client.messages.create(**req.body.json()))
+    ```
+  </Tab>
+</Tabs>
+
+**2. Manually setting the arguments**
+
+```python OpenAI
+body = req.body.json()
+res = await client.chat.completions.create(model=body["model"], messages=body["messages"])
+```
+
+This will preserve the type hints for the OpenAI SDK but it doesn't work for
+Anthropic. On the other hand, Gemini SDK / REST API is built in such a way that
+it basically forces us to use this pattern as seen in the
+[example above](#google-gemini).
+
+### TypeScript
+
+TypeScript doesn't have optional parameters like Python, it uses objects instead
+so you can just cast to the expected type:
+
+<Tabs>
+  <Tab title="OpenAI" language="openai">
+    ```typescript OpenAI
+    import { ChatCompletionCreateParamsNonStreaming } from 'openai/resources';
+
+    const res = await client.chat.completions.create(req.body.json() as ChatCompletionCreateParamsNonStreaming)
+    ```
+  </Tab>
+
+  <Tab title="Anthropic" language="anthropic">
+    ```typescript Anthropic
+    import { MessageCreateParamsNonStreaming } from '@anthropic-ai/sdk/resources';
+
+    const res = await client.messages.create(req.body.json() as MessageCreateParamsNonStreaming)
+    ```
+  </Tab>
+
+  <Tab title="Gemini" language="Gemini">
+    ```typescript Gemini
+    import { GenerateContentRequest } from '@google/generative-ai';
+
+    const res = await model.generateContent(req.body.json() as GenerateContentRequest)
+    ```
+  </Tab>
+</Tabs>
+
+## Streaming
+
+Stream requests and parsing is also supported. Here's an example using OpenAI
+SDK:
+
+<CodeBlocks>
+```python Python
+import typing
+from openai import AsyncOpenAI, AsyncStream
+from openai.types.chat import ChatCompletionChunk
+from baml_client import b
+
+async def run():
+  client = AsyncOpenAI()
+
+  req = await b.stream_request.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  stream = typing.cast(
+    AsyncStream[ChatCompletionChunk],
+    await client.chat.completions.create(**req.body.json())
+  )
+
+  llm_response: list[str] = []
+
+  async for chunk in stream:
+    if len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+      llm_response.append(chunk.choices[0].delta.content)
+      # You can parse the partial responses as they come in.
+      print(b.parse_stream.ExtractResume("".join(llm_response)))
+```
+
+```typescript TypeScript
+import OpenAI from 'openai'
+import { ChatCompletionCreateParamsStreaming } from 'openai/resources';
+import { b } from 'baml_client'
+
+async function run() {
+  const client = new OpenAI()
+
+  const req = await b.streamRequest.ExtractResume("John Doe | Software Engineer | BSc in CS")
+
+  const stream = await client.chat.completions.create(
+    req.body.json() as ChatCompletionCreateParamsStreaming
+  )
+
+  let llmResponse: string[] = []
+
+  for await (const chunk of stream) {
+    if (chunk.choices.length > 0 && chunk.choices[0].delta.content) {
+      llmResponse.push(chunk.choices[0].delta.content)
+      // You can parse the partial responses as they come in.
+      console.log(b.parseStream.ExtractResume(llmResponse.join('')))
+    }
+  }
+}
+```
+</CodeBlocks>
+
+## OpenAI Batch API Example
+
+Currently, BAML doesn't support OpenAI's [Batch API](https://platform.openai.com/docs/guides/batch)
+out of the box, but you can use the modular API to build the prompts and parse
+the responses of batch jobs. Here's an example:
+
+<CodeBlocks>
+```python Python
+import asyncio
+import json
+from openai import AsyncOpenAI
+from baml_py import HTTPRequest as BamlHttpRequest
+from baml_client import b
+from baml_client import types
+
+async def run():
+  client = AsyncOpenAI()
+
+  # Build the batch requests with BAML.
+  john_req, jane_req = await asyncio.gather(
+    b.request.ExtractResume("John Doe | Software Engineer | BSc in CS"),
+    b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics"),
+  )
+
+  # Build the JSONL content.
+  jsonl = to_openai_jsonl(john_req) + to_openai_jsonl(jane_req)
+
+  # Create the batch input file.
+  batch_input_file = await client.files.create(
+    file=jsonl.encode("utf-8"),
+    purpose="batch",
+  )
+
+  # Create the batch.
+  batch = await client.batches.create(
+    input_file_id=batch_input_file.id,
+    endpoint="/v1/chat/completions",
+    completion_window="24h",
+    metadata={
+      "description": "BAML Modular API Python Batch Example"
+    },
+  )
+
+  # Wait for the batch to complete (exponential backoff).
+  backoff = 2
+  attempts = 0
+  max_attempts = 5
+
+  while True:
+    batch = await client.batches.retrieve(batch.id)
+    attempts += 1
+
+    if batch.status == "completed":
+        break
+
+    if attempts >= max_attempts:
+      try:
+        await client.batches.cancel(batch.id)
+      finally:
+        raise Exception("Batch failed to complete in time")
+
+    await asyncio.sleep(backoff)
+    back_off *= 2
+
+  # Retrieve the batch output file.
+  output = await client.files.content(batch.output_file_id)
+
+  # You can match the batch results using the BAML request IDs.
+  expected = {
+    john_req.id: types.Resume(
+      name="John Doe",
+      experience=["Software Engineer"],
+      education=["BSc in CS"]
+    ),
+    jane_req.id: types.Resume(
+      name="Jane Smith",
+      experience=["Data Scientist"],
+      education=["PhD in Statistics"]
+    ),
+  }
+
+  resumes = {}
+
+  for line in output.text.splitlines():
+    result = json.loads(line)
+    llm_response = result["response"]["body"]["choices"][0]["message"]["content"]
+
+    parsed = b.parse.ExtractResume(llm_response)
+    resumes[result["custom_id"]] = parsed
+
+  print(resumes)
+
+  # Should be equal.
+  assert resumes == expected
+
+
+def to_openai_jsonl(req: BamlHttpRequest) -> str:
+  """ Helper that converts a BAML HTTP request to OpenAI JSONL format. """
+  line = json.dumps({
+    "custom_id": req.id, # Important for matching the batch results.
+    "method": "POST",
+    "url": "/v1/chat/completions",
+    "body": req.body.json(),
+  })
+
+  return f"{line}\n"
+```
+
+```typescript TypeScript
+import OpenAI from 'openai'
+import { HTTPRequest as BamlHttpRequest } from '@boundaryml/baml'
+import { Resume } from "baml_client/types"
+import { b } from 'baml_client'
+
+async function run() {
+  const client = new OpenAI()
+
+  // Build the batch requests with BAML.
+  const [johnReq, janeReq] = await Promise.all([
+    b.request.ExtractResume("John Doe | Software Engineer | BSc in CS"),
+    b.request.ExtractResume("Jane Smith | Data Scientist | PhD in Statistics"),
+  ])
+
+  const jsonl = toOpenaiJsonl(johnReq) + toOpenaiJsonl(janeReq)
+
+  // Create batch input file.
+  const batchInputFile = await client.files.create({
+    file: new File([jsonl], 'batch.jsonl'),
+    purpose: 'batch',
+  })
+
+  // Create batch.
+  let batch = await client.batches.create({
+    input_file_id: batchInputFile.id,
+    endpoint: '/v1/chat/completions',
+    completion_window: '24h',
+    metadata: {
+      description: 'BAML Modular API TypeScript Batch Example'
+    },
+  })
+
+  // Wait for the batch to complete (exponential backoff).
+  let backoff = 1000 // ms
+  let attempts = 0
+  const maxAttempts = 30
+
+  while (true) {
+    batch = await client.batches.retrieve(batch.id)
+    attempts += 1
+
+    if (batch.status === 'completed') {
+      break
+    }
+
+    if (attempts >= maxAttempts) {
+      try {
+        await client.batches.cancel(batch.id)
+      } finally {
+        throw 'Batch failed to complete in time'
+      }
+    }
+
+    await new Promise(resolve => setTimeout(resolve, backoff))
+    backoff *= 2
+  }
+
+  // Retrieve the batch output file.
+  const output = await client.files.content(batch.output_file_id!)
+
+  const resumes: Record<string, Resume> = {}
+  const outputJsonl = await output.text()
+
+  // Process the batch results (skip empty lines).
+  for (const line of outputJsonl.split("\n").filter(line => line.trim().length > 0)) {
+    const result = JSON.parse(line.trim())
+    const llmResponse = result.response.body.choices[0].message.content
+
+    const parsed = b.parse.ExtractResume(llmResponse)
+    resumes[result.custom_id] = parsed
+  }
+
+  // The resumes object should contain this.
+  // With Jest we can compare using `expect(resumes).toEqual(expected)`.
+  const expected: Record<string, Resume> = {
+    [johnReq.id]: JOHN_DOE_PARSED_RESUME,
+    [janeReq.id]: JANE_SMITH_PARSED_RESUME,
+  }
+
+  console.log(resumes)
+}
+
+// Helper function to convert BAML HTTP request to OpenAI batch JSONL format
+function toOpenaiJsonl(req: BamlHttpRequest): string {
+  const line = JSON.stringify({
+    custom_id: req.id,
+    method: 'POST',
+    url: '/v1/chat/completions',
+    body: req.body.json(),
+  })
+
+  return `${line}\n`
+}
+```
+</CodeBlocks>

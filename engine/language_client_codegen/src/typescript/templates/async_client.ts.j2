@@ -1,5 +1,5 @@
 import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Collector } from "@boundaryml/baml"
-import { toBamlError, BamlStream } from "@boundaryml/baml"
+import { toBamlError, BamlStream, type HTTPRequest } from "@boundaryml/baml"
 import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
 import type { partial_types } from "./partial_types"
 import type * as types from "./types"
@@ -7,6 +7,8 @@ import type {
   {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
 } from "./types"
 import type TypeBuilder from "./type_builder"
+import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
+import { LlmResponseParser, LlmStreamParser } from "./parser"
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 /**
@@ -22,23 +24,47 @@ type BamlCallOptions = {
 
 export class BamlAsyncClient {
   private runtime: BamlRuntime
-  private ctx_manager: BamlCtxManager
-  private stream_client: BamlStreamClient
-  private baml_options: BamlCallOptions
+  private ctxManager: BamlCtxManager
+  private streamClient: BamlStreamClient
+  private httpRequest: AsyncHttpRequest
+  private httpStreamRequest: AsyncHttpStreamRequest
+  private llmResponseParser: LlmResponseParser
+  private llmStreamParser: LlmStreamParser
+  private bamlOptions: BamlCallOptions
 
-  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager, baml_options?: BamlCallOptions) {
+  constructor(runtime: BamlRuntime, ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.runtime = runtime
-    this.ctx_manager = ctx_manager
-    this.stream_client = new BamlStreamClient(runtime, ctx_manager, baml_options)
-    this.baml_options = baml_options || {}
+    this.ctxManager = ctxManager
+    this.streamClient = new BamlStreamClient(runtime, ctxManager, bamlOptions)
+    this.httpRequest = new AsyncHttpRequest(runtime, ctxManager)
+    this.httpStreamRequest = new AsyncHttpStreamRequest(runtime, ctxManager)
+    this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
+    this.llmStreamParser = new LlmStreamParser(runtime, ctxManager)
+    this.bamlOptions = bamlOptions || {}
   }
 
-  withOptions(baml_options: BamlCallOptions) {
-    return new BamlAsyncClient(this.runtime, this.ctx_manager, baml_options)
+  withOptions(bamlOptions: BamlCallOptions) {
+    return new BamlAsyncClient(this.runtime, this.ctxManager, bamlOptions)
   }
 
   get stream() {
-    return this.stream_client
+    return this.streamClient
+  }
+
+  get request() {
+    return this.httpRequest
+  }
+
+  get streamRequest() {
+    return this.httpStreamRequest
+  }
+
+  get parse() {
+    return this.llmResponseParser
+  }
+
+  get parseStream() {
+    return this.llmStreamParser
   }
 
   {% for fn in funcs %}
@@ -49,7 +75,7 @@ export class BamlAsyncClient {
       __baml_options__?: BamlCallOptions
   ): Promise<{{fn.return_type}}> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "{{fn.name}}",
@@ -58,7 +84,7 @@ export class BamlAsyncClient {
           "{{name}}": {{name}}{% if optional %}?? null{% endif %}{% if !loop.last %},{% endif %}
           {%- endfor %}
         },
-        this.ctx_manager.cloneContext(),  
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -73,13 +99,13 @@ export class BamlAsyncClient {
 
 class BamlStreamClient {
   private runtime: BamlRuntime
-  private ctx_manager: BamlCtxManager
-  private baml_options: BamlCallOptions
+  private ctxManager: BamlCtxManager
+  private bamlOptions: BamlCallOptions
 
-  constructor(runtime: BamlRuntime, ctx_manager: BamlCtxManager, baml_options?: BamlCallOptions) {
+  constructor(runtime: BamlRuntime, ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.runtime = runtime
-    this.ctx_manager = ctx_manager
-    this.baml_options = baml_options || {}
+    this.ctxManager = ctxManager
+    this.bamlOptions = bamlOptions || {}
   }
 
   {% for fn in funcs %}
@@ -90,7 +116,7 @@ class BamlStreamClient {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
     try {
-      const options = { ...this.baml_options, ...(__baml_options__ || {}) }
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "{{fn.name}}",
@@ -100,7 +126,7 @@ class BamlStreamClient {
           {%- endfor %}
         },
         undefined,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
@@ -109,7 +135,7 @@ class BamlStreamClient {
         raw,
         (a): {{ fn.partial_return_type }} => a,
         (a): {{ fn.return_type }} => a,
-        this.ctx_manager.cloneContext(),
+        this.ctxManager.cloneContext(),
       )
     } catch (error) {
       throw toBamlError(error);

@@ -8,8 +8,8 @@ use crate::{
 use anyhow::{Context, Result};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use baml_types::tracing::events::{
-    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, HTTPRequest, HTTPResponse,
-    HttpRequestId, TraceData, TraceEvent, TraceLevel,
+    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, HTTPBody, HTTPRequest,
+    HTTPResponse, HttpRequestId, TraceData, TraceEvent, TraceLevel,
 };
 use baml_types::BamlMap;
 use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
@@ -81,10 +81,11 @@ pub(crate) fn to_prompt(
 
 pub enum JsonBodyInput<'a> {
     ReqwestBody(Option<&'a reqwest::Body>),
+    Bytes(&'a [u8]),
     String(String),
 }
 
-fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
+pub(crate) fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
     let string_to_parse = match input {
         JsonBodyInput::ReqwestBody(maybe_body) => {
             if let Some(b) = maybe_body {
@@ -94,6 +95,7 @@ fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
                 return Ok(serde_json::Value::Null);
             }
         }
+        JsonBodyInput::Bytes(b) => std::str::from_utf8(b)?.to_string(),
         JsonBodyInput::String(s) => s,
     };
 
@@ -109,7 +111,7 @@ fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
     Ok(serde_json::Value::String(string_to_parse))
 }
 
-fn json_headers(headers: &HeaderMap) -> serde_json::Value {
+pub(crate) fn json_headers(headers: &HeaderMap) -> serde_json::Value {
     let mut map = serde_json::Map::new();
     for (key, value) in headers.iter() {
         let value_str = value.to_str().unwrap_or_default().to_string();
@@ -208,11 +210,18 @@ pub(crate) async fn build_and_log_outbound_request(
             callsite: "".to_string(),
             verbosity: TraceLevel::Info,
             content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
-                request_id: http_request_id.clone(),
+                id: http_request_id.clone(),
                 url: built_req.url().to_string(),
                 method: built_req.method().to_string(),
                 headers: json_headers(built_req.headers()),
-                body: json_body(JsonBodyInput::ReqwestBody(built_req.body())).unwrap_or_default(),
+                body: HTTPBody::new(
+                    built_req
+                        .body()
+                        .map(reqwest::Body::as_bytes)
+                        .flatten()
+                        .unwrap_or_default()
+                        .into(),
+                ),
             })),
             tags: Default::default(),
         }));

@@ -84,7 +84,7 @@ class BamlStream {
                         return;
                     }
                     catch (err) {
-                        const bamlError = (0, errors_1.asBamlError)(err instanceof Error ? err : new Error(String(err)));
+                        const bamlError = (0, errors_1.toBamlError)(err instanceof Error ? err : new Error(String(err)));
                         controller.enqueue(encoder.encode(JSON.stringify({ error: bamlError })));
                         controller.close();
                         return;

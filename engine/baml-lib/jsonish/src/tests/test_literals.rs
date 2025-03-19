@@ -269,6 +269,31 @@ test_deserializer!(
     "THREE"
 );
 
+test_deserializer!(
+    test_ambiguous_literal_string_complete_string,
+    EMPTY_FILE,
+    r#"
+        "pay"
+    "#,
+    FieldType::Union(vec![
+        FieldType::Literal(LiteralValue::String("pay".into())),
+        FieldType::Literal(LiteralValue::String("pay_without_credit_card".into())),
+    ]),
+    "pay"
+);
+
+test_partial_deserializer_streaming_failure!(
+    test_ambiguous_literal_string,
+    EMPTY_FILE,
+    r#"
+        "pay
+    "#,
+    FieldType::Union(vec![
+        FieldType::Literal(LiteralValue::String("pay".into())),
+        FieldType::Literal(LiteralValue::String("pay_without_credit_card".into())),
+    ])
+);
+
 // Test with object that has multiple keys (should fail)
 test_failing_deserializer!(
     test_union_literal_with_multiple_types_from_multi_key_object,

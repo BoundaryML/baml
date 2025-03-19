@@ -270,16 +270,6 @@ pub fn parse_py_type(
                     }
                 }
 
-                // Log the fields
-                // log::info!("Fields of {}:", name);
-                // for (key, value) in &fields {
-                //     let repr = py
-                //         .import("builtins")?
-                //         .getattr("repr")?
-                //         .call1((value,))?;
-                //     let repr_str = repr.extract::<String>()?;
-                //     log::info!("  {}: {}", key, repr_str);
-                // }
                 Ok(MappedPyType::Class(name, fields))
                 // use downcast only
             } else if let Ok(list) = any.downcast_bound::<PyList>(py) {

@@ -1,8 +1,8 @@
 mod json_collection;
 mod json_parse_state;
 
-use baml_types::CompletionState;
 use crate::jsonish::{value::Fixes, Value};
+use baml_types::CompletionState;
 
 use self::json_parse_state::JsonParseState;
 
@@ -72,7 +72,7 @@ pub fn parse(str: &str, _options: &ParseOptions) -> Result<Vec<(Value, Vec<Fixes
                                 Value::FixedJson(f.1.into(), f.2)
                             })
                             .collect(),
-                        CompletionState::Incomplete // TODO: Is it complete?
+                        CompletionState::Incomplete, // TODO: Is it complete?
                     ),
                     vec![Fixes::InferredArray],
                 )])

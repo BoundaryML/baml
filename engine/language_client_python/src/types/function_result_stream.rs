@@ -99,7 +99,7 @@ impl FunctionResultStream {
             res.map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })
-        .map(|f| f.into())
+        .map(pyo3::Bound::into)
     }
 }
 

@@ -145,6 +145,9 @@ navigation:
 
       - section: BAML Advanced
         contents:
+          - page: Collector (track tokens)
+            icon: fa-regular fa-wave-pulse
+            path: 01-guide/05-baml-advanced/collector.mdx
           - page: LLM Client Registry
             icon: fa-regular fa-gears
             path: 01-guide/05-baml-advanced/client-registry.mdx
@@ -160,6 +163,9 @@ navigation:
           - page: Checks and Asserts
             icon: fa-regular fa-check-circle
             path: 01-guide/05-baml-advanced/checks-and-asserts.mdx
+          - page: Modular API
+            icon: fa-regular fa-cubes
+            path: 01-guide/05-baml-advanced/modular-api.mdx
       - section: Boundary Cloud
         contents:
           # - section: Functions
@@ -414,6 +420,17 @@ navigation:
       - section: Generated baml_client
         slug: baml_client
         contents:
+          - page: with_options(..)
+            path: 03-reference/baml_client/with_options.mdx
+          - page: Collector
+            path: 03-reference/baml_client/collector.mdx
+            slug: collector
+          - page: logging / env vars
+            slug: config
+            path: 03-reference/baml_client/config.mdx
+          - page: AsyncClient / SyncClient
+            slug: client
+            path: 03-reference/baml_client/client.mdx
           - page: TypeBuilder
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
@@ -717,7 +734,7 @@ redirects:
   - source: "/docs/snippets/clients/providers/azure"
     destination: "/ref/llm-client-providers/open-ai-from-azure"
   - source: "/docs/snippets/clients/providers/gemini"
-    destination: "/ref/llm-client-providers/google-ai-studio"
+    destination: "/ref/llm-client-providers/google-ai-gemini"
   - source: "/docs/snippets/clients/providers/groq"
     destination: "/ref/llm-client-providers/openai-generic-groq"
   - source: "/docs/snippets/clients/providers/huggingface"
@@ -728,6 +745,8 @@ redirects:
     destination: "/ref/llm-client-providers/open-ai"
   - source: "/docs/snippets/clients/providers/openai-generic"
     destination: "/ref/llm-client-providers/openai-generic"
+  - source: "/docs/snippets/clients/providers/google-vertex"
+    destination: "/ref/llm-client-providers/google-vertex"
   - source: "/docs/snippets/clients/providers/openrouter"
     destination: "/ref/llm-client-providers/openai-generic-open-router"
   - source: "/docs/snippets/clients/providers/together"

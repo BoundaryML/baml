@@ -17,6 +17,7 @@ anyhow.workspace = true
 askama.workspace = true
 base64.workspace = true
 baml-types.workspace = true
+baml-log.workspace = true
 cfg-if.workspace = true
 indexmap.workspace = true
 internal-baml-core.workspace = true

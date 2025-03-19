@@ -16,6 +16,7 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
+from typing_extensions import TypeAlias
 from typing import Dict, Generic, List, Optional, TypeVar, Union, Literal
 
 from . import types
@@ -203,6 +204,11 @@ class GroceryReceipt(BaseModel):
     items: List[Union[str, int, float]]
     totalAmount: Optional[float] = None
 
+class Haiku(BaseModel):
+    line1: Optional[str] = None
+    line2: Optional[str] = None
+    line3: Optional[str] = None
+
 class InnerClass(BaseModel):
     prop1: Optional[str] = None
     prop2: Optional[str] = None
@@ -343,14 +349,14 @@ class Recipe(BaseModel):
     recipe_type: Optional[Union[Literal["breakfast"], Literal["dinner"]]] = None
 
 class RecursiveAliasDependency(BaseModel):
-    value: Optional[types.JsonValue] = None
+    value: Optional["JsonValue"] = None
 
 class Resume(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
-    experience: List["Education"]
-    education: List[str]
+    experience: List[str]
+    education: List["Education"]
     skills: List[str]
 
 class Schema(BaseModel):
@@ -442,3 +448,23 @@ class UniverseQuestionInput(BaseModel):
 class WithReasoning(BaseModel):
     value: Optional[str] = None
     reasoning: Optional[str] = None
+
+JsonArray: TypeAlias = List["JsonValue"]
+
+JsonEntry: TypeAlias = Union["SimpleTag", "JsonTemplate"]
+
+JsonObject: TypeAlias = Dict[str, "JsonValue"]
+
+JsonTemplate: TypeAlias = Dict[str, "JsonEntry"]
+
+JsonValue: TypeAlias = Union[int, str, bool, float, "JsonObject", "JsonArray"]
+
+RecAliasOne: TypeAlias = "RecAliasTwo"
+
+RecAliasThree: TypeAlias = List["RecAliasOne"]
+
+RecAliasTwo: TypeAlias = "RecAliasThree"
+
+RecursiveListAlias: TypeAlias = List["RecursiveListAlias"]
+
+RecursiveMapAlias: TypeAlias = Dict[str, "RecursiveMapAlias"]

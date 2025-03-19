@@ -45,6 +45,7 @@ from ..baml_client.types import (
     Color,
     SimpleTag,
 )
+
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 from ..baml_client import reset_baml_env_vars
@@ -1923,7 +1924,7 @@ async def test_thinking_streaming():
     stream = b.stream.TestThinking("a world without horses, should be titled 'A World Without Horses'")
     async for msg in stream:
         print(msg)
-    
+
     res = await stream.get_final_response()
     assert len(res.title) > 0, "title should be non-empty"
     assert len(res.content) > 0, "content should be non-empty"

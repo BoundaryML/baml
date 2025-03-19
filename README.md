@@ -34,7 +34,7 @@
 
 |   |     |
 | - | - |
-| What is BAML? | BAML is a new programming language for builing AI applications. |
+| What is BAML? | BAML is a new programming language for building AI applications. |
 | Do I need to write my whole app in BAML? | Nope, only the AI parts, you can then use BAML with any existing language of your choice! [python](/python), [typescript](/ts), and [more](/more). |
 | Is BAML stable? | Yes, many companies use it in production! We ship updates weekly and rarely have breaking changes |
 | Why a new language? | [Jump to section](#why-a-new-programming-language) |
@@ -45,13 +45,13 @@
 
 The fundamental building block in BAML is a function. Every prompt is a function that takes in parameters and returns a type.
 
-```baml
+```rust
 function ChatAgent(message: Message[], tone: "happy" | "sad") -> string
 ```
 
 Every function additionally defines which models it uses and what its prompt is.
 
-```baml
+```rust
 function ChatAgent(message: Message[], tone: "happy" | "sad") -> StopTool | ReplyTool {
     client "openai/gpt-4o-mini"
 

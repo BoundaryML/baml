@@ -1,0 +1,489 @@
+---
+title: Collector
+---
+<Info>
+This feature was added in 0.79.0
+</Info>
+
+The `Collector` allows you to inspect the internal state of BAML function calls, including raw HTTP requests, responses, usage metrics, and timing information, so you can always see the raw data, without any abstraction layers.
+
+## Quick Start
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector
+
+# Create a collector with optional name
+collector = Collector(name="my-collector")
+
+# Use it with a function call
+result = b.ExtractResume("...", baml_options={"collector": collector})
+
+# Access logging information
+print(collector.last.usage)  # Print usage metrics
+print(collector.last.raw_llm_response)  # Print final response as string
+# since there may be retries, print the last http response received
+print(collector.last.calls[-1].http_response) 
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import { b } from 'baml_client'
+import { Collector } from '@boundaryml/baml'
+
+// Create a collector with optional name
+const collector = new Collector("my-collector")
+
+// Use it with a function call
+const result = await b.ExtractResume("...", { collector })
+
+// Access logging information
+console.log(collector.last?.usage)  // Print usage metrics
+console.log(collector.last?.rawLlmResponse)  // Print final response
+// since there may be retries, print the last http response received
+console.log(collector.last?.calls[-1].httpResponse)
+```
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
+require_relative "baml_client/client"
+b = Baml.Client
+
+# Create a collector with optional name
+collector = Baml::Collector.new(name: "my-collector")
+
+# Use it with a function call
+res = b.ExtractResume(input: '...', baml_options: { collector: collector })
+
+# Access logging information
+print(collector.last.usage)  # Print usage metrics
+print(collector.last.calls[-1].http_response)  # Print final response
+print(collector.last.raw_llm_response) # a string of the last response made
+```
+</Tab>
+</Tabs>
+
+## Common Use Cases
+
+### Basic Logging
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector  # Import the Collector class
+
+def run():
+    # Create a collector instance with an optional name
+    collector = Collector(name="my-collector")
+    # collector will be modified by the function to include all internal state
+    res = b.ExtractResume("...", baml_options={"collector": collector})
+    # This will print the return type of the function
+    print(res)
+
+    # This is guaranteed to be set by the function
+    assert collector.last is not None
+
+    # This will print the id of the last request
+    print(collector.last.id)
+
+    # This will print the usage of the last request
+    # (This aggregates usage from all retries if there was usage emitted)
+    print(collector.last.usage)
+
+    # This will print the raw response of the last request
+    print(collector.last.calls[-1].http_response)
+
+    # This will print the raw text we used to run the parser.
+    print(collector.last.raw_llm_response)
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import {b} from 'baml_client'
+import {Collector} from '@boundaryml/baml'
+
+async function run() {
+    // Create a collector instance with an optional name
+    const collector = new Collector("my-collector")
+    // collector will be modified by the function to include all internal state
+    const res = await b.ExtractResume("...", { collector })
+    // This will print the return type of the function
+    console.log(res)
+
+    // This is guaranteed to be set by the function
+    assert(collector.last)
+
+    // This will print the id of the last request
+    console.log(collector.last.id)
+
+    // This will print the usage of the last request
+    // (This aggregates usage from all retries if there was usage emitted)
+    console.log(collector.last.usage)
+
+    // This will print the raw response of the last request
+    console.log(collector.last.calls[-1].httpResponse)
+
+    // This will print the raw text we used to run the parser.
+    console.log(collector.last.rawLlmResponse)
+}
+```
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
+require_relative "baml_client/client"
+b = Baml.Client
+
+def run
+    # Create a collector instance
+    collector = Baml::Collector.new(name: "my-collector")
+    # The function will now use the collector to track internal state
+    res = b.ExtractResume(input: 'hi there', baml_options: { collector: collector })
+
+    # This will print the return type of the function
+    print(res)
+
+    # This is guaranteed to be set by the function
+    raise "Assertion failed" unless collector.last
+
+    # This will print the id of the last request
+    print(collector.last.id)
+
+    # This will print the usage of the last request
+    # (This aggregates usage from all retries if there was usage emitted)
+    print(collector.last.usage)
+
+    # This will print the raw response of the last request
+    print(collector.last.calls[-1].http_response)
+
+    # This will print the raw text we used to run the parser.
+    print(collector.last.raw_llm_response)
+end
+
+# Call the function
+run
+```
+</Tab>
+</Tabs>
+
+### Managing Collector State
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector
+
+def run():
+    collector = Collector(name="reusable-collector")
+    res = b.ExtractResume("...", baml_options={"collector": collector})
+    # Remove all logs and free up memory
+    collector.clear()
+
+    # Reuse the same collector
+    res = b.TestOpenAIGPT4oMini("Second call", baml_options={"collector": collector})
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import {b} from 'baml_client'
+import {Collector} from '@boundaryml/baml'
+
+async function run() {
+    const collector = new Collector("reusable-collector")
+    const res = await b.ExtractResume("...", { collector })
+    // Remove all logs and free up memory
+    collector.clear()
+
+    // Reuse the same collector
+    const res2 = await b.ExtractResume("...", { collector })
+}
+```
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
+require_relative "baml_client/client"
+b = Baml.Client
+
+def run
+    collector = Baml::Collector.new(name: "reusable-collector")
+    res = b.ExtractResume(input: 'First call', baml_options: { collector: collector })
+    # Remove all logs and free up memory
+    collector.clear()
+
+    # Reuse the same collector
+    res = b.ExtractResume(input: 'Second call', baml_options: { collector: collector })
+end
+```
+</Tab>
+</Tabs>
+
+### Using Multiple Collectors
+
+You can use multiple collectors to track different aspects of your application:
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector
+
+def run():
+    # Create separate collectors for different parts of your application
+    collector_a = Collector(name="collector-a")
+    collector_b = Collector(name="collector-b")
+    
+    # Use both collectors for the same function call
+    res = b.ExtractResume("...", baml_options={"collector": [collector_a, collector_b]})
+    
+    # Both collectors will have the same logs
+    assert collector_a.last.usage.input_tokens == collector_b.last.usage.input_tokens
+    
+    # Use only collector_a for another call
+    res2 = b.TestOpenAIGPT4oMini("another call", baml_options={"collector": collector_a})
+    
+    # collector_a will have 2 logs, collector_b will still have 1
+    assert len(collector_a.logs) == 2
+    assert len(collector_b.logs) == 1
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import {b} from 'baml_client'
+import {Collector} from '@boundaryml/baml'
+
+async function run() {
+    // Create separate collectors for different parts of your application
+    const collector_a = new Collector("collector-a")
+    const collector_b = new Collector("collector-b")
+    
+    // Use both collectors for the same function call
+    const res = await b.ExtractResume("...", { collector: [collector_a, collector_b] })
+    
+    // Both collectors will have the same logs
+    assert(collector_a.last?.usage.inputTokens === collector_b.last?.usage.inputTokens)
+    
+    // Use only collector_a for another call
+    const res2 = await b.ExtractResume("...", { collector: collector_a })
+    
+    // collector_a will have 2 logs, collector_b will still have 1
+    assert(collector_a.logs.length === 2)
+    assert(collector_b.logs.length === 1)
+}
+```
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
+require_relative "baml_client/client"
+b = Baml.Client
+def run
+    # Create separate collectors for different parts of your application
+    collector_a = Baml::Collector.new(name: "collector-a")
+    collector_b = Baml::Collector.new(name: "collector-b")
+    
+    # Use both collectors for the same function call
+    res = b.ExtractResume(input: 'hi there', baml_options: { collector: [collector_a, collector_b] })
+    
+    # Both collectors will have the same logs
+    raise "Assertion failed" unless collector_a.last.usage.input_tokens == collector_b.last.usage.input_tokens
+    
+    # Use only collector_a for another call
+    res2 = b.ExtractResume(input: 'another call', baml_options: { collector: collector_a })
+    
+    # collector_a will have 2 logs, collector_b will still have 1
+    raise "Assertion failed" unless collector_a.logs.length == 2
+    raise "Assertion failed" unless collector_b.logs.length == 1
+end
+```
+</Tab>
+</Tabs>
+
+### Usage Tracking
+
+<Tabs>
+<Tab title="Python" language="python">
+```python
+from baml_client import b
+from baml_py import Collector
+
+def run():
+    collector_a = Collector(name="collector-a")
+    res = b.ExtractResume("...", baml_options={"collector": collector_a})
+
+    collector_b = Collector(name="collector-b")
+    res = b.ExtractResume("...", baml_options={"collector": collector_b})
+
+    # The total usage of both logs is now available
+    print(collector_a.usage)
+    print(collector_b.usage)
+```
+</Tab>
+
+<Tab title="TypeScript" language="typescript">
+```typescript
+import {b} from 'baml_client'
+import {Collector} from '@boundaryml/baml'
+
+async function run() {
+    const collector_a = new Collector("collector-a")
+    const res = await b.ExtractResume("...", { collector: collector_a })
+
+    const collector_b = new Collector("collector-b")
+    const res2 = await b.ExtractResume("...", { collector: collector_b })
+    // The total usage of both logs is now available
+    console.log(collector_a.usage)
+    console.log(collector_b.usage)
+}
+```
+</Tab>
+
+<Tab title="Ruby" language="ruby">
+```ruby
+require_relative "baml_client/client"
+
+def run
+    collector_a = Baml::Collector.new(name: "collector-a")
+    res = Baml.Client.ExtractResume(input: 'First call', baml_options: { collector: collector_a })
+
+    collector_b = Baml::Collector.new(name: "collector-b")
+    res = Baml.Client.ExtractResume(input: 'Second call', baml_options: { collector: collector_b })
+
+
+    # The total usage of both logs is now available
+    print(collector_a.usage)
+    print(collector_b.usage)
+end
+```
+</Tab>
+</Tabs>
+
+## API Reference
+
+### Collector Class
+
+The Collector class provides properties to introspect the internal state of BAML function calls.
+
+| Property | Type | Description |
+|--------|------|-------------|
+| `logs` | `List[FunctionLog]` | A list of all function calls (ordered from oldest to newest) |
+| `last` | `FunctionLog \| null` | The most recent function log. |
+| `usage` | `Usage` | The cumulative total usage of all requests this collector has tracked. This includes all retries and fallbacks, if those did use any tokens. |
+
+
+The Collector class provides the following methods:
+
+| Method | Type | Description |
+|--------|------|-------------|
+| `id(id: string)` | `FunctionLog \| null` | Get the function log by id. |
+| `clear()` | `void` | Clears all logs. |
+
+### FunctionLog Class
+
+The `FunctionLog` class has the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | The id of the request. |
+| `function_name` | `string` | The name of the function. |
+| `log_type` | `"call" \| "stream"` | The manner in which the function was called. |
+| `timing` | `Timing` | The timing of the request. |
+| `usage` | `Usage` | The usage of the request (aggregated from all calls). |
+| `calls` | `(LLMCall \| LLMStreamCall)[]` | Every call made to the LLM (including fallbacks and retries). Sorted from oldest to newest. |
+| `raw_llm_response` | `string \| null` | The raw text from the best matching LLM. |
+| `tags` | `Map[str, any]` | Any user provided metadata. |
+
+
+### Timing Class
+
+The `Timing` class has the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `start_time_utc_ms` | `int` | The start time of the request in milliseconds since epoch. |
+| `duration_ms` | `int \| null` | The duration of the request in milliseconds. |
+
+#### StreamTiming Class (extends Timing)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `time_to_first_token_ms` | `int \| null` | The time to first token in milliseconds. |
+
+### Usage Class
+
+The `Usage` class has the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `input_tokens` | `int \| null` | The cumulative number of tokens used in the inputs. |
+| `output_tokens` | `int \| null` | The cumulative number of tokens used in the outputs. |
+
+<Info>
+Note: Usage may not include all things like "thinking_tokens" or "cached_tokens". For that you may need to look at the raw HTTP response and build your own adapters.
+</Info>
+
+### LLMCall Class
+
+The `LLMCall` class has the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `client_name` | `str` | The name of the client used. |
+| `provider` | `str` | The provider of the client used. |
+| `timing` | `Timing` | The timing of the request. |
+| `http_request` | `HttpRequest` | The raw HTTP request sent to the client. |
+| `http_response` | `HttpResponse \| null` | The raw HTTP response from the client (null for streaming). |
+| `usage` | `Usage \| null` | The usage of the request (if available). |
+| `selected` | `bool` | Whether this call was selected and used for parsing. |
+
+### LLMStreamCall Class (extends LLMCall)
+
+The `LLMStreamCall` includes the same properties as `LLMCall` plus the following:
+
+| Property | Type | Description |
+|----------|------|-------------|  
+| `timing` | `StreamTiming` | The timing of the request. |
+|`chunks` | `string[]` | The chunks of the response (API coming soon). |
+
+
+### HttpRequest Class
+
+The `HttpRequest` class has the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `url` | `str` | The URL of the request. |
+| `method` | `str` | The HTTP method of the request. |
+| `headers` | `object` | The request headers. |
+| `body` | `object` | The request body. |
+
+### HttpResponse Class
+
+The `HttpResponse` class has the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `status` | `int` | The HTTP status code. |
+| `headers` | `object` | The response headers. |
+| `body` | `object` | The response body. |
+
+## Related Topics
+- [Using with_options](/ref/baml_client/with-options) - Learn how to configure logging globally
+- [TypeBuilder](/ref/baml_client/type-builder) - Build custom types for your BAML functions
+- [Client Registry](/ref/baml_client/client-registry) - Manage LLM clients and their configurations
+
+## Best Practices
+1. Use a single collector instance when tracking related function calls in a chain.
+2. Clear the collector when reusing it for unrelated operations.
+3. Consider using multiple collectors to track different parts of your application.
+4. Use function IDs when tracking specific calls in parallel operations.
+5. For streaming calls, be aware that `http_response` will be null, but you can still access usage information.

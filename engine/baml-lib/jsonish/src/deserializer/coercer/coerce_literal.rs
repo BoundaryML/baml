@@ -54,9 +54,14 @@ impl TypeCoercer for LiteralValue {
                 let (key, inner_value) = obj.iter().next().unwrap();
                 // only extract value if it's a primitive (not an object or array, hoping to god its fixed)
                 match inner_value {
-                    jsonish::Value::Number(_, _) | jsonish::Value::Boolean(_) | jsonish::Value::String(_, _) => {
+                    jsonish::Value::Number(_, _)
+                    | jsonish::Value::Boolean(_)
+                    | jsonish::Value::String(_, _) => {
                         let mut result = self.coerce(ctx, target, Some(&inner_value))?;
-                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(obj.clone(), completion_state.clone())));
+                        result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(
+                            obj.clone(),
+                            completion_state.clone(),
+                        )));
                         return Ok(result);
                     }
                     _ => {}
