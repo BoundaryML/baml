@@ -20,8 +20,6 @@ pub fn run_cli(env: Env, params: Vec<String>) -> napi::Result<i32> {
         },
     )?;
 
-    println!("exit_code: {:?}", exit_code);
-
     Ok(exit_code.into())
 }
 
