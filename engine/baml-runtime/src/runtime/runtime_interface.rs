@@ -372,47 +372,8 @@ impl RuntimeInterface for InternalBamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
-        let func = match self.get_function(&function_name, &ctx) {
-            Ok(func) => func,
-            Err(e) => {
-                return Ok(FunctionResult::new(
-                    OrchestrationScope::default(),
-                    LLMResponse::UserFailure(format!(
-                        "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
-                        e
-                    )),
-                    None,
-                ))
-            }
-        };
-        let baml_args = self.ir().check_function_params(
-            &func,
-            params,
-            ArgCoercer {
-                span_path: None,
-                allow_implicit_cast_to_string: false,
-            },
-        )?;
-        // let baml_args = match self.ir().check_function_params(
-        //     &func,
-        //     &params,
-        //     ArgCoercer {
-        //         span_path: None,
-        //         allow_implicit_cast_to_string: false,
-        //     },
-        // ) {
-        //     Ok(args) => args,
-        //     Err(e) => {
-        //         return Ok(FunctionResult::new(
-        //             OrchestrationScope::default(),
-        //             LLMResponse::UserFailure(format!(
-        //                 "Failed while validating args for {function_name}: {:?}",
-        //                 e
-        //             )),
-        //             None,
-        //         ))
-        //     }
-        // };
+        let local_span_id = ctx.span_id.clone();
+        let local_function_name = function_name.clone();
 
         if let Some(span_id) = ctx.span_id {
             let trace_event = TraceEvent {
@@ -443,15 +404,44 @@ impl RuntimeInterface for InternalBamlRuntime {
             );
         }
 
-        let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-        let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
+        let future = async {
+            let func = match self.get_function(&function_name, &ctx) {
+                Ok(func) => func,
+                Err(e) => {
+                return Ok(FunctionResult::new(
+                    OrchestrationScope::default(),
+                    LLMResponse::UserFailure(format!(
+                        "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
+                        e
+                    )),
+                    None,
+                ))
+                }
+            };
 
-        // Now actually execute the code.
-        let (history, _) =
-            orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
-                renderer.parse(self.ir(), s, false)
-            })
-            .await;
+            let baml_args = self.ir().check_function_params(
+                &func,
+                params,
+                ArgCoercer {
+                    span_path: None,
+                    allow_implicit_cast_to_string: false,
+                },
+            )?;
+
+            let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
+            let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
+
+            // Now actually execute the code.
+            let (history, _) =
+                orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
+                    renderer.parse(self.ir(), s, false)
+                })
+                .await;
+
+            FunctionResult::new_chain(history)
+        };
+
+        let result = future.await;
 
         let end_time = web_time::SystemTime::now();
         if let Some(span_id) = ctx.span_id {
@@ -475,7 +465,7 @@ impl RuntimeInterface for InternalBamlRuntime {
             );
         }
 
-        FunctionResult::new_chain(history)
+        result
     }
 
     // Note that this only returns a FunctionResultStream object,

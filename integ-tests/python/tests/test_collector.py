@@ -1,4 +1,4 @@
-from baml_py.errors import BamlInvalidArgumentError, BamlClientError
+from baml_py.errors import BamlInvalidArgumentError, BamlError, BamlClientError
 import pytest
 import dotenv
 from openai.types.chat import ChatCompletion
@@ -380,8 +380,10 @@ async def test_collector_failures_arg_type():
     with pytest.raises(BamlInvalidArgumentError):
         value: str = 124  # type: ignore (We want to test the error)
         await b.TestOpenAIGPT4oMini(value, baml_options={"collector": collector})
+
     assert len(collector.logs) == 1
     last_log = collector.last
+    print("------------------------- last_log", last_log)
     assert last_log is not None
     assert last_log.function_name == "TestOpenAIGPT4oMini"
 
@@ -391,11 +393,59 @@ async def test_collector_failures_client_registry():
     collector = Collector(name="my-collector")
     client_registry = ClientRegistry()
     client_registry.set_primary("DoesNotExist")
-    with pytest.raises(BamlClientError):
+    with pytest.raises(BamlError):
         await b.TestOpenAIGPT4oMini(
             "hi there",
             baml_options={"collector": collector, "client_registry": client_registry},
         )
+    assert len(collector.logs) == 1
+    last_log = collector.last
+    assert last_log is not None
+    assert last_log.function_name == "TestOpenAIGPT4oMini"
+
+
+@pytest.mark.asyncio
+async def test_collector_failures_arg_type_streaming():
+    collector = Collector(name="my-collector")
+    with pytest.raises(BamlInvalidArgumentError):
+        value: str = 124  # type: ignore (We want to test the error)
+        async for _ in b.stream.TestOpenAIGPT4oMini(
+            value, baml_options={"collector": collector}
+        ):
+            pass
+
+    # Fails before the stream is even started
+    # We don't have a state for streams that were "registered" but not started
+    assert len(collector.logs) == 0
+
+
+@pytest.mark.asyncio
+async def test_collector_failures_client_registry_streaming():
+    collector = Collector(name="my-collector")
+    client_registry = ClientRegistry()
+    client_registry.add_llm_client(
+        "TestClient",
+        "openai",
+        {"model": "gpt-4o-mini", "base_url": "https://does-not-exist.com"},
+    )
+    client_registry.set_primary("TestClient")
+    with pytest.raises(BamlClientError):
+        try:
+            stream = b.stream.TestOpenAIGPT4oMini(
+                "hi there",
+                baml_options={
+                    "collector": collector,
+                    "client_registry": client_registry,
+                },
+            )
+            # TODO: baml doesnt yet throw if theres a connection error during the stream..
+            async for _ in stream:
+                pass
+            # So we try to call get final response to make sure it fails
+            await stream.get_final_response()
+        except Exception as e:
+            print(f"Error occurred: {e}")
+            raise
     assert len(collector.logs) == 1
     last_log = collector.last
     assert last_log is not None
