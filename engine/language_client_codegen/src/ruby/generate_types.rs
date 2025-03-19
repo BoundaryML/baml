@@ -10,7 +10,7 @@ use crate::{field_type_attributes, type_check_attributes, TypeCheckAttributes};
 use super::ruby_language_features::ToRuby;
 use internal_baml_core::ir::{
     repr::{Docstring, IntermediateRepr},
-    ClassWalker, EnumWalker, FieldType, IRHelper,
+    ClassWalker, EnumWalker, FieldType, IRHelper, IRHelperExtended,
 };
 
 #[derive(askama::Template)]

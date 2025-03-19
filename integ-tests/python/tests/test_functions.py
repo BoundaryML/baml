@@ -117,7 +117,7 @@ class TestAllInputs:
         res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
         assert "a" in res and "b" in res and "c" in res
 
-        res = await b.TestFnNamedArgsSingleStringList()
+        res = await b.TestFnNamedArgsSingleStringList([])
         assert res == []
 
     @pytest.mark.asyncio

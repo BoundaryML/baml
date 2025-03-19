@@ -4,7 +4,7 @@ use anyhow::Result;
 use baml_types::BamlValue;
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::{
-    repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper,
+    repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper, IRHelperExtended,
 };
 use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 

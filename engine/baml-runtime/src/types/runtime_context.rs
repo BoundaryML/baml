@@ -17,6 +17,8 @@ pub struct PropertyAttributes {
     pub(crate) alias: Option<BamlValue>,
     pub(crate) skip: Option<bool>,
     pub(crate) meta: IndexMap<String, BamlValue>,
+    pub(crate) constraints: Vec<baml_types::Constraint>,
+    pub(crate) streaming_behavior: baml_types::StreamingBehavior,
 }
 
 #[derive(Debug)]

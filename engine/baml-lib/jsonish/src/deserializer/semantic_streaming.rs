@@ -5,7 +5,7 @@ use crate::deserializer::coercer::ParsingError;
 use crate::{BamlValueWithFlags, Flag};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::repr::{IntermediateRepr, Walker};
-use internal_baml_core::ir::{Field, IRHelper};
+use internal_baml_core::ir::{Field, IRHelper, IRHelperExtended, IRSemanticStreamingHelper};
 
 use baml_types::{
     BamlMap, BamlValueWithMeta, Completion, CompletionState, FieldType, ResponseCheck,
@@ -31,7 +31,7 @@ pub enum StreamingError {
 /// For a given baml value, traverse its nodes, comparing the completion state
 /// of each node against the streaming behavior of the node's type.
 pub fn validate_streaming_state(
-    ir: &IntermediateRepr,
+    ir: &impl IRHelperExtended,
     baml_value: &BamlValueWithFlags,
     field_type: &FieldType,
     allow_partials: bool,
@@ -63,7 +63,7 @@ pub fn validate_streaming_state(
 ///   allow_partials: Whether this node may contain partial values. (Once we
 ///                   see a false, all child nodes will also get false).
 fn process_node(
-    ir: &IntermediateRepr,
+    ir: &impl IRHelperExtended,
     value: BamlValueWithMeta<(CompletionState, &FieldType)>,
     allow_partials: bool,
     depth: usize,
@@ -233,15 +233,9 @@ fn process_node(
 
 /// Extract the field names from a field_type that is expected to be a `Class`.
 /// If it is not a known class, return no field names.
-fn type_field_names(ir: &IntermediateRepr, field_type: &FieldType) -> IndexSet<String> {
+fn type_field_names(ir: &impl IRHelperExtended, field_type: &FieldType) -> IndexSet<String> {
     match ir.distribute_metadata(field_type).0 {
-        FieldType::Class(class_name) => match ir.find_class(class_name) {
-            Err(_) => IndexSet::new(),
-            Ok(class) => class
-                .walk_fields()
-                .map(|field| field.name().to_string())
-                .collect(),
-        },
+        FieldType::Class(class_name) => ir.class_field_names(class_name).unwrap_or_default(),
         _ => IndexSet::new(),
     }
 }
@@ -250,7 +244,7 @@ fn type_field_names(ir: &IntermediateRepr, field_type: &FieldType) -> IndexSet<S
 /// fields in the class need to be filled in by a null. A field needs to be
 /// filled by a null if it is not present in the map value.
 fn fields_needing_null_filler<'a>(
-    ir: &'a IntermediateRepr,
+    ir: &'a impl IRSemanticStreamingHelper,
     class_name: &'a str,
     value_names: HashSet<String>,
     allow_partials: bool,
@@ -258,23 +252,7 @@ fn fields_needing_null_filler<'a>(
     if allow_partials == false {
         return Ok(HashSet::new());
     }
-    let res = match ir.find_class(class_name) {
-        Err(_) => Ok(HashSet::new()),
-        Ok(class) => {
-            let missing_fields = class
-                .walk_fields()
-                .filter_map(|field: Walker<'_, &Field>| {
-                    if !value_names.contains(field.name()) {
-                        Some(field.name().to_string())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            Ok(missing_fields)
-        }
-    };
-    res
+    ir.find_class_fields_needing_null_filler(class_name, &value_names)
 }
 
 /// For a given type, assume that it is a class, and list the fields of that
@@ -285,33 +263,21 @@ fn fields_needing_null_filler<'a>(
 /// and return an empty set (because we are ignoring the "@stream.not_null" property,
 /// which only applies when `allow_partials==true`).
 fn needed_fields(
-    ir: &IntermediateRepr,
+    ir: &impl IRHelperExtended,
     class_name: &str,
     allow_partials: bool,
 ) -> Result<HashSet<String>, anyhow::Error> {
     if allow_partials == false {
         return Ok(HashSet::new());
     }
-    let class = ir
-        .find_class(class_name)
+    ir.class_streaming_needed_fields(class_name)
         .map_err(|_| StreamingError::ExpectedClass)
-        .context("needed_fields failed to lookup class")?;
-    let needed_fields = class
-        .walk_fields()
-        .filter_map(|field: Walker<'_, &Field>| {
-            if field.streaming_needed() {
-                Some(field.name().to_string())
-            } else {
-                None
-            }
-        })
-        .collect();
-    Ok(needed_fields)
+        .context("needed_fields failed to lookup class")
 }
 
 /// Whether a type must be complete before being included as a node
 /// in a streamed value.
-fn required_done(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
+fn required_done(ir: &impl IRHelperExtended, field_type: &FieldType) -> bool {
     let (base_type, (_, streaming_behavior)) = ir.distribute_metadata(field_type);
     let type_implies_done = match base_type {
         FieldType::Primitive(tv) => match tv {
@@ -353,7 +319,7 @@ fn completion_state(flags: &Vec<Flag>) -> CompletionState {
     }
 }
 
-fn type_streaming_behavior(ir: &IntermediateRepr, r#type: &FieldType) -> StreamingBehavior {
+fn type_streaming_behavior(ir: &impl IRHelperExtended, r#type: &FieldType) -> StreamingBehavior {
     let (_base_type, (_constraints, streaming_behavior)) = ir.distribute_metadata(r#type);
     streaming_behavior
 }

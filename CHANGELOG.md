@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.80.1](https://github.com/boundaryml/baml/compare/0.80.0..0.80.1) - 2025-03-19
+
+
+### Bug Fixes
+- Fix streaming for dynamic types (#1606) - ([eac4bbf](https://github.com/boundaryml/baml/commit/eac4bbfd99c0b6f54cd3ab5962eb7d52d6e72216)) - hellovai
+
+
 ## [0.80.0](https://github.com/boundaryml/baml/compare/0.79.0..0.80.0) - 2025-03-18
 
 

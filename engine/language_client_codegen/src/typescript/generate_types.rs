@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 use internal_baml_core::ir::{
     repr::{Docstring, IntermediateRepr, Walker},
-    ClassWalker, EnumWalker, FieldType, IRHelper,
+    ClassWalker, EnumWalker, FieldType, IRHelperExtended,
 };
 
 use crate::{type_check_attributes, GeneratorArgs, TypeCheckAttributes};

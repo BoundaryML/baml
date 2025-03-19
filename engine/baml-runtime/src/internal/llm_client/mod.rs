@@ -12,7 +12,7 @@ pub mod traits;
 use anyhow::{Context, Result};
 
 use baml_types::{BamlMap, BamlValueWithMeta, FieldType, JinjaExpression, ResponseCheck};
-use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
+use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker, IRHelper, IRHelperExtended};
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::AllowedRoleMetadata;
 pub use jsonish::ResponseBamlValue;
@@ -33,7 +33,7 @@ use wasm_bindgen::JsValue;
 
 /// Validate a parsed value, checking asserts and checks.
 pub fn parsed_value_to_response(
-    ir: &IntermediateRepr,
+    ir: &impl IRHelperExtended,
     baml_value: BamlValueWithFlags,
     field_type: &FieldType,
     allow_partials: bool,

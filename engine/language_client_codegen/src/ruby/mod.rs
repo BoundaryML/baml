@@ -9,7 +9,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use ruby_language_features::ToRuby;
 
-use internal_baml_core::ir::{repr::IntermediateRepr, IRHelper};
+use internal_baml_core::ir::{repr::IntermediateRepr, IRHelperExtended};
 
 use crate::dir_writer::FileCollector;
 

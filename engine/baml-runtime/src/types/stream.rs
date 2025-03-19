@@ -133,8 +133,8 @@ impl FunctionResultStream {
                         &rctx,
                         &self.renderer,
                         &baml_types::BamlValue::Map(local_params),
-                        |content| self.renderer.parse(self.ir.as_ref(), content, true),
-                        |content| self.renderer.parse(self.ir.as_ref(), content, false),
+                        |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
+                        |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,
                     )
                     .await;

@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use baml_types::{BamlValue, EvaluationContext, FieldType};
+use baml_types::{BamlValue, EvaluationContext, FieldType, StreamingBehavior};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
@@ -54,6 +54,8 @@ impl<T: Meta> From<&Arc<Mutex<T>>> for PropertyAttributes {
             alias,
             skip,
             meta: properties,
+            constraints: Vec::new(),
+            streaming_behavior: StreamingBehavior::default(),
         }
     }
 }
