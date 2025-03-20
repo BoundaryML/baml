@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.80.2](https://github.com/boundaryml/baml/compare/0.80.1..0.80.2) - 2025-03-20
+
+## Bug Fixes
+- Fix cases where collector failed in an unrecoverable way (#1633) - ([03a11d5](https://github.com/boundaryml/baml/commit/03a11d5b56bae986405adfbf97bafc604bbd4f41)) - hellovai
+- Fix exit codes and error logging for baml cli (#1636) - ([6c3c6d5](https://github.com/boundaryml/baml/commit/6c3c6d5d1d11a8c036659d9c9eba87b65e179ac8)) - aaronvg
+- Added `from __future__ import annotations` to support python 3.9 (#1642) - ([daf2b34](https://github.com/boundaryml/baml/commit/daf2b34cbe70700477301c712a0a17cd69eb0f17)) - hellovai
+- Bump version to 0.80.2 - ([0e72137](https://github.com/boundaryml/baml/commit/0e721378008fd900554e98a005a9a01a9f3e7a84)) - Aaron Villalpando
+
 ## [0.80.1](https://github.com/boundaryml/baml/compare/0.80.0..0.80.1) - 2025-03-19
 
 
