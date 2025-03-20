@@ -31,7 +31,6 @@ impl SyncRequestHandler for Hover {
             .project_db_for_path_mut(path)
             .expect("Ensured that a project db exists");
         let document_key = DocumentKey::from_url(project.root_path(), &url).internal_error()?;
-        eprintln!("***** HOVER doc_key: {:?}", document_key);
 
         let text_document_item = match project.baml_project.files.get(&document_key) {
             None => {

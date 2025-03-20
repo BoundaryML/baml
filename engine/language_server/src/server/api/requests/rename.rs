@@ -21,7 +21,7 @@ impl RequestHandler for Rename {
 impl SyncRequestHandler for Rename {
     fn run(
         session: &mut Session,
-        _notifier: Notifier,
+        notifier: Notifier,
         _requester: &mut Requester,
         params: RenameParams,
     ) -> Result<Option<lsp_types::WorkspaceEdit>> {
@@ -47,40 +47,44 @@ impl SyncRequestHandler for Rename {
       let symbol = get_word_at_position(&doc.contents, &params.text_document_position.position);
       let new_symbol = params.new_name;
 
-      // If the symbol is a class, find all 
+      // If the symbol is a class, find all occurrences and replace them.
       let runtime = project.baml_project.runtime(HashMap::new());
       let rt = runtime.as_ref().clone().map_err(|_| anyhow::anyhow!("Failed to get runtime")).internal_error()?;
-      if rt.is_valid_class(&symbol) {
+      let res = if rt.is_valid_class(&symbol) {
           let symbol_locations = rt.search_for_class_locations(&symbol);
           let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
 
-          symbol_locations.iter().for_each(|ref loc| {
+          symbol_locations.iter().try_for_each(|ref loc| {
+              let loc_url = PathBuf::from(&loc.uri);
               let range = lsp_types::Range::new(
                   lsp_types::Position::new(loc.start_line as u32, loc.start_character as u32),
-                  lsp_types::Position::new(loc.end_line as u32, (loc.end_character + symbol.len()) as u32 ),
+                  lsp_types::Position::new(loc.end_line as u32, (loc.end_character + 0) as u32 ),
               );
-              let uri = Url::parse(&loc.uri).expect("TODO");
+              let symbol_doc_key = DocumentKey::from_path(&PathBuf::from(project.root_path()), &loc_url).internal_error_msg("Could not convert URL to path")?;
               let text_edit = TextEdit { range, new_text: new_symbol.clone() };
 
-              let mut entry = changes.entry(uri).or_insert_with(Vec::new);
+              let mut entry = changes.entry(symbol_doc_key.url()).or_insert_with(Vec::new);
               entry.push(text_edit);
-          });
-          return Ok(Some(WorkspaceEdit {
+              Ok(())
+          })?;
+          Ok(Some(WorkspaceEdit {
               changes: Some(changes),
               document_changes: None,
               change_annotations: None,
           }))
       } else if rt.is_valid_function(&symbol) {
-          return Ok(None);
+          Ok(None)
       } else if rt.is_valid_enum(&symbol) {
-          return Ok(None);
+          Ok(None)
       } else if rt.is_valid_type_alias(&symbol) {
-          return Ok(None);
+          Ok(None)
       } else {
-          return Ok(None);
-      }
+          Ok(None)
+      };
+    
+    session.reload(Some(notifier)).internal_error()?;
       
-    todo!()
+    res
     }
             
 }

@@ -107,9 +107,9 @@ impl Session {
             .next_back()
             .map(|(_, db)| db);
 
-        if let Some(p) = res.as_ref() {
-            eprintln!("project_db_for_path {:?}: {:?}", &path, p.root_path());
-        }
+        // if let Some(p) = res.as_ref() {
+        //     eprintln!("project_db_for_path {:?}: {:?}", &path, p.root_path());
+        // }
         res
     }
 
@@ -125,9 +125,9 @@ impl Session {
             .next_back()
             .map(|(_, db)| db);
 
-        if let Some(p) = &res.as_ref() {
-            eprintln!("project_db_for_path {:?}: {:?}", &path, p.root_path());
-        }
+        // if let Some(p) = &res.as_ref() {
+        //     eprintln!("project_db_for_path {:?}: {:?}", &path, p.root_path());
+        // }
         res
     }
 

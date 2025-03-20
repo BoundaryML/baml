@@ -63,7 +63,6 @@ impl Server {
         connection: Connection,
         init_params: InitializeParams,
     ) -> anyhow::Result<Self> {
-        tracing::info!("new_with_connection");
         crate::message::init_messenger(connection.make_sender());
 
         let client_capabilities = init_params.capabilities.clone();
@@ -94,15 +93,12 @@ impl Server {
             (url, settings)
         };
 
-        tracing::info!("workspace_folders: {:?}", init_params.workspace_folders);
         let workspaces = init_params
             .workspace_folders
             .filter(|folders| !folders.is_empty())
             .map(|folders| folders.into_iter().filter_map(|folder| {
-                tracing::info!("attempting folder: {:?}", folder);
                 let baml_src_dir = find_baml_src(&PathBuf::from(folder.uri.path()))?;
                 let baml_src_uri = Url::from_file_path(baml_src_dir.to_str()?).ok()?;
-                tracing::info!("found baml_src at: {:?}", baml_src_uri);
                 Some(workspace_for_url(baml_src_uri))
             }).collect())
             .or_else(|| {
@@ -113,7 +109,6 @@ impl Server {
                     Some(vec![workspace_for_url(url)])
                 } else {
                     let baml_src_dir = find_top_level_parent(&std::env::current_dir().ok()?)?;
-                    info!("OR_ELSE: {:?}", baml_src_dir);
                     let uri = Url::from_file_path(baml_src_dir).ok()?;
                     Some(vec![workspace_for_url(uri)])
                 }

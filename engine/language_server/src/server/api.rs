@@ -17,7 +17,6 @@ use super::{client::Responder, schedule::BackgroundSchedule, Result};
 pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
     let id = req.id.clone();
 
-    tracing::info!("REQUEST: {}", req.method.as_str());
     match req.method.as_str() {
         // request::CodeActions::METHOD => background_request_task::<request::CodeActions>(
         //     req,
@@ -31,7 +30,9 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
             return Task::local(move |_, _, _, responder| {
                 responder
                     .respond(id, Ok(version))
-                    .expect("TOOD: error handling");
+                    .map_err(|err| {
+                        tracing::error!("Failed to send response: {err}");
+                    }).unwrap_or(())
             });
         }
         request::Completion::METHOD => local_request_task::<request::Completion>(req),
@@ -39,11 +40,23 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
         request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
-            background_request_task::<request::DocumentDiagnosticRequestHandler>(
-                req,
-                BackgroundSchedule::LatencySensitive,
-            )
+            local_request_task::<request::DocumentDiagnosticRequestHandler>(req)
         }
+        "requestDiagnostics" => {
+            eprintln!("req: {:?}", req);
+            return Task::local(move |session,_,_,responder| {
+                // let diagnostics_report = 
+                responder.respond(id, Ok(())).map_err(|e| {
+                    tracing::error!("Failed to send response: {e}");
+                }).unwrap_or(());
+            });
+        }
+        // request::DocumentDiagnosticRequestHandler::METHOD => {
+        //     background_request_task::<request::DocumentDiagnosticRequestHandler>(
+        //         req,
+        //         BackgroundSchedule::LatencySensitive,
+        //     )
+        // }
 
         // request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
         // request::Format::METHOD => {
@@ -72,7 +85,6 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
 }
 
 pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Task<'a> {
-    tracing::info!("NOTIFICATION: {}", notif.method.as_str());
     match notif.method.as_str() {
         notification::DidChangeTextDocumentHandler::METHOD => {
             local_notification_task::<notification::DidChangeTextDocumentHandler>(notif)
@@ -199,13 +211,16 @@ fn cast_request<Req>(
 where
     Req: traits::RequestHandler,
 {
-    request
+    request.clone()
         .extract(Req::METHOD)
-        .map_err(|err| match err {
+        .map_err(|ref err| match &err {
             json_err @ lsp_server::ExtractError::JsonError { .. } => {
                 anyhow::anyhow!("JSON parsing failure:\n{json_err}")
             }
-            lsp_server::ExtractError::MethodMismatch(_) => {
+            lsp_server::ExtractError::MethodMismatch(e) => {
+                eprintln!("req: {:?}", request.clone());
+                eprintln!("Req::METHOD: {:?}", Req::METHOD.clone());
+                eprintln!("ExtractError: {:?}", e.clone());
                 unreachable!("A method mismatch should not be possible here unless you've used a different handler (`Req`) \
                     than the one whose method name was matched against earlier.")
             }

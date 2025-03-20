@@ -39,10 +39,10 @@ pub fn session_lsp_diagnostics(
         .project_db_for_path_mut(path)
         .expect("We just ensured the session is valid");
 
-    project_diagnostics(project, file_url)
+    project_diagnostics(project, Some(file_url))
 }
 
-pub fn project_diagnostics(project: &Project, file_url: &Url) -> Vec<lsp_types::Diagnostic> {
+pub fn project_diagnostics(project: &Project, file_url: Option<&Url>) -> Vec<lsp_types::Diagnostic> {
     let root_path = PathBuf::from(project.root_path());
     let fake_env = HashMap::new();
     let baml_diagnostics = match project.baml_project.runtime(fake_env) {
@@ -56,10 +56,10 @@ pub fn project_diagnostics(project: &Project, file_url: &Url) -> Vec<lsp_types::
     let errors = baml_diagnostics
         .errors()
         .iter()
-        .filter(|e| matches_target(&root_path, file_url, &e.span()))
+        .filter(|e| file_url.map_or(true, |url| matches_target(&root_path, &url, &e.span())))
         .filter_map(|error| {
             Some(lsp_types::Diagnostic::new(
-                span_to_range(project, &root_path, file_url, error.span())?,
+                span_to_range(project, &root_path, error.span())?,
                 Some(DiagnosticSeverity::ERROR),
                 None,
                 None,
@@ -71,10 +71,10 @@ pub fn project_diagnostics(project: &Project, file_url: &Url) -> Vec<lsp_types::
     let warnings = baml_diagnostics
         .warnings()
         .iter()
-        .filter(|w| matches_target(&root_path, file_url, &w.span()))
+        .filter(|w| file_url.map_or(true, |url| matches_target(&root_path, &url, &w.span())))
         .filter_map(|warning| {
             Some(lsp_types::Diagnostic::new(
-                span_to_range(project, &root_path, file_url, warning.span())?,
+                span_to_range(project, &root_path, warning.span())?,
                 Some(DiagnosticSeverity::WARNING),
                 None,
                 None,
@@ -133,7 +133,6 @@ fn matches_target(
 fn span_to_range(
     project: &Project,
     project_root: &Path,
-    _file_url: &Url,
     span: &internal_baml_diagnostics::Span,
 ) -> Option<lsp_types::Range> {
     let span_path = ensure_absolute(project_root, &PathBuf::from(span.file.path()));

@@ -7,10 +7,13 @@ use lsp_types::{
 };
 
 use crate::baml_project::Project;
-use crate::server::api::traits::{BackgroundDocumentRequestHandler, RequestHandler};
-use crate::server::{client::Notifier, Result};
-use crate::session::DocumentSnapshot;
-use crate::server::api::diagnostics::session_lsp_diagnostics;
+use crate::server::api::traits::{BackgroundDocumentRequestHandler, RequestHandler, SyncRequestHandler};
+use crate::server::api::ResultExt;
+use crate::server::Result;
+use crate::server::client::{Notifier, Requester};
+use crate::DocumentKey;
+use crate::session::{DocumentSnapshot, Session};
+use crate::server::api::diagnostics::{project_diagnostics, session_lsp_diagnostics};
 
 pub(crate) struct DocumentDiagnosticRequestHandler;
 
@@ -29,8 +32,37 @@ impl BackgroundDocumentRequestHandler for DocumentDiagnosticRequestHandler {
         _notifier: Notifier,
         _params: DocumentDiagnosticParams,
     ) -> Result<DocumentDiagnosticReportResult> {
-        tracing::info!("DocumentDiagnosticRequestHandler");
-        let diagnostics = compute_diagnostics(&snapshot, &db);
+        tracing::info!("****** RUN_WITH_SNAPSHOTDocumentDiagnosticRequestHandler");
+        todo!()
+        // let diagnostics = project_diagnostics(&snapshot, &db);
+
+        // Ok(DocumentDiagnosticReportResult::Report(
+        //     DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
+        //         related_documents: None,
+        //         full_document_diagnostic_report: FullDocumentDiagnosticReport {
+        //             result_id: None,
+        //             items: diagnostics,
+        //         },
+        //     }),
+        // ))
+    }
+}
+
+impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
+    fn run(
+        session: &mut Session,
+        notifier: Notifier,
+        requester: &mut Requester,
+        params: DocumentDiagnosticParams,
+    ) -> Result<DocumentDiagnosticReportResult> {
+        let url = params.text_document.uri.clone();
+        let path = url.to_file_path().internal_error_msg("Could not convert URL to path")?;
+
+        session.ensure_project_db_for_baml_file(&params.text_document.uri).internal_error()?;
+        let project = session.project_db_for_path_mut(path).expect("Just ensured it exists");
+
+        let diagnostics = project_diagnostics(project, Some(&url));
+        // diagnostics
 
         Ok(DocumentDiagnosticReportResult::Report(
             DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
@@ -42,41 +74,26 @@ impl BackgroundDocumentRequestHandler for DocumentDiagnosticRequestHandler {
             }),
         ))
     }
+
 }
 
-fn compute_diagnostics(snapshot: &DocumentSnapshot, db: &Project) -> Vec<Diagnostic> {
-    let Some(_file) = snapshot.file(db) else {
-        tracing::info!(
-            "No file found for snapshot for `{}`",
-            snapshot.query().file_url()
-        );
-
-        // let diagnostics = session_lsp_diagnostics(session);
-        return vec![];
-    };
-
-    // let diagnostics = match db.check_file(file) {
-    //     Ok(diagnostics) => diagnostics,
-    //     Err(cancelled) => {
-    //         tracing::info!("Diagnostics computation {cancelled}");
-    //         return vec![];
-    //     }
-    // };
-
-    // diagnostics
-    //     .as_slice()
-    //     .iter()
-    //     .map(|message| to_lsp_diagnostic(db, message, snapshot.encoding()))
-    //     .collect()
-
-    todo!()
+fn diagnostics_report(project: &Project, url: &Url) -> Result<DocumentDiagnosticReportResult> {
+    let diagnostics = project_diagnostics(project, Some(url));
+    Ok(DocumentDiagnosticReportResult::Report(
+        DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
+            related_documents: None,
+            full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                result_id: None,
+                items: diagnostics,
+            },
+        }),
+    ))
 }
 
-// fn to_lsp_diagnostic(
-//     db: &dyn Db,
-//     diagnostic: &dyn ruff_db::diagnostic::Diagnostic,
-//     encoding: crate::PositionEncoding,
-// ) -> Diagnostic {
+
+
+
+
 //     // let range = if let (Some(file), Some(range)) = (diagnostic.file(), diagnostic.range()) {
 //     //     let index = line_index(db.upcast(), file);
 //     //     let source = source_text(db.upcast(), file);
