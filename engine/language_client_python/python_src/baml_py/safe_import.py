@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Optional, Type
 from .baml_py import get_version
 
