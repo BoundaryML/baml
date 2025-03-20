@@ -59,25 +59,79 @@ describe('Basic Input/Output Tests', () => {
   })
 
   describe('Output Types', () => {
-    it('should work for all outputs', async () => {
+    it('single bool', async () => {
       const input = 'test input'
-
       const bool = await b.FnOutputBool(input)
       expect(bool).toEqual(true)
+    })
 
+    it('single int', async () => {
+      const input = 'test input'
       const int = await b.FnOutputInt(input)
       expect(int).toEqual(5)
+    })
 
-      const list = await b.FnOutputClassList(input)
-      expect(list.length).toBeGreaterThan(0)
-      expect(list[0].prop1.length).toBeGreaterThan(0)
-
-      const classWEnum = await b.FnOutputClassWithEnum(input)
-      expect(['ONE', 'TWO']).toContain(classWEnum.prop2)
-
+    it('single class', async () => {
+      const input = 'test input'
       const classs = await b.FnOutputClass(input)
       expect(classs.prop1).not.toBeNull()
       expect(classs.prop2).toEqual(540)
+    })
+
+    it('single class list', async () => {
+      const input = 'test input'
+      const list = await b.FnOutputClassList(input)
+      expect(list.length).toBeGreaterThan(0)
+      expect(list[0].prop1.length).toBeGreaterThan(0)
+    })
+
+    it('enum list', async () => {
+      const enumList = await b.FnEnumListOutput('input')
+      expect(enumList.length).toBe(2)
+    })
+
+    it('single class with enum', async () => {
+      const input = 'test input'
+      const classWEnum = await b.FnOutputClassWithEnum(input)
+      expect(['ONE', 'TWO']).toContain(classWEnum.prop2)
+    })
+
+    it('optional list and map', async () => {
+      let res = await b.AllowedOptionals({ p: null, q: null })
+      expect(res).toEqual({ p: null, q: null })
+
+      res = await b.AllowedOptionals({ p: ['test'], q: { test: 'ok' } })
+      expect(res).toEqual({ p: ['test'], q: { test: 'ok' } })
+    })
+
+    it('single optional string', async () => {
+      const res = await b.FnNamedArgsSingleStringOptional()
+      expect(res).toContain('none')
+    })
+
+    it('single map string to string', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToString({ lorem: 'ipsum', dolor: 'sit' })
+      expect(res).toHaveProperty('lorem', 'ipsum')
+    })
+
+    it('single map string to map', async () => {
+      const res = await b.TestFnNamedArgsSingleMapStringToMap({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
+      expect(res).toHaveProperty('lorem', { word: 'ipsum' })
+    })
+
+    it('literal int', async () => {
+      const int = await b.FnOutputLiteralInt('input')
+      expect(int).toEqual(5)
+    })
+
+    it('literal bool', async () => {
+      const bool = await b.FnOutputLiteralBool('input')
+      expect(bool).toEqual(false)
+    })
+
+    it('literal string', async () => {
+      const str = await b.FnOutputLiteralString('input')
+      expect(str).toEqual('example output')
     })
   })
 })
