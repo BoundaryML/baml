@@ -16,7 +16,7 @@ const nextConfig = {
 
     config.module.rules.push({
       test: /\.wasm$/,
-      type: 'asset/resource'
+      type: 'asset/resource',
     })
 
     if (dev) {
