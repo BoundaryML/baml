@@ -152,7 +152,7 @@
             inherit buildInputs;
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
-            RUSTFLAGS = "-C target-feature=+crt-static --cfg tracing_unstable -C linker=lld --cfg tracing_unstable";
+            RUSTFLAGS = "--cfg tracing_unstable";
           };
         }
     );

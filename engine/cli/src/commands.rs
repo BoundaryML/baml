@@ -126,6 +126,7 @@ impl RuntimeCli {
                         Ok(crate::ExitCode::NoTestsRun)
                     }
                 }
+            }
             Commands::LanguageServer(args) => {
                 match args.run() {
                     Ok(()) => Ok(crate::ExitCode::Success),
