@@ -1,6 +1,14 @@
 use crate::{server::schedule::Task, session::Session};
+use diagnostics::project_diagnostics;
 use log::info;
 use lsp_server;
+use lsp_types::{
+    DocumentDiagnosticReport, DocumentDiagnosticReportResult, FullDocumentDiagnosticReport,
+    RelatedFullDocumentDiagnosticReport,
+};
+use serde::Deserialize;
+use std::path::PathBuf;
+use url::Url;
 
 mod diagnostics;
 mod notifications;
@@ -32,7 +40,8 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     .respond(id, Ok(version))
                     .map_err(|err| {
                         tracing::error!("Failed to send response: {err}");
-                    }).unwrap_or(())
+                    })
+                    .unwrap_or(())
             });
         }
         request::Completion::METHOD => local_request_task::<request::Completion>(req),
@@ -44,11 +53,40 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         }
         "requestDiagnostics" => {
             eprintln!("req: {:?}", req);
-            return Task::local(move |session,_,_,responder| {
-                // let diagnostics_report = 
-                responder.respond(id, Ok(())).map_err(|e| {
-                    tracing::error!("Failed to send response: {e}");
-                }).unwrap_or(());
+            let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
+                .expect("Failed to parse JSON");
+            let url = Url::parse(&params.project_id)
+                .map_err(|e| {
+                    tracing::error!("Failed to parse URL: {e}");
+                    e
+                })
+                .expect("Failed to parse URL");
+            return Task::local(move |session, _, _, responder| {
+                // let diagnostics_report =
+                let project_file = params.project_id;
+                session
+                    .ensure_project_db_for_baml_file(&url)
+                    .expect("Failed to ensure project");
+                let project = session
+                    .project_db_for_path(url.to_file_path().unwrap())
+                    .unwrap();
+                let diagnostics = project_diagnostics(&project, Some(&url));
+
+                let report = Ok(DocumentDiagnosticReportResult::Report(
+                    DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
+                        related_documents: None,
+                        full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                            result_id: None,
+                            items: diagnostics,
+                        },
+                    }),
+                ));
+                responder
+                    .respond(id, report)
+                    .map_err(|e| {
+                        tracing::error!("Failed to send response: {e}");
+                    })
+                    .unwrap_or(());
             });
         }
         // request::DocumentDiagnosticRequestHandler::METHOD => {
@@ -197,6 +235,12 @@ fn local_notification_task<'a, N: traits::SyncNotificationHandler>(
 //         })
 //     }))
 // }
+
+#[derive(Deserialize)]
+struct DiagnosticRequestParams {
+    #[serde(rename = "projectId")]
+    project_id: String,
+}
 
 /// Tries to cast a serialized request from the server into
 /// a parameter type for a specific request handler.

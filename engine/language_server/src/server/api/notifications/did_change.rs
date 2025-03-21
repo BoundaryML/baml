@@ -42,18 +42,6 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         //     .update_runtime(Some(notifier.clone()))
         //     .internal_error()?;
 
-        // let diagnostics = session_lsp_diagnostics(session, &url);
-
-        // // TODO: Only send this when clients do not support pull diagnostics?
-        // notifier
-        //     .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
-        //         uri: url,
-        //         version: Some(params.text_document.version),
-        //         diagnostics,
-        //     })
-        //     .map_err(|e| anyhow::anyhow!("did_change err: {}", e))
-        //     .internal_error()?;
-
         // let Ok(path) = url_to_any_system_path(&params.text_document.uri) else {
         //     return Ok(());
         // };
@@ -73,10 +61,19 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 &document_key,
                 params.content_changes,
                 params.text_document.version,
-                Some(notifier),
+                Some(notifier.clone()),
             )
             .internal_error()?;
 
+        let diagnostics = session_lsp_diagnostics(session, &url);
+        notifier
+            .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
+                uri: url,
+                version: Some(params.text_document.version),
+                diagnostics,
+            })
+            .map_err(|e| anyhow::anyhow!("did_change err: {}", e))
+            .internal_error()?;
         // let key = session.key_from_url(params.text_document.uri);
 
         // session
