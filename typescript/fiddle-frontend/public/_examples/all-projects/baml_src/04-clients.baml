@@ -12,7 +12,7 @@ client<llm> GPT4 {
     model gpt-4
     api_key env.OPENAI_API_KEY
   }
-}
+} 
 
 client<llm> GPT4o {
   provider openai
@@ -21,7 +21,7 @@ client<llm> GPT4o {
     model gpt-4o
     api_key env.OPENAI_API_KEY
   }
-}
+} 
 
 retry_policy CustomRetry {
   max_retries 3
@@ -42,14 +42,5 @@ client<llm> Gemini {
   options {
     model "gemini-1.5-pro-001"
     api_key env.GOOGLE_API_KEY
-  }
-}
-
-
-client<llm> Vertex {
-  provider vertex-ai
-  options {
-    model "gemini-1.5-pro-001"
-    location us-central1
   }
 }

@@ -14,7 +14,7 @@ class Message {
 
 // inputs can be more complex than just a string
 function ClassifyMessage(message: Message) -> Category {
-  client Vertex
+  client GPT4o
 
   prompt #"
     Classify the following INPUT into ONE
