@@ -237,7 +237,6 @@ pub struct EvaluationContext<'a> {
 
 impl<'a> GetEnvVar for EvaluationContext<'a> {
     fn get_env_var(&self, key: &str) -> Result<String> {
-        log::debug!("resolving env var {key} against {:?}", self.env_vars);
         match self
             .env_vars
             .as_ref()
