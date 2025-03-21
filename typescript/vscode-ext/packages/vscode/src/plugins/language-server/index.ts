@@ -349,11 +349,17 @@ const plugin: BamlVSCodePlugin = {
     // }
 
     var serverExecutableName = 'baml-cli'
+    let subdir = ''
     const platform = os.platform()
     if (platform === 'win32') {
       serverExecutableName = `${serverExecutableName}.exe`
+      subdir = 'windows'
+    } else if (platform === 'darwin') {
+      subdir = 'darwin'
+    } else {
+      subdir = 'linux'
     }
-    const serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', serverExecutableName))
+    const serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', subdir, serverExecutableName))
     if (platform != 'win32') {
       fs.chmodSync(serverAbsolutePath, '755')
     }
