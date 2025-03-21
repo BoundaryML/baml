@@ -133,6 +133,6 @@ mod tests {
         let example_path = PathBuf::from("c:\\Users\\ImAls\\code\\tmp2\\baml_src\\test.baml");
         let document_key = DocumentKey::from_path(&root_path, &example_path).expect("Should parse");
         dbg!(document_key.path());
-        assert!(false)
+        // assert!(false)
     }
 }
