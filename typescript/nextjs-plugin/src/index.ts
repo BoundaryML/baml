@@ -1,59 +1,53 @@
-import type { Configuration } from 'webpack';
+import type { Configuration } from 'webpack'
 
 function getNextJsVersion(): string | null {
   try {
     // Try to find Next.js in the project's dependencies first
     const projectNextPath = require.resolve('next/package.json', {
       paths: [process.cwd()],
-    });
-    const nextPackageJson = require(projectNextPath);
-    return nextPackageJson.version || null;
+    })
+    const nextPackageJson = require(projectNextPath)
+    return nextPackageJson.version || null
   } catch (error) {
     try {
       // Fallback to checking in the plugin's dependencies
-      const nextPackageJson = require('next/package.json');
-      return nextPackageJson.version || null;
+      const nextPackageJson = require('next/package.json')
+      return nextPackageJson.version || null
     } catch (error) {
-      console.warn(
-        'Warning: Could not determine Next.js version, defaulting to latest config',
-      );
-      return null;
+      console.warn('Warning: Could not determine Next.js version, defaulting to latest config')
+      return null
     }
   }
 }
 
 type GenericNextConfig = {
   experimental?: {
-    serverComponentsExternalPackages?: string[];
+    serverComponentsExternalPackages?: string[]
     turbo?: {
-      rules?: Record<string, any>;
-      resolveAlias?: Record<string, any>;
+      rules?: Record<string, any>
+      resolveAlias?: Record<string, any>
       resolve?: {
-        alias?: Record<string, any>;
-        conditionNames?: string[];
-        preferRelative?: boolean;
-      };
-    };
-  };
-  serverExternalPackages?: string[];
-  webpack?: ((config: Configuration, context: any) => Configuration) | null;
-};
+        alias?: Record<string, any>
+        conditionNames?: string[]
+        preferRelative?: boolean
+      }
+    }
+  }
+  serverExternalPackages?: string[]
+  webpack?: ((config: Configuration, context: any) => Configuration) | null
+}
 
 export interface BamlNextConfig {
-  webpack?: ((config: Configuration, context: any) => Configuration) | null;
+  webpack?: ((config: Configuration, context: any) => Configuration) | null
 }
 
 export function withBaml(bamlConfig: BamlNextConfig = {}) {
-  return function withBamlConfig<T extends GenericNextConfig>(
-    nextConfig: T = {} as T,
-  ): T {
-    const nextVersion = getNextJsVersion();
+  return function withBamlConfig<T extends GenericNextConfig>(nextConfig: T = {} as T): T {
+    const nextVersion = getNextJsVersion()
     // Default to new config (>= 14) if version can't be determined
-    const majorVersion = nextVersion
-      ? Number.parseInt(nextVersion.split('.')[0], 10)
-      : 14;
-    const useNewConfig = majorVersion >= 14;
-    const isTurbo = Boolean(process.env.TURBOPACK === '1');
+    const majorVersion = nextVersion ? Number.parseInt(nextVersion.split('.')[0], 10) : 14
+    const useNewConfig = majorVersion >= 14
+    const isTurbo = Boolean(process.env.TURBOPACK === '1')
 
     if (isTurbo) {
       console.warn(
@@ -63,7 +57,7 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
    Please remove the --turbo flag from your "next dev" command.
    Example: "next dev" instead of "next dev --turbo"
       `,
-      );
+      )
     }
 
     const turboConfig = isTurbo
@@ -74,7 +68,7 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
             '*.node': { loaders: ['nextjs-node-loader'], as: '*.js' },
           },
         }
-      : undefined;
+      : undefined
 
     return {
       ...nextConfig,
@@ -88,18 +82,14 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
             ...(isTurbo
               ? {}
               : {
-                  serverExternalPackages: [
-                    ...(nextConfig?.serverExternalPackages || []),
-                    '@boundaryml/baml',
-                  ],
+                  serverExternalPackages: [...(nextConfig?.serverExternalPackages || []), '@boundaryml/baml'],
                 }),
           }
         : {
             experimental: {
               ...(nextConfig.experimental || {}),
               serverComponentsExternalPackages: [
-                ...((nextConfig.experimental as any)
-                  ?.serverComponentsExternalPackages || []),
+                ...((nextConfig.experimental as any)?.serverComponentsExternalPackages || []),
                 '@boundaryml/baml',
               ],
               ...(isTurbo ? { turbo: turboConfig } : {}),
@@ -107,7 +97,7 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
           }),
       webpack: (config: Configuration, context: any) => {
         if (typeof nextConfig.webpack === 'function') {
-          config = nextConfig.webpack(config, context);
+          config = nextConfig.webpack(config, context)
         }
 
         if (context.isServer) {
@@ -123,13 +113,13 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
             '@boundaryml/baml-linux-x64-musl',
             '@boundaryml/baml-win32-arm64-msvc',
             '@boundaryml/baml-win32-x64-msvc',
-          ];
+          ]
         }
 
         // Only add webpack rules if not using Turbo
         if (!isTurbo) {
-          config.module = config.module || {};
-          config.module.rules = config.module.rules || [];
+          config.module = config.module || {}
+          config.module.rules = config.module.rules || []
           config.module.rules.push({
             test: /\.node$/,
             use: [
@@ -140,11 +130,11 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
                 },
               },
             ],
-          });
+          })
         }
 
-        return config;
+        return config
       },
-    } as T;
-  };
+    } as T
+  }
 }
