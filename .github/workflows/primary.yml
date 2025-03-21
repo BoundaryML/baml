@@ -218,9 +218,12 @@ jobs:
       - name: Build VSCode extension
         run: pnpm build
         working-directory: typescript/vscode-ext/packages/vscode
-      - name: Package VSIX
-        run: pnpm vscode:prepublish && npx @vscode/vsce package --no-dependencies
+      - name: Prepackage VSIX
+        run: pnpm vscode:prepublish
         working-directory: typescript/vscode-ext/packages/vscode
+      - name: Package VSIX
+        run: npx @vscode/vsce package --no-dependencies
+        working-directory: typescript/vscode-ext/packages
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
