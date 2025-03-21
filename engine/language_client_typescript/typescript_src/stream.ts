@@ -98,12 +98,6 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
             controller.close();
             return;
           } catch (err: unknown) {
-<<<<<<< HEAD
-            const bamlError = toBamlError(err instanceof Error ? err : new Error(String(err)))
-            controller.enqueue(encoder.encode(JSON.stringify({ error: bamlError })))
-            controller.close()
-            return
-=======
             const bamlError = toBamlError(
               err instanceof Error ? err : new Error(String(err)),
             );
@@ -112,7 +106,6 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
             );
             controller.close();
             return;
->>>>>>> 62ea8be4 (checkpoint: testing images)
           }
         } catch (streamErr: unknown) {
           const errorPayload = {

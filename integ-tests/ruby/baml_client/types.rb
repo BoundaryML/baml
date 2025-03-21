@@ -159,11 +159,13 @@ module Baml
     class ClassWithBlockDone < T::Struct; end
     class ClassWithImage < T::Struct; end
     class ClassWithoutDone < T::Struct; end
+    class ClientDetails1559 < T::Struct; end
     class ComplexMemoryObject < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
     class ContactInfo < T::Struct; end
     class CustomStory < T::Struct; end
     class CustomTaskResult < T::Struct; end
+    class Document1559 < T::Struct; end
     class DummyOutput < T::Struct; end
     class DynInputOutput < T::Struct; end
     class DynamicClassOne < T::Struct; end
@@ -205,6 +207,7 @@ module Baml
     class NestedBlockConstraintForParam < T::Struct; end
     class Node < T::Struct; end
     class NodeWithAliasIndirection < T::Struct; end
+    class Note1599 < T::Struct; end
     class OptionalListAndMap < T::Struct; end
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
@@ -440,6 +443,30 @@ module Baml
         @props = props
       end
     end
+    class ClientDetails1559 < T::Struct
+      include Baml::Sorbet::Struct
+      const :client_name, T.nilable(String)
+      const :client_address, T.nilable(String)
+      const :client_postal_code, T.nilable(String)
+      const :client_city, T.nilable(String)
+      const :client_country, T.nilable(String)
+      const :client_phone, T.nilable(String)
+      const :client_email, T.nilable(String)
+
+      def initialize(props)
+        super(
+          client_name: props[:client_name],
+          client_address: props[:client_address],
+          client_postal_code: props[:client_postal_code],
+          client_city: props[:client_city],
+          client_country: props[:client_country],
+          client_phone: props[:client_phone],
+          client_email: props[:client_email],
+        )
+
+        @props = props
+      end
+    end
     class ComplexMemoryObject < T::Struct
       include Baml::Sorbet::Struct
       const :id, String
@@ -515,6 +542,20 @@ module Baml
           bookOrder: props[:bookOrder],
           flightConfirmation: props[:flightConfirmation],
           groceryReceipt: props[:groceryReceipt],
+        )
+
+        @props = props
+      end
+    end
+    class Document1559 < T::Struct
+      include Baml::Sorbet::Struct
+      const :client_details, Baml::Types::ClientDetails1559
+      const :notes, T::Array[Baml::Types::Note1599]
+
+      def initialize(props)
+        super(
+          client_details: props[:client_details],
+          notes: props[:notes],
         )
 
         @props = props
@@ -1093,6 +1134,22 @@ module Baml
         super(
           value: props[:value],
           next: props[:next],
+        )
+
+        @props = props
+      end
+    end
+    class Note1599 < T::Struct
+      include Baml::Sorbet::Struct
+      const :note_title, String
+      const :note_description, T.nilable(String)
+      const :note_amount, T.nilable(String)
+
+      def initialize(props)
+        super(
+          note_title: props[:note_title],
+          note_description: props[:note_description],
+          note_amount: props[:note_amount],
         )
 
         @props = props

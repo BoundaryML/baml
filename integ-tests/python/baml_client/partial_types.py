@@ -94,6 +94,15 @@ class ClassWithoutDone(BaseModel):
     i_16_digits: Optional[int] = None
     s_20_words: StreamState[Optional[str]]
 
+class ClientDetails1559(BaseModel):
+    client_name: Optional[str] = None
+    client_address: Optional[str] = None
+    client_postal_code: Optional[str] = None
+    client_city: Optional[str] = None
+    client_country: Optional[str] = None
+    client_phone: Optional[str] = None
+    client_email: Optional[str] = None
+
 class ComplexMemoryObject(BaseModel):
     id: Optional[str] = None
     name: Optional[str] = None
@@ -118,6 +127,10 @@ class CustomTaskResult(BaseModel):
     bookOrder: Optional[Union["BookOrder", Optional[None]]] = None
     flightConfirmation: Optional[Union["FlightConfirmation", Optional[None]]] = None
     groceryReceipt: Optional[Union["GroceryReceipt", Optional[None]]] = None
+
+class Document1559(BaseModel):
+    client_details: Optional["ClientDetails1559"] = None
+    notes: List["Note1599"]
 
 class DummyOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
@@ -291,6 +304,11 @@ class Node(BaseModel):
 class NodeWithAliasIndirection(BaseModel):
     value: Optional[int] = None
     next: Optional["NodeWithAliasIndirection"] = None
+
+class Note1599(BaseModel):
+    note_title: Optional[str] = None
+    note_description: Optional[str] = None
+    note_amount: Optional[str] = None
 
 class OptionalListAndMap(BaseModel):
     p: Optional[List[str]] = None

@@ -36,7 +36,9 @@
     "./safe_imports.d.ts",
     "./safe_imports.js",
     "./logging.d.ts",
-    "./logging.js"
+    "./logging.js",
+    "./browser.d.ts",
+    "./browser.js"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -62,10 +64,12 @@
   "scripts": {
     "artifacts": "napi artifacts",
     "build": "pnpm build:napi-release && pnpm build:ts_build",
-    "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
+    "build:debug": "pnpm build:napi-debug && pnpm build:ts_build && pnpm napi create-npm-dirs && pnpm artifacts",
     "build:napi-release": "pnpm build:napi-debug --release",
-    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
-    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./ --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
+    "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform && pnpm build:napi-debug-local",
+    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./ --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true && pnpm build:ts_build_local",
+    "build:napi-debug-local": "napi build -o ./artifacts --js ./native.js --dts ./native.d.ts --platform",
+    "build:ts_build_local": "tsc ./typescript_src/*.ts --outDir ./artifacts --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
@@ -96,15 +100,10 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "moduleFileExtensions": [
-      "ts",
-      "js"
-    ],
+    "moduleFileExtensions": ["ts", "js"],
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "testMatch": [
-      "**/__test__/**/*.test.ts"
-    ]
+    "testMatch": ["**/__test__/**/*.test.ts"]
   }
 }

@@ -1,6 +1,6 @@
 import type { InputFieldConfig } from '@/lib/store';
+import { Image as BamlImage } from '@boundaryml/baml/browser';
 import { useEffect, useState } from 'react';
-import { ClientImage, convertFileToBase64 } from '../utils/imageUtils';
 
 // Define a more specific type for the hook result
 interface HookResult {
@@ -72,17 +72,7 @@ export function useFormSubmission({
           // Handle file inputs - convert to appropriate format
           try {
             // For image files, convert to base64 and create an Image object
-            const base64 = await convertFileToBase64(fileInputs[key] as File);
-            // Extract the mime type and data from the base64 string
-            const [, mimeType, data] =
-              base64.match(/^data:([^;]+);base64,(.+)$/) || [];
-
-            if (mimeType && data) {
-              // Create an Image object in the format expected by the BAML server
-              payload[key] = ClientImage.fromBase64(mimeType, data);
-            } else {
-              console.error('Invalid base64 format:', base64);
-            }
+            payload[key] = await BamlImage.fromFile(fileInputs[key] as File);
           } catch (error) {
             console.error('Error converting file:', error);
           }
@@ -90,7 +80,7 @@ export function useFormSubmission({
           // Handle URL inputs
           const url = formValues[key];
           // Create an Image object from URL
-          payload[key] = ClientImage.fromUrl(url);
+          payload[key] = BamlImage.fromUrl(url);
         }
       }
     }

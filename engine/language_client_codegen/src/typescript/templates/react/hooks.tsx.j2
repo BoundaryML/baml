@@ -227,7 +227,18 @@ function useBamlAction<FunctionName extends FunctionNames>(
       try {
         let response: Awaited<ReturnType<ServerAction>>
         startTransition(async () => {
-          response = await action(...input)
+          // Transform any BamlImage or BamlAudio inputs to their JSON representation
+          const transformedInput = input.map(arg => {
+            // Check if the argument is an instance of BamlImage or BamlAudio
+            // We check the constructor name since the actual classes might be proxied in browser environments
+            if (arg && typeof arg === 'object' &&
+                (arg.constructor.name === 'BamlImage' || arg.constructor.name === 'BamlAudio')) {
+              return arg.toJSON();
+            }
+            return arg;
+          });
+
+          response = await action(...transformedInput)
 
           if (isStreamingProps(props) && response instanceof ReadableStream) {
             const reader = response.getReader()

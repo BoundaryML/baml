@@ -349,6 +349,19 @@ paths:
                 title: DescribeImage4Response
                 type: string
       operationId: DescribeImage4
+  /call/DescribeMedia1599:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/DescribeMedia1599'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: DescribeMedia1599Response
+                type: string
+      operationId: DescribeMedia1599
   /call/DifferentiateUnions:
     post:
       requestBody:
@@ -1423,6 +1436,19 @@ paths:
                 title: StreamingCompoundNumbersResponse
                 $ref: '#/components/schemas/CompoundBigNumbers'
       operationId: StreamingCompoundNumbers
+  /call/StructureDocument1559:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StructureDocument1559'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StructureDocument1559Response
+                $ref: '#/components/schemas/Document1559'
+      operationId: StructureDocument1559
   /call/TakeRecAliasDep:
     post:
       requestBody:
@@ -2724,6 +2750,28 @@ components:
             - classWithImage
             - img2
             additionalProperties: false
+    DescribeMedia1599:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: DescribeMedia1599Request
+            type: object
+            properties:
+              client_name:
+                type: string
+              client_sector:
+                type: string
+              img:
+                $ref: '#/components/schemas/BamlImage'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - client_name
+            - client_sector
+            - img
+            additionalProperties: false
     DifferentiateUnions:
       required: true
       content:
@@ -3976,6 +4024,22 @@ components:
             required:
             - digits
             - yapping
+            additionalProperties: false
+    StructureDocument1559:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StructureDocument1559Request
+            type: object
+            properties:
+              document_txt:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - document_txt
             additionalProperties: false
     TakeRecAliasDep:
       required: true
@@ -5325,6 +5389,25 @@ components:
       - i_16_digits
       - s_20_words
       additionalProperties: false
+    ClientDetails1559:
+      type: object
+      properties:
+        client_address:
+          type: string
+        client_city:
+          type: string
+        client_country:
+          type: string
+        client_email:
+          type: string
+        client_name:
+          type: string
+        client_phone:
+          type: string
+        client_postal_code:
+          type: string
+      required: []
+      additionalProperties: false
     Color:
       enum:
       - RED
@@ -5421,6 +5504,19 @@ components:
       - Resume
       - Event
       type: string
+    Document1559:
+      type: object
+      properties:
+        client_details:
+          $ref: '#/components/schemas/ClientDetails1559'
+        notes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Note1599'
+      required:
+      - client_details
+      - notes
+      additionalProperties: false
     DummyOutput:
       type: object
       properties:
@@ -6030,6 +6126,18 @@ components:
           type: integer
       required:
       - value
+      additionalProperties: false
+    Note1599:
+      type: object
+      properties:
+        note_amount:
+          type: string
+        note_description:
+          type: string
+        note_title:
+          type: string
+      required:
+      - note_title
       additionalProperties: false
     OptionalListAndMap:
       type: object

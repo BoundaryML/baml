@@ -589,6 +589,29 @@ class HttpRequest:
         False,
       )
     
+    def DescribeMedia1599(
+        self,
+        img: baml_py.Image,client_sector: str,client_name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "DescribeMedia1599",
+        {
+          "img": img,"client_sector": client_sector,"client_name": client_name,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        False,
+      )
+    
     def DifferentiateUnions(
         self,
         
@@ -2307,6 +2330,29 @@ class HttpRequest:
         "StreamingCompoundNumbers",
         {
           "digits": digits,"yapping": yapping,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        False,
+      )
+    
+    def StructureDocument1559(
+        self,
+        document_txt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "StructureDocument1559",
+        {
+          "document_txt": document_txt,
         },
         self.__ctx_manager.get(),
         tb,
@@ -4418,6 +4464,29 @@ class HttpStreamRequest:
         True,
       )
     
+    def DescribeMedia1599(
+        self,
+        img: baml_py.Image,client_sector: str,client_name: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "DescribeMedia1599",
+        {
+          "img": img,"client_sector": client_sector,"client_name": client_name,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
     def DifferentiateUnions(
         self,
         
@@ -6136,6 +6205,29 @@ class HttpStreamRequest:
         "StreamingCompoundNumbers",
         {
           "digits": digits,"yapping": yapping,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    def StructureDocument1559(
+        self,
+        document_txt: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "StructureDocument1559",
+        {
+          "document_txt": document_txt,
         },
         self.__ctx_manager.get(),
         tb,

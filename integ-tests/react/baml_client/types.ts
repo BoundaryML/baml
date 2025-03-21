@@ -254,6 +254,17 @@ export interface ClassWithoutDone {
   
 }
 
+export interface ClientDetails1559 {
+  client_name?: string | null
+  client_address?: string | null
+  client_postal_code?: string | null
+  client_city?: string | null
+  client_country?: string | null
+  client_phone?: string | null
+  client_email?: string | null
+  
+}
+
 export interface ComplexMemoryObject {
   id: string
   name: string
@@ -286,6 +297,12 @@ export interface CustomTaskResult {
   bookOrder?: BookOrder | null | null
   flightConfirmation?: FlightConfirmation | null | null
   groceryReceipt?: GroceryReceipt | null | null
+  
+}
+
+export interface Document1559 {
+  client_details: ClientDetails1559
+  notes: Note1599[]
   
 }
 
@@ -545,6 +562,13 @@ export interface Node {
 export interface NodeWithAliasIndirection {
   value: number
   next?: NodeWithAliasIndirection | null
+  
+}
+
+export interface Note1599 {
+  note_title: string
+  note_description?: string | null
+  note_amount?: string | null
   
 }
 
