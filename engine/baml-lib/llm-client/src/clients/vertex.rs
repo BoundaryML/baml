@@ -92,27 +92,21 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
     fn resolve(&self, ctx: &impl GetEnvVar) -> Result<ResolvedGcpAuthStrategy> {
         Ok(match self {
             UnresolvedGcpAuthStrategy::CredentialsString(s) => {
-                log::debug!("Resolving credentials string {:?}", s);
                 let s = s.resolve(ctx)?;
-                log::debug!("Resolved credentials string {:?}", s);
                 match serde_json::from_str::<serde_json::Value>(&s) {
                     Ok(_) => ResolvedGcpAuthStrategy::JsonString(s),
                     Err(_) => ResolvedGcpAuthStrategy::FilePath(s),
                 }
             }
             UnresolvedGcpAuthStrategy::CredentialsJsonObject(m) => {
-                // log::debug!("Resolving credentials json object {:?}", m);
                 let m = m
                     .iter()
                     .map(|(k, (_, v))| Ok((k.clone(), v.resolve_string(ctx)?)))
                     .collect::<Result<IndexMap<_, _>>>()?;
-                log::debug!("Resolved credentials json object {:?}", m);
                 ResolvedGcpAuthStrategy::JsonObject(m)
             }
             UnresolvedGcpAuthStrategy::CredentialsContentString(s) => {
-                log::debug!("Resolving credentials content string {:?}", s);
                 let s = s.resolve(ctx)?;
-                log::debug!("Resolved credentials content string {:?}", s);
                 ResolvedGcpAuthStrategy::JsonString(s)
             }
             UnresolvedGcpAuthStrategy::SystemDefault => {
