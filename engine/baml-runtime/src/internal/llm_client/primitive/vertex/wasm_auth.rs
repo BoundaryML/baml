@@ -109,7 +109,7 @@ impl Claims {
             iss: service_account.client_email.clone(),
             scope: DEFAULT_SCOPE.to_string(),
             aud: service_account.token_uri.clone(),
-            exp: (now + chrono::Duration::hours(60)).timestamp(),
+            exp: (now + chrono::Duration::hours(1)).timestamp(),
             iat: now.timestamp(),
         }
     }
