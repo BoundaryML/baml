@@ -1,7 +1,7 @@
 import { Atom, atom } from 'jotai'
 import { requiredEnvVarsAtom, envVarsAtom, runtimeAtom } from '../atoms'
 
-export const runtimeStateAtom: Atom<{ functions: WasmFunction[], stale: boolean }> = atom((get) => {
+export const runtimeStateAtom: Atom<{ functions: WasmFunction[]; stale: boolean }> = atom((get) => {
   const { rt, lastValidRt } = get(runtimeAtom)
   console.log('rt', rt)
   if (rt === undefined) {

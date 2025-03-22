@@ -78,13 +78,21 @@ export const ctxAtom = atom((get) => {
   return context
 })
 
-export const runtimeAtom = atom<{ rt: WasmRuntime | undefined, diags: WasmDiagnosticError | undefined, lastValidRt: WasmRuntime | undefined }>((get) => {
+export const runtimeAtom = atom<{
+  rt: WasmRuntime | undefined
+  diags: WasmDiagnosticError | undefined
+  lastValidRt: WasmRuntime | undefined
+}>((get) => {
   try {
     const wasm = get(wasmAtom)
     const project = get(projectAtom)
     const envVars = get(envVarsAtom)
     if (wasm === undefined || project === undefined) {
-      let previousState: { rt: WasmRuntime | undefined, diags: WasmDiagnosticError | undefined, lastValidRt: WasmRuntime | undefined } = get(runtimeAtom)
+      let previousState: {
+        rt: WasmRuntime | undefined
+        diags: WasmDiagnosticError | undefined
+        lastValidRt: WasmRuntime | undefined
+      } = get(runtimeAtom)
       return { rt: undefined, diags: undefined, lastValidRt: previousState.lastValidRt }
     }
     const selectedEnvVars = Object.fromEntries(Object.entries(envVars).filter(([key, value]) => value !== undefined))
@@ -97,7 +105,11 @@ export const runtimeAtom = atom<{ rt: WasmRuntime | undefined, diags: WasmDiagno
     if (wasm) {
       const WasmDiagnosticError = wasm.WasmDiagnosticError
       if (e instanceof WasmDiagnosticError) {
-        let previousState: { rt: WasmRuntime | undefined, diags: WasmDiagnosticError | undefined, lastValidRt: WasmRuntime | undefined } = get(runtimeAtom)
+        let previousState: {
+          rt: WasmRuntime | undefined
+          diags: WasmDiagnosticError | undefined
+          lastValidRt: WasmRuntime | undefined
+        } = get(runtimeAtom)
         return { rt: undefined, diags: e, lastValidRt: previousState.lastValidRt }
       }
     }
