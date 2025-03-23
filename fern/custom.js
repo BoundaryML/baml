@@ -166,7 +166,7 @@
   
   // Add click event
   chatBubble.addEventListener('click', function() {
-    window.open('https://boundaryml.com/chat', '_blank');
+    window.open('https://boundaryml.com/chat', '_blank', "noopener,noreferrer");
   });
   
   // Function to append to body when it's available
