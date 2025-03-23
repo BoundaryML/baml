@@ -480,6 +480,8 @@ navigation:
             path: 03-reference/baml/attributes/dynamic.mdx
       - section: LLM Client Providers
         contents:
+          - page: "Overview"
+            path: 03-reference/baml/client-llm.mdx
           - page: "AWS Bedrock"
             path: 03-reference/baml/clients/providers/aws-bedrock.mdx
           - page: "Anthropic"
@@ -494,25 +496,38 @@ navigation:
             path: 03-reference/baml/clients/providers/azure.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
-          - page: "openai-generic: Azure AI Foundary"
+          - page: "Azure AI Foundary (openai-generic)"
+            slug: azure-ai-foundary
             path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
-          - page: "openai-generic: Groq"
+          - page: "Groq (openai-generic)"
+            slug: groq
             path: 03-reference/baml/clients/providers/groq.mdx
-          - page: "openai-generic: Hugging Face"
+          - page: "Hugging Face (openai-generic)"
+            slug: huggingface
             path: 03-reference/baml/clients/providers/huggingface.mdx
-          - page: "openai-generic: Keywords AI"
+          - page: "Keywords AI (openai-generic)"
+            slug: keywordsai
             path: 03-reference/baml/clients/providers/keywordsai.mdx
-          - page: "openai-generic: LM Studio"
+          - page: "Litellm (openai-generic)"
+            slug: litellm
+            path: 03-reference/baml/clients/providers/litellm.mdx
+          - page: "LM Studio (openai-generic)"
+            slug: lmstudio
             path: 03-reference/baml/clients/providers/lmstudio.mdx
-          - page: "openai-generic: Ollama"
+          - page: "Ollama (openai-generic)"
+            slug: ollama
             path: 03-reference/baml/clients/providers/ollama.mdx
-          - page: "openai-generic: OpenRouter"
+          - page: "OpenRouter (openai-generic)"
+            slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
-          - page: "openai-generic: TogetherAI"
+          - page: "TogetherAI (openai-generic)"
+            slug: together
             path: 03-reference/baml/clients/providers/together.mdx
-          - page: "openai-generic: Unify AI"
+          - page: "Unify AI (openai-generic)"
+            slug: unify
             path: 03-reference/baml/clients/providers/unify.mdx
-          - page: "openai-generic: vLLM"
+          - page: "vLLM (openai-generic)"
+            slug: vllm
             path: 03-reference/baml/clients/providers/vllm.mdx
       - section: LLM Client Strategies
         contents:
@@ -843,3 +858,25 @@ redirects:
     destination: "/ref/boundary-extraction-api/extract"
   - source: "/document-extraction-api/overview/docs/api/extraction-examples"
     destination: "/ref/boundary-extraction-api/extract/examples"
+  - source: "/ref/llm-client-providers/openai-generic-azure-ai-foundary"
+    destination: "/ref/llm-client-providers/azure-ai-foundary"
+  - source: "/ref/llm-client-providers/openai-generic-groq"
+    destination: "/ref/llm-client-providers/groq"
+  - source: "/ref/llm-client-providers/openai-generic-hugging-face"
+    destination: "/ref/llm-client-providers/huggingface"
+  - source: "/ref/llm-client-providers/openai-generic-keywords-ai"
+    destination: "/ref/llm-client-providers/keywordsai"
+  - source: "/ref/llm-client-providers/openai-generic-litellm"
+    destination: "/ref/llm-client-providers/litellm"
+  - source: "/ref/llm-client-providers/openai-generic-lm-studio"
+    destination: "/ref/llm-client-providers/lmstudio"
+  - source: "/ref/llm-client-providers/openai-generic-ollama"
+    destination: "/ref/llm-client-providers/ollama"
+  - source: "/ref/llm-client-providers/openai-generic-openrouter"
+    destination: "/ref/llm-client-providers/openrouter"
+  - source: "/ref/llm-client-providers/openai-generic-togetherai"
+    destination: "/ref/llm-client-providers/together"
+  - source: "/ref/llm-client-providers/openai-generic-unify-ai"
+    destination: "/ref/llm-client-providers/unify"
+  - source: "/ref/llm-client-providers/openai-generic-vllm"
+    destination: "/ref/llm-client-providers/vllm"
