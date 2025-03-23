@@ -9,7 +9,7 @@ instances:
         branch: canary
 
 title: Boundary Documentation
-
+js: ./custom.js
 tabs:
   home:
     display-name: Home
