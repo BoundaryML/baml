@@ -134,7 +134,7 @@ impl Session {
     /// Ensures that a project database exists for the given BAML file,
     /// creating one if it doesn't exist.
     pub fn ensure_project_db_for_baml_file(&mut self, url: &Url) -> anyhow::Result<()> {
-        let baml_src = find_top_level_parent(&PathBuf::from(url.to_file_path().expect("TODO")))
+        let baml_src = find_top_level_parent(&PathBuf::from(url.to_file_path().map_err(|_| anyhow::anyhow!("Failed to convert URL to path"))?))
             .context("Failed to find top level parent 2")?;
         match self.project_db_for_path(&baml_src) {
             Some(_) => Ok(()),

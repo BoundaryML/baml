@@ -239,8 +239,11 @@ const activateClient = (
 
       // Handler for both notifications and requests of type "runtime_updated".
       const handleRuntimeUpdated = (params: { root_path: string; files: Record<string, string> }) => {
+        console.log('*** HANDLE RUNTIME UPDATED ***' + JSON.stringify(params, null, 2))
         // Only send message if current file is part of this root path
-        const activeEditor = vscode.window.activeTextEditor
+        const activeEditor =
+          vscode.window.activeTextEditor ||
+          (vscode.window.visibleTextEditors.length > 0 ? vscode.window.visibleTextEditors[0] : null)
         if (activeEditor) {
           const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
           const rootPathUri = URI.file(params.root_path).fsPath
@@ -359,7 +362,15 @@ const plugin: BamlVSCodePlugin = {
     } else {
       subdir = 'linux'
     }
-    const serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', subdir, serverExecutableName))
+    var serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', subdir, serverExecutableName))
+    const devServerPath = context.asAbsolutePath(path.join('server', serverExecutableName))
+
+    // If the dev server file exists, overwrite serverAbsolutePath with it.
+    if (fs.existsSync(devServerPath)) {
+      serverAbsolutePath = devServerPath
+    }
+    console.log('serverAbsolutePath: ', serverAbsolutePath)
+
     if (platform != 'win32') {
       fs.chmodSync(serverAbsolutePath, '755')
     }

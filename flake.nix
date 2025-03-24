@@ -51,10 +51,10 @@
           ruby
           ruby.devEnv
           maturin
-          pnpm
-          nodejs
           vsce # VSCode extension packaging tool
           toolchain
+	  nodejs
+	  pnpm_10
           uv
           wasm-pack
           wasm-bindgen-cli
