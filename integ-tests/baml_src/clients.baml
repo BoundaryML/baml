@@ -68,7 +68,7 @@ client<llm> GPT35LegacyProvider {
 client<llm> Ollama {
   provider ollama
   options {
-    model llama2
+    model llama3.1
   }
 }
 

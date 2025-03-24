@@ -293,19 +293,18 @@ impl BamlRuntime {
                 ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let (params, constraints) =
                 self.get_test_params_and_constraints(function_name, test_name, &rctx, true)?;
-            let rctx_stream =
-                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let mut stream = self.inner.stream_function_impl(
                 function_name.into(),
                 &params,
                 self.tracer.clone(),
-                rctx_stream,
+                rctx,
                 #[cfg(not(target_arch = "wasm32"))]
                 self.async_runtime.clone(),
                 // TODO: collectors here?
                 vec![],
             )?;
-            let (response_res, span_uuid) = stream.run(on_event, ctx, None, None).await;
+            let (response_res, span_uuid) =
+                stream.run(on_event, ctx, type_builder.as_ref(), None).await;
             let res = response_res?;
             let (_, llm_resp, val) = res
                 .event_chain()
