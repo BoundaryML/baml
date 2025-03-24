@@ -1,7 +1,7 @@
 // 1: Uncontrolled Tree
 import { useEffect, useRef, useState } from 'react'
 
-import { MoveHandler, RenameHandler, Tree, type TreeApi } from 'react-arborist'
+import { MoveHandler, NodeApi, RenameHandler, Tree, type TreeApi } from 'react-arborist'
 
 import { EditorFile } from '@/app/actions'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
@@ -169,30 +169,38 @@ const FileViewer = () => {
             const fileRenames: { from: string; to: string }[] = []
 
             dragNodes.forEach((node) => {
-              const stack = [node]
-              const parents = []
+              const stack: { nodes: NodeApi<any>[]; parents: string[] }[] = [
+                {
+                  nodes: [node],
+                  parents: [],
+                },
+              ]
 
               while (stack.length > 0) {
-                const current = stack.pop()!
-                stack.push(...(current?.children ?? []))
+                const { nodes, parents } = stack.pop()!
 
-                let dest: string
+                for (const node of nodes) {
+                  let dest: string
 
-                if (parents.length > 0) {
-                  dest = `${parentId}/${parents.join('/')}/${current.id.split('/').pop() ?? ''}`
-                } else {
-                  dest = `${parentId}/${current.id.split('/').pop() ?? ''}`
-                }
-
-                if (current.isLeaf) {
-                  if (dest !== current.id) {
-                    fileRenames.push({ from: current.id, to: dest })
+                  if (parents.length > 0) {
+                    dest = `${parentId}/${parents.join('/')}/${node.id.split('/').pop() ?? ''}`
+                  } else {
+                    dest = `${parentId}/${node.id.split('/').pop() ?? ''}`
                   }
-                } else {
-                  if (emptyDirsLookup.has(current.id) || emptyDirsLookup.has(`${current.id}/`)) {
-                    emptyDirRenames.set(`${current.id}/`, `${dest}/`)
+
+                  if (node.isLeaf) {
+                    if (dest !== node.id) {
+                      fileRenames.push({ from: node.id, to: dest })
+                    }
+                  } else {
+                    if (emptyDirsLookup.has(node.id) || emptyDirsLookup.has(`${node.id}/`)) {
+                      emptyDirRenames.set(`${node.id}/`, `${dest}/`)
+                    }
+                    stack.push({
+                      nodes: node.children!,
+                      parents: parents.concat(node.id.split('/').pop() ?? ''),
+                    })
                   }
-                  parents.push(current.id.split('/').pop())
                 }
               }
             })
