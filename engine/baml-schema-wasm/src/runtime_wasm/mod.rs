@@ -79,7 +79,6 @@ pub fn on_wasm_init() {
     console_error_panic_hook::set_once();
 }
 
-// TODO: (Greg) Move this into language_server.
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct WasmProject {
@@ -287,17 +286,6 @@ impl WasmProject {
         };
 
         res
-    }
-}
-
-impl WasmProject {
-    pub fn run_generators_native(
-        &self,
-        no_version_check: Option<bool>,
-    ) -> Result<Vec<generator::WasmGeneratorOutput>, anyhow::Error> {
-        Err(anyhow::anyhow!(
-            "This function is not available in the wasm target."
-        ))
     }
 }
 

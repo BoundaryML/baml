@@ -45,7 +45,7 @@ pub fn find_baml_src(file_path: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Gathers files with .baml or .json extensions from a given root directory.
+/// Gathers files with .baml or extensions from a given root directory.
 /// The search is performed iteratively using a stack so that each directory is only
 /// visited once.
 ///

@@ -19,7 +19,6 @@ mod system;
 mod tests;
 
 // additional baml modules
-mod baml_db;
 mod baml_project;
 mod baml_source_file;
 mod baml_text_size;

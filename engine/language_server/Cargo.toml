@@ -8,22 +8,12 @@ license-file.workspace = true
 
 
 [dependencies]
-# ruff_diagnostics = { workspace = true }
-# ruff_formatter = { workspace = true }
-# ruff_linter = { workspace = true }
-# ruff_notebook = { workspace = true }
-# ruff_python_ast = { workspace = true }
-# ruff_python_codegen = { workspace = true }
-# ruff_python_formatter = { workspace = true }
-# ruff_python_index = { workspace = true }
-# ruff_python_parser = { workspace = true }
-# ruff_source_file = { workspace = true }
-# ruff_text_size = { workspace = true }
-# ruff_workspace = { workspace = true }
 
 anyhow = { workspace = true }
 baml-types = { path = "../baml-lib/baml-types" }
-baml-runtime = { path = "../baml-runtime", features=["internal"], default-features=false }
+baml-runtime = { path = "../baml-runtime", features = [
+    "internal",
+], default-features = false }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-codegen = { workspace = true }
@@ -59,11 +49,14 @@ is-macro = { version = "0.3.5" }
 # baml_linter
 similar = { version = "2.4.0", features = ["inline"] }
 colored = "3.0.0"
-path-absolutize = { version = "3.1.1", features = ["once_cell_cache", "use_unix_paths_on_wasm"] }
+path-absolutize = { version = "3.1.1", features = [
+    "once_cell_cache",
+    "use_unix_paths_on_wasm",
+] }
 pathdiff = { version = "0.2.1" }
 
 # baml_project
-baml-schema-build = { path ="../baml-schema-wasm" }
+baml-schema-build = { path = "../baml-schema-wasm" }
 
 # baml project dependency
 serde-wasm-bindgen = "0.4"

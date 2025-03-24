@@ -11,12 +11,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 
-// use red_knot_project::{ProjectDatabase, ProjectMetadata};
-// use ruff_db::files::{system_path_to_file, File};
-// use ruff_db::system::SystemPath;
-// use ruff_db::Db;
-
-use crate::baml_db::{File, FileRevision, FileStatus};
 use crate::baml_project::file_utils::find_top_level_parent;
 use crate::baml_project::{BamlProject, Project};
 use crate::edit::{DocumentKey, DocumentVersion};
@@ -380,21 +374,21 @@ impl DocumentSnapshot {
         self.position_encoding
     }
 
-    ///
-    pub(crate) fn file(&self, db: &Project) -> Option<File> {
-        let url = self.document_ref.file_url();
-        let document_key = self.document_ref.file_document_key();
-        let path_str = url.as_str().to_string();
-        let file_is_in_db = db.baml_project.files.contains_key(&document_key);
-        if file_is_in_db {
-            Some(File {
-                path: path_str,
-                permissions: None,
-                revision: FileRevision::now(),
-                status: FileStatus::Exists,
-            })
-        } else {
-            None
-        }
-    }
+    // ///
+    // pub(crate) fn file(&self, db: &Project) -> Option<File> {
+    //     let url = self.document_ref.file_url();
+    //     let document_key = self.document_ref.file_document_key();
+    //     let path_str = url.as_str().to_string();
+    //     let file_is_in_db = db.baml_project.files.contains_key(&document_key);
+    //     if file_is_in_db {
+    //         Some(File {
+    //             path: path_str,
+    //             permissions: None,
+    //             revision: FileRevision::now(),
+    //             status: FileStatus::Exists,
+    //         })
+    //     } else {
+    //         None
+    //     }
+    // }
 }
