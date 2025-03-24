@@ -647,7 +647,7 @@ pub fn log_event_internal<T: Loggable>(
     .to_logger();
 
     // Skip if level is not enabled
-    if level.is_at_least(config.level) {
+    if !level.is_at_least(config.level) {
         return;
     }
 
