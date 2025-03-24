@@ -101,16 +101,11 @@ impl Session {
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
     ) -> Option<&Project> {
-        let res = self
+        self
             .projects_by_workspace_folder
             .range(..=path.as_ref().to_path_buf())
             .next_back()
-            .map(|(_, db)| db);
-
-        // if let Some(p) = res.as_ref() {
-        //     eprintln!("project_db_for_path {:?}: {:?}", &path, p.root_path());
-        // }
-        res
+            .map(|(_, db)| db)
     }
 
     /// Returns a mutable reference to the project [`ProjectDatabase`] corresponding to the given
@@ -119,16 +114,11 @@ impl Session {
         &mut self,
         path: impl AsRef<Path> + std::fmt::Debug,
     ) -> Option<&mut Project> {
-        let res = self
+        self
             .projects_by_workspace_folder
             .range_mut(..=path.as_ref().to_path_buf())
             .next_back()
-            .map(|(_, db)| db);
-
-        // if let Some(p) = &res.as_ref() {
-        //     eprintln!("project_db_for_path {:?}: {:?}", &path, p.root_path());
-        // }
-        res
+            .map(|(_, db)| db)
     }
 
     /// Ensures that a project database exists for the given BAML file,
@@ -158,11 +148,10 @@ impl Session {
             .iter_mut()
             .map(|(_projet_root, project)| {
                 let files_map = project.baml_project.load_files()?;
-                // project.baml_project.unsaved_files.clear();
                 project.update_runtime(notifier.clone()).map_err(|e| {
+                    tracing::error!("Failed to update runtime after reloading files: {e}");
                     anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
                 })?;
-                // let files_vec = files_map.into_iter().collect::<Vec<_>>();
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -208,20 +197,6 @@ impl Session {
     pub(crate) fn open_text_document(&mut self, document_key: DocumentKey, document: TextDocument) {
         self.index_mut()
             .open_text_document(document_key.clone(), document.clone());
-        // self.projects_by_workspace_folder
-        //     .iter_mut()
-        //     .for_each(|(folder, project)| {
-        //         dbg!(&folder);
-        //         if url
-        //             .path()
-        //             .starts_with(folder.as_os_str().to_str().expect("TODO: handle error"))
-        //         {
-        //             eprintln!("MATCH");
-        //         }
-        //         // project.baml_project.files.insert(url.as_str().to_string(), document.contents().to_string());
-        //         // project.baml_project.load_files();
-        //         project.reload().expect("TODO: Handle reload errer");
-        //     })?;
     }
 
     pub(crate) fn set_unsaved_file(

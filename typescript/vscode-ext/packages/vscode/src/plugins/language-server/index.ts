@@ -326,10 +326,6 @@ const plugin: BamlVSCodePlugin = {
     console.log('debugmode', isDebugMode())
     // serverModule = context.asAbsolutePath(path.join('../../packages/language-server/dist/src/bin'))
 
-    serverModule = context.asAbsolutePath(path.join('language-server', 'out', 'bin'))
-
-    console.log(`serverModules: ${serverModule}`)
-
     // The debug options for the server
     // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging
     const debugOptions = {
