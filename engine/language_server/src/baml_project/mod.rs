@@ -1,4 +1,6 @@
 use anyhow::Context;
+use std::sync::mpsc;
+
 use baml_runtime::{
     // internal::llm_client::LLMResponse,
     BamlRuntime,
@@ -11,7 +13,7 @@ use baml_types::BamlValue;
 use baml_types::{BamlMediaType, TypeValue};
 use file_utils::gather_files;
 use internal_baml_codegen::GenerateOutput;
-use internal_baml_diagnostics::Diagnostics;
+use internal_baml_diagnostics::{Diagnostics, Span};
 use lsp_server::Notification;
 use serde::{Deserialize, Serialize};
 
@@ -161,7 +163,7 @@ impl BamlProject {
         Ok(workspace_files)
     }
 
-    pub fn runtime(&self, env_vars: HashMap<String, String>) -> Result<BamlRuntime, Diagnostics> {
+    pub fn runtime_with_channel(&self, env_vars: HashMap<String, String>) -> Result<(BamlRuntime, mpsc::Receiver<Vec<Span>>), Diagnostics> {
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
@@ -182,6 +184,10 @@ impl BamlProject {
                 return Diagnostics::new(self.root_dir_name.clone());
             }
         })
+    }
+
+    pub fn runtime(&self, env_vars: HashMap<String, String>) -> Result<BamlRuntime, Diagnostics> {
+        Ok(self.runtime_with_channel(env_vars)?.0)
     }
 
     pub fn files(&self) -> Vec<String> {

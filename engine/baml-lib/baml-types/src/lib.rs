@@ -4,6 +4,7 @@ mod media;
 mod minijinja;
 pub mod rpc;
 pub mod tracing;
+pub mod expr;
 
 pub mod baml_value;
 mod field_type;

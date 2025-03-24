@@ -58,6 +58,7 @@ impl BamlRuntime {
         let directory = PathBuf::from(directory);
         Ok(CoreRuntime::from_directory(&directory, env_vars)
             .map_err(from_anyhow_error)?
+            .0
             .into())
     }
 
@@ -73,6 +74,7 @@ impl BamlRuntime {
             .collect();
         Ok(CoreRuntime::from_file_content(&root_path, &files, env_vars)
             .map_err(from_anyhow_error)?
+            .0
             .into())
     }
 
@@ -85,6 +87,7 @@ impl BamlRuntime {
     ) -> napi::Result<()> {
         self.inner = CoreRuntime::from_file_content(&root_path, &files, env_vars)
             .map_err(from_anyhow_error)?
+            .0
             .into();
         Ok(())
     }

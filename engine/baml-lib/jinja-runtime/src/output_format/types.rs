@@ -58,8 +58,8 @@ pub struct Class {
 pub struct OutputFormatContent {
     pub enums: Arc<IndexMap<String, Enum>>,
     pub classes: Arc<IndexMap<String, Class>>,
-    recursive_classes: Arc<IndexSet<String>>,
-    structural_recursive_aliases: Arc<IndexMap<String, FieldType>>,
+    pub recursive_classes: Arc<IndexSet<String>>,
+    pub structural_recursive_aliases: Arc<IndexMap<String, FieldType>>,
     pub target: FieldType,
 }
 
@@ -318,6 +318,16 @@ struct RenderState {
 impl OutputFormatContent {
     pub fn target(target: FieldType) -> Builder {
         Builder::new(target)
+    }
+
+    pub fn mk_fake() -> OutputFormatContent {
+        OutputFormatContent {
+            enums: Arc::new(IndexMap::new()),
+            classes: Arc::new(IndexMap::new()),
+            recursive_classes: Arc::new(IndexSet::new()),
+            structural_recursive_aliases: Arc::new(IndexMap::new()),
+            target: FieldType::Primitive(TypeValue::String),
+        }
     }
 
     fn prefix(&self, options: &RenderOptions) -> Option<String> {

@@ -28,7 +28,7 @@ impl GenerateArgs {
     }
 
     fn generate_clients(&self, defaults: super::RuntimeCliDefaults) -> Result<()> {
-        let runtime = BamlRuntime::from_directory(&self.from, std::env::vars().collect())
+        let (runtime, _) = BamlRuntime::from_directory(&self.from, std::env::vars().collect())
             .context("Failed to build BAML runtime")?;
         let src_files = baml_src_files(&self.from)
             .context("Failed while searching for .baml files in baml_src/")?;

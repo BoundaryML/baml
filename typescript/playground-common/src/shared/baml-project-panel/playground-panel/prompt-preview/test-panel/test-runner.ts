@@ -1,4 +1,4 @@
-import type { WasmFunctionResponse } from '@gloo-ai/baml-schema-wasm-web'
+import type { WasmFunctionResponse, WasmSpan } from '@gloo-ai/baml-schema-wasm-web'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { findMediaFile } from '../media-utils'
 import { ctxAtom, runtimeAtom, wasmAtom } from '../../../atoms'
@@ -13,6 +13,20 @@ import {
 } from '../../atoms'
 import { testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
+
+// Helper function to clear highlights if in VSCode
+const clearHighlights = () => {
+  if (typeof acquireVsCodeApi === 'function') {
+    try {
+      const vscode = acquireVsCodeApi()
+      vscode.postMessage({
+        command: 'clearHighlights'
+      })
+    } catch (e) {
+      console.error('Failed to clear highlights in VSCode:', e)
+    }
+  }
+}
 
 export const useRunTests = (maxBatchSize = 5) => {
   const { rt } = useAtomValue(runtimeAtom)
@@ -69,27 +83,42 @@ export const useRunTests = (maxBatchSize = 5) => {
         const runTest = async (test: { functionName: string; testName: string }) => {
           try {
             const testCase = get(testCaseAtom(test))
-            console.log('test deps', testCase, rt, ctx, wasm)
-            var missingDeps = ['missing items:']
             if (!rt || !ctx || !testCase || !wasm) {
-              missingDeps.push(rt ? 'rt' : '')
-              missingDeps.push(ctx ? 'ctx' : '')
-              missingDeps.push(testCase ? 'testCase' : '')
-              missingDeps.push(wasm ? 'wasm' : '')
-              setState(test, { status: 'error', message: 'Missing required dependencies: ' + missingDeps.join(', ') })
-              console.error('Missing required dependencies' + missingDeps.join(', '))
+              setState(test, { status: 'error', message: 'Missing required dependencies.' })
+              console.error('Missing required dependencies')
+              clearHighlights() // Clear highlights on error
               return
             }
 
             const startTime = performance.now()
             setState(test, { status: 'running' })
-            const result = await testCase.fn.run_test(
+            const result = await testCase.fn.run_test_with_expr_events(
               rt,
               testCase.tc.name,
               (partial: WasmFunctionResponse) => {
                 setState(test, { status: 'running', response: partial })
               },
               findMediaFile,
+              (spans: WasmSpan[]) => {
+                console.log('spans', spans)
+                // Send spans to VSCode for highlighting if we're in the VSCode environment
+                if (spans.length > 0 && typeof acquireVsCodeApi === 'function') {
+                  try {
+                    const vscode = acquireVsCodeApi()
+                    vscode.postMessage({
+                      command: 'highlightSpans',
+                      spans: spans.map(span => ({
+                        file_path: span.file_path,
+                        start: span.start,
+                        end: span.end
+                      })),
+                      animate: true
+                    })
+                  } catch (e) {
+                    console.error('Failed to send spans to VSCode:', e)
+                  }
+                }
+              },
             )
             console.log('result', result)
 
@@ -111,9 +140,13 @@ export const useRunTests = (maxBatchSize = 5) => {
               response_status: responseStatusMap[response_status] || 'error',
               latency_ms: endTime - startTime,
             })
+            
+            // Clear highlights when test is completed, whether success or failure
+            clearHighlights()
           } catch (e) {
             console.log('test error!')
             console.error(e)
+            clearHighlights() // Clear highlights on error
             setState(test, {
               status: 'error',
               message: e instanceof Error ? e.message : 'Unknown error',
@@ -154,6 +187,7 @@ export const useRunTests = (maxBatchSize = 5) => {
         set(areTestsRunningAtom, true)
         await run().finally(() => {
           set(areTestsRunningAtom, false)
+          clearHighlights() // Clear highlights when all tests are done
         })
       },
       [maxBatchSize, rt, ctx, wasm],

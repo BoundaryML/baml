@@ -82,3 +82,26 @@ impl From<(SourceFile, pest::Span<'_>)> for Span {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SerializedSpan {
+    pub file_path: String,
+    pub start: usize,
+    pub end: usize,
+    pub start_line: usize,
+    pub end_line: usize,
+}
+
+impl SerializedSpan {
+    pub fn serialize(span: &Span) -> Self {
+        let (start, end) = span.line_and_column();
+        SerializedSpan {
+            file_path: span.file.path().to_string(),
+            start: span.start,
+            end: span.end,
+            start_line: start.0,
+            end_line: end.0,
+        }
+    }
+}
+

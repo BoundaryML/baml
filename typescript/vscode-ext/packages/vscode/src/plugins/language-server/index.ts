@@ -36,6 +36,16 @@ const intervalTimers: NodeJS.Timeout[] = []
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
+let glowOnDecoration: vscode.TextEditorDecorationType | null  = null;
+let glowOffDecoration: vscode.TextEditorDecorationType | null = null;
+let isGlowOn: boolean = true;
+let animationTimer: NodeJS.Timeout | null = null;
+// let highlightRanges: vscode.Range[] = [];
+let highlightRanges: vscode.Range[] = [
+  new vscode.Range(new vscode.Position(1, 4), new vscode.Position(1,7)),
+  new vscode.Range(new vscode.Position(2, 2), new vscode.Position(2,8)),
+];
+
 export const generateTestRequest = async (test_request: TestRequest): Promise<string | undefined> => {
   return await client.sendRequest('generatePythonTests', test_request)
 }
@@ -336,6 +346,12 @@ const plugin: BamlVSCodePlugin = {
       },
     }
 
+    // Initialize the highlight effect.
+    createDecorations();
+    // updateHighlight();
+    startAnimation();
+    
+
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
     // const serverOptions: ServerOptions = {
@@ -502,6 +518,22 @@ const plugin: BamlVSCodePlugin = {
         }
       }),
     )
+    commands.registerCommand('baml.setFlashingRegions', async (args: { spans: {file_path: string, start_line: number, start_char: number, end_line: number, end_char: number}[] }) => {
+      context.subscriptions.push({
+        dispose: () => {
+          stopAnimation();
+          if (glowOnDecoration) glowOnDecoration.dispose();
+          if (glowOffDecoration) glowOffDecoration.dispose();
+        }
+      })
+      const ranges = args.spans.map((span) => {
+        const start = new vscode.Position(span.start_line, span.start_char);
+        const end = new vscode.Position(span.start_line, span.start_char);
+        return new vscode.Range(start, end)
+      })
+      highlightRanges = ranges
+      updateHighlight()
+    });
 
     activateClient(context, serverOptions, clientOptions)
 
@@ -538,6 +570,94 @@ const plugin: BamlVSCodePlugin = {
 
     return client.stop()
   },
+}
+
+// Create our two decoration states
+function createDecorations() {
+  // Bright neon color for the glow effect (bright green)
+  const glowColor = '#00FF00';
+  const offColor = '#009900';
+  
+  // Glow ON - attempt to create text glow with textDecoration property 
+  glowOnDecoration = vscode.window.createTextEditorDecorationType({
+      color: glowColor,
+      fontWeight: 'bold',
+      backgroundColor: 'transparent',
+      textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+      // Try using before/after elements to reinforce the glow effect
+      before: {
+          contentText: '',
+          textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+          color: glowColor
+      },
+      after: {
+          contentText: '',
+          textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+          color: glowColor
+      }
+  });
+  
+  // Glow ON - attempt to create text glow with textDecoration property 
+  glowOffDecoration = vscode.window.createTextEditorDecorationType({
+      color: offColor,
+      fontWeight: 'bold',
+      backgroundColor: 'transparent',
+      textDecoration: `none; `,
+      // Try using before/after elements to reinforce the glow effect
+      before: {
+          contentText: '',
+          textDecoration: `none; `,
+          color: offColor
+      },
+      after: {
+          contentText: '',
+          textDecoration: `none; `,
+          color: offColor
+      }
+  });
+}
+
+// Update the highlight based on current state
+function updateHighlight() {
+  window.showWarningMessage(`updateHighlight:` +  isGlowOn)
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) return;
+  
+  
+  // Clear both decorations
+  // Apply appropriate decoration based on state
+  if (glowOnDecoration && glowOffDecoration && isGlowOn) {
+    editor.setDecorations(glowOffDecoration, [])
+    editor.setDecorations(glowOnDecoration, highlightRanges);
+  };
+  if (glowOnDecoration && glowOffDecoration && !isGlowOn) {
+    editor.setDecorations(glowOnDecoration, []);
+    editor.setDecorations(glowOffDecoration, highlightRanges);
+  }
+  
+}
+
+// Start the simple toggling animation
+function startAnimation() {
+  console.log('startAnimation')
+  if (animationTimer) return;
+  
+  // Toggle every 500ms (2 times per second)
+  animationTimer = setInterval(() => {
+      // Toggle between on and off states
+      isGlowOn = !isGlowOn;
+      
+      // Update the highlight
+      updateHighlight();
+  }, 500); // 500ms = half a second
+}
+
+// Stop animation
+function stopAnimation(): void {
+  if (animationTimer) {
+      clearInterval(animationTimer);
+      animationTimer = null;
+  }
 }
 
 export { telemetry }

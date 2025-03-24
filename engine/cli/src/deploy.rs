@@ -50,7 +50,7 @@ impl DeployArgs {
     ///
     ///   - selected dialoguer / indicatif based on https://fadeevab.com/comparison-of-rust-cli-prompts/
     pub async fn run_async(&self) -> Result<()> {
-        let runtime = BamlRuntime::from_directory(&self.from, std::env::vars().collect())
+        let (runtime, _) = BamlRuntime::from_directory(&self.from, std::env::vars().collect())
             .context("Failed to build BAML runtime")?;
 
         let d = Deployer {

@@ -78,6 +78,7 @@ impl BamlRuntime {
     fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> PyResult<Self> {
         Ok(CoreBamlRuntime::from_directory(&directory, env_vars)
             .map_err(BamlError::from_anyhow)?
+            .0
             .into())
     }
 
@@ -90,6 +91,7 @@ impl BamlRuntime {
         Ok(
             CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
                 .map_err(BamlError::from_anyhow)?
+                .0
                 .into(),
         )
     }
@@ -103,6 +105,7 @@ impl BamlRuntime {
     ) -> PyResult<()> {
         self.inner = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
             .map_err(BamlError::from_anyhow)?
+            .0
             .into();
         Ok(())
     }

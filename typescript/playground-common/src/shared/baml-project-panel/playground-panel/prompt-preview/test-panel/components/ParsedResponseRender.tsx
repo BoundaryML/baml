@@ -63,6 +63,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
   return (
     <div className='flex max-h-[500px]  text-xs'>
       <ScrollArea className='pr-2 w-full text-xs' type='always'>
+        <p>{JSON.stringify(parsedResponseObj)}</p>
         <JsonView
           className='p-1 w-full rounded-md'
           value={parsedResponseObj || {}}
