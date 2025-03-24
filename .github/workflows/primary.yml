@@ -202,16 +202,16 @@ jobs:
           path: cli-artifacts
       - name: Copy binaries to language server
         run: |
-          mkdir -p typescript/vscode-ext/packages/vscode/language-server/server
-          mkdir -p typescript/vscode-ext/packages/vscode/language-server/server/linux
-          mkdir -p typescript/vscode-ext/packages/vscode/language-server/server/darwin
-          mkdir -p typescript/vscode-ext/packages/vscode/language-server/server/windows
-          cp cli-artifacts/baml-cli-x86_64-unknown-linux-gnu/baml-cli typescript/vscode-ext/packages/vscode/language-server/server/linux/baml-cli
-          cp cli-artifacts/baml-cli-x86_64-apple-darwin/baml-cli typescript/vscode-ext/packages/vscode/language-server/server/darwin/baml-cli
-          cp cli-artifacts/baml-cli-x86_64-pc-windows-msvc/baml-cli.exe typescript/vscode-ext/packages/vscode/language-server/server/windows/baml-cli.exe
-          chmod +x typescript/vscode-ext/packages/vscode/language-server/server/linux/baml-cli*
-          chmod +x typescript/vscode-ext/packages/vscode/language-server/server/darwin/baml-cli*
-          chmod +x typescript/vscode-ext/packages/vscode/language-server/server/windows/baml-cli.exe
+          mkdir -p typescript/vscode-ext/packages/vscode/server
+          mkdir -p typescript/vscode-ext/packages/vscode/server/linux
+          mkdir -p typescript/vscode-ext/packages/vscode/server/darwin
+          mkdir -p typescript/vscode-ext/packages/vscode/server/windows
+          cp cli-artifacts/baml-cli-x86_64-unknown-linux-gnu/baml-cli typescript/vscode-ext/packages/vscode/server/linux/baml-cli
+          cp cli-artifacts/baml-cli-x86_64-apple-darwin/baml-cli typescript/vscode-ext/packages/vscode/server/darwin/baml-cli
+          cp cli-artifacts/baml-cli-x86_64-pc-windows-msvc/baml-cli.exe typescript/vscode-ext/packages/vscode/server/windows/baml-cli.exe
+          chmod +x typescript/vscode-ext/packages/vscode/server/linux/baml-cli*
+          chmod +x typescript/vscode-ext/packages/vscode/server/darwin/baml-cli*
+          chmod +x typescript/vscode-ext/packages/vscode/server/windows/baml-cli.exe
       - name: Install dependencies
         run: pnpm install && pnpm build
         working-directory: typescript
