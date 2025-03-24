@@ -171,6 +171,7 @@ module Baml
     class DynamicClassOne < T::Struct; end
     class DynamicClassTwo < T::Struct; end
     class DynamicOutput < T::Struct; end
+    class DynamicSchema < T::Struct; end
     class Earthling < T::Struct; end
     class Education < T::Struct; end
     class Email < T::Struct; end
@@ -614,6 +615,16 @@ module Baml
       end
     end
     class DynamicOutput < T::Struct
+      include Baml::Sorbet::Struct
+
+      def initialize(props)
+        super(
+        )
+
+        @props = props
+      end
+    end
+    class DynamicSchema < T::Struct
       include Baml::Sorbet::Struct
 
       def initialize(props)

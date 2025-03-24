@@ -153,6 +153,9 @@ class DynamicClassTwo(BaseModel):
 class DynamicOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
 
+class DynamicSchema(BaseModel):
+    model_config = ConfigDict(extra='allow')
+
 class Earthling(BaseModel):
     age: Checked[Optional[int],Literal["earth_aged", "no_infants"]]
 
