@@ -1,34 +1,23 @@
+/**
+ * If this import fails, you may need to upgrade @boundaryml/baml.
+ * 
+ * Please upgrade @boundaryml/baml to {{version}}.
+ * 
+ * $ npm install @boundaryml/baml@{{version}}
+ * $ yarn add @boundaryml/baml@{{version}}
+ * $ pnpm add @boundaryml/baml@{{version}}
+ * 
+ * If nothing else works, please ask for help:
+ * 
+ * https://github.com/boundaryml/baml/issues
+ * https://boundaryml.com/discord
+ * 
+ **/
+import { ThrowIfVersionMismatch } from "@boundaryml/baml";
+
 export const version = "{{ version }}";
 
-
-let ThrowIfVersionMismatch: (version: string) => void;
-try {
-  ThrowIfVersionMismatch = require("@boundaryml/baml").ThrowIfVersionMismatch;
-} catch (error) {
-  
-}
-
-if (ThrowIfVersionMismatch) {
-  ThrowIfVersionMismatch(version);
-} else {
-  // You're probably using a different version of baml.
-  // Please upgrade to the version used by generators.baml.
-  const errorMessage = `Update to @boundaryml/baml required.
-  Version of index.ts.j2 (see generators.baml): ${version}
-  
-  Please upgrade @boundaryml/baml to ${version}.
-  
-  $ npm install @boundaryml/baml@${version}
-  $ yarn add @boundaryml/baml@${version}
-  $ pnpm add @boundaryml/baml@${version}
-  
-  If nothing else works, please ask for help:
-  
-  https://github.com/boundaryml/baml/issues
-  https://boundaryml.com/discord`;
-  
-  throw new Error(errorMessage.trim());
-}
+ThrowIfVersionMismatch(version);
 
 
 {% if default_client_mode == GeneratorDefaultClientMode::Async %}
