@@ -337,6 +337,11 @@ export interface DynamicOutput {
   [key: string]: any;
 }
 
+export interface DynamicSchema {
+  
+  [key: string]: any;
+}
+
 export interface Earthling {
   age: Checked<number,"earth_aged" | "no_infants">
   

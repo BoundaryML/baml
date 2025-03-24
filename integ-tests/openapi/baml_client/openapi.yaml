@@ -457,6 +457,19 @@ paths:
                 title: ExtractContactInfoResponse
                 $ref: '#/components/schemas/ContactInfo'
       operationId: ExtractContactInfo
+  /call/ExtractEntities:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/ExtractEntities'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: ExtractEntitiesResponse
+                $ref: '#/components/schemas/DynamicSchema'
+      operationId: ExtractEntities
   /call/ExtractHobby:
     post:
       requestBody:
@@ -2879,6 +2892,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - document
+            additionalProperties: false
+    ExtractEntities:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: ExtractEntitiesRequest
+            type: object
+            properties:
+              text:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - text
             additionalProperties: false
     ExtractHobby:
       required: true
@@ -5562,6 +5591,11 @@ components:
       - status
       additionalProperties: false
     DynamicOutput:
+      type: object
+      properties: {}
+      required: []
+      additionalProperties: false
+    DynamicSchema:
       type: object
       properties: {}
       required: []
