@@ -56,28 +56,37 @@ impl VertexAuth {
             ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
             ("assertion", &jwt),
         ];
-        let res: serde_json::Value = client
+        let res = client
             .post(&self.0.token_uri)
             .form(&params)
             .send()
             .await?
-            .json()
+            .text()
             .await?;
 
-        Ok(Arc::new(Token(
-            res.as_object()
-                .context("Token exchange did not return a JSON object")?
-                .get("access_token")
-                .context("Access token not found in response")?
-                .as_str()
-                .context("Access token is not a string")?
-                .to_string(),
-        )))
+        parse_token_response(&res)
+            .context(format!("OAuth2 access token request failed: {res}"))
+            .map(Arc::new)
     }
 
     pub async fn project_id(&self) -> Result<String> {
         Ok(self.0.project_id.clone())
     }
+}
+
+fn parse_token_response(response: &str) -> Result<Token> {
+    let res: serde_json::Value =
+        serde_json::from_str(response).context("Failed to parse token response as JSON")?;
+
+    Ok(Token(
+        res.as_object()
+            .context("Token exchange did not return a JSON object")?
+            .get("access_token")
+            .context("Access token not found in response")?
+            .as_str()
+            .context("Access token is not a string")?
+            .to_string(),
+    ))
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -36,7 +36,9 @@
     "./safe_imports.d.ts",
     "./safe_imports.js",
     "./logging.d.ts",
-    "./logging.js"
+    "./logging.js",
+    "./browser.d.ts",
+    "./browser.js"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",
