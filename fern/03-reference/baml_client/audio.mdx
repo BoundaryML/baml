@@ -46,13 +46,13 @@ const fetchedAudio = await Audio.fromUrlAsync('https://example.com/audio.ogg')
 
 ```tsx
 import { useTestAudioInput } from '../baml_client/react/hooks'
-import { Audio as BamlAudio } from "@boundaryml/baml/browser"
+import { Audio } from "../baml_client/react/media"
 
 export function TestAudioInput() {
     const { mutate } = useTestAudioInput()
 
     const handleClick = async () => {
-        const audio = await BamlAudio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg')
+        const audio = await Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg')
         mutate(audio)
     }
 
@@ -104,10 +104,10 @@ export function TestAudioInput() {
 </ParamField>
 
 <ParamField
-  path="fromUrlAsync"
+  path="fromUrlToBase64"
   type="(url: string) => Promise<Audio>"
 >
-  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  <Info>Only available in browser environments.</Info>
   Creates an Audio object by fetching from a URL. Available in browser environments only.
 </ParamField>
 

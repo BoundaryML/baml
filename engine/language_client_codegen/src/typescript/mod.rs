@@ -78,6 +78,10 @@ struct ReactClientHooks {
 }
 
 #[derive(askama::Template)]
+#[template(path = "react/media.ts.j2", escape = "none")]
+struct ReactClientMedia {}
+
+#[derive(askama::Template)]
 #[template(path = "async_client.ts.j2", escape = "none")]
 struct AsyncTypescriptClient {
     funcs: Vec<TypescriptFunction>,
@@ -149,6 +153,12 @@ impl From<TypescriptClient> for ReactClientHooks {
             funcs: value.funcs,
             types: value.types,
         }
+    }
+}
+
+impl From<TypescriptClient> for ReactClientMedia {
+    fn from(_: TypescriptClient) -> Self {
+        Self {}
     }
 }
 
@@ -274,6 +284,7 @@ pub(crate) fn generate(
                 (ir, generator),
             )?;
             collector.add_template::<ReactClientHooks>("react/hooks.tsx", (ir, generator))?;
+            collector.add_template::<ReactClientMedia>("react/media.ts", (ir, generator))?;
         }
         TypescriptFramework::None => {}
     }
@@ -463,6 +474,15 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for ReactServerSt
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for ReactClientHooks {
+    type Error = anyhow::Error;
+
+    fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let typscript_client = TypescriptClient::try_from(params)?;
+        Ok(typscript_client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for ReactClientMedia {
     type Error = anyhow::Error;
 
     fn try_from(params: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {

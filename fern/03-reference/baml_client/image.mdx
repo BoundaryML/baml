@@ -41,18 +41,17 @@ res = await b.TestImageInput(
 // Browser-specific methods
 const fileImage = await Image.fromFile(file)
 const blobImage = await Image.fromBlob(blob, 'image/png')
-const fetchedImage = await Image.fromUrlAsync('https://example.com/image.png')
 ```
 
 ```tsx
 import { useTestImageInput } from '../baml_client/react/hooks'
-import { Image as BamlImage } from "@boundaryml/baml/browser"
+import { Image } from "../baml_client/react/media"
 
 export function TestImageInput() {
     const { mutate } = useTestImageInput()
 
     const handleClick = async () => {
-        const image = await BamlImage.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png')
+        const image = await Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png')
         mutate(image)
     }
 
@@ -104,10 +103,10 @@ export function TestImageInput() {
 </ParamField>
 
 <ParamField
-  path="fromUrlAsync"
+  path="fromUrlToBase64"
   type="(url: string) => Promise<Image>"
 >
-  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  <Info>Only available in browser environments. </Info>
   Creates an Image object by fetching from a URL. Available in browser environments only.
 </ParamField>
 
