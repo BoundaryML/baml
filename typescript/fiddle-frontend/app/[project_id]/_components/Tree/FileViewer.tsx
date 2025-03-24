@@ -163,21 +163,59 @@ const FileViewer = () => {
               return
             }
 
-            // TODO: Drag folders.
-            const renames = dragIds
-              .filter((id) => id.endsWith('.baml') || id.endsWith('.json'))
-              .map((id) => ({ from: id, to: `${parentId}/${id.split('/').pop() ?? ''}` }))
-              .filter((rename) => rename.to !== rename.from)
+            const emptyDirsLookup = new Set(emptyDirs)
+
+            const emptyDirRenames = new Map<string, string>()
+            const fileRenames: { from: string; to: string }[] = []
+
+            dragNodes.forEach((node) => {
+              const stack = [node]
+              const parents = []
+
+              while (stack.length > 0) {
+                const current = stack.pop()!
+                stack.push(...(current?.children ?? []))
+
+                let dest: string
+
+                if (parents.length > 0) {
+                  dest = `${parentId}/${parents.join('/')}/${current.id.split('/').pop() ?? ''}`
+                } else {
+                  dest = `${parentId}/${current.id.split('/').pop() ?? ''}`
+                }
+
+                if (current.isLeaf) {
+                  if (dest !== current.id) {
+                    fileRenames.push({ from: current.id, to: dest })
+                  }
+                } else {
+                  if (emptyDirsLookup.has(current.id) || emptyDirsLookup.has(`${current.id}/`)) {
+                    emptyDirRenames.set(`${current.id}/`, `${dest}/`)
+                  }
+                  parents.push(current.id.split('/').pop())
+                }
+              }
+            })
+
+            console.log('onMove', { fileRenames, emptyDirRenames })
 
             setFiles((prev) => {
               const movedFiles = { ...prev }
 
-              renames.forEach((rename) => {
+              fileRenames.forEach((rename) => {
                 movedFiles[rename.to] = movedFiles[rename.from]
                 delete movedFiles[rename.from]
               })
 
               return movedFiles
+            })
+
+            setEmptydirs((prev) => {
+              // TODO: See onRename(), there's some issue with trailing slashes, fix this.
+              const movedEmptyDirs = prev.filter((dir) => !emptyDirRenames.has(dir) && !emptyDirRenames.has(`${dir}/`))
+              emptyDirRenames.values().forEach((dir) => movedEmptyDirs.push(dir))
+
+              return movedEmptyDirs
             })
           }}
           onCreate={({ parentId, parentNode, type }) => {
@@ -212,9 +250,9 @@ const FileViewer = () => {
             if (emptyDirRenames.length > 0) {
               setEmptydirs((prev) => {
                 const dirs = prev.filter((dir) => !dir.startsWith(id))
-                // TODO: Something's causing the last backslash to be removed
-                // after triggering this handler more than once. This fixes it
-                // but we should find where it's removed.
+                // TODO: Something's causing the last slash to be removed after
+                // triggering this handler more than once. This fixes it but we
+                // should find where it's removed.
                 emptyDirRenames.forEach((rename) => dirs.push(`${rename.to}/`))
 
                 console.log({ prev, dirs })
