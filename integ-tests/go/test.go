@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
-	"example.com/integ-tests/baml_client/types"
+	b "example.com/integ-tests/baml_client"
 )
 
 func main() {
-	var v = types.Category2Question
-	fmt.Println(v)
+	ctx := context.Background()
+	for v := range b.Stream.TestOllama(ctx) {
+		fmt.Println(v)
+	}
 }

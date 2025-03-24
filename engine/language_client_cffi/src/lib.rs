@@ -80,7 +80,7 @@ static mut RESULT_CALLBACK_FN: Option<
     extern "C" fn(call_id: u32, is_done: bool, content: *const i8, length: usize),
 > = None;
 static mut ERROR_CALLBACK_FN: Option<
-    extern "C" fn(call_id: u32, name: *const c_char, message: *const u8),
+    extern "C" fn(call_id: u32, name: *const c_char, message: *const i8, length: usize),
 > = None;
 
 #[no_mangle]
@@ -115,14 +115,17 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
                 );
             }
             Some(Err(e)) => {
+                println!("Error: {}", e);
                 // let c_message = CString::new(e.to_string()).unwrap();
                 // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
             }
             None => {
+                println!("No result");
                 // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
             }
         },
         Err(e) => {
+            println!("Error: {}", e);
             // let c_message = CString::new(e.to_string()).unwrap();
             // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
         }

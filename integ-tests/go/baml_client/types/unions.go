@@ -1017,40 +1017,6 @@ func (u *Union__List__bool__List__int64) List__int64() *[]int64 {
 
 
 
-type Union__SimpleTag__JsonTemplate struct {
-    variant string
-    
-    variant_SimpleTag *SimpleTag
-    
-    variant_JsonTemplate *JsonTemplate
-    
-}
-
-
-func (u *Union__SimpleTag__JsonTemplate) IsSimpleTag() bool {
-    return u.variant == "SimpleTag"
-}
-
-func (u *Union__SimpleTag__JsonTemplate) SimpleTag() *SimpleTag {
-    if !u.IsSimpleTag() {
-        return nil
-    }
-    return u.variant_SimpleTag
-}
-
-func (u *Union__SimpleTag__JsonTemplate) IsJsonTemplate() bool {
-    return u.variant == "JsonTemplate"
-}
-
-func (u *Union__SimpleTag__JsonTemplate) JsonTemplate() *JsonTemplate {
-    if !u.IsJsonTemplate() {
-        return nil
-    }
-    return u.variant_JsonTemplate
-}
-
-
-
 type Union__int64__string__bool__float64__JsonObject__JsonArray struct {
     variant string
     
@@ -1133,6 +1099,40 @@ func (u *Union__int64__string__bool__float64__JsonObject__JsonArray) JsonArray()
         return nil
     }
     return u.variant_JsonArray
+}
+
+
+
+type Union__SimpleTag__JsonTemplate struct {
+    variant string
+    
+    variant_SimpleTag *SimpleTag
+    
+    variant_JsonTemplate *JsonTemplate
+    
+}
+
+
+func (u *Union__SimpleTag__JsonTemplate) IsSimpleTag() bool {
+    return u.variant == "SimpleTag"
+}
+
+func (u *Union__SimpleTag__JsonTemplate) SimpleTag() *SimpleTag {
+    if !u.IsSimpleTag() {
+        return nil
+    }
+    return u.variant_SimpleTag
+}
+
+func (u *Union__SimpleTag__JsonTemplate) IsJsonTemplate() bool {
+    return u.variant == "JsonTemplate"
+}
+
+func (u *Union__SimpleTag__JsonTemplate) JsonTemplate() *JsonTemplate {
+    if !u.IsJsonTemplate() {
+        return nil
+    }
+    return u.variant_JsonTemplate
 }
 
 

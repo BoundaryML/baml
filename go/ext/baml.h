@@ -46,7 +46,7 @@ void call_function_stream_from_c(const void *runtime,
 typedef void (*callback_fcn)(uint32_t, bool, const int8_t *, int);
 
 // Registers a callback function to be called when a function is called.
-void register_callback(callback_fcn callback);
+void register_callbacks(callback_fcn result_callback, callback_fcn error_callback);
 
 // Invokes the runtime CLI. `args` is a null-terminated array of null-terminated C strings.
 void invoke_runtime_cli(const char * const* args);

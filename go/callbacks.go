@@ -21,11 +21,11 @@ import (
 )
 
 type ResultCallback struct {
-	data string // JSON string
+	data CFFI.CFFIValueHolder // JSON string
 }
 
 func (r *ResultCallback) Raw() string {
-	return r.data
+	return fmt.Sprintf("%s: %s", r.data.ValueType().String(), len(r.data.Table().Bytes))
 }
 
 type CallbackData struct {
@@ -53,6 +53,7 @@ func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.
 		flatbuffers.GetRootAs(content_bytes, 0, &parsed_data)
 
 		my_string := fmt.Sprintf("Length: %d, Type: %s", length, parsed_data.ValueType().String())
+		fmt.Println("My string: ", my_string)
 		force_close := false
 
 		select {
@@ -60,11 +61,13 @@ func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.
 			force_close = true
 			// TODO: Somehow tell rust to die
 			break
-		case callback.channel <- ResultCallback{data: my_string}:
+		case callback.channel <- ResultCallback{data: parsed_data}:
+			fmt.Println("Sending data to channel")
 			break
 		}
 
 		if bool(isDone) || force_close {
+			fmt.Println("Closing channel")
 			close(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()
