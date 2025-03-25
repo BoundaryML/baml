@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use futures::channel::mpsc;
 use std::sync::Arc;
 
 use crate::{BamlRuntime, FunctionResult};
@@ -9,6 +9,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 pub struct EvalEnv<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default> {
     pub context: HashMap<Name, Expr<T, U>>,
     pub runtime: &'a BamlRuntime,
+    pub expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
 }
 
 impl<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default> EvalEnv<'a, T, U> {
@@ -132,7 +133,10 @@ async fn beta_reduce<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug 
                             expr
                         ));
                     }
-                    let new_body = subst2(body, &params[0], &arg, env).as_ref().unwrap().clone();
+                    let new_body = subst2(body, &params[0], &arg, env)
+                        .as_ref()
+                        .unwrap()
+                        .clone();
                     // eprintln!("BETA_REDUCE_LAMBDA_RESULT2: {}\n", new_body.dump_str());
                     Box::pin(beta_reduce(env, &new_body)).await
                 }
@@ -140,6 +144,7 @@ async fn beta_reduce<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug 
                     // dbg!(&args);
                     // let args: Vec<BamlValue> = args.clone().into_iter().map(|arg| arg.as_atom().unwrap().clone().value()).collect();
                     // let evaluated_args: Vec<BamlValue> = args.clone().into_iter().map(|arg| Box::pin(eval_to_value(env, arg).await)).collect::<anyhow::Result<Vec<_>>>()?;
+
                     let mut evaluated_args: Vec<BamlValue> = Vec::new();
                     for arg in args {
                         let val = eval_to_value(env, arg).await;
@@ -157,6 +162,9 @@ async fn beta_reduce<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug 
                     let ctx = env
                         .runtime
                         .create_ctx_manager(BamlValue::String("none".to_string()), None);
+
+                    let app_span = expr.meta().0.clone();
+
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
                         .call_function(name.clone(), &args_map, &ctx, None, None, None)
@@ -210,9 +218,9 @@ pub async fn eval_to_value<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::
 
 #[cfg(test)]
 mod tests {
+    use crate::internal_baml_diagnostics::Span;
     use baml_types::{BamlMap, BamlValue};
     use internal_baml_core::ir::repr::make_test_ir;
-    use crate::internal_baml_diagnostics::Span;
     use std::sync::mpsc;
 
     use super::*;
@@ -221,7 +229,7 @@ mod tests {
     // Make a testing runtime. It assumes the presence of
     // OPENAI_API_KEY environment variable.
     fn runtime(content: &str) -> (BamlRuntime, mpsc::Receiver<Vec<Span>>) {
-      let openai_api_key = std::env::var("OPENAI_API_KEY").unwrap();
+        let openai_api_key = std::env::var("OPENAI_API_KEY").unwrap();
         BamlRuntime::from_file_content(
             ".",
             &HashMap::from([("main.baml", content)]),

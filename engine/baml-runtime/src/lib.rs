@@ -176,7 +176,7 @@ impl BamlRuntime {
         env_vars: HashMap<T, T>,
     ) -> Result<(Self, mpsc::Receiver<Vec<Span>>)> {
         let path = Self::parse_baml_src_path(path)?;
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::channel(1);
 
         let copy = env_vars
             .iter()
@@ -509,6 +509,20 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
+        let res = self.call_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, None).await;
+        res
+    }
+
+    pub async fn call_function_with_expr_events(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+        expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
 
@@ -548,6 +562,7 @@ impl BamlRuntime {
                     let env = EvalEnv {
                         context,
                         runtime: self,
+                        expr_tx: Some(expr_tx.clone()),
                     };
                     let params_expr: Expr<ExprMetadata, ()> = Expr::ArgsTuple(
                         params
