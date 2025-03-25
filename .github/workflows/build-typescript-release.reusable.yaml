@@ -2,6 +2,9 @@ name: BAML Release - Build Typescript
 
 on:
   workflow_call: {}
+  push:
+    branches:
+      - glibc-ts
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -76,6 +79,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Check GLIBC version for Linux targets
+      - name: Check GLIBC version
+        if: contains(matrix._.target, 'linux')
+        run: |
+          ldd --version
+          
       # Install common toolchain dependencies
       # NOTE: we can't use mise here because it doesn't support Windows
       - uses: pnpm/action-setup@v4
