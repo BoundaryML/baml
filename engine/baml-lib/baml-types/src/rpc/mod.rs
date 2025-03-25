@@ -34,15 +34,3 @@ pub struct BamlSrcBlob {
     pub baml_src_id: String,
     pub baml_src: IndexMap<String, String>,
 }
-
-// ------------------------------------------------------------------------------------------------
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TraceEventUploadRequest {
-    pub trace_event_batch: StudioTraceEventBatch,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TraceEventUploadResponse {
-    pub project_id: String,
-}

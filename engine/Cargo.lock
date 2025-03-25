@@ -145,6 +145,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "arrayvec"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+
+[[package]]
 name = "askama"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -939,6 +945,48 @@ dependencies = [
  "tokio-util",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "baml-rpc"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "base64 0.22.1",
+ "bytes",
+ "console_log",
+ "derive_more",
+ "dissimilar",
+ "dunce",
+ "either",
+ "env_logger",
+ "eventsource-stream",
+ "expect-test",
+ "futures",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "indexmap 2.2.6",
+ "indoc",
+ "log",
+ "num",
+ "pretty_assertions",
+ "rand",
+ "regex",
+ "rstest",
+ "scopeguard",
+ "serde",
+ "serde_json",
+ "static_assertions",
+ "strsim 0.11.1",
+ "strum",
+ "strum_macros",
+ "time",
+ "type-safe-id",
+ "uuid",
+ "walkdir",
+ "wasm-bindgen-test",
+ "web-time",
 ]
 
 [[package]]
@@ -3941,7 +3989,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b55c4d17d994b637e2f4daf6e5dc5d660d209d5642377d675d7a1c3ab69fa579"
 dependencies = [
- "arrayvec",
+ "arrayvec 0.5.2",
  "typed-arena",
  "unicode-width",
 ]
@@ -5485,6 +5533,18 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "type-safe-id"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa0f2333ec5a49706b6f29896d0e4cdba1665d2bf2d752d0c4f130634935d42f"
+dependencies = [
+ "arrayvec 0.7.6",
+ "rand",
+ "thiserror 2.0.9",
+ "uuid",
+]
 
 [[package]]
 name = "typed-arena"

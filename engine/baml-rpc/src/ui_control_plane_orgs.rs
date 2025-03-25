@@ -1,0 +1,74 @@
+use crate::rpc::ApiEndpoint;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Organization {
+    pub org_id: String,
+    pub org_slug: String,
+    pub org_display_name: String,
+    pub stripe_customer_id: Option<String>,
+    pub stripe_subscription_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateOrganizationRequest {
+    pub org_id: String,
+    pub org_slug: String,
+    pub org_display_name: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateOrganizationResponse {
+    pub org: Organization,
+}
+
+struct CreateOrganization;
+
+impl ApiEndpoint for CreateOrganization {
+    type Request = CreateOrganizationRequest;
+    type Response = CreateOrganizationResponse;
+
+    const PATH: &'static str = "/v1/create-organization";
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateOrganizationRequest {
+    pub org_id: String,
+    pub org_slug: Option<String>,
+    pub org_display_name: Option<String>,
+    pub stripe_customer_id: Option<String>,
+    pub stripe_subscription_id: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateOrganizationResponse {
+    pub org: Organization,
+}
+
+struct UpdateOrganization;
+
+impl ApiEndpoint for UpdateOrganization {
+    type Request = UpdateOrganizationRequest;
+    type Response = UpdateOrganizationResponse;
+
+    const PATH: &'static str = "/v1/update-organization";
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetOrganizationRequest {
+    pub org_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GetOrganizationResponse {
+    pub org: Organization,
+}
+
+struct GetOrganization;
+
+impl ApiEndpoint for GetOrganization {
+    type Request = GetOrganizationRequest;
+    type Response = GetOrganizationResponse;
+
+    const PATH: &'static str = "/v1/get-organization";
+}

@@ -3,6 +3,7 @@ resolver = "2"
 members = [
   "baml-lib/*",
   "baml-runtime",
+  "baml-rpc",
   "baml-schema-wasm",
   "bstd",
   "cli",
@@ -15,6 +16,7 @@ members = [
 default-members = [
   "baml-lib/*",
   "baml-runtime",
+  "baml-rpc",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
   # Building baml-schema-wasm in combination with everything else triggers feature unification,
   # and it's OK to not build this by default because we have to build ts separately (this may
