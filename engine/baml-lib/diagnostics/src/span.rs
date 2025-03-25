@@ -58,11 +58,13 @@ impl Span {
             }
         }
 
-        match (start, end) {
+        let res = match (start, end) {
             (Some(start), Some(end)) => (start, end),
             (Some(start), None) => (start, (line, column)),
             _ => ((0, 0), (0, 0)),
-        }
+        };
+        log::info!("Span line and column: {:?} => {:?}", self, res);
+        res
     }
 
     /// Create a fake span. Useful when generating test data that requires
@@ -97,10 +99,10 @@ impl SerializedSpan {
         let (start, end) = span.line_and_column();
         SerializedSpan {
             file_path: span.file.path().to_string(),
-            start: span.start,
-            end: span.end,
             start_line: start.0,
+            start: start.1,
             end_line: end.0,
+            end: end.1,
         }
     }
 }

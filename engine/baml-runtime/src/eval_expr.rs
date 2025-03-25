@@ -1,18 +1,22 @@
+use anyhow::Context;
 use futures::channel::mpsc;
+use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{BamlRuntime, FunctionResult};
 use baml_types::expr::{Arrow, Expr, ExprType, Name};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
+use internal_baml_core::ir::repr::ExprMetadata;
 use internal_baml_core::ir::repr::IntermediateRepr;
 
-pub struct EvalEnv<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default> {
-    pub context: HashMap<Name, Expr<T, U>>,
+pub struct EvalEnv<'a> {
+    pub context: HashMap<Name, Expr<ExprMetadata, ()>>,
     pub runtime: &'a BamlRuntime,
     pub expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
 }
 
-impl<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default> EvalEnv<'a, T, U> {
+impl<'a> EvalEnv<'a> {
     pub fn dump_ctx(&self) -> String {
         self.context
             .iter()
@@ -22,19 +26,19 @@ impl<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default> EvalE
     }
 }
 
-fn subst2<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default>(
-    expr: &Expr<T, U>,
+fn subst2<'a>(
+    expr: &Expr<ExprMetadata, ()>,
     var_name: &Name,
-    val: &Expr<T, U>,
-    env: &EvalEnv<'a, T, U>,
-) -> anyhow::Result<Expr<T, U>> {
+    val: &Expr<ExprMetadata, ()>,
+    env: &EvalEnv<'a>,
+) -> anyhow::Result<Expr<ExprMetadata, ()>> {
     // eprintln!(
     //     "SUBST2:\n[{} -> {}] in {:?}",
     //     var_name,
     //     val.dump_str(),
     //     expr
     // );
-    let res: anyhow::Result<Expr<T, U>> = match expr {
+    let res: anyhow::Result<Expr<ExprMetadata, ()>> = match expr {
         Expr::Var(expr_var_name, _) => {
             if expr_var_name == var_name {
                 Ok(val.clone())
@@ -94,10 +98,10 @@ fn subst2<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default>(
 
 /// Perform a single beta reduction. Note that we ignore env.context
 /// here. Only use env for the runtime.
-async fn beta_reduce<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default>(
-    env: &EvalEnv<'a, T, U>,
-    expr: &Expr<T, U>,
-) -> anyhow::Result<Expr<T, U>> {
+async fn beta_reduce<'a>(
+    env: &EvalEnv<'a>,
+    expr: &Expr<ExprMetadata, ()>,
+) -> anyhow::Result<Expr<ExprMetadata, ()>> {
     // eprintln!("BETA_REDUCE:\n{}\n", expr.dump_str());
     match expr {
         Expr::Atom(_, _) => Ok(expr.clone()),
@@ -163,7 +167,13 @@ async fn beta_reduce<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug 
                         .runtime
                         .create_ctx_manager(BamlValue::String("none".to_string()), None);
 
-                    let app_span = expr.meta().0.clone();
+                    let app_span = SerializedSpan::serialize(&expr.meta().0);
+                    if let Some(tx) = &env.expr_tx {
+                        tx.unbounded_send(vec![app_span]).unwrap();
+                    } else {
+                        // TODO: Don't panic :)
+                        panic!("tx is none");
+                    }
 
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
@@ -179,9 +189,22 @@ async fn beta_reduce<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug 
                         .unwrap()
                         .clone()
                         .0
-                        .map_meta(|_| U::default());
+                        .map_meta(|_| ());
+
+                    if let Some(tx) = &env.expr_tx {
+                        tx.unbounded_send(vec![]).unwrap();
+                    }
                     // eprintln!("BETA_REDUCE_LLM_RESULT: {:?}\n", val);
                     Ok(Expr::Atom(val, meta.clone()))
+                }
+                (Expr::Var(name, _), _) => {
+                    let var_lookup = env
+                        .context
+                        .get(name)
+                        .context(format!("Variable not found: {:?}", name))?;
+                    let new_app = Expr::App(Arc::new(var_lookup.clone()), x.clone(), meta.clone());
+                    let res = Box::pin(beta_reduce(env, &new_app)).await?;
+                    Ok(res)
                 }
                 _ => Err(anyhow::anyhow!("Not a function: {:?}", f)),
             }
@@ -191,10 +214,10 @@ async fn beta_reduce<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug 
 }
 
 /// Fully evaluate an expression to a value.
-pub async fn eval_to_value<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::Debug + Default>(
-    env: &EvalEnv<'a, T, U>,
-    expr: &Expr<T, U>,
-) -> anyhow::Result<Option<BamlValueWithMeta<U>>> {
+pub async fn eval_to_value<'a>(
+    env: &EvalEnv<'a>,
+    expr: &Expr<ExprMetadata, ()>,
+) -> anyhow::Result<Option<BamlValueWithMeta<()>>> {
     // eprintln!("called eval_to_value: {}", expr.dump_str());
     let max_steps = 1000;
     let mut current_expr = expr.clone();
@@ -220,8 +243,8 @@ pub async fn eval_to_value<'a, T: Clone + std::fmt::Debug, U: Clone + std::fmt::
 mod tests {
     use crate::internal_baml_diagnostics::Span;
     use baml_types::{BamlMap, BamlValue};
+    use futures::channel::mpsc;
     use internal_baml_core::ir::repr::make_test_ir;
-    use std::sync::mpsc;
 
     use super::*;
     use crate::BamlRuntime;

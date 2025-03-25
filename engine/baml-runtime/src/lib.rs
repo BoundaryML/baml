@@ -313,27 +313,6 @@ impl BamlRuntime {
     {
         let span = self.tracer.start_span(test_name, ctx, &Default::default());
 
-        if let Some(tx) = expr_tx {
-            // Send test spans directly through the channel
-            tx.unbounded_send(vec![
-                SerializedSpan {
-                    file_path: "test.baml".to_string(),
-                    start_line: 0,
-                    start: 0,
-                    end_line: 0,
-                    end: 3,
-                },
-                SerializedSpan {
-                    file_path: "test.baml".to_string(),
-                    start_line: 0,
-                    start: 6,
-                    end_line: 0,
-                    end: 10,
-                },
-            ])
-            .expect("Failed to send expr events");
-        }
-
         let is_expr_fn = self
             .inner
             .ir()
@@ -353,13 +332,14 @@ impl BamlRuntime {
 
             // Call the runtime synchronously.
             let (response_res, span_uuid) = self
-                .call_function(
+                .call_function_with_expr_events(
                     function_name.into(),
                     &params,
                     &ctx,
                     type_builder.as_ref(),
                     None,
                     None, // TODO: Collectors?
+                    expr_tx,
                 )
                 .await;
 
@@ -509,7 +489,9 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let res = self.call_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, None).await;
+        let res = self
+            .call_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, None)
+            .await;
         res
     }
 
@@ -562,7 +544,7 @@ impl BamlRuntime {
                     let env = EvalEnv {
                         context,
                         runtime: self,
-                        expr_tx: Some(expr_tx.clone()),
+                        expr_tx: expr_tx.clone(),
                     };
                     let params_expr: Expr<ExprMetadata, ()> = Expr::ArgsTuple(
                         params

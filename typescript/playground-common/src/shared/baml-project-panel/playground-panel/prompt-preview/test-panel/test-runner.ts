@@ -84,15 +84,15 @@ export const useRunTests = (maxBatchSize = 5) => {
           console.log('runTest', test)
 
           // TEMPORARY:
-          console.log("2Try to set flashing regions")
-          try {
-            vscode.postMessage({
-              command: 'set_flashing_regions',
-              spans: [{file_path: "tmp", start: 1, end: 4, start_line:0, end_line: 0}],
-            })
-          } catch (e) {
-            console.error('Failed to set flashing regions in VSCode:', e)
-          }
+          // console.log("2Try to set flashing regions")
+          // try {
+          //   vscode.postMessage({
+          //     command: 'set_flashing_regions',
+          //     spans: [{file_path: "tmp", start: 1, end: 4, start_line:0, end_line: 0}],
+          //   })
+          // } catch (e) {
+          //   console.error('Failed to set flashing regions in VSCode:', e)
+          // }
 
           try {
             const testCase = get(testCaseAtom(test))

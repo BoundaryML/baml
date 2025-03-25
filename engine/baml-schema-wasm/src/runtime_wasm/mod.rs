@@ -28,6 +28,7 @@ use jsonish::BamlValueWithFlags;
 
 use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use futures::channel::mpsc;
+use futures::StreamExt;
 use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
@@ -1731,6 +1732,7 @@ impl WasmFunction {
         get_baml_src_cb: js_sys::Function,
         on_expr_event: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
+        log::info!("TEST LOGGING");
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
@@ -1750,7 +1752,13 @@ impl WasmFunction {
         // Spawn a task to handle expression events
         let on_expr_event_clone = on_expr_event.clone();
         wasm_bindgen_futures::spawn_local(async move {
-            while let Some(spans) = rx.try_next().expect("TODO") {
+            while let Some(spans) = rx.next().await
+            // .map_err(|e| {
+            //     log::error!("Error receiving spans: {e}");
+            //     panic!("Error receiving spans: {e}");
+            // })
+            // .unwrap()
+            {
                 let this = JsValue::NULL;
                 match serde_wasm_bindgen::to_value(&spans) {
                     Ok(res) => {

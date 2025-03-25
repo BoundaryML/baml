@@ -24,11 +24,11 @@ let glowOnDecoration: vscode.TextEditorDecorationType | null  = null;
 let glowOffDecoration: vscode.TextEditorDecorationType | null = null;
 let isGlowOn: boolean = true;
 let animationTimer: NodeJS.Timeout | null = null;
-// let highlightRanges: vscode.Range[] = [];
-let highlightRanges: vscode.Range[] = [
-  new vscode.Range(new vscode.Position(1, 4), new vscode.Position(1,7)),
-  new vscode.Range(new vscode.Position(2, 2), new vscode.Position(2,8)),
-];
+let highlightRanges: vscode.Range[] = [];
+// let highlightRanges: vscode.Range[] = [
+//   new vscode.Range(new vscode.Position(1, 4), new vscode.Position(1,7)),
+//   new vscode.Range(new vscode.Position(2, 2), new vscode.Position(2,8)),
+// ];
 
 
 function scheduleDiagnostics(): void {
@@ -341,7 +341,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   vscode.commands.registerCommand('baml.setFlashingRegions', async (args: { spans: {file_path: string, start_line: number, start: number, end_line: number, end: number}[] }) => {
     console.log('HANDLER setFlashingRegions', args)
-    vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(args))
+    // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(args))
     context.subscriptions.push({
       dispose: () => {
         stopAnimation();
