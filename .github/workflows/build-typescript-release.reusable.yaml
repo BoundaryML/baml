@@ -27,7 +27,7 @@ jobs:
             node_build: pnpm build:napi-release --target aarch64-apple-darwin
 
           - target: aarch64-unknown-linux-gnu
-            host: ubuntu-latest
+            host: ubuntu-20.04
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # need a new version of manylinux to build crates on arm64-linux
             container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
@@ -45,9 +45,7 @@ jobs:
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-20.04
-            # container: quay.io/pypa/manylinux_2_28_x86_64:latest
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
-            # cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-unknown-linux-musl
             host: ubuntu-latest
