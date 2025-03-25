@@ -204,6 +204,10 @@ export class WebPanelView {
               command: 'get_port' | 'add_project' | 'cancelTestRun' | 'removeTest'
             }
           | {
+              command: 'set_flashing_regions'
+              spans: { file_path: string, start_line: number, start_char: number, end_line: number, end_char: number }[]
+            }
+          | {
               command: 'jumpToFile'
               span: StringSpan
             }
@@ -219,6 +223,7 @@ export class WebPanelView {
               data: WebviewToVscodeRpc
             },
       ) => {
+        console.log('DEBUG: webview message: ', message)
         if ('command' in message) {
           switch (message.command) {
             case 'add_project':
@@ -248,6 +253,12 @@ export class WebPanelView {
                 event: `baml.webview.${action}`,
                 properties: data,
               })
+              return
+            }
+            case 'set_flashing_regions': {
+              // Call the command handler with the spans
+              console.log('WEBPANELVIEW set_flashing_regions', message.spans)
+              vscode.commands.executeCommand('baml.setFlashingRegions', {spans: message.spans})
               return
             }
           }

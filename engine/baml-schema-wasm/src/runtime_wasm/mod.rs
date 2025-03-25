@@ -1,17 +1,16 @@
 pub mod generator;
 pub mod runtime_prompt;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
-use baml_runtime::SerializedSpan;
-use internal_baml_core::internal_baml_diagnostics::Span;
 use anyhow::Context;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::tracingv2::storage::storage::Collector;
 use baml_runtime::BamlSrcReader;
+use baml_runtime::FunctionResult;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
-use baml_runtime::FunctionResult;
+use baml_runtime::SerializedSpan;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
@@ -21,6 +20,7 @@ use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
+use internal_baml_core::internal_baml_diagnostics::Span;
 use internal_baml_core::ir::repr::Walker;
 use internal_llm_client::AllowedRoleMetadata;
 use jsonish::deserializer::deserialize_flags::Flag;
@@ -1744,26 +1744,23 @@ impl WasmFunction {
             on_partial_response.call1(&this, &res).unwrap();
         });
 
+        // Create the channel for expression events
         let (tx, mut rx) = mpsc::unbounded::<Vec<SerializedSpan>>();
 
+        // Spawn a task to handle expression events
         let on_expr_event_clone = on_expr_event.clone();
         wasm_bindgen_futures::spawn_local(async move {
-            while let Ok(Some(spans)) = rx.try_next() {
+            while let Some(spans) = rx.try_next().expect("TODO") {
                 let this = JsValue::NULL;
-                let res: JsValue = spans.into_iter().map(|span| WasmSpan {
-                    file_path: span.file_path,
-                    start: span.start,
-                    end: span.end,
-                    start_line: span.start_line,
-                    end_line: span.end_line,
-                }).collect::<Vec<WasmSpan>>().into();
-                on_expr_event_clone.call1(&this, &res).unwrap();
+                match serde_wasm_bindgen::to_value(&spans) {
+                    Ok(res) => {
+                        on_expr_event_clone.call1(&this, &res).expect("TODO");
+                    }
+                    Err(e) => {
+                        log::error!("Error serializing spans: {e}");
+                    }
+                }
             }
-        });
-
-        // Create the closure to handle expr events.
-        let cb_exprs = Box::new(move |r: Vec<SerializedSpan>| {
-            tx.unbounded_send(r).unwrap();
         });
 
         // Create your evaluation context, etc.
@@ -1772,10 +1769,9 @@ impl WasmFunction {
             js_fn_to_baml_src_reader(get_baml_src_cb),
         );
 
-        // Now pass collector_arc to your runtime's run_test
+        // Pass the sender to run_test_with_expr_events
         let (test_response, span) = rt
-            // .run_test(&function_name, &test_name, &ctx, Some(cb))
-            .run_test_with_expr_events(&function_name, &test_name, &ctx, Some(cb), Some(cb_exprs), None) // TODO: Just guessing/testing.
+            .run_test_with_expr_events(&function_name, &test_name, &ctx, Some(cb), Some(tx), None)
             .await;
 
         log::info!("test_response: {:#?}", test_response);

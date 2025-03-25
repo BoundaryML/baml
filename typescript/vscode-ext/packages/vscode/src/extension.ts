@@ -339,7 +339,9 @@ export function activate(context: vscode.ExtensionContext) {
     },
   )
 
-  vscode.commands.registerCommand('baml.setFlashingRegions', async (args: { spans: {file_path: string, start_line: number, start_char: number, end_line: number, end_char: number}[] }) => {
+  vscode.commands.registerCommand('baml.setFlashingRegions', async (args: { spans: {file_path: string, start_line: number, start: number, end_line: number, end: number}[] }) => {
+    console.log('HANDLER setFlashingRegions', args)
+    vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(args))
     context.subscriptions.push({
       dispose: () => {
         stopAnimation();
@@ -348,8 +350,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
     })
     const ranges = args.spans.map((span) => {
-      const start = new vscode.Position(span.start_line, span.start_char);
-      const end = new vscode.Position(span.start_line, span.start_char);
+      const start = new vscode.Position(span.start_line, span.start);
+      const end = new vscode.Position(span.end_line, span.end);
       return new vscode.Range(start, end)
     })
     highlightRanges = ranges
@@ -524,7 +526,7 @@ function createDecorations() {
 
 // Update the highlight based on current state
 function updateHighlight() {
-  vscode.window.showWarningMessage(`updateHighlight:` +  isGlowOn)
+  // vscode.window.showWarningMessage(`updateHighlight:` +  isGlowOn)
   const editor = vscode.window.activeTextEditor;
   if (!editor) return;
   

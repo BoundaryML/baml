@@ -3,6 +3,7 @@ import { useAtomValue, useSetAtom } from 'jotai'
 import { findMediaFile } from '../media-utils'
 import { ctxAtom, runtimeAtom, wasmAtom } from '../../../atoms'
 import { useAtomCallback } from 'jotai/utils'
+import { vscode } from '../../../vscode'
 import { useCallback } from 'react'
 import {
   type TestState,
@@ -14,17 +15,16 @@ import {
 import { testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 
+
+
 // Helper function to clear highlights if in VSCode
 const clearHighlights = () => {
-  if (typeof acquireVsCodeApi === 'function') {
-    try {
-      const vscode = acquireVsCodeApi()
-      vscode.postMessage({
-        command: 'clearHighlights'
-      })
-    } catch (e) {
-      console.error('Failed to clear highlights in VSCode:', e)
-    }
+  try {
+    vscode.postMessage({
+      command: 'clearHighlights'
+    })
+  } catch (e) {
+    console.error('Failed to clear highlights in VSCode:', e)
   }
 }
 
@@ -81,15 +81,18 @@ export const useRunTests = (maxBatchSize = 5) => {
         }
 
         const runTest = async (test: { functionName: string; testName: string }) => {
+          console.log('runTest', test)
 
           // TEMPORARY:
-          const vscode = acquireVsCodeApi()
-          console.log("Try to set flashing regions")
-          vscode.postMessage({
-            command: 'baml.setFlashingRegions',
-            spans: [{file_path: "tmp", start: 1, end: 4}],
-            animate: true
-          })
+          console.log("2Try to set flashing regions")
+          try {
+            vscode.postMessage({
+              command: 'set_flashing_regions',
+              spans: [{file_path: "tmp", start: 1, end: 4, start_line:0, end_line: 0}],
+            })
+          } catch (e) {
+            console.error('Failed to set flashing regions in VSCode:', e)
+          }
 
           try {
             const testCase = get(testCaseAtom(test))
@@ -103,6 +106,7 @@ export const useRunTests = (maxBatchSize = 5) => {
             const startTime = performance.now()
             setState(test, { status: 'running' })
             const result = await testCase.fn.run_test_with_expr_events(
+            // const result = await testCase.fn.run_test(
               rt,
               testCase.tc.name,
               (partial: WasmFunctionResponse) => {
@@ -110,20 +114,24 @@ export const useRunTests = (maxBatchSize = 5) => {
               },
               findMediaFile,
               (spans: WasmSpan[]) => {
-                console.log('spans', spans)
+                console.log('CALLBACK: spans', spans)
                 // Send spans to VSCode for highlighting if we're in the VSCode environment
-                if (spans.length > 0 && typeof acquireVsCodeApi === 'function') {
+                if (spans.length > 0) {
+                  const spans_to_send = spans.map(span => ({
+                    file_path: span.file_path,
+                    start_line: span.start_line,
+                    start: span.start,
+                    end_line: span.end_line,
+                    end: span.end
+                  }));
+                  console.log('spans_to_send: ', spans_to_send)
                   try {
-                    const vscode = acquireVsCodeApi()
+                    console.log('Sending spans to VSCode:')
                     vscode.postMessage({
-                      command: 'baml.setFlashingRegions',
-                      spans: spans.map(span => ({
-                        file_path: span.file_path,
-                        start: span.start,
-                        end: span.end
-                      })),
-                      animate: true
+                      command: 'set_flashing_regions',
+                      spans: spans_to_send,
                     })
+                    console.log('SUCCESS Sent spans to VSCode')
                   } catch (e) {
                     console.error('Failed to send spans to VSCode:', e)
                   }

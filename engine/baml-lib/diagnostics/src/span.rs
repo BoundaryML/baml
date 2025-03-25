@@ -86,10 +86,10 @@ impl From<(SourceFile, pest::Span<'_>)> for Span {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct SerializedSpan {
     pub file_path: String,
-    pub start: usize,
-    pub end: usize,
     pub start_line: usize,
+    pub start: usize,
     pub end_line: usize,
+    pub end: usize,
 }
 
 impl SerializedSpan {
@@ -104,4 +104,3 @@ impl SerializedSpan {
         }
     }
 }
-

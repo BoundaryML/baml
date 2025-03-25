@@ -29,11 +29,11 @@ use std::sync::Arc;
 use anyhow::Context;
 use anyhow::Result;
 use baml_types::expr::ExprType;
-use tokio::sync::Mutex;
-use std::sync::mpsc;
+use futures::channel::mpsc;
 use internal_baml_core::ast::Span;
 use internal_baml_core::ir::repr::initial_context;
 use internal_baml_core::ir::repr::ExprMetadata;
+use tokio::sync::Mutex;
 
 use crate::internal::llm_client::LLMCompleteResponse;
 use baml_types::expr::Expr;
@@ -209,7 +209,7 @@ impl BamlRuntime {
         baml_log::set_from_env(&copy)?;
 
         let inner = InternalBamlRuntime::from_file_content(root_path, files)?;
-        let (sender, receiver) = mpsc::channel();
+        let (sender, receiver) = mpsc::channel(1); // TODO: Remove this one.
         Ok((
             BamlRuntime {
                 inner,
@@ -299,22 +299,40 @@ impl BamlRuntime {
             .get_test_params(function_name, test_name, ctx, strict)
     }
 
-    pub async fn run_test_with_expr_events<F, G>(
+    pub async fn run_test_with_expr_events<F>(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
-        on_expr_event: Option<G>,
+        expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
         collector: Option<Arc<Collector>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
-      where F: Fn(FunctionResult),
-            G: Fn(Vec<SerializedSpan>) + Send + Sync + Clone + 'static,
+    where
+        F: Fn(FunctionResult),
     {
         let span = self.tracer.start_span(test_name, ctx, &Default::default());
 
-        // Make a channel for transmitting expr events.
-        let (expr_tx,expr_rx ) = std::sync::mpsc::channel::<Vec<internal_baml_diagnostics::SerializedSpan>>();
+        if let Some(tx) = expr_tx {
+            // Send test spans directly through the channel
+            tx.unbounded_send(vec![
+                SerializedSpan {
+                    file_path: "test.baml".to_string(),
+                    start_line: 0,
+                    start: 0,
+                    end_line: 0,
+                    end: 3,
+                },
+                SerializedSpan {
+                    file_path: "test.baml".to_string(),
+                    start_line: 0,
+                    start: 6,
+                    end_line: 0,
+                    end: 10,
+                },
+            ])
+            .expect("Failed to send expr events");
+        }
 
         let is_expr_fn = self
             .inner
@@ -325,17 +343,6 @@ impl BamlRuntime {
             .is_some();
 
         if is_expr_fn {
-
-            if on_expr_event.is_some() {
-                // Spawn a thread to listen for expression events and forward them to the callback
-                std::thread::spawn(move || {
-                    let cb = on_expr_event.as_ref().expect("It exists"); // .lock().unwrap();
-                    // let rx2 = rx.clone();
-                    while let Ok(events) = expr_rx.recv() {
-                        cb(events);
-                    }
-                });
-            }
             let type_builder = None;
             let rctx = ctx
                 .create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))
@@ -421,7 +428,7 @@ impl BamlRuntime {
                         evaluate_test_constraints(
                             &params,
                             &value_with_constraints,
-                            complete_resp,
+                            &complete_resp,
                             constraints,
                         )
                     }
@@ -466,7 +473,16 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
-        let res = self.run_test_with_expr_events::<F,fn(Vec<SerializedSpan>)>(function_name, test_name, ctx, on_event, None, collector).await;
+        let res = self
+            .run_test_with_expr_events::<F>(
+                function_name,
+                test_name,
+                ctx,
+                on_event,
+                None,
+                collector,
+            )
+            .await;
         res
     }
 
