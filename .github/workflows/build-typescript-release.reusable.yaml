@@ -25,6 +25,7 @@ jobs:
             node_build: pnpm build:napi-release --target aarch64-apple-darwin
 
           - target: aarch64-unknown-linux-gnu
+            # Do not use -latest, since it uses a different glibc version!
             host: ubuntu-20.04
             # from https://github.com/PyO3/maturin-action?tab=readme-ov-file#manylinux-docker-container
             # need a new version of manylinux to build crates on arm64-linux
@@ -42,6 +43,7 @@ jobs:
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-unknown-linux-gnu
+            # Do not use -latest, since it uses a newer glibc version!
             host: ubuntu-20.04
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
 
