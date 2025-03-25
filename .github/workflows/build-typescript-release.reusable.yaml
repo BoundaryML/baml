@@ -77,6 +77,8 @@ jobs:
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.host }}
     container: ${{ matrix._.container }}
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
       - uses: actions/checkout@v4
 
