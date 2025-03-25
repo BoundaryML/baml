@@ -81,6 +81,16 @@ export const useRunTests = (maxBatchSize = 5) => {
         }
 
         const runTest = async (test: { functionName: string; testName: string }) => {
+
+          // TEMPORARY:
+          const vscode = acquireVsCodeApi()
+          console.log("Try to set flashing regions")
+          vscode.postMessage({
+            command: 'baml.setFlashingRegions',
+            spans: [{file_path: "tmp", start: 1, end: 4}],
+            animate: true
+          })
+
           try {
             const testCase = get(testCaseAtom(test))
             if (!rt || !ctx || !testCase || !wasm) {
@@ -106,7 +116,7 @@ export const useRunTests = (maxBatchSize = 5) => {
                   try {
                     const vscode = acquireVsCodeApi()
                     vscode.postMessage({
-                      command: 'highlightSpans',
+                      command: 'baml.setFlashingRegions',
                       spans: spans.map(span => ({
                         file_path: span.file_path,
                         start: span.start,

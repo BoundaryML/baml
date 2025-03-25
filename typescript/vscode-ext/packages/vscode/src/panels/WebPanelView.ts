@@ -18,14 +18,6 @@ import { URI } from 'vscode-uri'
 import { getCurrentOpenedFile } from '../helpers/get-open-file'
 import { bamlConfig, requestDiagnostics } from '../plugins/language-server'
 import TelemetryReporter from '../telemetryReporter'
-import path from 'path'
-
-// Add highlight decoration globals
-let glowOnDecoration: vscode.TextEditorDecorationType | null = null
-let glowOffDecoration: vscode.TextEditorDecorationType | null = null
-let isGlowOn: boolean = true
-let animationTimer: NodeJS.Timeout | null = null
-let highlightRanges: vscode.Range[] = []
 
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -86,51 +78,38 @@ export class WebPanelView {
    * @param extensionUri The URI of the directory containing the extension.
    */
   public static render(extensionUri: Uri, portLoader: () => number, reporter: TelemetryReporter) {
-    const column = vscode.window.activeTextEditor
-      ? vscode.window.activeTextEditor.viewColumn
-      : ViewColumn.One
-
-    // If we already have a panel, show it.
     if (WebPanelView.currentPanel) {
-      WebPanelView.currentPanel._panel.reveal(column || ViewColumn.One)
-      return
+      // If the webview panel already exists reveal it
+      WebPanelView.currentPanel._panel.reveal(ViewColumn.Beside)
+    } else {
+      // If a webview panel does not already exist create and show a new one
+      const panel = window.createWebviewPanel(
+        // Panel view type
+        'showHelloWorld',
+        // Panel title
+        'BAML Playground',
+        // The editor column the panel should be displayed in
+        // process.env.VSCODE_DEBUG_MODE === 'true' ? ViewColumn.Two : ViewColumn.Beside,
+        { viewColumn: ViewColumn.Beside, preserveFocus: true },
+
+        // Extra panel configurations
+        {
+          // Enable JavaScript in the webview
+          enableScripts: true,
+
+          // Restrict the webview to only load resources from the `out` and `web-panel/dist` directories
+          localResourceRoots: [
+            ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri),
+            Uri.joinPath(extensionUri, 'out'),
+            Uri.joinPath(extensionUri, 'web-panel/dist'),
+          ],
+          retainContextWhenHidden: true,
+          enableCommandUris: true,
+        },
+      )
+
+      WebPanelView.currentPanel = new WebPanelView(panel, extensionUri, portLoader, reporter)
     }
-
-    // Always go to column 2. If the saved column would be column 1 (editor), try
-    // to avoid the panel opening on top of the editor
-    const secondColumn = column === ViewColumn.One ? ViewColumn.Two : (column || ViewColumn.Two)
-
-    // Otherwise, create a new panel.
-    const panel = window.createWebviewPanel(
-      'playground',
-      'BAML Playground',
-      {
-        // Open the webview in column 2
-        viewColumn: secondColumn,
-        preserveFocus: true,
-      },
-      {
-        // Enable javascript in the webview
-        enableScripts: true,
-
-        // And restrict the webview to only loading content from our extension's `media` directory.
-        localResourceRoots: [
-          URI.file(path.join(extensionUri.fsPath, 'media')),
-          URI.file(path.join(extensionUri.fsPath, 'out')),
-          // Add more roots as needed
-        ],
-
-        retainContextWhenHidden: true,
-      },
-    )
-
-    const config = workspace.getConfiguration()
-    config.update('baml.bamlPanelOpen', true, true)
-
-    // Initialize decorations for highlighting
-    createDecorations()
-
-    WebPanelView.currentPanel = new WebPanelView(panel, extensionUri, portLoader, reporter)
   }
 
   public postMessage<T>(command: string, content: T) {
@@ -148,27 +127,17 @@ export class WebPanelView {
   public dispose() {
     WebPanelView.currentPanel = undefined
 
-    // Clean up our resources
+    // Dispose of the current webview panel
     this._panel.dispose()
-
-    // Stop any ongoing animations and clean up decorations
-    stopAnimation()
-    if (glowOnDecoration) {
-      glowOnDecoration.dispose()
-      glowOnDecoration = null
-    }
-    if (glowOffDecoration) {
-      glowOffDecoration.dispose()
-      glowOffDecoration = null
-    }
 
     const config = workspace.getConfiguration()
     config.update('baml.bamlPanelOpen', false, true)
 
+    // Dispose of all disposables (i.e. commands) for the current webview panel
     while (this._disposables.length) {
-      const x = this._disposables.pop()
-      if (x) {
-        x.dispose()
+      const disposable = this._disposables.pop()
+      if (disposable) {
+        disposable.dispose()
       }
     }
   }
@@ -239,18 +208,6 @@ export class WebPanelView {
               span: StringSpan
             }
           | {
-              command: 'highlightSpans'
-              spans: Array<{
-                file_path: string
-                start: number
-                end: number
-              }>
-              animate?: boolean
-            }
-          | {
-              command: 'clearHighlights'
-            }
-          | {
               command: 'telemetry'
               meta: {
                 action: string
@@ -267,8 +224,8 @@ export class WebPanelView {
             case 'add_project':
               console.log('webview add_project')
               addProject()
+
               return
-            
             case 'jumpToFile': {
               try {
                 console.log('jumpToFile', message.span)
@@ -285,66 +242,6 @@ export class WebPanelView {
               }
               return
             }
-            
-            case 'highlightSpans': {
-              try {
-                console.log('highlightSpans', message.spans)
-                
-                // Stop any existing animation
-                stopAnimation()
-                
-                // Make sure we have decorations created
-                createDecorations()
-                
-                // If there are no spans or empty array, clear highlights
-                if (!message.spans || message.spans.length === 0) {
-                  highlightRanges = []
-                  updateHighlight()
-                  return
-                }
-                
-                // First span determines the file to open
-                const firstSpan = message.spans[0]
-                const uri = vscode.Uri.parse(firstSpan.file_path)
-                
-                // Open the document and convert spans to ranges
-                await vscode.workspace.openTextDocument(uri).then(async (doc) => {
-                  // Convert all spans to ranges
-                  highlightRanges = message.spans.map(span => {
-                    return new vscode.Range(
-                      doc.positionAt(span.start),
-                      doc.positionAt(span.end)
-                    )
-                  })
-                  
-                  // Show the document
-                  await vscode.window.showTextDocument(doc, { 
-                    viewColumn: ViewColumn.One
-                  })
-                  
-                  // Animate if requested (default to true)
-                  const shouldAnimate = message.animate !== false
-                  if (shouldAnimate) {
-                    startAnimation()
-                  } else {
-                    // Just show static highlight
-                    isGlowOn = true
-                    updateHighlight()
-                  }
-                })
-              } catch (e: any) {
-                console.error('Error highlighting spans:', e)
-              }
-              return
-            }
-            
-            case 'clearHighlights': {
-              stopAnimation()
-              highlightRanges = []
-              updateHighlight()
-              return
-            }
-            
             case 'telemetry': {
               const { action, data } = message.meta
               this.reporter?.sendTelemetryEvent({
@@ -424,100 +321,5 @@ export class WebPanelView {
       undefined,
       this._disposables,
     )
-  }
-}
-
-// Create our two decoration states
-function createDecorations() {
-  // Bright neon color for the glow effect (bright green)
-  const glowColor = '#00FF00'
-  const offColor = '#009900'
-  
-  // Dispose any existing decorations
-  if (glowOnDecoration) glowOnDecoration.dispose()
-  if (glowOffDecoration) glowOffDecoration.dispose()
-  
-  // Glow ON - attempt to create text glow with textDecoration property 
-  glowOnDecoration = vscode.window.createTextEditorDecorationType({
-      color: glowColor,
-      fontWeight: 'bold',
-      backgroundColor: 'transparent',
-      textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
-      // Try using before/after elements to reinforce the glow effect
-      before: {
-          contentText: '',
-          textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
-          color: glowColor
-      },
-      after: {
-          contentText: '',
-          textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
-          color: glowColor
-      }
-  })
-  
-  // Glow OFF - dimmer state
-  glowOffDecoration = vscode.window.createTextEditorDecorationType({
-      color: offColor,
-      fontWeight: 'bold',
-      backgroundColor: 'transparent',
-      textDecoration: `none; `,
-      // Try using before/after elements to reinforce the glow effect
-      before: {
-          contentText: '',
-          textDecoration: `none; `,
-          color: offColor
-      },
-      after: {
-          contentText: '',
-          textDecoration: `none; `,
-          color: offColor
-      }
-  })
-}
-
-// Update the highlight based on current state
-function updateHighlight() {
-  const editor = vscode.window.activeTextEditor
-  if (!editor) return
-  
-  // Apply appropriate decoration based on state
-  if (glowOnDecoration && glowOffDecoration && isGlowOn) {
-    editor.setDecorations(glowOffDecoration, [])
-    editor.setDecorations(glowOnDecoration, highlightRanges)
-  }
-  if (glowOnDecoration && glowOffDecoration && !isGlowOn) {
-    editor.setDecorations(glowOnDecoration, [])
-    editor.setDecorations(glowOffDecoration, highlightRanges)
-  }
-}
-
-// Start the simple toggling animation
-function startAnimation() {
-  console.log('startAnimation')
-  if (animationTimer) return
-  
-  // Toggle every 500ms (2 times per second)
-  animationTimer = setInterval(() => {
-      // Toggle between on and off states
-      isGlowOn = !isGlowOn
-      
-      // Update the highlight
-      updateHighlight()
-  }, 500) // 500ms = half a second
-}
-
-// Stop animation
-function stopAnimation(): void {
-  if (animationTimer) {
-      clearInterval(animationTimer)
-      animationTimer = null
-  }
-  
-  // Clean up decorations when stopping
-  const editor = vscode.window.activeTextEditor
-  if (editor && glowOnDecoration && glowOffDecoration) {
-    editor.setDecorations(glowOnDecoration, [])
-    editor.setDecorations(glowOffDecoration, [])
   }
 }

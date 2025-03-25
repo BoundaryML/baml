@@ -221,10 +221,11 @@ mod tests {
     // Make a testing runtime. It assumes the presence of
     // OPENAI_API_KEY environment variable.
     fn runtime(content: &str) -> (BamlRuntime, mpsc::Receiver<Vec<Span>>) {
+      let openai_api_key = std::env::var("OPENAI_API_KEY").unwrap();
         BamlRuntime::from_file_content(
             ".",
             &HashMap::from([("main.baml", content)]),
-            HashMap::from([("OPENAI_API_KEY", env!("OPENAI_API_KEY"))]),
+            HashMap::from([("OPENAI_API_KEY", openai_api_key.as_str())]),
         )
         .unwrap()
     }
