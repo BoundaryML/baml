@@ -45,7 +45,7 @@ jobs:
 
           - target: x86_64-unknown-linux-gnu
             host: ubuntu-20.04
-            container: quay.io/pypa/manylinux2014_x86_64:latest
+            # container: quay.io/pypa/manylinux2014_x86_64:latest
             node_build: pnpm build:napi-release --target x86_64-unknown-linux-gnu --use-napi-cross
 
           - target: x86_64-unknown-linux-musl
