@@ -754,6 +754,8 @@ redirects:
     destination: "/ref/llm-client-providers/aws-bedrock"
   - source: "/docs/snippets/clients/providers/azure"
     destination: "/ref/llm-client-providers/open-ai-from-azure"
+  - source: "/ref/llm-client-providers/azure"
+    destination: "/ref/llm-client-providers/open-ai-from-azure"
   - source: "/docs/snippets/clients/providers/gemini"
     destination: "/ref/llm-client-providers/google-ai-gemini"
   - source: "/docs/snippets/clients/providers/groq"
