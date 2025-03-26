@@ -107,7 +107,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: engine-${{ github.job }}-${{ matrix._.target }}
+          prefix-key: engine-${{ github.job }}-${{ matrix._.target }}-${{ matrix._.host }}
           # shared-key: engine-${{ github.job }}-${{ matrix._.target }}
           cache-on-failure: true
 
