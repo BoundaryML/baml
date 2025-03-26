@@ -118,9 +118,6 @@ pub struct BamlRuntime {
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
     pub async_runtime: Arc<tokio::runtime::Runtime>,
-
-    // Used inside the runtime for sending highlight events during expr evaluation.
-    pub eval_sender: mpsc::Sender<Vec<Span>>,
 }
 
 impl BamlRuntime {
@@ -174,9 +171,8 @@ impl BamlRuntime {
     pub fn from_directory<T: AsRef<str>>(
         path: &std::path::Path,
         env_vars: HashMap<T, T>,
-    ) -> Result<(Self, mpsc::Receiver<Vec<Span>>)> {
+    ) -> Result<Self> {
         let path = Self::parse_baml_src_path(path)?;
-        let (sender, receiver) = mpsc::channel(1);
 
         let copy = env_vars
             .iter()
@@ -184,24 +180,20 @@ impl BamlRuntime {
             .collect();
         baml_log::set_from_env(&copy)?;
 
-        Ok((
-            BamlRuntime {
-                inner: InternalBamlRuntime::from_directory(&path)?,
-                tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
-                env_vars: copy,
-                #[cfg(not(target_arch = "wasm32"))]
-                async_runtime: Self::get_tokio_singleton()?,
-                eval_sender: sender,
-            },
-            receiver,
-        ))
+        Ok(BamlRuntime {
+            inner: InternalBamlRuntime::from_directory(&path)?,
+            tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
+            env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: Self::get_tokio_singleton()?,
+        })
     }
 
     pub fn from_file_content<T: AsRef<str> + std::fmt::Debug, U: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
         env_vars: HashMap<U, U>,
-    ) -> Result<(Self, mpsc::Receiver<Vec<Span>>)> {
+    ) -> Result<Self> {
         let copy = env_vars
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
@@ -209,18 +201,13 @@ impl BamlRuntime {
         baml_log::set_from_env(&copy)?;
 
         let inner = InternalBamlRuntime::from_file_content(root_path, files)?;
-        let (sender, receiver) = mpsc::channel(1); // TODO: Remove this one.
-        Ok((
-            BamlRuntime {
-                inner,
-                tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
-                env_vars: copy,
-                #[cfg(not(target_arch = "wasm32"))]
-                async_runtime: Self::get_tokio_singleton()?,
-                eval_sender: sender,
-            },
-            receiver,
-        ))
+        Ok(BamlRuntime {
+            inner,
+            tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
+            env_vars: copy,
+            #[cfg(not(target_arch = "wasm32"))]
+            async_runtime: Self::get_tokio_singleton()?,
+        })
     }
 
     #[cfg(feature = "internal")]

@@ -251,7 +251,7 @@ mod tests {
 
     // Make a testing runtime. It assumes the presence of
     // OPENAI_API_KEY environment variable.
-    fn runtime(content: &str) -> (BamlRuntime, mpsc::Receiver<Vec<Span>>) {
+    fn runtime(content: &str) -> BamlRuntime {
         let openai_api_key = std::env::var("OPENAI_API_KEY").unwrap();
         BamlRuntime::from_file_content(
             ".",
@@ -263,7 +263,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_eval_expr() {
-        let (rt, _) = runtime(
+        let rt = runtime(
             r##"
 
         client<llm> GPT35 {
@@ -453,7 +453,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_haikus() {
-        let (rt, _) = runtime(
+        let rt = runtime(
             r##"
 
                class TwoInts {
@@ -605,7 +605,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_haikus_2() {
-        let (rt, _) = runtime(
+        let rt = runtime(
             r##"
 
 class TwoInts {

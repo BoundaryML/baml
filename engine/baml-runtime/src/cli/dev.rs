@@ -102,7 +102,7 @@ Thanks for trying out BAML!
                         );
                         let start = Instant::now();
                         match BamlRuntime::from_directory(&self.from, std::env::vars().collect()) {
-                            Ok((mut new_runtime, _)) => {
+                            Ok(mut new_runtime) => {
                                 let elapsed = start.elapsed();
                                 let _ = GenerateArgs {
                                     from: self.from.clone(),

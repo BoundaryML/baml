@@ -206,7 +206,7 @@ impl Server {
                 "Failed to bind to port {}; try using --port PORT to specify a different port.",
                 port
             ))?;
-        let (baml_runtime, _) = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
+        let baml_runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
         Ok((
             Arc::new(Self {
                 src_dir: src_dir.clone(),

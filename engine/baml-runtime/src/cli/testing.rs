@@ -124,7 +124,7 @@ impl TestArgs {
             }
         }
 
-        let (runtime, _) = BamlRuntime::from_directory(&from, std::env::vars().collect())?;
+        let runtime = BamlRuntime::from_directory(&from, std::env::vars().collect())?;
         let runtime = std::sync::Arc::new(runtime);
 
         let test_execution_args = TestFilter::from(
