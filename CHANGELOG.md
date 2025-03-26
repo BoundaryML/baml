@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.81.3](https://github.com/boundaryml/baml/compare/0.81.2..0.81.3) - 2025-03-26
+
+
+### Bug fixes
+- Fix ts build arguments (#1682) - ([83db889](https://github.com/boundaryml/baml/commit/83db889fa3c7e594f2e6133ba1c736afc332e710)) - aaronvg
+- Bump version to 0.81.3 - ([6a65cfa](https://github.com/boundaryml/baml/commit/6a65cfaed212e0df1f99cf4a0697e2e141533bbb)) - Aaron Villalpando
+
 ## [0.81.2](https://github.com/boundaryml/baml/compare/0.81.1..0.81.2) - 2025-03-26
 
 ## Bug fixes
