@@ -1,4 +1,3 @@
-
 #[cfg(test)]
 mod tests {
 
@@ -11,7 +10,6 @@ mod tests {
     use crate::server::connection::ConnectionInitializer;
     use crate::server::Server;
     use lsp_server::Message;
-
 
     pub struct TestServer {
         pub thread_join_handle: thread::JoinHandle<()>,
@@ -373,6 +371,9 @@ test TestSucc {
 }
 "##;
 
+    // This test can be useful for local debugging. But it can't run in CI
+    // or as part of the ful test suite because it requires Ctrl-C to
+    // terminate.
     // #[test]
     fn test_initialization() {
         TestCase::mk_simple().run().unwrap()

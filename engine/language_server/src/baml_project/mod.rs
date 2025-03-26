@@ -47,8 +47,6 @@ use crate::{DocumentKey, TextDocument};
 
 pub mod file_utils;
 pub mod position_utils;
-pub mod watch;
-
 
 // --- Helper functions for working with text documents ---
 
@@ -182,7 +180,6 @@ impl BamlProject {
             .collect::<Vec<String>>();
         formatted_files
     }
-
 }
 
 pub trait BamlRuntimeExt {
@@ -244,7 +241,8 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner.ir
+        self.inner
+            .ir
             .find_class_locations(symbol)
             .into_iter()
             .map(|span| {
