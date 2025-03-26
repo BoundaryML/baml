@@ -2,9 +2,6 @@ name: BAML Release - Build Typescript
 
 on:
   workflow_call: {}
-  push:
-    branches:
-      - glibc3
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -85,7 +82,7 @@ jobs:
 
       # Check GLIBC version for Linux targets
       - name: Check GLIBC version
-        if: contains(matrix._.target, 'linux') || contains(matrix._.target, 'darwin')
+        if: contains(matrix._.target, 'linux')
         run: |
           ldd --version
           
