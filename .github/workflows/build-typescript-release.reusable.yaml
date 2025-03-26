@@ -2,7 +2,9 @@ name: BAML Release - Build Typescript
 
 on:
   workflow_call: {}
-
+  push:
+    branches:
+      - glibc3
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -34,7 +36,7 @@ jobs:
             cargo_args: -p baml-typescript-ffi -p baml-python-ffi
 
           - target: x86_64-apple-darwin
-            host: macos-latest
+            host: macos-14
             node_build: pnpm build:napi-release --target x86_64-apple-darwin
 
           - target: x86_64-pc-windows-msvc
@@ -83,7 +85,7 @@ jobs:
 
       # Check GLIBC version for Linux targets
       - name: Check GLIBC version
-        if: contains(matrix._.target, 'linux')
+        if: contains(matrix._.target, 'linux') || contains(matrix._.target, 'darwin')
         run: |
           ldd --version
           
