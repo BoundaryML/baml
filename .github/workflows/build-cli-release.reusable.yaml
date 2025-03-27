@@ -1,0 +1,59 @@
+name: BAML Release - Build BAML CLI
+
+on:
+  workflow_call: {}
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-cli
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            static: true
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - name: Install musl tools
+        if: matrix.static == true
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+
+      # Build the CLI
+      - name: Build CLI (Static)
+        if: matrix.static == true
+        run: >
+          cargo build --release --bin baml-cli --target=${{ matrix.target }}
+          --features static-ssl
+          --no-default-features
+        working-directory: engine
+      - name: Build CLI (Dynamic)
+        if: matrix.static != true
+        run: cargo build --release --bin baml-cli --target=${{ matrix.target }}
+        working-directory: engine
+
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-cli-${{ matrix.target }}
+          path: engine/target/${{ matrix.target }}/release/baml-cli*

@@ -33,8 +33,12 @@ jobs:
 
   build-typescript-release:
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
+  
+  build-cli:
+    uses: ./.github/workflows/build-cli-release-reusable.yaml
 
-  build-vscode-release:
+  build-vscode:
+    needs: build-cli
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
 
   # placeholder fan-in step
@@ -45,7 +49,8 @@ jobs:
       - build-python-release
       - build-ruby-release
       - build-typescript-release
-      - build-vscode-release
+      - build-cli
+      - build-vscode
     steps:
       - run: echo "::do-nothing::" >/dev/null
 

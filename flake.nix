@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -19,7 +19,7 @@
 
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        clang = pkgs.llvmPackages_19.clang;
+        clang = pkgs.llvmPackages_17.clang;
         pythonEnv = pkgs.python3.withPackages (ps: []);
 
         toolchain = with fenix.packages.${system}; combine [
@@ -27,6 +27,7 @@
           minimal.rustc
           minimal.rust-std
           targets.wasm32-unknown-unknown.latest.rust-std
+	  targets.x86_64-unknown-linux-musl.latest.rust-std
         ];
 
         version = (builtins.fromTOML (builtins.readFile ./engine/Cargo.toml)).workspace.package.version;
@@ -42,11 +43,26 @@
           inherit (fenix.packages.${system}.latest) rust-std;
         };
 
+	# wasm-bindgen-cli = pkgs.rustPlatform.buildRustPackage rec {
+	#   pname = "wasm-bindgen-cli";
+	#   version = "0.2.92";
+	#   src = pkgs.fetchFromGitHub {
+	#     owner = "rustwasm";
+	#     repo = "wasm-bindgen";
+	#     rev = "${version}";
+	#     sha256 = "sha256-VMt+J5sazHPqmAdsoueS2WW6Pn1tvugaJaPnSJq9038=";
+	#   };
+	#   cargoHash = "sha256-+iIHleftJ+Yl9QHEBVI91NOhBw9qtUZfgooHKoyY1w4=";
+	#   buildInputs = with pkgs; [ openssl ];
+	#   nativeBuildInputs = with pkgs; [ pkg-config ];
+	#   cargoBuildFlags = ["--package wasm-bindgen-cli"];
+	# };
+
         buildInputs = (with pkgs; [
           git
           openssl
           pkg-config
-          lld_19
+          lld_17
           pythonEnv
           ruby
           ruby.devEnv
@@ -57,6 +73,16 @@
           uv
           wasm-pack
           pkgs.gcc
+          napi-rs-cli
+	  wasm-bindgen-cli
+
+	  # For building the typescript client.
+	  pixman
+	  cairo
+	  pango
+	  libjpeg
+	  giflib
+	  librsvg
         ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
         nativeBuildInputs = [
           pkgs.openssl
@@ -65,9 +91,10 @@
           pythonEnv
           pkgs.maturin
           pkgs.perl
-          pkgs.lld_19
+          pkgs.lld_17
           pkgs.gcc
         ];
+
         
         bamlCliInitData = pkgs.runCommand "baml-cli-init-data" {} ''
           mkdir -p $out
@@ -94,9 +121,9 @@
             src = ./engine;
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/headers "
+              "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
             else
-              "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.glibc.dev}/include";
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.glibc.dev}/include";
 
             cargoBuildFlags = "--bin baml-cli";
 

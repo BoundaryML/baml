@@ -20,6 +20,9 @@ importers:
       '@google/generative-ai':
         specifier: ^0.24.0
         version: 0.24.0
+      '@napi-rs/cli':
+        specifier: ^2.18.4
+        version: 2.18.4
       chart.js:
         specifier: ^4.4.7
         version: 4.4.7
@@ -460,6 +463,11 @@ packages:
 
   '@mapbox/node-pre-gyp@1.0.11':
     resolution: {integrity: sha512-Yhlar6v9WQgUp/He7BdgzOz8lqMQ8sU+jkCq7Wx8Myc5YFJLbEe7lgui/V7G1qB1DJykHSGwreceSaD60Y0PUQ==}
+    hasBin: true
+
+  '@napi-rs/cli@2.18.4':
+    resolution: {integrity: sha512-SgJeA4df9DE2iAEpr3M2H0OKl/yjtg1BnRI5/JyowS71tUWhrfSu2LT0V3vlHET+g1hBVlrO60PmEXwUEKp8Mg==}
+    engines: {node: '>= 10'}
     hasBin: true
 
   '@sinclair/typebox@0.27.8':
@@ -2866,6 +2874,8 @@ snapshots:
     transitivePeerDependencies:
       - encoding
       - supports-color
+
+  '@napi-rs/cli@2.18.4': {}
 
   '@sinclair/typebox@0.27.8': {}
 

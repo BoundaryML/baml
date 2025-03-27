@@ -36,8 +36,6 @@
     "@aws-sdk/client-sts": "^3.721.0",
     "@boundaryml/baml": "link:../../engine/language_client_typescript",
     "@google/generative-ai": "^0.24.0",
-    "chart.js": "^4.4.7",
-    "chartjs-node-canvas": "^4.1.6",
     "dotenv": "^16.4.5",
     "openai": "^4.87.3"
   },

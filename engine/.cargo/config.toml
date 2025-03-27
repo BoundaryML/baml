@@ -5,5 +5,6 @@ rustflags = ["--cfg", "tracing_unstable"]
 # https://github.com/rust-lang/cargo/issues/8607
 [target.x86_64-unknown-linux-musl]
 rustflags = ["-C", "link-arg=-lm", "--cfg", "tracing_unstable"]
+
 [target.aarch64-unknown-linux-musl]
-rustflags = ["-C", "link-arg=-lm", "--cfg", "tracing_unstable"]
+rustflags = ["-C", "target-features=-crt-static", "--cfg", "tracing_unstable"]

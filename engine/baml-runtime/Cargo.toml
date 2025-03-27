@@ -180,3 +180,12 @@ walkdir = "2.5.0"
 wasm-logger = "0.2.0"
 serial_test = "3.2.0"
 console_error_panic_hook = "0.1.7"
+
+[dependencies.openssl-sys]
+version = "*"
+features = ["vendored"]
+
+[dependencies.openssl]
+version = "*"
+features = ["vendored"]
+
