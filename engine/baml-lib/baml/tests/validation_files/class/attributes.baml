@@ -8,3 +8,9 @@ class TestClassAlias {
   key3 string @alias("key with space")
   key4 string @alias("key.with.punctuation/123")
 }
+
+class HasTwoBlockAttributes {
+  name string
+  @@description("A test")
+  @@alias("AKAHasTwo")
+}
