@@ -163,7 +163,7 @@ impl BamlProject {
         Ok(workspace_files)
     }
 
-    pub fn runtime_with_channel(&self, env_vars: HashMap<String, String>) -> Result<(BamlRuntime, mpsc::Receiver<Vec<Span>>), Diagnostics> {
+    pub fn runtime(&self, env_vars: HashMap<String, String>) -> Result<BamlRuntime, Diagnostics> {
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
@@ -172,7 +172,7 @@ impl BamlProject {
             .map(|(k, v)| (k.unchecked_to_string(), v.contents.clone()))
             .collect::<HashMap<_, _>>();
 
-        BamlRuntime::from_file_content(
+        let rt = BamlRuntime::from_file_content(
             &self.root_dir_name.as_os_str().to_str().expect("TODO"),
             &files_for_runtime,
             env_vars,
@@ -183,11 +183,9 @@ impl BamlProject {
                 log::debug!("Error: {:#?}", e);
                 return Diagnostics::new(self.root_dir_name.clone());
             }
-        })
-    }
+        })?;
 
-    pub fn runtime(&self, env_vars: HashMap<String, String>) -> Result<BamlRuntime, Diagnostics> {
-        Ok(self.runtime_with_channel(env_vars)?.0)
+        Ok(rt)
     }
 
     pub fn files(&self) -> Vec<String> {
@@ -208,8 +206,6 @@ impl BamlProject {
 
         rt.inner.diagnostics.clone()
     }
-
-
 }
 
 pub trait BamlRuntimeExt {
@@ -271,7 +267,8 @@ impl BamlRuntimeExt for BamlRuntime {
     }
 
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
-        self.inner.ir
+        self.inner
+            .ir
             .find_class_locations(symbol)
             .into_iter()
             .map(|span| {

@@ -256,7 +256,7 @@ impl WasmProject {
             })?;
 
         BamlRuntime::from_file_content(&self.root_dir_name, &hm, env_vars)
-            .map(|r| WasmRuntime { runtime: r.0 })
+            .map(|r| WasmRuntime { runtime: r })
             .map_err(|e| match e.downcast::<DiagnosticsError>() {
                 Ok(e) => {
                     let wasm_error = WasmDiagnosticError {

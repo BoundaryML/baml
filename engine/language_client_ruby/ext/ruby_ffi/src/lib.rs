@@ -56,7 +56,7 @@ impl BamlRuntimeFfi {
         env_vars: HashMap<String, String>,
     ) -> Result<BamlRuntimeFfi> {
         let baml_runtime = match BamlRuntime::from_directory(&directory, env_vars) {
-            Ok((br, _)) => br,
+            Ok(br) => br,
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_runtime_error(),
@@ -80,7 +80,7 @@ impl BamlRuntimeFfi {
         env_vars: HashMap<String, String>,
     ) -> Result<Self> {
         let baml_runtime = match BamlRuntime::from_file_content(&root_path, &files, env_vars) {
-            Ok((br, _)) => br,
+            Ok(br) => br,
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_runtime_error(),
