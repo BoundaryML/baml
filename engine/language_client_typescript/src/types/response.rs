@@ -17,7 +17,7 @@ impl HTTPResponse {
             "HTTPResponse(status={}, headers={}, body={})",
             self.inner.status,
             serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap()
+            serde_json::to_string_pretty(&self.inner.body.as_serde_value()).unwrap()
         )
     }
 
