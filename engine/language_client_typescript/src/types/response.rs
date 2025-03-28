@@ -1,6 +1,8 @@
 use napi::{bindgen_prelude::Env, JsObject};
 use napi_derive::napi;
 
+use super::request::HTTPBody;
+
 crate::lang_wrapper!(
     HTTPResponse,
     baml_types::tracing::events::HTTPResponse,
@@ -37,7 +39,8 @@ impl HTTPResponse {
     }
 
     #[napi(getter)]
-    pub fn body(&self) -> napi::Result<serde_json::Value> {
-        Ok(self.inner.body.clone())
+    pub fn body(&self) -> HTTPBody {
+        // TODO: Avoid clone.
+        HTTPBody::from(self.inner.body.clone())
     }
 }

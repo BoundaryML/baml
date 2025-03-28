@@ -197,7 +197,7 @@ pub struct HTTPResponse {
     pub request_id: HttpRequestId,
     pub status: u16,
     pub headers: serde_json::Value,
-    pub body: serde_json::Value,
+    pub body: HTTPBody,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

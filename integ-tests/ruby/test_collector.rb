@@ -17,7 +17,7 @@ describe "Ruby Collector Tests" do
     assert_equal 0, Baml::Collector.__function_span_count if Baml::Collector.respond_to?(:__function_span_count)
   end
 
-  after do 
+  after do
     # Force garbage collection and check collector is empty
     GC.start
     # GC.start(full_mark: true, immediate_sweep: true);
@@ -35,7 +35,7 @@ describe "Ruby Collector Tests" do
     b.TestOpenAIGPT4oMini(input: "hi there", baml_options: {collector: collector})
 
     puts "func called"
-    
+
 
     puts "#{Baml::Collector.__function_span_count}"
     puts "#{Baml::Collector.__print_storage}"
@@ -71,24 +71,26 @@ describe "Ruby Collector Tests" do
 
     # Verify request/response
     request = call.http_request
-    refute_nil request
-    assert_kind_of Hash, request.body
-    assert_includes request.body, "messages"
-    assert_includes request.body["messages"][0], "content"
-    refute_nil request.body["messages"][0]["content"]
-    assert_equal "gpt-4o-mini", request.body["model"]
+    body = request.body.json()
+    refute_nil body
+    assert_kind_of Hash, body
+    assert_includes body, "messages"
+    assert_includes body["messages"][0], "content"
+    refute_nil body["messages"][0]["content"]
+    assert_equal "gpt-4o-mini", body["model"]
 
     # Verify http response
     response = call.http_response
     refute_nil response
+    body = response.body.json()
     assert_equal 200, response.status
-    refute_nil response.body
-    assert_kind_of Hash, response.body
-    assert_includes response.body, "choices"
-    assert response.body["choices"].length > 0
-    assert_includes response.body["choices"][0], "message"
-    assert_includes response.body["choices"][0]["message"], "content"
-    refute_nil response.body["choices"][0]["message"]["content"]
+    refute_nil body
+    assert_kind_of Hash, body
+    assert_includes body, "choices"
+    assert body["choices"].length > 0
+    assert_includes body["choices"][0], "message"
+    assert_includes body["choices"][0]["message"], "content"
+    refute_nil body["choices"][0]["message"]["content"]
 
     puts "call.body.headers: #{call.http_response.headers}"
     # Verify response headers contain openai-version
@@ -109,7 +111,7 @@ describe "Ruby Collector Tests" do
     assert call_usage.input_tokens > 0
     refute_nil call_usage.output_tokens
     assert call_usage.output_tokens > 0
-    
+
     # Matches log usage
     assert_equal call_usage.input_tokens, log.usage.input_tokens
     assert_equal call_usage.output_tokens, log.usage.output_tokens
@@ -149,7 +151,7 @@ describe "Ruby Collector Tests" do
     assert_equal 0, function_logs.length
 
     stream = b.stream.TestOpenAIGPT4oMini(input: "hi there", baml_options: {collector: collector})
-    
+
     chunks = []
     stream.each do |chunk|
       puts "### chunk: #{chunk}"
@@ -158,7 +160,7 @@ describe "Ruby Collector Tests" do
 
     res = stream.get_final_response
     puts "### res: #{res}"
-    
+
     function_logs = collector.logs
     assert_equal 1, function_logs.length
 
@@ -329,7 +331,7 @@ describe "Ruby Collector Tests" do
     threads << Thread.new { b.TestOpenAIGPT4oMini(input: "call #1", baml_options: {collector: collector}) }
     threads << Thread.new { b.TestOpenAIGPT4oMini(input: "call #2", baml_options: {collector: collector}) }
     threads.each(&:join)
-    
+
     puts "------------------------- ended parallel calls"
 
     # Verify the collector has two function logs
