@@ -112,7 +112,7 @@
             };
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/headers -I${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include"
+              "" # Rely on default includes provided by stdenv.cc + libclang
             else
               "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.llvmPackages_19.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
 
@@ -144,7 +144,7 @@
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/headers -I${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include"
+              "" # Rely on default includes provided by stdenv.cc + libclang
             else
               "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.llvmPackages_19.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
           };
