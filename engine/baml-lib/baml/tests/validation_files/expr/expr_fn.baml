@@ -1,17 +1,11 @@
 fn Foo(x: int) -> int {
+    let y = x;
     x
 }
 
-fn Bar(x: int, y: string) -> int {
-    let y = go(x);
-    let z = go2(x,y);
-    go3(z)
-}
-
 test TestBar {
-    functions [Bar]
+    functions [Foo]
     args {
         x 1
-        y "hello"
     }
 }

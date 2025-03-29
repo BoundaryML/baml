@@ -69,20 +69,27 @@ pub fn parse_top_level_assignment(
 }
 
 pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::Stmt> {
+    dbg!(&token);
     assert_correct_parser!(token, Rule::stmt);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     // Our only statements are let bindings, so:
     let let_binding_token = tokens.next()?;
+    dbg!(&let_binding_token);
     assert_correct_parser!(let_binding_token, Rule::let_expr);
     let mut let_binding_tokens = let_binding_token.into_inner();
     let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
 
     let rhs = let_binding_tokens.next()?;
+    dbg!(&rhs);
     let rhs_span = diagnostics.span(rhs.as_span());
     let maybe_body = match rhs.as_rule() {
-        Rule::expr_fn_body => parse_function_body(rhs, diagnostics),
+        Rule::expr_fn_body => {
+            eprintln!("parsing expr_fn_body");
+            parse_function_body(rhs, diagnostics)
+        }
         Rule::expr => {
+            eprintln!("parsing expr");
             let maybe_expr = parse_expr(rhs, diagnostics);
             maybe_expr.map(|expr| FunctionBody {
                 stmts: Vec::new(),
@@ -90,7 +97,6 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             })
         }
         _ => {
-            dbg!(&rhs);
             diagnostics.push_error(DatamodelError::new_static(
                 "Parser only allows expr_fn_body and expr here",
                 rhs_span,
@@ -100,7 +106,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     };
     let maybe_semicolon = tokens.next();
     match maybe_semicolon {
-        Some(t) if t.as_str() == ";" => {}
+        Some(p) if p.as_str() == ";" => {}
         _ => {
             diagnostics.push_error(DatamodelError::new_static(
                 "Statement must end with a semicolon.",
@@ -120,7 +126,7 @@ pub fn parse_expr(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr
     let span = diagnostics.span(token.as_span());
     let expr_variant = token.into_inner().next()?;
     match expr_variant.as_rule() {
-        Rule::expression => {
+        Rule::expression_without_unquoted_string => {
             let expression = parse_expression(expr_variant, diagnostics);
             expression.map(|e| ExprWithSpan {
                 expr: Expr::Atom(e),
@@ -175,7 +181,6 @@ pub fn parse_lambda(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<ex
 pub fn parse_function_body(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FunctionBody> {
     assert_correct_parser!(token, Rule::expr_fn_body);
     let span = diagnostics.span(token.as_span());
-    // dbg!(&token);
     let mut tokens = token.into_inner();
     let mut stmts = Vec::new();
     let mut expr = None;

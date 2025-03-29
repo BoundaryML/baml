@@ -1,6 +1,6 @@
 // Missing semicolons.
 fn Foo(x: int) -> int {
-    let y = "hello";
+    let y = "hello"
     x
 }
 
@@ -10,7 +10,7 @@ let x = 1
 //   -->  expr/missing_semicolons.baml:3
 //    | 
 //  2 | fn Foo(x: int) -> int {
-//  3 |     let y = "hello";
+//  3 |     let y = "hello"
 //    | 
 // error: Statement must end with a semicolon.
 //   -->  expr/missing_semicolons.baml:7

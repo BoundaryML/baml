@@ -16,6 +16,17 @@ pub(crate) fn parse_expression(
     match first_child.as_rule() {
         Rule::numeric_literal => Some(Expression::NumericValue(first_child.as_str().into(), span)),
         Rule::string_literal => Some(parse_string_literal(first_child, diagnostics)),
+        Rule::raw_string_literal => Some(Expression::RawStringValue(parse_raw_string(
+            first_child,
+            diagnostics,
+        ))),
+        Rule::quoted_string_literal => {
+            let contents = first_child.into_inner().next().unwrap();
+            Some(Expression::StringValue(
+                unescape_string(contents.as_str()),
+                span,
+            ))
+        }
         Rule::map_expression => Some(parse_map(first_child, diagnostics)),
         Rule::array_expression => Some(parse_array(first_child, diagnostics)),
         Rule::jinja_expression => Some(parse_jinja_expression(first_child, diagnostics)),

@@ -37,6 +37,8 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         .collect::<HashSet<_>>();
     classes::assert_no_field_name_collisions(ctx, &codegen_targets);
 
+    expr_fns::validate_expr_fns(ctx);
+
     let _ = expr_typecheck::typecheck_exprs(ctx);
 
     if !ctx.diagnostics.has_errors() {
