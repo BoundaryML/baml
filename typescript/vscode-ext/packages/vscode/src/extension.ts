@@ -340,7 +340,8 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   vscode.commands.registerCommand('baml.setFlashingRegions', async (args: { spans: {file_path: string, start_line: number, start: number, end_line: number, end: number}[] }) => {
-    console.log('HANDLER setFlashingRegions', args)
+    // A helpful thing to toggle on for debugging:
+    // console.log('HANDLER setFlashingRegions', args)
     // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(args))
     context.subscriptions.push({
       dispose: () => {

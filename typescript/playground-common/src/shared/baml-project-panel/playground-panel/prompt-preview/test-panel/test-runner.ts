@@ -116,25 +116,23 @@ export const useRunTests = (maxBatchSize = 5) => {
               (spans: WasmSpan[]) => {
                 console.log('CALLBACK: spans', spans)
                 // Send spans to VSCode for highlighting if we're in the VSCode environment
-                if (spans.length > 0) {
-                  const spans_to_send = spans.map(span => ({
-                    file_path: span.file_path,
-                    start_line: span.start_line,
-                    start: span.start,
-                    end_line: span.end_line,
-                    end: span.end
-                  }));
-                  console.log('spans_to_send: ', spans_to_send)
-                  try {
-                    console.log('Sending spans to VSCode:')
-                    vscode.postMessage({
-                      command: 'set_flashing_regions',
-                      spans: spans_to_send,
-                    })
-                    console.log('SUCCESS Sent spans to VSCode')
-                  } catch (e) {
-                    console.error('Failed to send spans to VSCode:', e)
-                  }
+                const spans_to_send = spans.map(span => ({
+                  file_path: span.file_path,
+                  start_line: span.start_line,
+                  start: span.start,
+                  end_line: span.end_line,
+                  end: span.end
+                }));
+                console.log('spans_to_send: ', spans_to_send)
+                try {
+                  console.log('Sending spans to VSCode:')
+                  vscode.postMessage({
+                    command: 'set_flashing_regions',
+                    spans: spans_to_send,
+                  })
+                  console.log('SUCCESS Sent spans to VSCode')
+                } catch (e) {
+                  console.error('Failed to send spans to VSCode:', e)
                 }
               },
             )

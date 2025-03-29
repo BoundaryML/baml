@@ -32,12 +32,6 @@ fn subst2<'a>(
     val: &Expr<ExprMetadata, ()>,
     env: &EvalEnv<'a>,
 ) -> anyhow::Result<Expr<ExprMetadata, ()>> {
-    // eprintln!(
-    //     "SUBST2:\n[{} -> {}] in {:?}",
-    //     var_name,
-    //     val.dump_str(),
-    //     expr
-    // );
     let res: anyhow::Result<Expr<ExprMetadata, ()>> = match expr {
         Expr::Var(expr_var_name, _) => {
             if expr_var_name == var_name {
@@ -86,13 +80,6 @@ fn subst2<'a>(
         }
     };
     let res = res?;
-    // eprintln!(
-    //     "SUBST2:\n[{} -> {}] in {:?} ===> {:?}",
-    //     var_name,
-    //     val.dump_str(),
-    //     expr,
-    //     res
-    // );
     Ok(res)
 }
 
@@ -141,7 +128,6 @@ async fn beta_reduce<'a>(
                         .as_ref()
                         .unwrap()
                         .clone();
-                    // eprintln!("BETA_REDUCE_LAMBDA_RESULT2: {}\n", new_body.dump_str());
                     Box::pin(beta_reduce(env, &new_body)).await
                 }
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
@@ -170,16 +156,19 @@ async fn beta_reduce<'a>(
                     let app_span = SerializedSpan::serialize(&expr.meta().0);
                     if let Some(tx) = &env.expr_tx {
                         tx.unbounded_send(vec![app_span]).unwrap();
-                    } else {
-                        // TODO: Don't panic :)
-                        panic!("tx is none");
                     }
-
+                    // if let Some(tx) = &env.expr_tx {
+                    //     tx.unbounded_send(vec![]).unwrap();
+                    // }
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
                         .call_function(name.clone(), &args_map, &ctx, None, None, None)
                         .await
                         .0;
+
+                    if let Some(tx) = &env.expr_tx {
+                        tx.unbounded_send(vec![]).unwrap();
+                    }
                     let val = res
                         .unwrap()
                         .parsed()
@@ -190,11 +179,6 @@ async fn beta_reduce<'a>(
                         .clone()
                         .0
                         .map_meta(|_| ());
-
-                    if let Some(tx) = &env.expr_tx {
-                        tx.unbounded_send(vec![]).unwrap();
-                    }
-                    // eprintln!("BETA_REDUCE_LLM_RESULT: {:?}\n", val);
                     Ok(Expr::Atom(val, meta.clone()))
                 }
                 (Expr::Var(name, _), _) => {

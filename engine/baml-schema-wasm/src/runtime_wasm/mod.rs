@@ -1759,6 +1759,7 @@ impl WasmFunction {
             // })
             // .unwrap()
             {
+                log::info!("SPANS: {:#?}", spans);
                 let this = JsValue::NULL;
                 match serde_wasm_bindgen::to_value(&spans) {
                     Ok(res) => {

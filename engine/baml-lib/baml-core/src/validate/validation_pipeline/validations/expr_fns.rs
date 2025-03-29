@@ -27,6 +27,9 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     ctx.db.walk_toplevel_assignments().for_each(|assignment| {
         taken_names.insert(assignment.name().to_owned());
     });
+    ctx.db.walk_functions().for_each(|function| {
+        taken_names.insert(function.name().to_owned());
+    });
 
     for expr_fn in ctx.db.walk_expr_fns() {
         if taken_names.contains(expr_fn.name()) {
