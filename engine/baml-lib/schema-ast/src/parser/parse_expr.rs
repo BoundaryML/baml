@@ -28,24 +28,34 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let name = parse_identifier(tokens.next()?, diagnostics);
-    let args = parse_named_argument_list(
-        tokens.next()?,
-        diagnostics,
-    );
-    let _arrow = tokens.next()?;
-    let return_type =
-        parse_field_type_chain(tokens.next()?, diagnostics);
-    let maybe_body = parse_function_body(
-        tokens.next()?,
-        diagnostics,
-    );
-    maybe_body.map(move |body| ExprFn {
-        name,
-        args,
-        return_type,
-        body,
-        span,
-    })
+    let args = parse_named_argument_list(tokens.next()?, diagnostics);
+    let arrow_or_body = tokens.next()?;
+
+    // We may or may not have an arrow and a return type.
+    // If the args list is immediately followed by an arrow, we have an arrow and a return type.
+    // Otherwise, we have just a body.
+    let (maybe_return_type, maybe_body) = if matches!(arrow_or_body.as_rule(), Rule::ARROW) {
+        let return_type = parse_field_type_chain(tokens.next()?, diagnostics);
+        let function_body = parse_function_body(tokens.next()?, diagnostics);
+        (Some(return_type), function_body)
+    } else {
+        diagnostics.push_error(DatamodelError::new_static(
+            "fn must have a return type: e.g. fn Foo() -> int",
+            span.clone(),
+        ));
+        let function_body = parse_function_body(arrow_or_body, diagnostics);
+        (None, function_body)
+    };
+    match (maybe_return_type, maybe_body) {
+        (Some(return_type), Some(body)) => Some(ExprFn {
+            name,
+            args,
+            return_type,
+            body,
+            span,
+        }),
+        _ => None,
+    }
 }
 
 pub fn parse_top_level_assignment(
@@ -53,7 +63,6 @@ pub fn parse_top_level_assignment(
     diagnostics: &mut Diagnostics,
 ) -> Option<expr::TopLevelAssignment> {
     assert_correct_parser!(token, Rule::top_level_assignment);
-    // dbg!(&token);
     let mut tokens = token.into_inner();
     let stmt = parse_statement(tokens.next()?, diagnostics)?;
     Some(TopLevelAssignment { stmt })
@@ -67,10 +76,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let let_binding_token = tokens.next()?;
     assert_correct_parser!(let_binding_token, Rule::let_expr);
     let mut let_binding_tokens = let_binding_token.into_inner();
-    let identifier = parse_identifier(
-        let_binding_tokens.next()?,
-        diagnostics,
-    );
+    let identifier = parse_identifier(let_binding_tokens.next()?, diagnostics);
 
     let rhs = let_binding_tokens.next()?;
     let rhs_span = diagnostics.span(rhs.as_span());
@@ -78,7 +84,6 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         Rule::expr_fn_body => parse_function_body(rhs, diagnostics),
         Rule::expr => {
             let maybe_expr = parse_expr(rhs, diagnostics);
-            // let span = diagnostics.span(let_binding_token.as_span());
             maybe_expr.map(|expr| FunctionBody {
                 stmts: Vec::new(),
                 expr,
@@ -93,6 +98,16 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
             None
         }
     };
+    let maybe_semicolon = tokens.next();
+    match maybe_semicolon {
+        Some(t) if t.as_str() == ";" => {}
+        _ => {
+            diagnostics.push_error(DatamodelError::new_static(
+                "Statement must end with a semicolon.",
+                span.clone(),
+            ));
+        }
+    }
     maybe_body.map(|body| Stmt {
         identifier,
         body,
@@ -149,12 +164,7 @@ pub fn parse_lambda(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<ex
     let mut args = ArgumentsList {
         arguments: Vec::new(),
     };
-    parse_arguments_list(
-        tokens.next()?,
-        &mut args,
-        &None,
-        diagnostics,
-    );
+    parse_arguments_list(tokens.next()?, &mut args, &None, diagnostics);
     let maybe_body = parse_function_body(tokens.next()?, diagnostics);
     maybe_body.map(|body| ExprWithSpan {
         expr: Expr::Lambda(args, Box::new(body)),

@@ -212,7 +212,7 @@ top_level_assignment = { stmt }
 // fn foo(x:int, y: bool?) -> string {
 // go(x,y)
 // }
-expr_fn = { "fn" ~ identifier ~ named_argument_list ~ ARROW ~ field_type_chain? ~ expr_fn_body }
+expr_fn = { "fn" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_fn_body }
 
 // Body of a function (including curly brackets).
 expr_fn_body = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE?)* ~ expr ~ NEWLINE? ~ BLOCK_CLOSE }
@@ -222,7 +222,7 @@ expr_fn_body = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE?)* ~ expr ~ NEWLINE? ~ 
 expr = { fn_app | lambda | expression }
 
 // Statement.
-stmt = { let_expr ~ ";" }
+stmt = { let_expr ~ ";"? }
 
 // Let-binding statement.
 let_expr = { "let" ~ identifier ~ "=" ~ (expr_fn_body | expr) }
