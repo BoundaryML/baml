@@ -126,7 +126,7 @@ pub fn parse_expr(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr
     let span = diagnostics.span(token.as_span());
     let expr_variant = token.into_inner().next()?;
     match expr_variant.as_rule() {
-        Rule::expression_without_unquoted_string => {
+        Rule::expression => {
             let expression = parse_expression(expr_variant, diagnostics);
             expression.map(|e| ExprWithSpan {
                 expr: Expr::Atom(e),

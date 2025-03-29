@@ -193,6 +193,13 @@ async fn beta_reduce<'a>(
                 _ => Err(anyhow::anyhow!("Not a function: {:?}", f)),
             }
         }
+        Expr::Var(name, _) => {
+            let var_lookup = env
+                .context
+                .get(name)
+                .context(format!("Variable not found: {:?}", name))?;
+            Ok(var_lookup.clone())
+        }
         _ => Err(anyhow::anyhow!("Not an application: {:?}", expr)),
     }
 }
@@ -249,127 +256,76 @@ mod tests {
     async fn test_eval_expr() {
         let rt = runtime(
             r##"
+function MakePoem(length: int) -> string {
+    client GPT4o
+    prompt #"Write a poem {{ length }} lines long."#
+}
 
-        client<llm> GPT35 {
-          provider baml-openai-chat
-          options {
-            model gpt-3.5-turbo
-            api_key env.OPENAI_API_KEY
-          }
-        }
+function CombinePoems(poem1: string, poem2: string) -> string {
+    client GPT4o
+    prompt #"Combine the following two poems into one poem.
 
-        function CountWords(text: string) -> int {
-          client GPT35
-          prompt #"
-          "#
-        }
+    Poem 1:
+    {{ poem1 }}
 
-        fn Second(x: string, y: string) -> int {
-          let x1 = LlmParseInt(x);
-          let y1 = LlmParseInt(y);
-          let z1 = Double(y1);
-          let a1 = Double(z1);
-          a1
-        }
+    Poem 2:
+    {{ poem2 }}
+    "#
+}
 
-        fn DoId(x: int, y: int) -> int {
-          let z = Double(x);
-          let a = Double(z);
-          a
-        }
+let poem = MakePoem(10);
 
-        function Double(my_inp: int) -> int {
-          client GPT35
-          prompt #"
-          Double the following integer:
-          {{ my_inp }}
+let another = {
+  let x = MakePoem(10);
+  let y = mkePoem(5);
+  CombinePoems(x,y)
+};
 
-          {{ ctx.output_format}}
-          "#
-        }
+fn Pipeline() -> string {
+    let x = MakePoem(6);
+    let y = MakePoem(6);
+    let a = MakePoem(6);
+    let b = MakePoem(6);
+    let xy = CombinePoems(x,y);
+    let ab = CombinePoems(a,b);
+    CombinePoems(xy, ab)
+}
 
-        function LlmParseInt(inp: string) -> int {
-          client GPT35
-          prompt #"
-            Parse the following text as an integer:
-            {{ inp }}
+fn Pyramid() -> string {
+  CombinePoems( CombinePoems( MakePoem(10), MakePoem(10)), MakePoem(10))
+}
 
-            {{ ctx.output_format}}
-          "#
-        }
+fn OuterPyramid() -> string {
+  poem
+}
 
-        test TestSecond {
-          functions [Second]
-          args {
-            x "123"
-            y "456"
-          }
-        }
+test TestPipeline() {
+  functions [Pipeline]
+  args { }
+}
 
-        test TestParse {
-          functions [LlmParseInt]
-          args { inp "123"}
-          @@assert({{ this == 124 }})
-        }
+test TestPyramid() {
+  functions [Pyramid]
+  args { }
+}
 
-        enum MyEnum {
-          A
-          B
-          C
-        }
-        
-        
-        class Foo {
-          my_foo Foo?
-        }
-        
-        class A {
-          i int
-        }
-        
-        client<llm> GPT3 {
-          provider openai
-          options {
-            model gpt-4o
-            api_key env.OPENAI_API_KEY
-          }
-        }
-        
-        enum Color {
-          RED
-          GREEN
-          BLUE
-        }
-        
-        fn First(x: int, y: int) -> int {
-          x
-        }
-        
-        
-        function DoIt(a: int) -> int {
-          client GPT3
-          prompt #"
-            Just return {{ a }} times 100.
-        
-            {{ ctx.output_format }}
-          "#
-        }
-        
-        test FirstTest {
-          functions [First]
-          args {
-            x 1
-            y 2
-          }
-        }
-        
-        test FooTest {
-          functions [DoIt]
-          args {
-            a 1
-            c RED
-            }
-        }
+test OuterPyramid() {
+  functions [OuterPyramid]
+  args { }
+}
+
+client<llm> GPT4o {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+test TestMakePoem() {
+    functions [MakePoem]
+    args { length 4 }
+}
         "##,
         );
         let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
@@ -427,327 +383,11 @@ mod tests {
         };
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("First", "FirstTest", &ctx, Some(on_event), None)
-            // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
-            // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
-            .await;
-        // dbg!(res);
-        assert!(false);
-    }
-
-    #[tokio::test]
-    async fn test_haikus() {
-        let rt = runtime(
-            r##"
-
-               class TwoInts {
-                int1 int
-                int2 int
-              }
-              
-              function AddThem(two_ints: TwoInts) -> int {
-                client GPT3
-                prompt #"
-                  Add {{ two_ints.int1}} and {{ two_ints.int2 }} together.
-                  {{ ctx.output_format }}
-                "#
-              }
-              
-              test AddThemTest {
-                functions [AddThem]
-                args {
-                  two_ints {
-                    int1 1
-                    int2 2
-                    }
-                }
-              }
-              
-              class BreakResult {
-                two_ints TwoInts
-                reason_interesting string @description("A reason why this split is interesting")
-              }
-              
-              function BreakThem(inp: int) -> BreakResult {
-                client GPT3
-                prompt #"
-                  Split {{ inp }} into two integers in any way you like.
-                  {{ ctx.output_format }}
-                "#
-              }
-              
-              test BreakThemTest {
-                functions [BreakThem]
-                args {
-                  inp 123
-                }
-              }
-              
-              fn Compose(two_ints: TwoInts) -> BreakResult {
-                let z = AddThem(two_ints);
-                BreakThem(z)
-              }
-              
-              test ComposeTest {
-                functions [Compose]
-                args {
-                  two_ints {
-                    int1 1
-                    int2 2
-                  }
-                }
-              }       
-        class Comparison {
-          haiku1 string
-          haiku1_score int
-          haiku2 string
-          haiku2_score int
-          three_reasons string[]
-        }
-        
-        function CompareHaikus(haiku1: string, haiku2: string) -> Comparison {
-          client GPT3
-          prompt #"
-            Compare the following haikus:
-            {{ haiku1 }}
-            {{ haiku2 }}
-            {{ ctx.output_format }}
-          "#
-        }
-        
-        fn HaikusForTopic(topic: string) -> Comparison {
-          let haiku1 = Haiku35(topic);
-          let haiku2 = Haiku4o(topic);
-          CompareHaikus(haiku1, haiku2)
-        }
-        
-        test HaikusForTopicTest {
-          functions [HaikusForTopic]
-          args {
-            topic "The sky is blue"
-          }
-        }
-        
-        function Haiku35(topic: string) -> string {
-          client GPT3
-          prompt #"
-            Produce a haiku about {{ topic }}"#
-        }
-        
-        function Haiku4o(topic: string) -> string {
-          client GPT4o
-          prompt #"
-            Produce a haiku about {{ topic }}"#
-        }
-        
-        test Haiku35Test {
-          functions [Haiku35]
-          args {
-            topic "The sky is blue"
-          }
-        }
-        
-        test Haiku4oTest {
-          functions [Haiku4o]
-          args {
-            topic "The sky is blue"
-          }
-        }
-        
-
-        client<llm> GPT3 {
-          provider openai
-          options {
-            model gpt-3.5-turbo
-            api_key env.OPENAI_API_KEY
-          }
-        }
-        
-        client<llm> GPT4o {
-          provider openai
-          options {
-            model gpt-4o
-            api_key env.OPENAI_API_KEY
-          }
-        }
-      "##,
-        );
-        eprintln!("ir: {:?}", rt.inner.ir);
-        let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
-        let on_event = |res: FunctionResult| {
-            eprintln!("on_event: {:?}", res);
-        };
-        let (res, _) = rt
-            // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("Compose", "ComposeTest", &ctx, Some(on_event), None)
+            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
             .await;
         dbg!(res);
         assert!(false);
-    }
-
-    #[tokio::test]
-    async fn test_haikus_2() {
-        let rt = runtime(
-            r##"
-
-class TwoInts {
-  int1 int
-  int2 int
-}
-
-function AddThem(two_ints: TwoInts) -> int {
-  client GPT3
-  prompt #"
-    Add {{ two_ints.int1 }} and {{ two_ints.int2 }} together.
-    {{ ctx.output_format }}
-  "#
-}
-
-function BreakThem(inp: int) -> TwoInts {
-  client GPT3
-  prompt #"
-    Split {{ inp }} into two integers in any way you like.
-    {{ ctx.output_format }}
-  "#
-}
-
-fn Third(x: int) -> string {
-  x
-}
-
-
-fn Compose(two_ints: TwoInts) -> TwoInts {
-  BreakThem( AddThem(two_ints) )
-}
-
-
-test ComposeTest {
-  functions [Compose]
-  args {
-    two_ints {
-      int1 23
-      int2 12
-    }
-  }
-}
-
-class Comparison {
-  haiku1 string
-  haiku1_score int
-  haiku2 string
-  haiku2_score int
-  three_reasons string[]
-}
-
-function CompareHaikus(haiku1: string, haiku2: string, n_reasons: int) -> Comparison {
-  client GPT4o
-  prompt #"
-    Compare the following haikus:
-
-    {{ haiku1 }}
-
-    {{ haiku2 }}
-
-    Give {{ n_reasons }} reasons why you chose the higher-rated haiku.
-    {{ ctx.output_format }}
-  "#
-}
-
-fn HaikusForTopic(topic: string) -> Comparison {
-  let haiku1 = Haiku35(topic);
-  let haiku2 = Haiku4o(topic);
-  CompareHaikus(haiku1, haiku2)
-}
-
-test HaikusForTopicTest {
-  functions [HaikusForTopic]
-  args {
-    topic "The most wonderful thing about Mexico is its men"
-  }
-}
-
-
-let some_haiku = "The sky is blue, the grass is green, the sky is blue, the grass is green";
-
-let better_haiku = {
-  let topic = "Let's write GPU kernels in BAML";
-  Haiku4o(topic)
-};
-
-fn UseTopLevelThings(n_reasons: int) -> Comparison {
-  CompareHaikus(some_haiku, better_haiku, n_reasons)
-}
-
-test UseTopLevelThingsTest {
-  functions [UseTopLevelThings]
-  args {
-    n_reasons 3
-  }
-}
-
-function Haiku35(topic: string) -> string {
-  client GPT3
-  prompt #"
-    Produce a haiku about {{ topic }}"#
-}
-
-function Haiku4o(topic: string) -> string {
-  client GPT4o
-  prompt #"
-    Produce a haiku about {{ topic }}"#
-}
-
-test Haiku35Test {
-  functions [Haiku35]
-  args {
-    topic "The sky is blue"
-  }
-}
-
-test Haiku4oTest {
-  functions [Haiku4o]
-  args {
-    topic "The sky is blue"
-  }
-}
-
-
-
-client<llm> GPT3 {
-  provider openai
-  options {
-    model gpt-3.5-turbo
-    api_key env.OPENAI_API_KEY
-  }
-}
-
-
-client<llm> GPT4o {
-  provider openai
-  options {
-    model gpt-4o
-    api_key env.OPENAI_API_KEY
-  }
-}
-      "##,
-        );
-        eprintln!("ir: {:?}", rt.inner.ir);
-        let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
-        let on_event = |res: FunctionResult| {
-            eprintln!("on_event: {:?}", res);
-        };
-        let (res, _) = rt
-            // .run_test("Compose", "ComposeTest", &ctx, Some(on_event))
-            .run_test(
-                "UseTopLevelThings",
-                "UseTopLevelThingsTest",
-                &ctx,
-                Some(on_event),
-                None,
-            )
-            .await;
-        dbg!(res);
     }
 }

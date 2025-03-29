@@ -113,7 +113,6 @@ jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
 expression        =  { jinja_expression | map_expression | array_expression | numeric_literal | string_literal | identifier }
-expression_without_unquoted_string = { jinja_expression | map_expression | array_expression | numeric_literal | identifier| quoted_string_literal | raw_string_literal }
 ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
 ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
 // ######################################
@@ -124,7 +123,7 @@ numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 // ######################################
 // String literals. These behave specially in BAML.
 // ######################################
-banned_chars            = @{ "#" | "@" | "{" | "(" | "[" | "<" | "}" | ")" | "]" | ">" | "," | "'" | " //" | NEWLINE }
+banned_chars            = @{ "#" | "@" | "{" | "(" | "[" | "<" | "}" | ")" | "]" | ">" | "," | "'" | ";" | " //" | NEWLINE }
 banned_start_chars      =  { WHITESPACE | banned_chars }
 banned_end_chars        =  { WHITESPACE | banned_chars }
 unquoted_string_literal = @{ (!banned_start_chars ~ ANY) ~ (!banned_chars ~ !"\"" ~ ANY)* ~ (!banned_end_chars ~ ANY)* }
@@ -221,7 +220,7 @@ expr_fn_body = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE)* ~ expr ~ NEWLINE? ~ B
 
 // A compound expression - either function application, abstraction, or one of the already-defined
 // `expression` forms (literal values).
-expr = { fn_app | lambda | expression_without_unquoted_string }
+expr = { fn_app | lambda | expression }
 
 // Statement.
 stmt = { let_expr ~ SEMICOLON? }
