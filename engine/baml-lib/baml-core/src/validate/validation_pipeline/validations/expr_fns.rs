@@ -1,9 +1,9 @@
 use std::collections::HashSet;
 
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::expr;
-use internal_baml_schema_ast::ast::Expression;
+// use internal_baml_schema_ast::ast::expr;
 use internal_baml_schema_ast::ast::WithName;
+use internal_baml_schema_ast::ast::{Expression, Stmt};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -68,7 +68,7 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     }
 }
 
-fn validate_stmt(ctx: &mut Context<'_>, stmt: &expr::Stmt, scope: &HashSet<String>) {
+fn validate_stmt(ctx: &mut Context<'_>, stmt: &Stmt, scope: &HashSet<String>) {
     // Make a copy of the scope above, for augmenting an passing down.
     let mut scope_names = scope.clone();
     for sub_stmt in stmt.body.stmts.iter() {
@@ -80,7 +80,7 @@ fn validate_stmt(ctx: &mut Context<'_>, stmt: &expr::Stmt, scope: &HashSet<Strin
     validate_expr(ctx, &stmt.body.expr, &scope_names);
 }
 
-fn validate_expr(ctx: &mut Context<'_>, expr: &expr::ExprWithSpan, scope: &HashSet<String>) {
+fn validate_expr(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet<String>) {
     match &expr.expr {
         expr::Expr::Atom(Expression::Identifier(name)) => {
             if !scope.contains(&name.to_string()) {

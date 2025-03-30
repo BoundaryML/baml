@@ -112,7 +112,17 @@ jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
-expression        =  { jinja_expression | map_expression | array_expression | numeric_literal | class_constructor | string_literal | identifier }
+expression        =  {
+    fn_app |
+    lambda |
+    jinja_expression |
+    map_expression |
+    array_expression |
+    numeric_literal |
+    class_constructor |
+    string_literal |
+    identifier
+}
 ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
 ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
 // ######################################
@@ -215,27 +225,23 @@ top_level_assignment = { stmt }
 // fn foo(x:int, y: bool?) -> string {
 //   go(x,y)
 // }
-expr_fn = { "fn" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_fn_body }
+expr_fn = { "fn" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
-expr_fn_body = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE)* ~ expr ~ NEWLINE? ~ BLOCK_CLOSE }
-
-// A compound expression - either function application, abstraction, or one of the already-defined
-// `expression` forms (literal values).
-expr = { fn_app | lambda | expression }
+expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE)* ~ expression ~ NEWLINE? ~ BLOCK_CLOSE }
 
 // Statement.
 // Currently the only statement is a let-binding.
 stmt = { let_expr ~ SEMICOLON? }
 
 // Let-binding statement.
-let_expr = { "let" ~ identifier ~ "=" ~ (expr_fn_body | expr) }
+let_expr = { "let" ~ identifier ~ "=" ~ expression }
 
 // Function applicatino.
-fn_app = { identifier ~ "(" ~ expr? ~ ("," ~ expr)* ~ ")" }
+fn_app = { identifier ~ "(" ~ expression? ~ ("," ~ expression)* ~ ")" }
 
 // Anaonymous function.
-lambda = { named_argument_list ~ "=>" ~ expr }
+lambda = { named_argument_list ~ "=>" ~ expression }
 
 // Class constructors.
 // e.g. `new MyClass { x = 1, y = 2 }`.

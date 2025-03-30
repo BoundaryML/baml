@@ -25,8 +25,10 @@ pub use argument::{Argument, ArgumentId, ArgumentsList};
 pub use assignment::Assignment;
 pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use config::ConfigBlockProperty;
-pub use expr::{Expr, ExprFn, ExprWithSpan, TopLevelAssignment};
-pub use expression::{ClassConstructor, Expression, RawString};
+pub use expr::{ExprFn, TopLevelAssignment};
+pub use expression::{
+    ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, RawString, Stmt,
+};
 pub use field::{Field, FieldArity, FieldType};
 pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;

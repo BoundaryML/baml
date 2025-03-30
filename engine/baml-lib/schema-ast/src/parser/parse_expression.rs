@@ -1,5 +1,6 @@
 use super::{
     helpers::{parsing_catch_all, Pair},
+    parse_expr::{parse_fn_app, parse_lambda},
     parse_identifier::parse_identifier,
     Rule,
 };
@@ -36,6 +37,8 @@ pub(crate) fn parse_expression(
             diagnostics,
         ))),
         Rule::class_constructor => Some(parse_class_constructor(first_child, diagnostics)),
+        Rule::fn_app => parse_fn_app(first_child, diagnostics),
+        Rule::lambda => parse_lambda(first_child, diagnostics),
 
         Rule::BLOCK_LEVEL_CATCH_ALL => {
             diagnostics.push_error(
@@ -318,27 +321,33 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
             match identifier_or_spread.as_rule() {
                 Rule::struct_spread => {
                     let mut struct_spread_tokens = identifier_or_spread.into_inner();
-                    let expr = parse_expression(
+                    let maybe_expr = parse_expression(
                         struct_spread_tokens
                             .next()
                             .expect("Guaranteed by the grammar"),
                         diagnostics,
                     );
-                    fields.push(ClassConstructorField::Spread(expr));
+                    if let Some(expr) = maybe_expr {
+                        fields.push(ClassConstructorField::Spread(expr));
+                    }
                 }
                 Rule::identifier => {
                     let field_name = parse_identifier(identifier_or_spread, diagnostics);
-                    let expr = parse_expression(
+                    let maybe_expr = parse_expression(
                         field_tokens.next().expect("Guaranteed by the grammar"),
                         diagnostics,
                     );
-                    fields.push(ClassConstructorField::Named(field_name, expr));
+                    if let Some(expr) = maybe_expr {
+                        fields.push(ClassConstructorField::Named(field_name, expr));
+                    }
                 }
+                _ => unreachable_rule!(identifier_or_spread, Rule::class_field_value_pair),
             }
         }
     }
+    let class_constructor = ClassConstructor { class_name, fields };
 
-    Expression::ClassConstructor(class_name, span)
+    Expression::ClassConstructor(class_constructor, span)
 }
 
 #[cfg(test)]

@@ -7,7 +7,7 @@ use crate::ast::Span;
 use bstd::dedent;
 use std::fmt;
 
-use super::{Identifier, WithName, WithSpan};
+use super::{ArgumentsList, Identifier, WithName, WithSpan};
 use baml_types::JinjaExpression;
 
 #[derive(Debug, Clone)]
@@ -109,6 +109,10 @@ pub enum Expression {
     Map(Vec<(Expression, Expression)>, Span),
     /// A JinjaExpression. e.g. "this|length > 5".
     JinjaExpressionValue(JinjaExpression, Span),
+    /// Function abstraction.
+    Lambda(ArgumentsList, Box<ExpressionBlock>, Span),
+    /// Function Application
+    FnApp(Identifier, Vec<Expression>, Span),
     /// A class constructor, e.g. `MyClass { x = 1, y = 2 }`.
     ClassConstructor(ClassConstructor, Span),
 }
@@ -153,6 +157,17 @@ impl fmt::Display for Expression {
                     }
                 }
                 write!(f, "}}")
+            }
+            Expression::Lambda(args, body, _span) => {
+                write!(f, "{} => {}", args, body)
+            }
+            Expression::FnApp(name, args, _span) => {
+                write!(f, "{name}(")?;
+                for arg in args {
+                    write!(f, "{arg},")?; // TODO: Drop the comma for the last argument.
+                }
+                write!(f, ")")?;
+                Ok(())
             }
         }
     }
@@ -264,6 +279,8 @@ impl Expression {
             Self::Map(_, span) => span,
             Self::Array(_, span) => span,
             Self::ClassConstructor(_, span) => span,
+            Self::Lambda(_, _, span) => span,
+            Self::FnApp(_, _, span) => span,
         }
     }
 
@@ -289,6 +306,8 @@ impl Expression {
             Expression::Map(_, _) => "map",
             Expression::Array(_, _) => "array",
             Expression::ClassConstructor(cc, _) => cc.class_name.name(),
+            Expression::Lambda(_, _, _) => "function",
+            Expression::FnApp(_, _, _) => "function_application",
         }
     }
 
@@ -347,6 +366,22 @@ impl Expression {
                 cc1.assert_eq_up_to_span(cc2);
             }
             (ClassConstructor(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (Lambda(args1, body1, _), Lambda(args2, body2, _)) => {
+                assert_eq!(args1.arguments.len(), args2.arguments.len());
+                for (arg1, arg2) in args1.arguments.iter().zip(args2.arguments.iter()) {
+                    arg1.assert_eq_up_to_span(arg2);
+                }
+                body1.assert_eq_up_to_span(body2);
+            }
+            (Lambda(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (FnApp(name1, args1, _), FnApp(name2, args2, _)) => {
+                name1.assert_eq_up_to_span(name2);
+                assert_eq!(args1.len(), args2.len());
+                for (arg1, arg2) in args1.iter().zip(args2.iter()) {
+                    arg1.assert_eq_up_to_span(arg2);
+                }
+            }
+            (FnApp(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -434,6 +469,8 @@ impl Expression {
                     span.clone(),
                 ))
             }
+            Expression::Lambda(_arg_names, _body, _span) => todo!(),
+            Expression::FnApp(_, _, _) => todo!(),
         }
     }
 }
@@ -491,5 +528,58 @@ impl ClassConstructorField {
             )),
             ClassConstructorField::Spread(_expr) => None,
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExpressionBlock {
+    pub stmts: Vec<Stmt>,
+    pub expr: Expression,
+}
+
+// TODO: How do we indent the inner statements?
+impl fmt::Display for ExpressionBlock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{{")?;
+        for stmt in &self.stmts {
+            write!(f, "{stmt}")?;
+        }
+        write!(f, "{}", self.expr)?;
+        write!(f, "}}")
+    }
+}
+
+impl ExpressionBlock {
+    pub fn assert_eq_up_to_span(&self, other: &ExpressionBlock) {
+        self.stmts
+            .iter()
+            .zip(other.stmts.iter())
+            .for_each(|(a, b)| {
+                a.assert_eq_up_to_span(b);
+            });
+        self.expr.assert_eq_up_to_span(&other.expr);
+    }
+}
+
+// TODO: Stmt statements have the form` `let x = some_expr`.
+// When we add more statements, `Stmt` will become an enum.
+#[derive(Debug, Clone)]
+pub struct Stmt {
+    pub identifier: Identifier,
+    pub body: ExpressionBlock,
+    pub span: Span,
+}
+
+impl fmt::Display for Stmt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "let {} = {}", self.identifier, self.body)?;
+        Ok(())
+    }
+}
+
+impl Stmt {
+    pub fn assert_eq_up_to_span(&self, other: &Stmt) {
+        self.identifier.assert_eq_up_to_span(&other.identifier);
+        self.body.assert_eq_up_to_span(&other.body);
     }
 }

@@ -1,15 +1,14 @@
+use baml_types::expr::Expr;
 use internal_baml_diagnostics::Span;
 use internal_baml_schema_ast::ast::{self, WithSpan};
-use baml_types::expr::{Expr};
-use internal_baml_schema_ast::ast::{TopLevelAssignment, ExprFn, WithName};
+use internal_baml_schema_ast::ast::{ExprFn, TopLevelAssignment, WithName};
 
 use super::{ConfigurationWalker, Walker};
 
 /// Walker for top level assignments.
 pub type TopLevelAssignmentWalker<'db> = Walker<'db, ast::TopLevelAssignmentId>;
 
-
-impl <'db> TopLevelAssignmentWalker<'db> {
+impl<'db> TopLevelAssignmentWalker<'db> {
     /// Returns the name of the top level assignment.
     pub fn name(&self) -> &str {
         self.db.ast[self.id].stmt.identifier.name()
@@ -21,7 +20,7 @@ impl <'db> TopLevelAssignmentWalker<'db> {
     }
 
     /// Returns the expression of the top level assignment.
-    pub fn expr(&self) -> &ast::ExprWithSpan {
+    pub fn expr(&self) -> &ast::Expression {
         &self.db.ast[self.id].stmt.body.expr
     }
 }
@@ -29,7 +28,7 @@ impl <'db> TopLevelAssignmentWalker<'db> {
 /// Walker for expression functions.
 pub type ExprFnWalker<'db> = Walker<'db, ast::ExprFnId>;
 
-impl <'db> ExprFnWalker<'db> {
+impl<'db> ExprFnWalker<'db> {
     /// Return the name of the function.
     pub fn name(&self) -> &str {
         self.db.ast[self.id].name.name()

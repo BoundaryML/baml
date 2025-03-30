@@ -10,15 +10,12 @@ use crate::parser::{
 };
 use crate::{
     assert_correct_parser,
-    ast::{
-        expr::{ExprFn, FunctionBody},
-        *,
-    },
+    ast::{expr::ExprFn, ExpressionBlock, *},
     parser::parse_arguments::parse_arguments_list,
     unreachable_rule,
 };
 use crate::{
-    ast::expr::{self, Expr, ExprWithSpan, Stmt, TopLevelAssignment},
+    ast::{self, Expression, Stmt, TopLevelAssignment},
     parser::{parse_field::parse_field_type_chain, parse_types::parse_field_type},
 };
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
@@ -68,7 +65,7 @@ pub fn parse_top_level_assignment(
     Some(TopLevelAssignment { stmt })
 }
 
-pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::Stmt> {
+pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Stmt> {
     dbg!(&token);
     assert_correct_parser!(token, Rule::stmt);
     let span = diagnostics.span(token.as_span());
@@ -84,14 +81,14 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     dbg!(&rhs);
     let rhs_span = diagnostics.span(rhs.as_span());
     let maybe_body = match rhs.as_rule() {
-        Rule::expr_fn_body => {
-            eprintln!("parsing expr_fn_body");
+        Rule::expr_block => {
+            eprintln!("parsing expr_block");
             parse_function_body(rhs, diagnostics)
         }
-        Rule::expr => {
+        Rule::expression => {
             eprintln!("parsing expr");
-            let maybe_expr = parse_expr(rhs, diagnostics);
-            maybe_expr.map(|expr| FunctionBody {
+            let maybe_expr = parse_expression(rhs, diagnostics);
+            maybe_expr.map(|expr| ExpressionBlock {
                 stmts: Vec::new(),
                 expr,
             })
@@ -121,49 +118,46 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     })
 }
 
-pub fn parse_expr(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::ExprWithSpan> {
-    assert_correct_parser!(token, Rule::expr);
-    let span = diagnostics.span(token.as_span());
-    let expr_variant = token.into_inner().next()?;
-    match expr_variant.as_rule() {
-        Rule::expression => {
-            let expression = parse_expression(expr_variant, diagnostics);
-            expression.map(|e| ExprWithSpan {
-                expr: Expr::Atom(e),
-                span,
-            })
-        }
-        Rule::fn_app => parse_fn_app(expr_variant, diagnostics),
-        Rule::lambda => parse_lambda(expr_variant, diagnostics),
-        _ => {
-            diagnostics.push_error(DatamodelError::new_static(
-                "Internal error: Expected expr node to be either expression, fn_app or lambda.",
-                span,
-            ));
-            None
-        }
-    }
-}
+// pub fn parse_expr(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::ExprWithSpan> {
+//     assert_correct_parser!(token, Rule::expr);
+//     let span = diagnostics.span(token.as_span());
+//     let expr_variant = token.into_inner().next()?;
+//     match expr_variant.as_rule() {
+//         Rule::expression => {
+//             let expression = parse_expression(expr_variant, diagnostics);
+//             expression.map(|e| ExprWithSpan {
+//                 expr: Expr::Atom(e),
+//                 span,
+//             })
+//         }
+//         Rule::fn_app => parse_fn_app(expr_variant, diagnostics),
+//         Rule::lambda => parse_lambda(expr_variant, diagnostics),
+//         _ => {
+//             diagnostics.push_error(DatamodelError::new_static(
+//                 "Internal error: Expected expr node to be either expression, fn_app or lambda.",
+//                 span,
+//             ));
+//             None
+//         }
+//     }
+// }
 
-pub fn parse_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::ExprWithSpan> {
+pub fn parse_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
     assert_correct_parser!(token, Rule::fn_app);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let fn_name = parse_identifier(tokens.next()?, diagnostics);
     let mut args = Vec::new();
     for item in tokens {
-        let maybe_arg = parse_expr(item, diagnostics);
+        let maybe_arg = parse_expression(item, diagnostics);
         if let Some(arg) = maybe_arg {
             args.push(arg);
         }
     }
-    Some(ExprWithSpan {
-        expr: Expr::FnApp(fn_name, args),
-        span,
-    })
+    Some(Expression::FnApp(fn_name, args, span))
 }
 
-pub fn parse_lambda(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::ExprWithSpan> {
+pub fn parse_lambda(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
     assert_correct_parser!(token, Rule::lambda);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
@@ -172,14 +166,14 @@ pub fn parse_lambda(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<ex
     };
     parse_arguments_list(tokens.next()?, &mut args, &None, diagnostics);
     let maybe_body = parse_function_body(tokens.next()?, diagnostics);
-    maybe_body.map(|body| ExprWithSpan {
-        expr: Expr::Lambda(args, Box::new(body)),
-        span,
-    })
+    maybe_body.map(|body| Expression::Lambda(args, Box::new(body), span))
 }
 
-pub fn parse_function_body(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FunctionBody> {
-    assert_correct_parser!(token, Rule::expr_fn_body);
+pub fn parse_function_body(
+    token: Pair<'_>,
+    diagnostics: &mut Diagnostics,
+) -> Option<ExpressionBlock> {
+    assert_correct_parser!(token, Rule::expr_block);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let mut stmts = Vec::new();
@@ -193,8 +187,8 @@ pub fn parse_function_body(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
                     stmts.push(stmt);
                 }
             }
-            Rule::expr => {
-                let maybe_expr = parse_expr(item, diagnostics);
+            Rule::expression => {
+                let maybe_expr = parse_expression(item, diagnostics);
                 if let Some(parsed_expr) = maybe_expr {
                     expr = Some(parsed_expr);
                     break;
@@ -220,5 +214,5 @@ pub fn parse_function_body(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Op
             }
         }
     }
-    expr.map(|e| FunctionBody { stmts, expr: e })
+    expr.map(|e| ExpressionBlock { stmts, expr: e })
 }
