@@ -262,6 +262,10 @@ impl<'c> NestedChecks<'c> {
                             .map_or(false, |ft| self.has_checks_nested(ft))
                     })
                 }
+                Some(TypeWalker::TypeAlias(type_alias_walker)) => {
+                    let resolved = type_alias_walker.resolved();
+                    self.has_checks_nested(resolved)
+                }
                 _ => false,
             },
 
