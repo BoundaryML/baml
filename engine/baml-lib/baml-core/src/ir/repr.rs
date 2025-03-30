@@ -4,10 +4,8 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use baml_types::{
     expr::{self, Arrow, Expr, ExprType, Name},
-    BamlValueWithMeta,
-    Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable, StreamingBehavior,
-    StringOr, TypeValue,
-    UnresolvedValue,
+    BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable,
+    StreamingBehavior, StringOr, TypeValue, UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
@@ -22,8 +20,8 @@ use internal_baml_parser_database::{
 };
 
 use internal_baml_schema_ast::ast::{
-    self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
-    WithSpan,
+    self, Attribute, ClassConstructor, FieldArity, SubType, ValExpId, WithAttributes,
+    WithIdentifier, WithName, WithSpan,
 };
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
@@ -357,6 +355,23 @@ impl WithRepr<Expr<ExprMetadata, ()>> for ast::Expression {
             )),
             ast::Expression::Identifier(id) => {
                 Ok(Expr::Var(id.name().to_string(), (id.span().clone(), None)))
+            }
+            // TODO: How do we handle spreads here?
+            ast::Expression::ClassConstructor(ClassConstructor { class_name, fields }, span) => {
+                todo!()
+                // let new_fields = fields
+                //     .iter()
+                //     .map(|f| {
+                //         let (name, expr) = f.to_unresolved_value(db)?;
+                //         Ok((name, expr.repr(db)?))
+                //     })
+                //     .collect::<Result<Vec<_>>>()?;
+                // let baml_value =
+                //     BamlValueWithMeta::Class(class_name().to_string, new_fields, span.clone());
+                // Ok(Expr::Atom(
+                //     baml_value.map_meta(|_| ()),
+                //     (span.clone(), None),
+                // ))
             }
         }
     }

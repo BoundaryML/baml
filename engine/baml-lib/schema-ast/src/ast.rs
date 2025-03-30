@@ -25,8 +25,8 @@ pub use argument::{Argument, ArgumentId, ArgumentsList};
 pub use assignment::Assignment;
 pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use config::ConfigBlockProperty;
-pub use expression::{Expression, RawString};
-pub use expr::{Expr, ExprWithSpan, TopLevelAssignment, ExprFn};
+pub use expr::{Expr, ExprFn, ExprWithSpan, TopLevelAssignment};
+pub use expression::{ClassConstructor, Expression, RawString};
 pub use field::{Field, FieldArity, FieldType};
 pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
@@ -293,7 +293,6 @@ impl TopId {
             _ => None,
         }
     }
-
 }
 impl std::ops::Index<TopId> for SchemaAst {
     type Output = Top;
@@ -328,7 +327,9 @@ fn top_idx_to_top_id(top_idx: usize, top: &Top) -> TopId {
         Top::Generator(_) => TopId::Generator(ValExpId(top_idx as u32)),
         Top::TestCase(_) => TopId::TestCase(ValExpId(top_idx as u32)),
         Top::RetryPolicy(_) => TopId::RetryPolicy(ValExpId(top_idx as u32)),
-        Top::TopLevelAssignment(_) => TopId::TopLevelAssignment(TopLevelAssignmentId(top_idx as u32)),
+        Top::TopLevelAssignment(_) => {
+            TopId::TopLevelAssignment(TopLevelAssignmentId(top_idx as u32))
+        }
         Top::ExprFn(_) => TopId::ExprFn(ExprFnId(top_idx as u32)),
     }
 }

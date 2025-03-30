@@ -112,7 +112,7 @@ jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
-expression        =  { jinja_expression | map_expression | array_expression | numeric_literal | string_literal | identifier }
+expression        =  { jinja_expression | map_expression | array_expression | numeric_literal | class_constructor | string_literal | identifier }
 ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
 ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
 // ######################################
@@ -199,6 +199,8 @@ CLIENT_KEYWORD       = { "client<llm>" | "client" }
 GENERATOR_KEYWORD    = { "generator" }
 RETRY_POLICY_KEYWORD = { "retry_policy" }
 SEMICOLON = { ";" }
+COLON = { ":" }
+COMMA = { "," }
 
 // #################################################
 // BAML Expressions
@@ -211,7 +213,7 @@ top_level_assignment = { stmt }
 // Regular function.
 // e.g.:
 // fn foo(x:int, y: bool?) -> string {
-// go(x,y)
+//   go(x,y)
 // }
 expr_fn = { "fn" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_fn_body }
 
@@ -223,6 +225,7 @@ expr_fn_body = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE)* ~ expr ~ NEWLINE? ~ B
 expr = { fn_app | lambda | expression }
 
 // Statement.
+// Currently the only statement is a let-binding.
 stmt = { let_expr ~ SEMICOLON? }
 
 // Let-binding statement.
@@ -233,3 +236,17 @@ fn_app = { identifier ~ "(" ~ expr? ~ ("," ~ expr)* ~ ")" }
 
 // Anaonymous function.
 lambda = { named_argument_list ~ "=>" ~ expr }
+
+// Class constructors.
+// e.g. `new MyClass { x = 1, y = 2 }`.
+// 
+class_constructor = { identifier ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
+
+// A single field in a class constructor.
+class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }
+
+// struct spread a.k.a struct update syntax.
+// e.g. `..other_struct`
+// Used in constructors to initialize fields of a new struct from some other struct.
+// e.g. `new MyClass { a: 1, b: 2, ..other_struct }`
+struct_spread = { ".." ~ expression }

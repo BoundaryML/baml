@@ -35,6 +35,7 @@ pub(crate) fn parse_expression(
             first_child,
             diagnostics,
         ))),
+        Rule::class_constructor => Some(parse_class_constructor(first_child, diagnostics)),
 
         Rule::BLOCK_LEVEL_CATCH_ALL => {
             diagnostics.push_error(
@@ -295,6 +296,49 @@ pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) ->
     } else {
         unreachable!("Encountered impossible jinja expression during parsing")
     }
+}
+
+pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    assert_correct_parser!(token, Rule::class_constructor);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let class_name = parse_identifier(
+        tokens.next().expect("Guaranteed by the grammar"),
+        diagnostics,
+    );
+    let _open_bracket = tokens.next().expect("Guaranteed by the grammar");
+    let mut fields = Vec::new();
+    while let Some(field_or_close_bracket) = tokens.next() {
+        if field_or_close_bracket.as_str() == "}" {
+            break;
+        } else {
+            assert_correct_parser!(field_or_close_bracket, Rule::class_field_value_pair);
+            let mut field_tokens = field_or_close_bracket.into_inner();
+            let identifier_or_spread = field_tokens.next().expect("Guaranteed by the grammar");
+            match identifier_or_spread.as_rule() {
+                Rule::struct_spread => {
+                    let mut struct_spread_tokens = identifier_or_spread.into_inner();
+                    let expr = parse_expression(
+                        struct_spread_tokens
+                            .next()
+                            .expect("Guaranteed by the grammar"),
+                        diagnostics,
+                    );
+                    fields.push(ClassConstructorField::Spread(expr));
+                }
+                Rule::identifier => {
+                    let field_name = parse_identifier(identifier_or_spread, diagnostics);
+                    let expr = parse_expression(
+                        field_tokens.next().expect("Guaranteed by the grammar"),
+                        diagnostics,
+                    );
+                    fields.push(ClassConstructorField::Named(field_name, expr));
+                }
+            }
+        }
+    }
+
+    Expression::ClassConstructor(class_name, span)
 }
 
 #[cfg(test)]

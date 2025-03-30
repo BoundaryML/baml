@@ -109,6 +109,8 @@ pub enum Expression {
     Map(Vec<(Expression, Expression)>, Span),
     /// A JinjaExpression. e.g. "this|length > 5".
     JinjaExpressionValue(JinjaExpression, Span),
+    /// A class constructor, e.g. `MyClass { x = 1, y = 2 }`.
+    ClassConstructor(ClassConstructor, Span),
 }
 
 impl fmt::Display for Expression {
@@ -137,6 +139,20 @@ impl fmt::Display for Expression {
                     .collect::<Vec<_>>()
                     .join(",");
                 write!(f, "{{{vals}}}")
+            }
+            Expression::ClassConstructor(cc, ..) => {
+                write!(f, "{} {{", cc.class_name)?;
+                for field in &cc.fields {
+                    match field {
+                        ClassConstructorField::Named(name, expr) => {
+                            write!(f, " {name}: {expr};")?;
+                        }
+                        ClassConstructorField::Spread(expr) => {
+                            write!(f, " ..{expr};")?;
+                        }
+                    }
+                }
+                write!(f, "}}")
             }
         }
     }
@@ -247,6 +263,7 @@ impl Expression {
             Self::Identifier(id) => id.span(),
             Self::Map(_, span) => span,
             Self::Array(_, span) => span,
+            Self::ClassConstructor(_, span) => span,
         }
     }
 
@@ -255,7 +272,7 @@ impl Expression {
     }
 
     /// Creates a friendly readable representation for a value's type.
-    pub fn describe_value_type(&self) -> &'static str {
+    pub fn describe_value_type(&self) -> &str {
         match self {
             Expression::BoolValue(_, _) => "boolean",
             Expression::NumericValue(_, _) => "numeric",
@@ -271,6 +288,7 @@ impl Expression {
             },
             Expression::Map(_, _) => "map",
             Expression::Array(_, _) => "array",
+            Expression::ClassConstructor(cc, _) => cc.class_name.name(),
         }
     }
 
@@ -325,6 +343,10 @@ impl Expression {
                 });
             }
             (Map(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (ClassConstructor(cc1, _), ClassConstructor(cc2, _)) => {
+                cc1.assert_eq_up_to_span(cc2);
+            }
+            (ClassConstructor(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -400,6 +422,74 @@ impl Expression {
                     span.clone(),
                 ))
             }
+            Expression::ClassConstructor(cc, span) => {
+                let fields = cc
+                    .fields
+                    .iter()
+                    .filter_map(|f| f.to_unresolved_value(_diagnostics))
+                    .collect::<Vec<_>>();
+                Some(UnresolvedValue::ClassConstructor(
+                    cc.class_name.name().to_string(),
+                    fields,
+                    span.clone(),
+                ))
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClassConstructor {
+    pub class_name: Identifier,
+    pub fields: Vec<ClassConstructorField>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ClassConstructorField {
+    Named(Identifier, Expression),
+    Spread(Expression),
+}
+
+impl ClassConstructor {
+    pub fn assert_eq_up_to_span(&self, other: &ClassConstructor) {
+        assert_eq!(self.class_name, other.class_name);
+        assert_eq!(self.fields.len(), other.fields.len());
+        self.fields
+            .iter()
+            .zip(other.fields.iter())
+            .for_each(|(a, b)| {
+                a.assert_eq_up_to_span(b);
+            });
+    }
+}
+
+impl ClassConstructorField {
+    pub fn assert_eq_up_to_span(&self, other: &ClassConstructorField) {
+        use ClassConstructorField::*;
+        match (self, other) {
+            (Named(name1, expr1), Named(name2, expr2)) => {
+                name1.assert_eq_up_to_span(name2);
+                expr1.assert_eq_up_to_span(expr2);
+            }
+            (Spread(expr1), Spread(expr2)) => {
+                expr1.assert_eq_up_to_span(expr2);
+            }
+            (Named(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (Spread(_expr), _) => panic!("Types do not match: {self:?} and {other:?}"),
+        }
+    }
+
+    // TODO: This is weird. Figure out what should happen with UnresolvedValue on spreads.
+    pub fn to_unresolved_value(
+        &self,
+        _diagnostics: &mut internal_baml_diagnostics::Diagnostics,
+    ) -> Option<(String, UnresolvedValue)> {
+        match self {
+            ClassConstructorField::Named(name, expr) => Some((
+                name.name().to_string(),
+                expr.to_unresolved_value(_diagnostics)?,
+            )),
+            ClassConstructorField::Spread(_expr) => None,
         }
     }
 }

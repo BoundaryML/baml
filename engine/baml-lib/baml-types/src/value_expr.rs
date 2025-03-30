@@ -18,6 +18,8 @@ pub enum Resolvable<Id, Meta> {
     Array(Vec<Resolvable<Id, Meta>>, Meta),
     // This includes key-value pairs for classes
     Map(IndexMap<String, (Meta, Resolvable<Id, Meta>)>, Meta),
+    // The class name and list of fields as resolvable values.
+    ClassConstructor(String, Vec<(String, Resolvable<Id, Meta>)>, Meta),
     Null(Meta),
 }
 
@@ -108,6 +110,7 @@ impl<Id, Meta> Resolvable<Id, Meta> {
             Resolvable::Bool(_, meta) => meta,
             Resolvable::Array(_, meta) => meta,
             Resolvable::Map(_, meta) => meta,
+            Resolvable::ClassConstructor(_, _, meta) => meta,
             Resolvable::Null(meta) => meta,
         }
     }
@@ -138,6 +141,7 @@ impl<Id, Meta> Resolvable<Id, Meta> {
                     .join(",\n");
                 format!("{{\n{content}\n}}")
             }
+            Resolvable::ClassConstructor(class_name, _, _) => class_name.to_string(),
             Resolvable::Null(..) => String::from("null"),
         }
     }
@@ -220,6 +224,14 @@ impl<Meta> UnresolvedValue<Meta> {
                     .collect(),
                 (),
             ),
+            Self::ClassConstructor(class_name, fields, ..) => Resolvable::ClassConstructor(
+                class_name.clone(),
+                fields
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.without_meta()))
+                    .collect(),
+                (),
+            ),
             Self::Null(..) => Resolvable::Null(()),
         }
     }
@@ -294,6 +306,9 @@ impl<Meta> UnresolvedValue<Meta> {
             Self::Bool(..) => anyhow::bail!("Expected a string, not a bool"),
             Self::Map(..) => anyhow::bail!("Expected a string, not a map"),
             Self::Null(..) => anyhow::bail!("Expected a string, not null"),
+            Self::ClassConstructor(..) => {
+                anyhow::bail!("Expected a string, not a class constructor")
+            }
         }
     }
 
@@ -370,6 +385,17 @@ impl<Meta> UnresolvedValue<Meta> {
                     .collect::<Result<_>>()?;
                 Ok(ResolvedValue::Map(values, ()))
             }
+            Self::ClassConstructor(class_name, fields, _meta) => {
+                let new_fields = fields
+                    .iter()
+                    .map(|(k, v)| v.resolve(ctx).map(|res| (k.clone(), res)))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(ResolvedValue::ClassConstructor(
+                    class_name.clone(),
+                    new_fields,
+                    (),
+                ))
+            }
             Self::Null(..) => Ok(ResolvedValue::Null(())),
         }
     }
@@ -416,6 +442,12 @@ impl TryFrom<ResolvedValue> for serde_json::Value {
             ResolvedValue::Map(m, ..) => serde_json::Value::Object(
                 m.into_iter()
                     .map(|(k, (_, v))| Ok((k.clone(), serde_json::Value::try_from(v)?)))
+                    .collect::<Result<_>>()?,
+            ),
+            ResolvedValue::ClassConstructor(_class_name, fields, ..) => serde_json::Value::Object(
+                fields
+                    .into_iter()
+                    .map(|(k, v)| Ok((k, serde_json::Value::try_from(v)?)))
                     .collect::<Result<_>>()?,
             ),
             ResolvedValue::Null(..) => serde_json::Value::Null,
