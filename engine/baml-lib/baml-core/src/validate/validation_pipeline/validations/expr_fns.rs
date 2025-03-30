@@ -57,6 +57,15 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         });
         validate_expr(ctx, &expr_fn.expr_fn().body.expr, &scope);
     }
+
+    for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
+        let scope: HashSet<String> = taken_names.clone();
+        validate_stmt(
+            ctx,
+            &toplevel_assignment.top_level_assignment().stmt,
+            &scope,
+        );
+    }
 }
 
 fn validate_stmt(ctx: &mut Context<'_>, stmt: &expr::Stmt, scope: &HashSet<String>) {

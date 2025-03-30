@@ -277,7 +277,7 @@ let poem = MakePoem(10);
 
 let another = {
   let x = MakePoem(10);
-  let y = mkePoem(5);
+  let y = MakePoem(5);
   CombinePoems(x,y)
 };
 
@@ -296,7 +296,7 @@ fn Pyramid() -> string {
 }
 
 fn OuterPyramid() -> string {
-  poem
+  CombinePoems(poem, another)
 }
 
 test TestPipeline() {
@@ -329,54 +329,6 @@ test TestMakePoem() {
         "##,
         );
         let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
-
-        // let params = BamlMap::from([(
-        //     "inp".to_string(),
-        //     BamlValue::String("123".to_string().to_string()),
-        // )]);
-        // let res = rt
-        //     .call_function("LlmParseInt".to_string(), &params, &ctx, None, None)
-        //     .await
-        //     .0
-        //     .unwrap();
-        // let res2 = res.parsed().as_ref().unwrap().as_ref().unwrap();
-        // dbg!(res2);
-
-        // dbg!(&rt.inner.ir.expr_fns);
-        // let fns: Vec<_> = rt
-        //     .inner
-        //     .ir
-        //     .walk_expr_fns()
-        //     .into_iter()
-        //     .map(|w| (w.item.elem.0.clone(), w.item.elem.1.dump_str()))
-        //     .collect::<Vec<_>>();
-        // fns.iter()
-        //     .for_each(|(name, fn_str)| eprintln!("{}: {}", name, fn_str));
-
-        // let params = BamlMap::from([(
-        //     "x".to_string(),
-        //     BamlValue::String("123".to_string().to_string()),
-        // ), (
-        //     "y".to_string(),
-        //     BamlValue::String("456".to_string().to_string()),
-        // )]);
-        // let res3 = rt
-        //     .call_function("Second".to_string(), &params, &ctx, None, None)
-        //     .await
-        //     .0.unwrap();
-        // let res4 = res3.parsed().as_ref().unwrap().as_ref().unwrap();
-        // dbg!(res4);
-
-        // let params = BamlMap::from([(
-        //     "x".to_string(),
-        //     BamlValue::Int(888),
-        // ), ("y".to_string(), BamlValue::Int(999))]);
-        // let res3 = rt
-        //     .call_function("DoId".to_string(), &params, &ctx, None, None)
-        //     .await
-        //     .0.unwrap();
-        // let res4 = res3.parsed().as_ref().unwrap().as_ref().unwrap();
-        // dbg!(res4);
 
         let on_event = |res: FunctionResult| {
             eprintln!("on_event: {:?}", res);
