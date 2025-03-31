@@ -124,6 +124,8 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
                 .any(|target| self.is_subtype(base, target)),
 
             (FieldType::Primitive(TypeValue::Null), FieldType::Optional(_)) => true,
+            (FieldType::Primitive(_), _) => false,
+
             (FieldType::Optional(base_item), FieldType::Optional(other_item)) => {
                 self.is_subtype(base_item, other_item)
             }
@@ -185,9 +187,18 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
                         .all(|(base_item, other_item)| self.is_subtype(base_item, other_item))
             }
             (FieldType::Tuple(_), _) => false,
-            (FieldType::Primitive(_), _) => false,
             (FieldType::Enum(_), _) => false,
             (FieldType::Class(_), _) => false,
+
+            (FieldType::Arrow(arrow1), FieldType::Arrow(arrow2)) => {
+                let param_lengths_match = arrow1.param_types.len() == arrow2.param_types.len();
+                // N.B. Functions are covariant in their return type and contravariant in their arguments.
+                // This is way a and b are swapped in the parameters check, and no in the return type check.
+                let return_types_match = self.is_subtype(&arrow1.return_type, &arrow2.return_type);
+                let args_match = arrow1.param_types.iter().zip(arrow2.param_types.iter()).all(|(a, b)| self.is_subtype(b, a));
+                param_lengths_match && return_types_match && args_match
+            }
+            (FieldType::Arrow(_), _) => false,
         }
     }
 
@@ -1109,6 +1120,7 @@ pub fn item_type<'ir, 'a, T: std::fmt::Debug>(
             }
         }
         FieldType::Tuple(_) => None,
+        FieldType::Arrow(_) => None,
         FieldType::WithMetadata { base, .. } => item_type(ir, base, baml_child_values),
     };
     res
@@ -1145,6 +1157,7 @@ where
             variant_map_types.next()
         }
         FieldType::Class(_) => None,
+        FieldType::Arrow(_) => None,
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata never returns this variant")
         }

@@ -356,6 +356,9 @@ impl ArgCoercer {
                     }
                 }
             }
+            (FieldType::Arrow(_), _) => {
+                Err(anyhow::anyhow!("A json value may not be coerced into a function type"))
+            }
             (FieldType::WithMetadata { .. }, _) => {
                 unreachable!("The return value of distribute_constraints can never be FieldType::Constrainted");
             }

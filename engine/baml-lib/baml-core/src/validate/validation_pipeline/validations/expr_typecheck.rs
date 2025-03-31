@@ -319,10 +319,10 @@ pub fn infer_types_in_context(
         expr.meta()
             .1
             .as_ref()
-            .map_or("?".to_string(), |t| t.dump_str())
+            .map_or("?".to_string(), |t| t.to_string())
     );
     for (k, v) in typing_context.clone() {
-        eprintln!("  {} : {}", k, v.dump_str());
+        eprintln!("  {} : {}", k, v.to_string());
     }
     match expr.as_ref() {
         Expr::Var(ref var_name, (span, maybe_type)) => {
