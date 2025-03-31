@@ -12,7 +12,6 @@ on:
   schedule:
     # daily at 2am PST
     - cron: 0 10 * * *
-      - ".github/workflows/primary.yml"
   push:
     branches:
       - "greg/lsp"
@@ -56,6 +55,7 @@ jobs:
       - build-vscode
     steps:
       - run: echo "::do-nothing::" >/dev/null
+      
 
   # publish-to-pypi:
   #   environment: release
