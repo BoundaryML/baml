@@ -12,12 +12,13 @@ on:
   schedule:
     # daily at 2am PST
     - cron: 0 10 * * *
+      - ".github/workflows/primary.yml"
   push:
     branches:
       - "greg/lsp"
-    tags:
-      - "test-release/*.*"
-      - "*.*"
+    # tags:
+    #   - "test-release/*.*"
+    #   - "*.*"
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
