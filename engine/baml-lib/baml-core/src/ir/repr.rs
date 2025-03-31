@@ -20,8 +20,8 @@ use internal_baml_parser_database::{
 };
 
 use internal_baml_schema_ast::ast::{
-    self, Attribute, ClassConstructor, FieldArity, SubType, ValExpId, WithAttributes,
-    WithIdentifier, WithName, WithSpan,
+    self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
+    WithSpan,
 };
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
@@ -63,6 +63,18 @@ pub struct TopLevelAssignment {
     pub expr: Node<Expr<ExprMetadata, ()>>,
 }
 
+#[derive(Clone, Debug)]
+pub struct ClassConstructor {
+    pub class_name: Node<String>,
+    pub fields: Vec<Node<ClassConstructorField>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ClassConstructorField {
+    Named(Node<String>, Node<Expr<ExprMetadata, ()>>),
+    Spread(Node<Expr<ExprMetadata, ()>>),
+}
+
 impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         // TODO: Add attributes.
@@ -90,7 +102,7 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
                         stmt.identifier.name().to_string(),
                         Arc::new(stmt_expr),
                         Arc::new(acc),
-                        (stmt.body.expr.span.clone(), None), // TODO: Infer the type.
+                        (stmt.body.expr.span().clone(), None), // TODO: Infer the type.
                     )
                 });
         Ok(TopLevelAssignment {
@@ -103,39 +115,6 @@ impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
                 attributes: NodeAttributes::default(),
             },
         })
-    }
-}
-
-impl WithRepr<Expr<ExprMetadata, ()>> for ast::ExprWithSpan {
-    fn repr(&self, db: &ParserDatabase) -> Result<Expr<ExprMetadata, ()>> {
-        match &self.expr {
-            ast::Expr::Atom(expr) => Ok(expr.repr(db)?),
-            ast::Expr::Lambda(args, body) => {
-                let args = args
-                    .arguments
-                    .iter()
-                    .filter_map(|arg| arg.value.as_string_value().map(|v| v.0.to_string()))
-                    .collect();
-                let body = convert_function_body(*body.to_owned(), db);
-                Ok(Expr::Lambda(
-                    args,
-                    Arc::new(body),
-                    (self.span.clone(), None),
-                ))
-            }
-            ast::Expr::FnApp(func, args) => {
-                let func = Expr::Var(func.name().to_string(), (self.span.clone(), None));
-                let args = args
-                    .iter()
-                    .filter_map(|arg| arg.repr(db).ok()) // TODO: Handle errors, don't swallow them.
-                    .collect();
-                Ok(Expr::App(
-                    Arc::new(func),
-                    Arc::new(Expr::ArgsTuple(args, (self.span.clone(), None))),
-                    (self.span.clone(), None),
-                ))
-            }
-        }
     }
 }
 
@@ -248,7 +227,7 @@ impl WithRepr<Function> for ExprFnWalker<'_> {
 /// The function body is a list of statements, which are let bindings.
 /// We fold the let bindings into a single expression.
 fn convert_function_body(
-    function_body: ast::expr::FunctionBody,
+    function_body: ast::ExpressionBlock,
     db: &ParserDatabase,
 ) -> Expr<ExprMetadata, ()> {
     function_body
@@ -261,7 +240,7 @@ fn convert_function_body(
                         stmt.identifier.name().to_string(),
                         Arc::new(stmt_expr),
                         Arc::new(acc),
-                        (stmt.body.expr.span.clone(), None),
+                        (stmt.body.expr.span().clone(), None),
                     ),
                     Err(e) => acc,
                 }
@@ -356,16 +335,51 @@ impl WithRepr<Expr<ExprMetadata, ()>> for ast::Expression {
             ast::Expression::Identifier(id) => {
                 Ok(Expr::Var(id.name().to_string(), (id.span().clone(), None)))
             }
+
+            ast::Expression::Lambda(args, body, span) => {
+                let args = args
+                    .arguments
+                    .iter()
+                    .filter_map(|arg| arg.value.as_string_value().map(|v| v.0.to_string()))
+                    .collect();
+                let body = convert_function_body(*body.to_owned(), db);
+                Ok(Expr::Lambda(args, Arc::new(body), (span.clone(), None)))
+            }
+            ast::Expression::FnApp(func, args, span) => {
+                let func = Expr::Var(func.name().to_string(), (func.span().clone(), None));
+                let args = args
+                    .iter()
+                    .filter_map(|arg| arg.repr(db).ok()) // TODO: Handle errors, don't swallow them.
+                    .collect();
+                Ok(Expr::App(
+                    Arc::new(func),
+                    Arc::new(Expr::ArgsTuple(args, (span.clone(), None))), // TODO: Wrong span?
+                    (span.clone(), None),
+                ))
+            }
             // TODO: How do we handle spreads here?
-            ast::Expression::ClassConstructor(ClassConstructor { class_name, fields }, span) => {
-                todo!()
-                // let new_fields = fields
-                //     .iter()
-                //     .map(|f| {
-                //         let (name, expr) = f.to_unresolved_value(db)?;
-                //         Ok((name, expr.repr(db)?))
-                //     })
-                //     .collect::<Result<Vec<_>>>()?;
+            ast::Expression::ClassConstructor(
+                ast::ClassConstructor { class_name, fields },
+                span,
+            ) => {
+                let new_fields = fields
+                    .iter()
+                    .map(|f| match f {
+                        ast::ClassConstructorField::Named(name, expr) => Ok(
+                            ClassConstructorField::Named(name.name().to_string(), expr.repr(db)?),
+                        ),
+                        ast::ClassConstructorField::Spread(expr) => {
+                            Ok(ClassConstructorField::Spread(expr.repr(db)?))
+                        }
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                ClassConstructor {
+                    class_name: Node {
+                        elem: class_name.name().to_string(),
+                        attributes: NodeAttributes::default(),
+                    },
+                    fields: new_fields,
+                }
                 // let baml_value =
                 //     BamlValueWithMeta::Class(class_name().to_string, new_fields, span.clone());
                 // Ok(Expr::Atom(

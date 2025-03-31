@@ -6,13 +6,13 @@ use super::{
 };
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use baml_types::JinjaExpression;
-use internal_baml_diagnostics::Diagnostics;
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_expression(
     token: Pair<'_>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<Expression> {
-    let first_child = token.into_inner().next().unwrap();
+    let first_child = token.into_inner().next()?;
     let span = diagnostics.span(first_child.as_span());
     match first_child.as_rule() {
         Rule::numeric_literal => Some(Expression::NumericValue(first_child.as_str().into(), span)),
@@ -302,6 +302,7 @@ pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) ->
 }
 
 pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
+    dbg!(&token);
     assert_correct_parser!(token, Rule::class_constructor);
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
@@ -314,6 +315,8 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
     while let Some(field_or_close_bracket) = tokens.next() {
         if field_or_close_bracket.as_str() == "}" {
             break;
+        } else if field_or_close_bracket.as_str() == "," {
+            continue;
         } else {
             assert_correct_parser!(field_or_close_bracket, Rule::class_field_value_pair);
             let mut field_tokens = field_or_close_bracket.into_inner();
@@ -330,6 +333,12 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                     if let Some(expr) = maybe_expr {
                         fields.push(ClassConstructorField::Spread(expr));
                     }
+                    if let Some(token) = tokens.next() {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            "spread must be the last field in a class constructor",
+                            diagnostics.span(token.as_span()),
+                        ));
+                    }
                 }
                 Rule::identifier => {
                     let field_name = parse_identifier(identifier_or_spread, diagnostics);
@@ -340,9 +349,20 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                     if let Some(expr) = maybe_expr {
                         fields.push(ClassConstructorField::Named(field_name, expr));
                     }
+                    let maybe_comma = tokens.next();
+                    if let Some(comma) = maybe_comma {
+                        if comma.as_str() != "," {
+                            diagnostics.push_error(DatamodelError::new_static(
+                                "expected comma",
+                                span.clone(),
+                            ));
+                        }
+                    }
                 }
                 _ => unreachable_rule!(identifier_or_spread, Rule::class_field_value_pair),
             }
+            let maybe_comma = tokens.next();
+            dbg!(&maybe_comma);
         }
     }
     let class_constructor = ClassConstructor { class_name, fields };
