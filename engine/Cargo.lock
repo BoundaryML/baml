@@ -1105,6 +1105,7 @@ dependencies = [
  "clap",
  "derive_builder",
  "indexmap 2.2.6",
+ "internal-baml-diagnostics",
  "itertools 0.13.0",
  "log",
  "minijinja",

@@ -86,11 +86,18 @@ pub enum FieldType {
     Tuple(Vec<FieldType>),
     Optional(Box<FieldType>),
     RecursiveTypeAlias(String),
+    Arrow(Box<Arrow>),
     WithMetadata {
         base: Box<FieldType>,
         constraints: Vec<Constraint>,
         streaming_behavior: StreamingBehavior,
     },
+}
+
+#[derive(serde::Serialize, Debug, Clone, PartialEq)]
+pub struct Arrow {
+    pub param_types: Vec<FieldType>,
+    pub return_type: FieldType,
 }
 
 // Impl display for FieldType
@@ -127,6 +134,7 @@ impl std::fmt::Display for FieldType {
             FieldType::Map(k, v) => write!(f, "map<{k}, {v}>"),
             FieldType::List(t) => write!(f, "{t}[]"),
             FieldType::Optional(t) => write!(f, "{t}?"),
+            FieldType::Arrow(arrow) => write!(f, "({}) -> {}", arrow.param_types.iter().map(|t| t.to_string()).collect::<Vec<_>>().join(", "), arrow.return_type.to_string()),
             FieldType::WithMetadata { base, .. } => base.fmt(f),
         }
     }

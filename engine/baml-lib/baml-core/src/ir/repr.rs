@@ -2,8 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use baml_types::BamlMap;
 use baml_types::{
-    expr::{self, Arrow, Expr, ExprType, Name},
+    expr::{self, Arrow, Expr, ExprType, ExprMetadata, Name},
     BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable,
     StreamingBehavior, StringOr, TypeValue, UnresolvedValue,
 };
@@ -60,7 +61,7 @@ pub struct IntermediateRepr {
 #[derive(Debug)]
 pub struct TopLevelAssignment {
     pub name: Node<String>,
-    pub expr: Node<Expr<ExprMetadata, ()>>,
+    pub expr: Node<Expr<ExprMetadata>>,
 }
 
 #[derive(Clone, Debug)]
@@ -71,8 +72,8 @@ pub struct ClassConstructor {
 
 #[derive(Clone, Debug)]
 pub enum ClassConstructorField {
-    Named(Node<String>, Node<Expr<ExprMetadata, ()>>),
-    Spread(Node<Expr<ExprMetadata, ()>>),
+    Named(Node<String>, Node<Expr<ExprMetadata>>),
+    Spread(Node<Expr<ExprMetadata>>),
 }
 
 impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
@@ -229,7 +230,7 @@ impl WithRepr<Function> for ExprFnWalker<'_> {
 fn convert_function_body(
     function_body: ast::ExpressionBlock,
     db: &ParserDatabase,
-) -> Expr<ExprMetadata, ()> {
+) -> Expr<ExprMetadata> {
     function_body
         .expr
         .repr(db)
@@ -248,75 +249,49 @@ fn convert_function_body(
             expr
         })
         .unwrap_or(Expr::Atom(
-            BamlValueWithMeta::Null(()),
-            (Span::fake(), None),
+            BamlValueWithMeta::Null((Span::fake(), None)),
         ))
 }
 
 // TODO: This is a temporary implementation.
-impl WithRepr<Expr<ExprMetadata, ()>> for ast::Expression {
-    fn repr(&self, db: &ParserDatabase) -> Result<Expr<ExprMetadata, ()>> {
+impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
+    fn repr(&self, db: &ParserDatabase) -> Result<Expr<ExprMetadata>> {
         match self {
             ast::Expression::BoolValue(val, span) => Ok(Expr::Atom(
-                BamlValueWithMeta::Bool(*val, ()),
-                (
-                    span.clone(),
-                    Some(ExprType::Atom(FieldType::Primitive(TypeValue::Bool))),
-                ),
+                BamlValueWithMeta::Bool(*val, (span.clone(), Some(ExprType::Atom(FieldType::Primitive(TypeValue::Bool))))),
             )),
             ast::Expression::NumericValue(val, span) => val
                 .parse::<i64>()
                 .map(|v| {
                     Expr::Atom(
-                        BamlValueWithMeta::Int(v, ()),
-                        (
-                            span.clone(),
-                            Some(ExprType::Atom(FieldType::Primitive(TypeValue::Int))),
-                        ),
+                        BamlValueWithMeta::Int(v, (span.clone(), Some(ExprType::Atom(FieldType::Primitive(TypeValue::Int))))),
                     )
                 })
                 .or_else(|_| {
                     val.parse::<f64>()
                         .map(|v| {
                             Expr::Atom(
-                                BamlValueWithMeta::Float(v, ()),
-                                (
-                                    span.clone(),
-                                    Some(ExprType::Atom(FieldType::Primitive(TypeValue::Float))),
-                                ),
+                                BamlValueWithMeta::Float(v, (span.clone(), Some(ExprType::Atom(FieldType::Primitive(TypeValue::Float))))),
                             )
                         })
                         .or_else(|_| Err(anyhow!("Invalid numeric value: {}", val)))
                 }),
             ast::Expression::StringValue(val, span) => Ok(Expr::Atom(
-                BamlValueWithMeta::String(val.to_string(), ()),
-                (
-                    span.clone(),
-                    Some(ExprType::Atom(FieldType::Primitive(TypeValue::String))),
-                ),
+                BamlValueWithMeta::String(val.to_string(), (span.clone(), Some(ExprType::Atom(FieldType::Primitive(TypeValue::String))))),
             )),
             ast::Expression::RawStringValue(val) => Ok(Expr::Atom(
-                BamlValueWithMeta::String(val.value().to_string(), ()),
-                (
-                    val.span().clone(),
-                    Some(ExprType::Atom(FieldType::Primitive(TypeValue::String))),
-                ),
+                BamlValueWithMeta::String(val.value().to_string(), (val.span().clone(), Some(ExprType::Atom(FieldType::Primitive(TypeValue::String))))),
             )),
             ast::Expression::JinjaExpressionValue(val, span) => Ok(Expr::Atom(
-                BamlValueWithMeta::String(val.to_string(), ()), // TODO: Probably wrong.
-                (
-                    span.clone(),
-                    Some(ExprType::Atom(FieldType::Primitive(TypeValue::String))),
-                ),
+                BamlValueWithMeta::String(val.to_string(), (span.clone(), Some(ExprType::Atom(FieldType::Primitive(TypeValue::String))))),
             )),
             ast::Expression::Array(vals, span) => Ok(Expr::Atom(
                 BamlValueWithMeta::List(
                     vals.iter()
                         .map(|v| v.repr(db).unwrap().as_atom().unwrap().clone())
                         .collect(),
-                    (),
-                ),
-                (span.clone(), None), // TODO: Infer the type. It's a list, but of what??
+                    (span.clone(), None), // TODO: Infer the type. It's a list, but of what??
+                )
             )),
             ast::Expression::Map(vals, span) => Ok(Expr::Atom(
                 BamlValueWithMeta::Map(
@@ -328,9 +303,8 @@ impl WithRepr<Expr<ExprMetadata, ()>> for ast::Expression {
                             )
                         })
                         .collect(),
-                    (),
+                    (span.clone(), None), // TODO: This is as hard as List.
                 ),
-                (span.clone(), None), // TODO: This is as hard as List.
             )),
             ast::Expression::Identifier(id) => {
                 Ok(Expr::Var(id.name().to_string(), (id.span().clone(), None)))
@@ -362,24 +336,24 @@ impl WithRepr<Expr<ExprMetadata, ()>> for ast::Expression {
                 ast::ClassConstructor { class_name, fields },
                 span,
             ) => {
-                let new_fields = fields
-                    .iter()
-                    .map(|f| match f {
-                        ast::ClassConstructorField::Named(name, expr) => Ok(
-                            ClassConstructorField::Named(todo!(), todo!()),
-                        ),
-                        ast::ClassConstructorField::Spread(expr) => {
-                            Ok(ClassConstructorField::Spread(todo!()))
+                let mut new_fields = BamlMap::new();
+                let mut spread = None;
+                for f in fields {
+                    match f {
+                        ast::ClassConstructorField::Named(name, expr) => {
+                            new_fields.insert(name.to_string(), expr.repr(db)?);
                         }
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(Expression::ClassConstructor(ClassConstructor {
-                    class_name: Node {
-                        elem: class_name.name().to_string(),
-                        attributes: NodeAttributes::default(),
-                    },
+                        ast::ClassConstructorField::Spread(expr) => {
+                            spread = Some(Box::new(expr.repr(db)?));
+                        }
+                    }
+                }
+                Ok(Expr::Class{
+                    name: class_name.name().to_string(),
                     fields: new_fields,
-                }, span))
+                    spread,
+                    meta: (span.clone(), Some(ExprType::Atom(FieldType::Class(class_name.name().to_string())))),
+                })
             }
         }
     }
@@ -1514,7 +1488,7 @@ pub struct ExprFunction {
     pub name: FunctionId,
     pub inputs: Vec<(String, FieldType)>,
     pub output: FieldType,
-    pub expr: Expr<ExprMetadata, ()>,
+    pub expr: Expr<ExprMetadata>,
     pub tests: Vec<Node<TestCase>>,
 }
 
@@ -1567,11 +1541,13 @@ impl ExprFunction {
     }
 }
 
+/// For all variables under an expression, assign them the given type.
+/// TODO: This ignores scope completely.
 pub fn annotate_variable(
     name: &str,
     r#type: ExprType,
-    expr: Expr<ExprMetadata, ()>,
-) -> Expr<ExprMetadata, ()> {
+    expr: Expr<ExprMetadata>,
+) -> Expr<ExprMetadata> {
     match &expr {
         Expr::Var(var_name, meta) => {
             let mut new_expr = expr.clone();
@@ -1620,8 +1596,28 @@ pub fn annotate_variable(
                 .collect(),
             meta.clone(),
         ),
-        Expr::Atom(_, _) => expr,
+        Expr::Atom(_) => expr,
         Expr::LLMFunction(_, _, _) => expr,
+        Expr::Class{name, fields, spread, meta  } => {
+            let new_fields = fields.iter().map(|(key, value)| {
+                (key.clone(), annotate_variable(name, r#type.clone(), value.clone()))
+            }).collect();
+            let new_spread = match spread {
+                None => None,
+                Some(expr) => Some(Box::new(annotate_variable(name, r#type.clone(), expr.as_ref().clone()))),
+            };
+            Expr::Class{name: name.clone(), fields: new_fields, spread: new_spread, meta: meta.clone()}
+        }
+        Expr::Map(entries, meta) => {
+            let new_entries = entries.iter().map(|(key, value)| {
+                (key.clone(), annotate_variable(name, r#type.clone(), value.clone()))
+            }).collect();
+            Expr::Map(new_entries, meta.clone())
+        }
+        Expr::List(items, meta) => {
+            let new_items = items.iter().map(|item| annotate_variable(name, r#type.clone(), item.clone())).collect();
+            Expr::List(new_items, meta.clone())
+        }
     }
 }
 
@@ -2031,7 +2027,7 @@ fn streaming_behavior_from_attributes(attributes: &NodeAttributes) -> StreamingB
 
 /// Create a context from the expr_functions, top_level_assignments, and
 /// functions in the IR.
-pub fn initial_context(ir: &IntermediateRepr) -> HashMap<Name, Expr<ExprMetadata, ()>> {
+pub fn initial_context(ir: &IntermediateRepr) -> HashMap<Name, Expr<ExprMetadata>> {
     let mut ctx = HashMap::new();
 
     for expr_fn in ir.expr_fns.iter() {

@@ -2,12 +2,12 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::ir::repr::{initial_context, ExprMetadata};
+use crate::ir::repr::initial_context;
 use crate::ir::IntermediateRepr;
 use crate::validate::validation_pipeline::context::Context;
 use crate::Configuration;
 use baml_types::expr::{Arrow, Expr, ExprType};
-use baml_types::{BamlValueWithMeta, FieldType};
+use baml_types::{BamlValueWithMeta, FieldType, expr::ExprMetadata};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::ir::IRHelperExtended;
@@ -71,11 +71,11 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     Ok(())
 }
 
-pub fn typecheck_in_context<U: Clone + std::fmt::Debug>(
+pub fn typecheck_in_context(
     ir: &IntermediateRepr,
     diagnostics: &mut Diagnostics,
     typing_context: &HashMap<String, ExprType>,
-    expr: &Expr<ExprMetadata, U>,
+    expr: &Expr<ExprMetadata>,
 ) -> Result<()> {
     eprintln!(
         "\ntypecheck: ({}): {}",
@@ -89,7 +89,7 @@ pub fn typecheck_in_context<U: Clone + std::fmt::Debug>(
         eprintln!("  {} : {}", k, v.dump_str());
     }
     match expr {
-        Expr::Atom(atom, maybe_type) => {
+        Expr::Atom(atom) => {
             // Atoms always typecheck.
             Ok(())
         }
@@ -269,6 +269,14 @@ pub fn typecheck_in_context<U: Clone + std::fmt::Debug>(
         }
         Expr::Let(let_expr, _, _, _) => Ok(()),
         Expr::ArgsTuple(args, _) => Ok(()),
+        Expr::List(items, meta) => {
+            for item in items.iter() {
+                if !compatible_as_subtype(ir, &item.meta().1, &Some(item_type.clone())) {
+                    diagnostics.push_error(DatamodelError::new_validation_error("Type mismatch in list", span.clone()));
+                }
+            }
+            Ok(())
+        }
     }
 }
 
@@ -303,8 +311,8 @@ fn compatible_as_subtype(
 
 pub fn infer_types_in_context(
     typing_context: &mut HashMap<String, ExprType>,
-    expr: Arc<Expr<ExprMetadata, ()>>,
-) -> Arc<Expr<ExprMetadata, ()>> {
+    expr: Arc<Expr<ExprMetadata>>,
+) -> Arc<Expr<ExprMetadata>> {
     eprintln!(
         "\ninfer_types_in_context: {}: {}",
         expr.dump_str(),
@@ -334,7 +342,7 @@ pub fn infer_types_in_context(
                 expr.clone()
             }
         }
-        Expr::Atom(_, _) => {
+        Expr::Atom(_) => {
             // All atoms are typed during parsing, so we ignore them.
             expr.clone()
         }

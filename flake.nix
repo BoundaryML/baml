@@ -96,16 +96,6 @@
         ];
 
         
-        bamlCliInitData = pkgs.runCommand "baml-cli-init-data" {} ''
-          mkdir -p $out
-          cp -r ${./engine/baml-runtime/src/cli/initial_project/baml_src}/* $out
-        '';
-
-        promptFiddleExampleData = pkgs.runCommand "prompt-fiddle-example-data" {} ''
-          mkdir -p $out
-          cp -r ${./engine/baml-runtime/src/cli/initial_project/baml_src}/* $out
-        '';
-
       in
         {
           packages.default = rustPlatform.buildRustPackage {
@@ -128,7 +118,6 @@
             cargoBuildFlags = "--bin baml-cli";
 
             cargoLock = { lockFile = ./engine/Cargo.lock; outputHashes = {
-              "serde_magnus-0.9.0" = "sha256-+iIHleftJ+Yl9QHEBVI91NOhBw9qtUZfgooHKoyY1w4=";
             }; };
 
             # Add build-time environment variables
@@ -164,9 +153,6 @@
             inherit buildInputs;
             inherit nativeBuildInputs;
 
-            BAML_CLI_INIT_DATA_DIR = bamlCliInitData;
-            PROMPT_FIDDLE_EXAMPLE_DIR = promptFiddleExampleData;
-
             PYTHON_SYS_EXECUTABLE="${pythonEnv}/bin/python3";
             LD_LIBRARY_PATH="${pythonEnv}/lib";
             PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
@@ -177,7 +163,15 @@
             inherit buildInputs;
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
-            RUSTFLAGS = "--cfg tracing_unstable";
+            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
+              "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
+            else
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.glibc.dev}/include";
+            RUSTFLAGS = if pkgs.stdenv.isDarwin
+              then
+                "--cfg tracing_unstable -C linker=lld"
+              else
+                "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
           };
         }
     );
