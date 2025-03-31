@@ -33,6 +33,7 @@ jobs:
           - platform: aarch64-linux
           - platform: aarch64-linux-musl
           - platform: arm-linux
+            rb-sys-dock-setup: ./arm-linux-setup.sh
           - platform: arm64-darwin
           # - platform: x64-mingw32
           # - platform: x86-mingw-ucrt
