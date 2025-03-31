@@ -13,6 +13,8 @@ on:
     # daily at 2am PST
     - cron: 0 10 * * *
   push:
+    branches:
+      - "greg/lsp"
     tags:
       - "test-release/*.*"
       - "*.*"
@@ -54,182 +56,182 @@ jobs:
     steps:
       - run: echo "::do-nothing::" >/dev/null
 
-  publish-to-pypi:
-    environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist
-          merge-multiple: true
+  # publish-to-pypi:
+  #   environment: release
+  #   needs: [all-builds]
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.8"
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: wheels-*
+  #         path: dist
+  #         merge-multiple: true
 
-      # Verify we have the expected number of wheels
-      - name: Verify wheel count
-        run: |
-          set -euo pipefail
-          ls dist/
-          wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
-          if [ "$wheel_count" -lt 7 ]; then
-            echo "Error: Expected at least 7 wheels, but found $wheel_count"
-            exit 1
-          fi
-          echo "Found $wheel_count wheels"
+  #     # Verify we have the expected number of wheels
+  #     - name: Verify wheel count
+  #       run: |
+  #         set -euo pipefail
+  #         ls dist/
+  #         wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
+  #         if [ "$wheel_count" -lt 7 ]; then
+  #           echo "Error: Expected at least 7 wheels, but found $wheel_count"
+  #           exit 1
+  #         fi
+  #         echo "Found $wheel_count wheels"
 
-      # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
-      # it is pinned to this github actions filename, so renaming this file is not safe!!
-      - name: Publish package to PyPI
-        uses: PyO3/maturin-action@v1
-        with:
-          command: upload
-          args: dist/*
+  #     # authz is managed via OIDC configured at https://pypi.org/manage/project/baml-py/settings/publishing/
+  #     # it is pinned to this github actions filename, so renaming this file is not safe!!
+  #     - name: Publish package to PyPI
+  #       uses: PyO3/maturin-action@v1
+  #       with:
+  #         command: upload
+  #         args: dist/*
 
-  publish-to-npm:
-    environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # publish-to-npm:
+  #   environment: release
+  #   needs: [all-builds]
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.0
-          package_json_file: engine/language_client_typescript/package.json
-          run_install: false
+  #     - name: setup pnpm
+  #       uses: pnpm/action-setup@v4
+  #       with:
+  #         version: 9.12.0
+  #         package_json_file: engine/language_client_typescript/package.json
+  #         run_install: false
 
-      - name: Setup node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
-          # This is load-bearing: it writes NODE_AUTH_TOKEN to .npmrc, which is what
-          # npm publish relies on.
-          # See https://github.com/npm/cli/issues/6184#issuecomment-1544496444
-          registry-url: "https://registry.npmjs.org"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+  #     - name: Setup node
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #         cache: pnpm
+  #         cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
+  #         # This is load-bearing: it writes NODE_AUTH_TOKEN to .npmrc, which is what
+  #         # npm publish relies on.
+  #         # See https://github.com/npm/cli/issues/6184#issuecomment-1544496444
+  #         registry-url: "https://registry.npmjs.org"
+  #       env:
+  #         NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Install dependencies
-        run: pnpm install
-        working-directory: engine/language_client_typescript
+  #     - name: Install dependencies
+  #       run: pnpm install
+  #       working-directory: engine/language_client_typescript
 
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: bindings-*
-          path: engine/language_client_typescript/artifacts
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: bindings-*
+  #         path: engine/language_client_typescript/artifacts
 
-      - name: create npm dirs
-        run: pnpm napi create-npm-dirs
-        working-directory: engine/language_client_typescript
+  #     - name: create npm dirs
+  #       run: pnpm napi create-npm-dirs
+  #       working-directory: engine/language_client_typescript
 
-      - name: Move artifacts
-        run: pnpm artifacts
-        working-directory: engine/language_client_typescript
+  #     - name: Move artifacts
+  #       run: pnpm artifacts
+  #       working-directory: engine/language_client_typescript
 
-      - name: Publish
-        # This reads the credential from .npmrc, which is written by the setup-node step.
-        # It does not use the NODE_AUTH_TOKEN environment variable.
-        run: npm publish --access public
-        working-directory: engine/language_client_typescript
+  #     - name: Publish
+  #       # This reads the credential from .npmrc, which is written by the setup-node step.
+  #       # It does not use the NODE_AUTH_TOKEN environment variable.
+  #       run: npm publish --access public
+  #       working-directory: engine/language_client_typescript
 
-  publish-to-rubygems:
-    environment: release
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # publish-to-rubygems:
+  #   environment: release
+  #   needs: [all-builds]
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - uses: rubygems/configure-rubygems-credentials@main
-        with:
-          # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
-          role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
+  #     - uses: rubygems/configure-rubygems-credentials@main
+  #       with:
+  #         # https://rubygems.org/profile/oidc/api_key_roles/rg_oidc_akr_p6x4xz53qtk948na3bgy
+  #         role-to-assume: rg_oidc_akr_p6x4xz53qtk948na3bgy
 
-      - uses: jdx/mise-action@v2
+  #     - uses: jdx/mise-action@v2
 
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: gem-*
-          path: engine/language_client_ruby/pkg/
-          merge-multiple: true
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         pattern: gem-*
+  #         path: engine/language_client_ruby/pkg/
+  #         merge-multiple: true
 
-      - working-directory: engine/language_client_ruby
-        run: |
-          set -euxo pipefail
-          find pkg
-          for i in $(ls pkg/*.gem); do
-            gem push $i
-          done
+  #     - working-directory: engine/language_client_ruby
+  #       run: |
+  #         set -euxo pipefail
+  #         find pkg
+  #         for i in $(ls pkg/*.gem); do
+  #           gem push $i
+  #         done
 
-  publish-to-github:
-    environment: release
-    permissions:
-      contents: write
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # publish-to-github:
+  #   environment: release
+  #   permissions:
+  #     contents: write
+  #   needs: [all-builds]
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Get Changelog
-        id: latest_release
-        run: |
-          echo "::set-output name=changelog::$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)"
+  #     - name: Get Changelog
+  #       id: latest_release
+  #       run: |
+  #         echo "::set-output name=changelog::$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)"
 
-      - name: Create Release
-        uses: mikepenz/action-gh-release@v1 #softprops/action-gh-release
-        with:
-          body: ${{steps.latest_release.outputs.changelog}}
+  #     - name: Create Release
+  #       uses: mikepenz/action-gh-release@v1 #softprops/action-gh-release
+  #       with:
+  #         body: ${{steps.latest_release.outputs.changelog}}
 
-  publish-to-open-vsx:
-    environment: release
-    needs: [all-builds]
-    runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: typescript/
-      - uses: actions/download-artifact@v4
-        with:
-          name: baml-vscode-vsix
-          path: typescript/vscode-ext/packages/out/
-      - name: Publish to open-vsx
-        run: |
-          cd typescript/vscode-ext/packages
-          pnpm ovsx publish --packagePath ./out/*.vsix
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+  # publish-to-open-vsx:
+  #   environment: release
+  #   needs: [all-builds]
+  #   runs-on: ubuntu-latest
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: jdx/mise-action@v2
+  #     - name: Install Dependencies
+  #       run: pnpm install --frozen-lockfile
+  #       working-directory: typescript/
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: baml-vscode-vsix
+  #         path: typescript/vscode-ext/packages/out/
+  #     - name: Publish to open-vsx
+  #       run: |
+  #         cd typescript/vscode-ext/packages
+  #         pnpm ovsx publish --packagePath ./out/*.vsix
+  #       env:
+  #         OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
-  publish-to-vscode-marketplace:
-    environment: release
-    needs: [all-builds]
-    runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: typescript/
-      - uses: actions/download-artifact@v4
-        with:
-          name: baml-vscode-vsix
-          path: typescript/vscode-ext/packages/out/
-      - name: Publish to VSCode Marketplace
-        run: |
-          cd typescript/vscode-ext/packages
-          pnpm vsce publish --packagePath ./out/*.vsix
-        env:
-          VSCE_PAT: ${{ secrets.VSCODE_PAT }}
+  # publish-to-vscode-marketplace:
+  #   environment: release
+  #   needs: [all-builds]
+  #   runs-on: ubuntu-latest
+  #   if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     - uses: jdx/mise-action@v2
+  #     - name: Install Dependencies
+  #       run: pnpm install --frozen-lockfile
+  #       working-directory: typescript/
+  #     - uses: actions/download-artifact@v4
+  #       with:
+  #         name: baml-vscode-vsix
+  #         path: typescript/vscode-ext/packages/out/
+  #     - name: Publish to VSCode Marketplace
+  #       run: |
+  #         cd typescript/vscode-ext/packages
+  #         pnpm vsce publish --packagePath ./out/*.vsix
+  #       env:
+  #         VSCE_PAT: ${{ secrets.VSCODE_PAT }}
