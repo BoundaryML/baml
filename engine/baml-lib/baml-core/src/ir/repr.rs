@@ -366,30 +366,25 @@ impl WithRepr<Expr<ExprMetadata, ()>> for ast::Expression {
                     .iter()
                     .map(|f| match f {
                         ast::ClassConstructorField::Named(name, expr) => Ok(
-                            ClassConstructorField::Named(name.name().to_string(), expr.repr(db)?),
+                            ClassConstructorField::Named(todo!(), todo!()),
                         ),
                         ast::ClassConstructorField::Spread(expr) => {
-                            Ok(ClassConstructorField::Spread(expr.repr(db)?))
+                            Ok(ClassConstructorField::Spread(todo!()))
                         }
                     })
                     .collect::<Result<Vec<_>>>()?;
-                ClassConstructor {
+                Ok(Expression::ClassConstructor(ClassConstructor {
                     class_name: Node {
                         elem: class_name.name().to_string(),
                         attributes: NodeAttributes::default(),
                     },
                     fields: new_fields,
-                }
-                // let baml_value =
-                //     BamlValueWithMeta::Class(class_name().to_string, new_fields, span.clone());
-                // Ok(Expr::Atom(
-                //     baml_value.map_meta(|_| ()),
-                //     (span.clone(), None),
-                // ))
+                }, span))
             }
         }
     }
 }
+
 
 /// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
