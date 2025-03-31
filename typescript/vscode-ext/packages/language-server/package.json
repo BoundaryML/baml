@@ -34,6 +34,7 @@
     "@baml/common": "workspace:*",
     "@gloo-ai/baml-schema-wasm-node": "workspace:*",
     "@types/js-levenshtein": "1.1.2",
+    "extract-zip": "^2.0.1",
     "js-levenshtein": "1.1.6",
     "klona": "2.0.6",
     "lodash": "^4.17.21",
