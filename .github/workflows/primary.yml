@@ -190,7 +190,7 @@ jobs:
         with:
           name: baml-cli-${{ matrix.target }}
           path: |
-            ${{ matrix.os == 'windows-latest' && 'engine/target/${{ matrix.target }}/release/baml-cli.exe' || 'engine/target/${{ matrix.target }}/release/baml-cli' }}
+            ${{ matrix.os == 'windows-latest' && format('engine/target/{0}/release/baml-cli.exe', matrix.target) || format('engine/target/{0}/release/baml-cli', matrix.target) }}
 
   build-vscode:
     needs: build-cli
