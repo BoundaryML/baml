@@ -126,7 +126,7 @@ async fn log_http_response(
     http_request_id: HttpRequestId,
     status: u16,
     headers: serde_json::Value,
-    body: serde_json::Value,
+    body: HTTPBody,
 ) {
     if let Some(span_id) = runtime_context.span_id {
         BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
@@ -253,7 +253,7 @@ pub async fn execute_request(
                     .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
                 serde_json::Value::Null,
-                serde_json::Value::String(format!("No response. Error: {:?}", e)),
+                HTTPBody::new(format!("No response. Error: {:?}", e).into_bytes()),
             )
             .await;
 
@@ -295,7 +295,7 @@ pub async fn execute_request(
                     http_request_id.clone(),
                     0,
                     serde_json::Value::Null,
-                    serde_json::Value::String(format!("Could not read response body: {:?}", e)),
+                    HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -317,15 +317,17 @@ pub async fn execute_request(
             Ok(s) if !s.is_empty() => s.to_string(),
             _ => "<no response or invalid utf-8>".to_string(),
         };
+
         log_http_response(
             runtime_context,
             TraceLevel::Error,
             http_request_id.clone(),
             logged_res.status.as_u16(),
             json_headers(&logged_res.headers),
-            serde_json::Value::String(resp_body.clone()),
+            HTTPBody::new(resp_body.clone().into_bytes()),
         )
         .await;
+
         return Err(LLMResponse::LLMFailure(LLMErrorResponse {
             client: client.context().name.to_string(),
             model: None,
@@ -335,8 +337,7 @@ pub async fn execute_request(
             latency: instant_now.elapsed(),
             message: format!(
                 "Request failed with status code: {}, \n{}",
-                logged_res.status,
-                resp_body.clone()
+                logged_res.status, resp_body
             ),
             code: ErrorCode::from_status(logged_res.status),
         }));
@@ -352,7 +353,7 @@ pub async fn execute_request(
                     http_request_id.clone(),
                     0,
                     serde_json::Value::Null,
-                    serde_json::Value::String(format!("Could not read response body: {:?}", e)),
+                    HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -380,7 +381,7 @@ pub async fn execute_request(
             http_request_id.clone(),
             logged_response.status.as_u16(),
             json_headers(&logged_response.headers),
-            json_body(JsonBodyInput::String(resp_body)).unwrap_or_default(),
+            HTTPBody::new(resp_body.into_bytes()),
         )
         .await;
 

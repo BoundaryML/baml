@@ -174,6 +174,19 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
         is_stream: bool,
     ) -> HTTPRequest: ...
+    def parse_llm_response(
+        self,
+        function_name: str,
+        llm_response: str,
+        enum_module: Any,
+        cls_module: Any,
+        partial_cls_module: Any,
+        allow_partials: bool,
+        ctx: RuntimeContextManager,
+        tb: Optional[TypeBuilder],
+        cr: Optional[ClientRegistry],
+    ) -> Any: ...
+
 
 class LogEventMetadata:
     event_id: str
@@ -354,7 +367,7 @@ class HTTPResponse:
     @property
     def headers(self) -> Dict[str, Any]: ...
     @property
-    def body(self) -> Union[Dict[str, Any], str]: ...
+    def body(self) -> HTTPBody: ...
 
 class ClientRegistry:
     def __init__(self) -> None: ...
