@@ -37,7 +37,7 @@ jobs:
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
   
   build-cli:
-    uses: ./.github/workflows/build-cli-release-reusable.yaml
+    uses: ./.github/workflows/build-cli-release.reusable.yaml
 
   build-vscode:
     needs: build-cli
