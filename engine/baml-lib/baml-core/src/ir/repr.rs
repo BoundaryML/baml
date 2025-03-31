@@ -1509,8 +1509,6 @@ pub struct FunctionConfig {
     pub client: ClientSpec,
 }
 
-pub type ExprMetadata = (Span, Option<ExprType>);
-
 #[derive(Clone, Debug)]
 pub struct ExprFunction {
     pub name: FunctionId,
