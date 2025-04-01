@@ -74,6 +74,74 @@ impl <T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Let(_, _, _, meta) => meta,
         }
     }
+
+    // pub fn assert_eq_up_to_span(&self, other: &Expr<T>) {
+    //     match (self, other) {
+    //         (Expr::Atom(a1), Expr::Atom(a2)) => assert_eq!(a1.clone().value(), a2.clone().value()),
+    //         (Expr::Atom(_), _) => panic!("Atom mismatch"),
+
+    //         (Expr::List(l1, _), Expr::List(l2, _)) => {
+    //             assert_eq!(l1.len(), l2.len());
+    //             l1.iter().zip(l2.iter()).for_each(|(e1, e2)| e1.assert_eq_up_to_span(e2));
+    //         }
+    //         (Expr::List(_, _), _) => panic!("List mismatch"),
+    //         
+    //         (Expr::ClassConstructor{name: n1, fields: f1, spread: s1, ..}, Expr::ClassConstructor{name: n2, fields: f2, spread: s2, ..}) => {
+    //             assert_eq!(n1, n2);
+    //             for ((k1,v1), (k2,v2)) in f1.iter().zip(f2.iter()) {
+    //                 assert_eq!(k1, k2);
+    //                 v1.assert_eq_up_to_span(v2);
+    //             }
+    //             if let (Some(s1), Some(s2)) = (s1, s2) {
+    //                 s1.assert_eq_up_to_span(s2);
+    //             } else if s1.is_some() || s2.is_some() {
+    //                 panic!("Spread mismatch");
+    //             }
+    //         }
+    //         (Expr::ClassConstructor{..}, _) => panic!("ClassConstructor mismatch"),
+
+    //         (Expr::LLMFunction(n1, args1, _), Expr::LLMFunction(n2, args2, _)) => {
+    //             assert_eq!(n1, n2);
+    //             assert_eq!(args1, args2);
+    //         }
+    //         (Expr::LLMFunction(_, _, _), _) => panic!("LLMFunction mismatch"),
+
+    //         (Expr::Var(n1, _), Expr::Var(n2, _)) => assert_eq!(n1, n2),
+    //         (Expr::Var(_, _), _) => panic!("Var mismatch"),
+
+    //         (Expr::Lambda(args1, body1, _), Expr::Lambda(args2, body2, _)) => {
+    //             assert_eq!(args1, args2);
+    //             body1.assert_eq_up_to_span(body2);
+    //         }
+    //         (Expr::Lambda(_, _, _), _) => panic!("Lambda mismatch"),
+
+    //         (Expr::App(f1, x1, _), Expr::App(f2, x2, _)) => {
+    //             f1.assert_eq_up_to_span(f2);
+    //             x1.assert_eq_up_to_span(x2);
+    //         }
+    //         (Expr::App(_, _, _), _) => panic!("App mismatch"),
+
+    //         (Expr::Let(n1, e1, b1, _), Expr::Let(n2, e2, b2, _)) => {
+    //             assert_eq!(n1, n2);
+    //             e1.assert_eq_up_to_span(e2);
+    //             b1.assert_eq_up_to_span(b2);
+    //         }
+    //         (Expr::Let(_, _, _, _), _) => panic!("Let mismatch"),
+
+    //         (Expr::ArgsTuple(args1, _), Expr::ArgsTuple(args2, _)) => {
+    //             assert_eq!(args1.len(), args2.len());
+    //             args1.iter().zip(args2.iter()).for_each(|(a1, a2)| a1.assert_eq_up_to_span(a2));
+    //         }
+    //         (Expr::ArgsTuple(_, _), _) => panic!("ArgsTuple mismatch"),
+
+    //         (Expr::Map(e1, _), Expr::Map(e2, _)) => {
+    //             assert_eq!(e1.len(), e2.len());
+    //             e1.iter().zip(e2.iter()).for_each(|((_k1, v1), (_k2, v2))| v1.assert_eq_up_to_span(v2));
+    //         }
+    //         (Expr::Map(_, _), _) => panic!("Map mismatch"),
+    //         
+    //     }
+    // }
 }
 
 impl <T: Clone + std::fmt::Debug> Expr<T> {
