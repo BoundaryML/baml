@@ -86,8 +86,8 @@ jobs:
         shell: bash
         if: ${{ matrix._.platform == 'arm64-darwin' }}
         run: |
-          apt-get update
-          apt-get install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
             clang \
             gcc \
             g++ \

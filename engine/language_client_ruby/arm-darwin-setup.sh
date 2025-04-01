@@ -1,33 +1,14 @@
 #!/bin/bash
 set -ex
 
-# Install osxcross dependencies with sudo
-sudo apt-get update
-sudo apt-get install -y \
-    clang \
-    gcc \
-    g++ \
-    zlib1g-dev \
-    libmpc-dev \
-    libmpfr-dev \
-    libgmp-dev \
-    make \
-    lzma-dev \
-    libxml2-dev \
-    patch \
-    wget \
-    git \
-    cmake \
-    xz-utils
-
 # Install osxcross if not already installed
 if [ ! -d "/tmp/osxcross" ]; then
     cd /tmp
     sudo rm -rf osxcross  # Clean up any failed previous attempts
     git clone https://github.com/tpoechtrager/osxcross
     cd osxcross
-    wget -nc https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
-    mv MacOSX11.3.sdk.tar.xz tarballs/
+    mkdir -p tarballs
+    wget -nc https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz -O tarballs/MacOSX11.3.sdk.tar.xz
     UNATTENDED=1 ./build.sh
 fi
 
