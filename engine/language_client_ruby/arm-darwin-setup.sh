@@ -1,6 +1,19 @@
 #!/bin/bash
 set -ex
 
+# Create a directory for our cross-compilation tools
+mkdir -p /tmp/cross-tools
+cd /tmp/cross-tools
+
+# Create symlinks with the expected names
+ln -sf $(which llvm-ar) aarch64-apple-darwin-ar
+ln -sf $(which llvm-ranlib) aarch64-apple-darwin-ranlib
+ln -sf $(which clang) aarch64-apple-darwin-cc
+ln -sf $(which clang++) aarch64-apple-darwin-c++
+
+# Add our tools directory to the PATH
+export PATH="/tmp/cross-tools:$PATH"
+
 # Ensure SDKROOT is set for macOS cross-compilation
 export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
 
@@ -28,18 +41,16 @@ export OPENSSL_LIB_DIR=""   # Clear any existing OpenSSL paths
 export OPENSSL_INCLUDE_DIR=""
 
 # Cross compilation settings for OpenSSL
-export CC=clang
-export CXX=clang++
-export AR=llvm-ar
-export RANLIB=llvm-ranlib
-export CROSS_COMPILE=aarch64-apple-darwin-
-export CROSS_SYSROOT=/usr/local/rake-compiler/ruby/aarch64-apple-darwin/ruby-3.3.0-rc1
+export AR=aarch64-apple-darwin-ar
+export RANLIB=aarch64-apple-darwin-ranlib
+export CC=aarch64-apple-darwin-cc
+export CXX=aarch64-apple-darwin-c++
 
 # Set the specific tools for the target
-export CC_aarch64_apple_darwin=clang
-export CXX_aarch64_apple_darwin=clang++
-export AR_aarch64_apple_darwin=llvm-ar
-export RANLIB_aarch64_apple_darwin=llvm-ranlib
+export CC_aarch64_apple_darwin=$CC
+export CXX_aarch64_apple_darwin=$CXX
+export AR_aarch64_apple_darwin=$AR
+export RANLIB_aarch64_apple_darwin=$RANLIB
 
 # Ensure the environment is properly configured
 export RUST_BACKTRACE=1 
