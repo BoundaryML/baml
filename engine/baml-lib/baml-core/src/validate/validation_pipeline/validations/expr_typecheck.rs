@@ -2,12 +2,11 @@ use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use crate::ir::repr::initial_context;
+use crate::ir::{repr::initial_context, IRHelper};
 use crate::ir::IntermediateRepr;
 use crate::validate::validation_pipeline::context::Context;
 use crate::Configuration;
-use baml_types::expr::{Arrow, Expr, ExprType};
-use baml_types::{BamlValueWithMeta, FieldType, expr::ExprMetadata};
+use baml_types::{BamlValueWithMeta, FieldType, Arrow, expr::{Expr, ExprMetadata}};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::ir::IRHelperExtended;
@@ -15,34 +14,34 @@ use crate::ir::IRHelperExtended;
 pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     let null_configuration = Configuration::new();
     if let Ok(ir) = IntermediateRepr::from_parser_database(ctx.db, null_configuration) {
-        let mut typing_context: HashMap<String, ExprType> = ir
+        let mut typing_context: HashMap<String, FieldType> = ir
             .expr_fns
             .iter()
             .map(|expr_fn| {
                 (
                     expr_fn.elem.name.clone(),
-                    ExprType::Arrow(Box::new(Arrow {
+                    FieldType::Arrow(Box::new(Arrow {
                         param_types: expr_fn
                             .elem
                             .inputs
                             .iter()
-                            .map(|(_, t)| ExprType::Atom(t.clone()))
+                            .map(|(_, t)| t.clone())
                             .collect(),
-                        body_type: ExprType::Atom(expr_fn.elem.output.clone()),
+                        return_type: expr_fn.elem.output.clone(),
                     })),
                 )
             })
             .chain(ir.functions.iter().map(|llm_function| {
                 (
                     llm_function.elem.name.clone(),
-                    ExprType::Arrow(Box::new(Arrow {
+                    FieldType::Arrow(Box::new(Arrow {
                         param_types: llm_function
                             .elem
                             .inputs
                             .iter()
-                            .map(|(_, t)| ExprType::Atom(t.clone()))
+                            .map(|(_, t)| t.clone())
                             .collect(),
-                        body_type: ExprType::Atom(llm_function.elem.output.clone()),
+                        return_type: llm_function.elem.output.clone(),
                     })),
                 )
             }))
@@ -74,7 +73,7 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
 pub fn typecheck_in_context(
     ir: &IntermediateRepr,
     diagnostics: &mut Diagnostics,
-    typing_context: &HashMap<String, ExprType>,
+    typing_context: &HashMap<String, FieldType>,
     expr: &Expr<ExprMetadata>,
 ) -> Result<()> {
     eprintln!(
@@ -83,10 +82,10 @@ pub fn typecheck_in_context(
         expr.meta()
             .1
             .as_ref()
-            .map_or("?".to_string(), |t| t.dump_str())
+            .map_or("?".to_string(), |t| t.to_string())
     );
     for (k, v) in typing_context {
-        eprintln!("  {} : {}", k, v.dump_str());
+        eprintln!("  {} : {}", k, v.to_string());
     }
     match expr {
         Expr::Atom(atom) => {
@@ -98,8 +97,8 @@ pub fn typecheck_in_context(
             Ok(())
         }
         Expr::Var(var, (var_span, maybe_type)) => {
-            if let Some(ExprType::Atom(var_type)) = maybe_type {
-                if let Some(ExprType::Atom(ctx_type)) = typing_context.get(var) {
+            if let Some(var_type) = maybe_type {
+                if let Some(ctx_type) = typing_context.get(var) {
                     if ir.is_subtype(&ctx_type, var_type) {
                         Ok(())
                     } else {
@@ -118,21 +117,21 @@ pub fn typecheck_in_context(
         }
         Expr::Lambda(param_names, body, (span, maybe_type)) => {
             // (\(x,y) -> x + y) : (Int,Int) -> Int
-            if let Some(ExprType::Arrow(arrow)) = maybe_type {
+            if let Some(FieldType::Arrow(arrow)) = maybe_type {
                 let mut inner_context = typing_context.clone();
                 for (param_type, param_name) in arrow.param_types.iter().zip(param_names.iter()) {
                     eprintln!("inserting {:?} -> {:?}", param_name, param_type);
                     inner_context.insert(param_name.to_string(), param_type.clone());
                 }
-                if !compatible_as_subtype(ir, &body.meta().1, &Some(arrow.body_type.clone())) {
+                if !compatible_as_subtype(ir, &body.meta().1, &Some(arrow.return_type.clone())) {
                     diagnostics.push_error(DatamodelError::new_validation_error(
                         &format!(
                             "B Type mismatch in lambda: {} vs {}",
                             body.meta()
                                 .1
                                 .as_ref()
-                                .map_or("?".to_string(), |t| t.dump_str()),
-                            arrow.body_type.dump_str()
+                                .map_or("?".to_string(), |t| t.to_string()),
+                            arrow.return_type.to_string()
                         ),
                         body.meta().0.clone(),
                     ));
@@ -142,8 +141,8 @@ pub fn typecheck_in_context(
                         body.meta()
                             .1
                             .as_ref()
-                            .map_or("?".to_string(), |t| t.dump_str()),
-                        arrow.body_type.dump_str()
+                            .map_or("?".to_string(), |t| t.to_string()),
+                        arrow.return_type.to_string()
                     );
                 }
                 typecheck_in_context(ir, diagnostics, &inner_context, body)?;
@@ -158,7 +157,7 @@ pub fn typecheck_in_context(
 
             // First check that the param types are compatible with the arguments.
             match (&f.meta().1, xs.as_ref()) {
-                (Some(ExprType::Arrow(arrow)), Expr::ArgsTuple(args, _)) => {
+                (Some(FieldType::Arrow(arrow)), Expr::ArgsTuple(args, _)) => {
                     for (param_type, arg) in arrow.param_types.iter().zip(args.iter()) {
                         eprintln!(
                             "TYPECHECKING APP: PARAMTYPE: {:?} ARG: {:?}",
@@ -271,46 +270,91 @@ pub fn typecheck_in_context(
         Expr::ArgsTuple(args, _) => Ok(()),
         Expr::List(items, meta) => {
             for item in items.iter() {
-                if !compatible_as_subtype(ir, &item.meta().1, &Some(item_type.clone())) {
-                    diagnostics.push_error(DatamodelError::new_validation_error("Type mismatch in list", span.clone()));
+                if let Some(item_type) = item.meta().1.as_ref() {
+                    let item_list_type = FieldType::List(Box::new(item_type.clone()));
+                    if !compatible_as_subtype(ir, &Some(item_list_type), &meta.1.clone()) {
+                        diagnostics.push_error(DatamodelError::new_validation_error("Type mismatch in list", meta.0.clone()));
+                    }
+                }
+                typecheck_in_context(ir, diagnostics, typing_context, item)?;
+            }
+            Ok(())
+        },
+        Expr::Map(items, meta) => {
+            if let Some(map_type) = meta.1.as_ref() {
+                if let Some((key_type, item_type)) = match map_type {
+                    FieldType::Map(key_type, item_type) => Some((key_type, item_type)),
+                    _ => None,
+                } {
+                    for (_key, item) in items.iter() {
+                        if let Some(item_type) = item.meta().1.as_ref() {
+                            let item_map_type = FieldType::Map(key_type.clone(), Box::new(item_type.clone()));
+                            if !compatible_as_subtype(ir, &Some(item_map_type), &meta.1.clone()) {
+                                diagnostics.push_error(DatamodelError::new_validation_error("Type mismatch in map", meta.0.clone()));
+                            }
+                        }
+                        typecheck_in_context(ir, diagnostics, typing_context, item)?;
+                    }
+                } else {
+                    diagnostics.push_error(DatamodelError::new_validation_error("Type mismatch in map", meta.0.clone()));
                 }
             }
             Ok(())
+        },
+        Expr::ClassConstructor{name, fields, spread, meta} => {
+            if let Ok(class_walker) = ir.find_class(name) {
+                for (field_name, field_value) in fields.iter() {
+                    let maybe_field_type = field_value.meta().1.clone();
+                    if let Some(field_type) = maybe_field_type {
+                        if let Some(field_walker) = class_walker.find_field(field_name) {
+                            if !compatible_as_subtype(ir, &Some(field_walker.r#type().clone()), &Some(field_type)) {
+                                diagnostics.push_error(DatamodelError::new_validation_error("Type mismatch in class constructor", meta.0.clone()));
+                            }
+                        }
+                    }
+                }
+            }
+            let spread_type = spread.as_ref().and_then(|s| s.meta().1.clone());
+            if !compatible_as_subtype(ir, &meta.1, &spread_type) {
+                diagnostics.push_error(DatamodelError::new_validation_error("Type mismatch in class constructor", meta.0.clone()));
+            }
+            Ok(())
         }
+        
     }
 }
 
-fn is_subtype(ir: &IntermediateRepr, a: &ExprType, b: &ExprType) -> bool {
-    match (a, b) {
-        (ExprType::Atom(a), ExprType::Atom(b)) => ir.is_subtype(a, b),
-        (ExprType::Arrow(a), ExprType::Arrow(b)) => {
-            let a_arrow = a.as_ref();
-            let b_arrow = b.as_ref();
-            let return_type_ok = is_subtype(ir, &a_arrow.body_type, &b_arrow.body_type);
-            let arg_types_ok = a_arrow
-                .param_types
-                .iter()
-                .zip(b_arrow.param_types.iter())
-                .all(|(a, b)| is_subtype(ir, b, a));
-            return_type_ok && arg_types_ok
-        }
-        _ => false,
-    }
-}
+// fn is_subtype(ir: &IntermediateRepr, a: &ExprType, b: &ExprType) -> bool {
+//     match (a, b) {
+//         (ExprType::Atom(a), ExprType::Atom(b)) => ir.is_subtype(a, b),
+//         (ExprType::Arrow(a), ExprType::Arrow(b)) => {
+//             let a_arrow = a.as_ref();
+//             let b_arrow = b.as_ref();
+//             let return_type_ok = is_subtype(ir, &a_arrow.body_type, &b_arrow.body_type);
+//             let arg_types_ok = a_arrow
+//                 .param_types
+//                 .iter()
+//                 .zip(b_arrow.param_types.iter())
+//                 .all(|(a, b)| is_subtype(ir, b, a));
+//             return_type_ok && arg_types_ok
+//         }
+//         _ => false,
+//     }
+// }
 
 fn compatible_as_subtype(
     ir: &IntermediateRepr,
-    a: &Option<ExprType>,
-    b: &Option<ExprType>,
+    a: &Option<FieldType>,
+    b: &Option<FieldType>,
 ) -> bool {
     match (a, b) {
-        (Some(a), Some(b)) => is_subtype(ir, a, b),
+        (Some(a), Some(b)) => ir.is_subtype(a, b),
         _ => true,
     }
 }
 
 pub fn infer_types_in_context(
-    typing_context: &mut HashMap<String, ExprType>,
+    typing_context: &mut HashMap<String, FieldType>,
     expr: Arc<Expr<ExprMetadata>>,
 ) -> Arc<Expr<ExprMetadata>> {
     eprintln!(
@@ -328,7 +372,7 @@ pub fn infer_types_in_context(
         Expr::Var(ref var_name, (span, maybe_type)) => {
             // Assign variables from the context.
             if let Some(ctx_ty) = typing_context.get(var_name) {
-                eprintln!("SUCCESS1! Setting {} to {}", var_name, ctx_ty.dump_str());
+                eprintln!("SUCCESS1! Setting {} to {}", var_name, ctx_ty.to_string());
                 Arc::new(Expr::Var(
                     var_name.clone(),
                     (span.clone(), Some(ctx_ty.clone())),
@@ -336,7 +380,7 @@ pub fn infer_types_in_context(
             } else {
                 // Otherwise, and if we know the type, add it to the context.
                 if let Some(var_ty) = &expr.meta().1 {
-                    eprintln!("SUCCESS2! Setting {} to {}", var_name, var_ty.dump_str());
+                    eprintln!("SUCCESS2! Setting {} to {}", var_name, var_ty.to_string());
                     typing_context.insert(var_name.to_string(), var_ty.clone());
                 }
                 expr.clone()
@@ -350,7 +394,7 @@ pub fn infer_types_in_context(
             let new_expr = infer_types_in_context(typing_context, expr.clone());
             let new_body = infer_types_in_context(typing_context, body.clone());
             if let Some(ref expr_ty) = new_expr.meta().1 {
-                eprintln!("SUCCESS4! Setting {} to {}", var_name, expr_ty.dump_str());
+                eprintln!("SUCCESS4! Setting {} to {}", var_name, expr_ty.to_string());
                 typing_context.insert(var_name.to_string(), expr_ty.clone());
             }
             let new_meta = (expr.meta().0.clone(), new_body.meta().1.clone());
@@ -363,19 +407,19 @@ pub fn infer_types_in_context(
             let new_f = infer_types_in_context(typing_context, f.clone());
             let new_args = infer_types_in_context(typing_context, args.clone());
             let new_app_type = match &new_f.meta().1 {
-                Some(ExprType::Arrow(arrow)) => {
+                Some(FieldType::Arrow(arrow)) => {
                     eprintln!("app infer_types: arrow: {:?}", arrow);
                     eprintln!(
                         "SUCCESS5! Setting {} to {}",
                         f.dump_str(),
-                        arrow.body_type.dump_str()
+                        arrow.return_type.to_string()
                     );
-                    Some(arrow.body_type.clone())
+                    Some(arrow.return_type.clone())
                 }
                 ty => {
                     eprintln!(
                         "app infer_types: not arrow but {}",
-                        ty.as_ref().map_or("?".to_string(), |ty| ty.dump_str())
+                        ty.as_ref().map_or("?".to_string(), |ty| ty.to_string())
                     );
                     None
                 }
@@ -403,7 +447,7 @@ pub fn infer_types_in_context(
         Expr::Lambda(param_names, body, (span, maybe_type)) => {
             eprintln!("LAMBDA");
             let mut local_typing_context = typing_context.clone();
-            if let Some(ExprType::Arrow(arrow)) = maybe_type {
+            if let Some(FieldType::Arrow(arrow)) = maybe_type {
                 for (param_type, param_name) in arrow.param_types.iter().zip(param_names.iter()) {
                     local_typing_context.insert(param_name.to_string(), param_type.clone());
                 }

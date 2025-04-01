@@ -16,7 +16,7 @@ pub enum Expr<T> {
     Atom(BamlValueWithMeta<T>),
     List(Vec<Expr<T>>, T),
     Map(BamlMap<String, Expr<T>>, T),
-    Class{name: String, fields: BamlMap<String, Expr<T>>, spread: Option<Box<Expr<T>>>, meta: T},
+    ClassConstructor{name: String, fields: BamlMap<String, Expr<T>>, spread: Option<Box<Expr<T>>>, meta: T},
 
     LLMFunction(Name, Vec<Name>, T),
     Var(Name, T),
@@ -35,7 +35,7 @@ impl <T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Atom(baml_value) => baml_value.meta(),
             Expr::List(_, meta) => meta,
             Expr::Map(_, meta) => meta,
-            Expr::Class{meta, ..} => meta,
+            Expr::ClassConstructor{meta, ..} => meta,
             Expr::LLMFunction(_, _, meta) => meta,
             Expr::Var(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
@@ -50,7 +50,7 @@ impl <T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Atom(baml_value) => baml_value.meta_mut(),
             Expr::List(_, meta) => meta,
             Expr::Map(_, meta) => meta,
-            Expr::Class{ meta, ..} => meta,
+            Expr::ClassConstructor{ meta, ..} => meta,
             Expr::LLMFunction(_, _, meta) => meta,
             Expr::Var(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
@@ -65,7 +65,7 @@ impl <T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Atom(baml_value) => baml_value.meta().clone(),
             Expr::List(_, meta) => meta,
             Expr::Map(_, meta) => meta,
-            Expr::Class{meta, ..} => meta,
+            Expr::ClassConstructor{meta, ..} => meta,
             Expr::LLMFunction(_, _, meta) => meta,
             Expr::Var(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
@@ -107,7 +107,7 @@ impl <T: Clone + std::fmt::Debug> Expr<T> {
                 let entries = entries.iter().map(|(key, value)| format!("{}: {}", key, value.dump_str())).collect::<Vec<_>>().join(", ");
                 format!("{{{}}}", entries)
             }
-            Expr::Class{name, fields, spread, ..} => {
+            Expr::ClassConstructor{name, fields, spread, ..} => {
                 let fields = fields.iter().map(|(key, value)| format!("{}: {}", key, value.dump_str())).collect::<Vec<_>>().join(", ");
                 let spread = match spread {
                     Some(expr) => format!("..{}", expr.dump_str()),
@@ -154,7 +154,7 @@ impl <T: Clone + std::fmt::Debug> Expr<T> {
             }
             (Expr::ArgsTuple(_, _), _) => false,
 
-            (Expr::Class{name: n1, fields: e1, spread: s1, ..}, Expr::Class{name: n2, fields: e2, spread: s2, ..}) => {
+            (Expr::ClassConstructor{name: n1, fields: e1, spread: s1, ..}, Expr::ClassConstructor{name: n2, fields: e2, spread: s2, ..}) => {
                 n1 == n2 &&
                 e1.len() == e2.len() &&
                 e1.iter().zip(e2.iter()).all(|((_k1, v1), (_k2, v2))| v1.temporary_same_state(v2)) &&
@@ -164,7 +164,7 @@ impl <T: Clone + std::fmt::Debug> Expr<T> {
                     _ => false,
                 })
             }
-            (Expr::Class{..}, _) => false,
+            (Expr::ClassConstructor{..}, _) => false,
 
             (Expr::Map(e1, _), Expr::Map(e2, _)) => {
                 e1.len() == e2.len() &&
@@ -202,7 +202,7 @@ impl Expr<ExprMetadata> {
                 Some(BamlValueWithMeta::Map(atom_entries, meta.clone()))
             }
             // A class constructor may not be evaluated into an atom if it still contains a spread.
-            Expr::Class{name, fields, spread, meta} => {
+            Expr::ClassConstructor{name, fields, spread, meta} => {
                  if spread.is_some() {
                     None
                  } else {
