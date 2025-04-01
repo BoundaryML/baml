@@ -37,6 +37,7 @@ jobs:
             rb-sys-dock-setup: ./arm-linux-setup.sh
           - platform: arm64-darwin
             target: aarch64-apple-darwin
+            rb-sys-dock-setup: ./arm-darwin-setup.sh
           # - platform: x64-mingw32
           # - platform: x86-mingw-ucrt
 
