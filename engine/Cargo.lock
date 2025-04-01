@@ -1013,8 +1013,6 @@ dependencies = [
  "minijinja",
  "notify-debouncer-full",
  "once_cell",
- "openssl",
- "openssl-sys",
  "pin-project-lite",
  "pretty_assertions",
  "regex",
