@@ -1,7 +1,9 @@
 use crate::rpc::ApiEndpoint;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct Organization {
     pub org_id: String,
     pub org_slug: String,
@@ -10,14 +12,16 @@ pub struct Organization {
     pub stripe_subscription_id: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CreateOrganizationRequest {
     pub org_id: String,
     pub org_slug: String,
     pub org_display_name: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CreateOrganizationResponse {
     pub org: Organization,
 }
@@ -31,7 +35,8 @@ impl ApiEndpoint for CreateOrganization {
     const PATH: &'static str = "/v1/create-organization";
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UpdateOrganizationRequest {
     pub org_id: String,
     pub org_slug: Option<String>,
@@ -40,7 +45,8 @@ pub struct UpdateOrganizationRequest {
     pub stripe_subscription_id: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UpdateOrganizationResponse {
     pub org: Organization,
 }
@@ -54,12 +60,14 @@ impl ApiEndpoint for UpdateOrganization {
     const PATH: &'static str = "/v1/update-organization";
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GetOrganizationRequest {
     pub org_id: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GetOrganizationResponse {
     pub org: Organization,
 }

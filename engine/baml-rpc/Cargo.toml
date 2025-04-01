@@ -40,6 +40,7 @@ strsim = "0.11.1"
 strum.workspace = true
 strum_macros.workspace = true
 time.workspace = true
+ts-rs = "10.1"
 type-safe-id = "0.3.2"
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
 web-time.workspace = true
