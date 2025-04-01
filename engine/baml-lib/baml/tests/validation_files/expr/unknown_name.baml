@@ -13,13 +13,13 @@ fn Go3(x:int) -> int {
     Unknown(x)
 }
 
-// error: Unknown valiable a
+// error: Unknown variable a
 //   -->  expr/unknown_name.baml:2
 //    | 
 //  1 | fn Go(x: int) -> int {
 //  2 |     let y = a;
 //    | 
-// error: Unknown valiable b
+// error: Unknown variable b
 //   -->  expr/unknown_name.baml:9
 //    | 
 //  8 |     let a = z;

@@ -285,15 +285,23 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
             ast::Expression::JinjaExpressionValue(val, span) => Ok(Expr::Atom(
                 BamlValueWithMeta::String(val.to_string(), (span.clone(), Some(FieldType::Primitive(TypeValue::String)))),
             )),
-            ast::Expression::Array(vals, span) => Ok(Expr::Atom(
-                BamlValueWithMeta::List(
-                    vals.iter()
-                        .map(|v| v.repr(db).unwrap().as_atom().unwrap().clone())
-                        .collect(),
-                    (span.clone(), None), // TODO: Infer the type. It's a list, but of what??
-                )
-            )),
+            ast::Expression::Array(vals, meta) => {
+                let new_items = vals.iter().map(|v| v.repr(db)).collect::<Result<Vec<_>>>()?;
+                let mut item_types = new_items.iter().filter_map(|v| v.meta().1.clone()).collect::<Vec<_>>();
+                item_types.dedup();
+                let item_type = match item_types.len() {
+                    0 => None,
+                    1 => Some(item_types[0].clone()),
+                    _ => Some(FieldType::Union(item_types)),
+                };
+                let list_type = item_type.map(|t| FieldType::List(Box::new(t)));
+                Ok(Expr::List(
+                    new_items,
+                    (meta.clone(), list_type),
+                ))
+            } ,
             ast::Expression::Map(vals, span) => Ok(Expr::Atom(
+                //TODO: Figure out the type as in list.
                 BamlValueWithMeta::Map(
                     vals.iter()
                         .map(|(k, v)| {

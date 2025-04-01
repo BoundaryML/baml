@@ -443,7 +443,7 @@ mod tests {
                 assert_eq!(x.stmt.identifier.name(), "x");
                 assert_eq!(x.stmt.body.stmts.len(), 1);
                 assert_eq!(x.stmt.body.stmts[0].identifier.name(), "y");
-                assert!(matches!(x.stmt.body.expr, Expr::App(_,_,_)));
+                assert!(matches!(x.stmt.body.expr, Expression::FnApp(_,_,_)));
                 dbg!(&x.stmt.body.expr);
             },
             _ => panic!("Expected a single top level assignment."),
