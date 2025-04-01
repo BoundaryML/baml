@@ -14,9 +14,6 @@ ln -sf $(which clang++) aarch64-apple-darwin-c++
 # Add our tools directory to the PATH
 export PATH="/tmp/cross-tools:$PATH"
 
-# Ensure SDKROOT is set for macOS cross-compilation
-export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
-
 # Set deployment target to match extconf.rb
 export MACOSX_DEPLOYMENT_TARGET=10.13
 
@@ -34,13 +31,21 @@ export CARGO_BUILD_TARGET=aarch64-apple-darwin
 export RB_SYS_FORCE_INSTALL_RUBY_VERSION=true
 export RB_SYS_FORCE_INSTALL_RUBY=true
 
-# OpenSSL specific settings - use vendored version
+# OpenSSL specific settings
 export OPENSSL_STATIC=1
-export OPENSSL_NO_VENDOR=0  # Use vendored OpenSSL
-export OPENSSL_LIB_DIR=""   # Clear any existing OpenSSL paths
-export OPENSSL_INCLUDE_DIR=""
+export OPENSSL_NO_VENDOR=1  # Don't use vendored OpenSSL
+export OPENSSL_NO_DEFAULT_VENDOR=1
+# Disable features that might cause issues
+export OPENSSL_NO_ASM=1
+export OPENSSL_NO_SHARED=1
+export OPENSSL_NO_ASYNC=1
+export OPENSSL_NO_ENGINE=1
+export OPENSSL_NO_DEPRECATED=1
+export OPENSSL_NO_AFALGENG=1
+export OPENSSL_NO_AUTOALGINIT=1
+export OPENSSL_NO_AUTOERRINIT=1
 
-# Cross compilation settings for OpenSSL
+# Cross compilation settings
 export AR=aarch64-apple-darwin-ar
 export RANLIB=aarch64-apple-darwin-ranlib
 export CC=aarch64-apple-darwin-cc
