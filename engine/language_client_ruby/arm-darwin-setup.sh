@@ -1,18 +1,18 @@
 #!/bin/bash
 set -ex
 
-# Create a directory for our cross-compilation tools
-mkdir -p /tmp/cross-tools
-cd /tmp/cross-tools
+# Install osxcross if not already installed
+if [ ! -d "/tmp/osxcross" ]; then
+    cd /tmp
+    git clone https://github.com/tpoechtrager/osxcross
+    cd osxcross
+    wget -nc https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.3.sdk.tar.xz
+    mv MacOSX11.3.sdk.tar.xz tarballs/
+    UNATTENDED=1 ./build.sh
+fi
 
-# Create symlinks with the expected names
-ln -sf $(which llvm-ar) aarch64-apple-darwin-ar
-ln -sf $(which llvm-ranlib) aarch64-apple-darwin-ranlib
-ln -sf $(which clang) aarch64-apple-darwin-cc
-ln -sf $(which clang++) aarch64-apple-darwin-c++
-
-# Add our tools directory to the PATH
-export PATH="/tmp/cross-tools:$PATH"
+# Add osxcross to PATH
+export PATH="/tmp/osxcross/target/bin:$PATH"
 
 # Set deployment target to match extconf.rb
 export MACOSX_DEPLOYMENT_TARGET=10.13
@@ -33,23 +33,13 @@ export RB_SYS_FORCE_INSTALL_RUBY=true
 
 # OpenSSL specific settings
 export OPENSSL_STATIC=1
-export OPENSSL_NO_VENDOR=1  # Don't use vendored OpenSSL
-export OPENSSL_NO_DEFAULT_VENDOR=1
-# Disable features that might cause issues
-export OPENSSL_NO_ASM=1
-export OPENSSL_NO_SHARED=1
-export OPENSSL_NO_ASYNC=1
-export OPENSSL_NO_ENGINE=1
-export OPENSSL_NO_DEPRECATED=1
-export OPENSSL_NO_AFALGENG=1
-export OPENSSL_NO_AUTOALGINIT=1
-export OPENSSL_NO_AUTOERRINIT=1
+export OPENSSL_NO_VENDOR=0  # Use vendored OpenSSL since we have proper tools now
 
-# Cross compilation settings
-export AR=aarch64-apple-darwin-ar
-export RANLIB=aarch64-apple-darwin-ranlib
-export CC=aarch64-apple-darwin-cc
-export CXX=aarch64-apple-darwin-c++
+# Cross compilation settings using osxcross
+export AR=aarch64-apple-darwin20.4-ar
+export RANLIB=aarch64-apple-darwin20.4-ranlib
+export CC=aarch64-apple-darwin20.4-clang
+export CXX=aarch64-apple-darwin20.4-clang++
 
 # Set the specific tools for the target
 export CC_aarch64_apple_darwin=$CC

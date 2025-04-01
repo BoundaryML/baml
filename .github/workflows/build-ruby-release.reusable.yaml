@@ -82,6 +82,28 @@ jobs:
           RUSTFLAGS=--cfg tracing_unstable
           EOF
 
+      - name: Install osxcross dependencies
+        shell: bash
+        if: ${{ matrix._.platform == 'arm64-darwin' }}
+        run: |
+          apt-get update
+          apt-get install -y \
+            clang \
+            gcc \
+            g++ \
+            zlib1g-dev \
+            libmpc-dev \
+            libmpfr-dev \
+            libgmp-dev \
+            make \
+            lzma-dev \
+            libxml2-dev \
+            patch \
+            wget \
+            git \
+            cmake \
+            xz-utils
+
       - name: Setup rb-sys
         shell: bash
         run: |
