@@ -33,6 +33,7 @@ jobs:
           - platform: aarch64-linux
           - platform: aarch64-linux-musl
           - platform: arm-linux
+            target: arm-unknown-linux-gnueabihf
             rb-sys-dock-setup: ./arm-linux-setup.sh
           - platform: arm64-darwin
           # - platform: x64-mingw32
@@ -107,6 +108,7 @@ jobs:
             --directory language_client_ruby \
             --ruby-versions 3.3,3.2,3.1 \
             --build \
+            --target ${{ matrix._.target }} \
             -- ${{ matrix._.rb-sys-dock-setup }}
 
       - name: Show built gem
