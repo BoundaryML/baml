@@ -33,9 +33,9 @@ export RB_SYS_FORCE_INSTALL_RUBY=true
 
 # OpenSSL specific settings
 export OPENSSL_STATIC=1
-export OPENSSL_NO_VENDOR=1  # Don't use vendored OpenSSL
-export OPENSSL_NO_DEFAULT_VENDOR=1
-export OPENSSL_DIR=/opt/osxcross/SDK/MacOSX11.3.sdk/usr
+export OPENSSL_NO_VENDOR=0  # Use vendored OpenSSL
+export OPENSSL_LIB_DIR=""   # Let the vendored build handle this
+export OPENSSL_INCLUDE_DIR="" # Let the vendored build handle this
 
 # Disable OpenSSL features that might cause issues
 export OPENSSL_NO_ASM=1
