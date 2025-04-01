@@ -15,4 +15,4 @@ rustflags = ["-C", "target-feature=+crt-static", "--cfg", "tracing_unstable"]
 
 [target.aarch64-unknown-linux-gnu]
 linker = "aarch64-linux-gnu-gcc"
-rustflags = ["-C", "target-feature=+crt-static", "--cfg", "tracing_unstable"]
+rustflags = ["-C", "target-feature=-crt-static", "--cfg", "tracing_unstable"]
