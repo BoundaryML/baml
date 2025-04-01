@@ -1,6 +1,8 @@
 use crate::Result;
 use magnus::{class, method, Error, Module, RModule, Ruby};
 
+use super::request::HTTPBody;
+
 crate::lang_wrapper!(
     HTTPResponse,
     "Baml::Ffi::HTTPResponse",
@@ -14,7 +16,7 @@ impl HTTPResponse {
             "HTTPResponse(status={}, headers={}, body={})",
             self.inner.status,
             serde_json::to_string_pretty(&self.inner.headers).unwrap_or_default(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap_or_default()
+            serde_json::to_string_pretty(&self.inner.body.as_serde_value()).unwrap_or_default()
         )
     }
 
@@ -28,9 +30,9 @@ impl HTTPResponse {
             .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
     }
 
-    pub fn body(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
-        serde_magnus::serialize(&rb_self.inner.body)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
+    pub fn body(&self) -> HTTPBody {
+        // TODO: Avoid clone.
+        HTTPBody::from(self.inner.body.clone())
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {

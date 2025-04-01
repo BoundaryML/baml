@@ -1,10 +1,10 @@
 use pyo3::{
     prelude::{pymethods, Py},
     types::{PyDict, PyDictMethods},
-    PyObject, PyResult, Python,
+    PyResult, Python,
 };
 
-use super::log_collector::serde_value_to_py;
+use super::request::HTTPBody;
 
 crate::lang_wrapper!(
     HTTPResponse,
@@ -20,7 +20,7 @@ impl HTTPResponse {
             "HTTPResponse(status={}, headers={}, body={})",
             self.inner.status,
             serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&self.inner.body).unwrap()
+            serde_json::to_string_pretty(&self.inner.body.as_serde_value()).unwrap()
         )
     }
 
@@ -40,9 +40,9 @@ impl HTTPResponse {
         Ok(dict.into())
     }
 
-    // note the body may be an error string, not a dict
     #[getter]
-    pub fn body(&self, py: Python<'_>) -> PyResult<PyObject> {
-        serde_value_to_py(py, &self.inner.body)
+    pub fn body(&self) -> HTTPBody {
+        // TODO: Avoid clone.
+        HTTPBody::from(self.inner.body.clone())
     }
 }

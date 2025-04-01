@@ -73,12 +73,13 @@ describe('Collector Tests', () => {
 
     // Verify http response
     const response = call.httpResponse;
+    const responseBody = response?.body.json();
     expect(response).not.toBeNull();
     expect(response?.status).toBe(200);
-    expect(response?.body).not.toBeNull();
-    expect(response?.body.choices).toBeDefined();
-    expect(response?.body.choices.length).toBeGreaterThan(0);
-    expect(response?.body.choices[0].message.content).not.toBeNull();
+    expect(responseBody).not.toBeNull();
+    expect(responseBody?.choices).toBeDefined();
+    expect(responseBody?.choices.length).toBeGreaterThan(0);
+    expect(responseBody?.choices[0].message.content).not.toBeNull();
 
     // Verify call timing
     const callTiming = call.timing;
@@ -157,7 +158,7 @@ describe('Collector Tests', () => {
     const request = call.httpRequest;
     expect(request).not.toBeNull();
     expect(typeof request?.body).toBe('object');
-    expect((request?.body.json() as any).messages).toBeDefined();
+    expect((request?.body.json()).messages).toBeDefined();
 
     // For streaming, httpResponse might be null since it's streaming
     const response = call.httpResponse;
@@ -292,13 +293,13 @@ describe('Collector Tests', () => {
   it('should handle sync calls correctly', async () => {
     const collector = new Collector("sync-collector");
     const result = b_sync.TestOpenAIGPT4oMini("sync call", { collector });
-    
+
     const logs = collector.logs;
     expect(logs.length).toBe(1);
     expect(logs[0].functionName).toBe("TestOpenAIGPT4oMini");
     expect(logs[0].logType).toBe("call");
     expect(logs[0].usage).not.toBeNull();
   });
-  
-  
+
+
 });

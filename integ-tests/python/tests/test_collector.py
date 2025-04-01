@@ -82,14 +82,15 @@ async def test_collector_async_no_stream_success():
     # Verify http response
     response = call.http_response
     assert response is not None
+    response_body = response.body.json()
     assert response.status == 200
-    assert response.body is not None
-    assert isinstance(response.body, dict)
-    completion = ChatCompletion(**response.body)
-    assert "choices" in response.body
-    assert len(response.body["choices"]) > 0
-    assert "message" in response.body["choices"][0]
-    assert "content" in response.body["choices"][0]["message"]
+    assert response_body is not None
+    assert isinstance(response_body, dict)
+    completion = ChatCompletion(**response_body)
+    assert "choices" in response_body
+    assert len(response_body["choices"]) > 0
+    assert "message" in response_body["choices"][0]
+    assert "content" in response_body["choices"][0]["message"]
     assert completion.choices[0].message.content is not None
 
     # Verify call timing
