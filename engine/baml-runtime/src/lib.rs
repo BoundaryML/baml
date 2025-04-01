@@ -28,15 +28,13 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
-use baml_types::expr::ExprType;
 use futures::channel::mpsc;
 use internal_baml_core::ast::Span;
 use internal_baml_core::ir::repr::initial_context;
-use internal_baml_core::ir::repr::ExprMetadata;
 use tokio::sync::Mutex;
 
 use crate::internal::llm_client::LLMCompleteResponse;
-use baml_types::expr::Expr;
+use baml_types::expr::{Expr, ExprMetadata};
 use baml_types::tracing::events::FunctionId;
 use baml_types::tracing::events::HTTPBody;
 use baml_types::tracing::events::HTTPRequest;
@@ -64,6 +62,7 @@ use internal_baml_core::configuration::CodegenGenerator;
 use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
 use internal_baml_core::ir::FunctionWalker;
+use internal_baml_core::ir::IRHelperExtended;
 use internal_llm_client::AllowedRoleMetadata;
 use internal_llm_client::ClientSpec;
 use jsonish::ResponseBamlValue;
@@ -533,20 +532,28 @@ impl BamlRuntime {
                         runtime: self,
                         expr_tx: expr_tx.clone(),
                     };
-                    let params_expr: Expr<ExprMetadata, ()> = Expr::ArgsTuple(
+                    let params_expr: Expr<ExprMetadata> = Expr::ArgsTuple(
                         params
                             .iter()
                             .map(|(k, v)| {
-                                let arg_type = infer_type(v).map(|t| ExprType::Atom(t));
+                                let arg_type = infer_type(v);
+                                let baml_value_with_meta : BamlValueWithMeta<ExprMetadata> = match arg_type {
+                                    None => BamlValueWithMeta::with_const_meta(v, (Span::fake(), None)),
+                                    Some(arg_type) => {
+                                        let value_unit_meta: BamlValueWithMeta<()> = BamlValueWithMeta::with_default_meta(v);
+                                        self
+                                            .inner
+                                            .ir()
+                                            .distribute_type_with_meta(value_unit_meta, arg_type)
+                                            .expect("TODO: handle distribution failure")
+                                            .map_meta_owned(|(_, field_type)| (Span::fake(), Some(field_type)))
+                                    }
+                                };
                                 Expr::Atom(
-                                    BamlValueWithMeta::with_default_meta(v),
-                                    (fake_syntax_span.clone(), arg_type),
+                                    baml_value_with_meta,
                                 )
-                            })
-                            .collect(),
-                        (fake_syntax_span.clone(), None),
-                    );
-                    let result_type = ExprType::Atom(expr_fn.output.clone());
+                            }).collect(), (Span::fake(), None));
+                    let result_type = expr_fn.output.clone();
                     let fn_call_expr = Expr::App(
                         Arc::new(fn_expr),
                         Arc::new(params_expr),

@@ -5,13 +5,13 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{BamlRuntime, FunctionResult};
-use baml_types::expr::{Arrow, Expr, ExprType, Name};
+use baml_types::Arrow;
+use baml_types::expr::{Expr, ExprMetadata, Name};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
-use internal_baml_core::ir::repr::ExprMetadata;
 use internal_baml_core::ir::repr::IntermediateRepr;
 
 pub struct EvalEnv<'a> {
-    pub context: HashMap<Name, Expr<ExprMetadata, ()>>,
+    pub context: HashMap<Name, Expr<ExprMetadata>>,
     pub runtime: &'a BamlRuntime,
     pub expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
 }
@@ -27,12 +27,12 @@ impl<'a> EvalEnv<'a> {
 }
 
 fn subst2<'a>(
-    expr: &Expr<ExprMetadata, ()>,
+    expr: &Expr<ExprMetadata>,
     var_name: &Name,
-    val: &Expr<ExprMetadata, ()>,
+    val: &Expr<ExprMetadata>,
     env: &EvalEnv<'a>,
-) -> anyhow::Result<Expr<ExprMetadata, ()>> {
-    let res: anyhow::Result<Expr<ExprMetadata, ()>> = match expr {
+) -> anyhow::Result<Expr<ExprMetadata>> {
+    let res: anyhow::Result<Expr<ExprMetadata>> = match expr {
         Expr::Var(expr_var_name, _) => {
             if expr_var_name == var_name {
                 Ok(val.clone())
@@ -44,7 +44,7 @@ fn subst2<'a>(
                 }
             }
         }
-        Expr::Atom(_, _) => Ok(expr.clone()),
+        Expr::Atom(_) => Ok(expr.clone()),
         Expr::App(f, x, meta) => {
             let f2 = subst2(f, var_name, val, env)?;
             let x2 = subst2(x, var_name, val, env)?;
@@ -78,6 +78,25 @@ fn subst2<'a>(
                 ))
             }
         }
+        Expr::List(items, meta) => {
+            let new_items = items.iter().map(|item| subst2(item, var_name, val, env)).collect::<anyhow::Result<Vec<_>>>()?;
+            Ok(Expr::List(new_items, meta.clone()))
+        }
+        Expr::Map(items, meta) => {
+            let new_items = items.iter().map(|(key, value)| {
+                let new_value = subst2(value, var_name, val, env)?;
+                Ok((key.clone(), new_value))
+            }).collect::<anyhow::Result<BamlMap<_,_>>>()?;
+            Ok(Expr::Map(new_items, meta.clone()))
+        }
+        Expr::ClassConstructor{name, fields, spread, meta} => {
+            let new_fields = fields.iter().map(|(key, value)| {
+                let new_value = subst2(value, var_name, val, env)?;
+                Ok((key.clone(), new_value))
+            }).collect::<anyhow::Result<BamlMap<_,_>>>()?;
+            let new_spread = spread.as_ref().map(|spread| subst2(spread, var_name, val, env).map(|spread| Box::new(spread.clone()))).transpose()?;
+            Ok(Expr::ClassConstructor{name: name.clone(), fields: new_fields, spread: new_spread, meta: meta.clone()})
+        }
     };
     let res = res?;
     Ok(res)
@@ -87,11 +106,11 @@ fn subst2<'a>(
 /// here. Only use env for the runtime.
 async fn beta_reduce<'a>(
     env: &EvalEnv<'a>,
-    expr: &Expr<ExprMetadata, ()>,
-) -> anyhow::Result<Expr<ExprMetadata, ()>> {
+    expr: &Expr<ExprMetadata>,
+) -> anyhow::Result<Expr<ExprMetadata>> {
     // eprintln!("BETA_REDUCE:\n{}\n", expr.dump_str());
     match expr {
-        Expr::Atom(_, _) => Ok(expr.clone()),
+        Expr::Atom(_) => Ok(expr.clone()),
         Expr::Let(name, value, body, meta) => {
             // Rewrite the let binding as an application.
             // e.g. (let x = y in f) => (\x y => f)
@@ -179,7 +198,7 @@ async fn beta_reduce<'a>(
                         .clone()
                         .0
                         .map_meta(|_| ());
-                    Ok(Expr::Atom(val, meta.clone()))
+                    Ok(Expr::Atom(val.map_meta(|_| meta.clone())))
                 }
                 (Expr::Var(name, _), _) => {
                     let var_lookup = env
@@ -207,7 +226,7 @@ async fn beta_reduce<'a>(
 /// Fully evaluate an expression to a value.
 pub async fn eval_to_value<'a>(
     env: &EvalEnv<'a>,
-    expr: &Expr<ExprMetadata, ()>,
+    expr: &Expr<ExprMetadata>,
 ) -> anyhow::Result<Option<BamlValueWithMeta<()>>> {
     // eprintln!("called eval_to_value: {}", expr.dump_str());
     let max_steps = 1000;
@@ -215,7 +234,7 @@ pub async fn eval_to_value<'a>(
 
     for steps in 0..max_steps {
         match current_expr {
-            Expr::Atom(value, _) => return Ok(Some(value.clone())),
+            Expr::Atom(value) => return Ok(Some(value.clone().map_meta(|_| ()))),
             other => {
                 // let new_expr = step(env, &other).await?;
                 let new_expr = Box::pin(beta_reduce(env, &other)).await?;
