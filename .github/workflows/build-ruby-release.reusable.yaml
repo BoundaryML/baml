@@ -108,7 +108,6 @@ jobs:
             --directory language_client_ruby \
             --ruby-versions 3.3,3.2,3.1 \
             --build \
-            --target ${{ matrix._.target }} \
             -- ${{ matrix._.rb-sys-dock-setup }}
 
       - name: Show built gem
