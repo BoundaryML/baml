@@ -28,7 +28,16 @@ export OPENSSL_LIB_DIR=""   # Clear any existing OpenSSL paths
 export OPENSSL_INCLUDE_DIR=""
 
 # Cross compilation settings for OpenSSL
+export CC=clang
+export CXX=clang++
+export AR=llvm-ar
+export RANLIB=llvm-ranlib
+export CROSS_COMPILE=aarch64-apple-darwin-
+export CROSS_SYSROOT=/usr/local/rake-compiler/ruby/aarch64-apple-darwin/ruby-3.3.0-rc1
+
+# Set the specific tools for the target
 export CC_aarch64_apple_darwin=clang
+export CXX_aarch64_apple_darwin=clang++
 export AR_aarch64_apple_darwin=llvm-ar
 export RANLIB_aarch64_apple_darwin=llvm-ranlib
 
