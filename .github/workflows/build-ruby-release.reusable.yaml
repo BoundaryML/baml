@@ -104,6 +104,22 @@ jobs:
             cmake \
             xz-utils
 
+      - name: Install latest LLVM tools
+        shell: bash
+        if: ${{ matrix._.platform == 'arm64-darwin' }}
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y \
+            llvm-17 \
+            clang-17 \
+            lld-17
+          sudo update-alternatives --install /usr/bin/llvm-ar llvm-ar /usr/bin/llvm-ar-17 100
+          sudo update-alternatives --install /usr/bin/llvm-ranlib llvm-ranlib /usr/bin/llvm-ranlib-17 100
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-17 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 100
+
       - name: Setup rb-sys
         shell: bash
         run: |
