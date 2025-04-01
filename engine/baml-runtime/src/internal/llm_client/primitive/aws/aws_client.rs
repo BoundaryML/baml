@@ -184,7 +184,9 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
                         request_id: self.http_request_id.clone(),
                         status: response.status().as_u16(),
                         headers,
-                        body,
+                        body: HTTPBody::new(
+                            response.body().bytes().unwrap_or_default().to_vec().into(),
+                        ),
                     })),
                     tags: Default::default(),
                 }));

@@ -502,6 +502,13 @@ async def test_collector_vertex():
     body = request.body.json()
     assert isinstance(body, dict)
 
+    # Verify response
+    response = call.http_response
+    assert response is not None
+    response_body = response.body.json()
+    assert isinstance(response_body, dict)
+    assert "candidates" in response_body
+
 
 @pytest.mark.asyncio
 async def test_collector_gemini():
@@ -528,6 +535,12 @@ async def test_collector_gemini():
     body = request.body.json()
     assert isinstance(body, dict)
 
+    # Verify response
+    response = call.http_response
+    assert response is not None
+    response_body = response.body.json()
+    assert isinstance(response_body, dict)
+
 
 @pytest.mark.asyncio
 async def test_collector_claude():
@@ -551,3 +564,11 @@ async def test_collector_claude():
     assert request is not None
     body = request.body.json()
     assert isinstance(body, dict)
+
+    # Verify response
+    response = call.http_response
+    assert response is not None
+    response_body = response.body.json()
+    assert isinstance(response_body, dict)
+    assert "content" in response_body
+    assert len(response_body["content"]) > 0
