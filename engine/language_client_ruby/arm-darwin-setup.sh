@@ -21,5 +21,16 @@ export CARGO_BUILD_TARGET=aarch64-apple-darwin
 export RB_SYS_FORCE_INSTALL_RUBY_VERSION=true
 export RB_SYS_FORCE_INSTALL_RUBY=true
 
+# OpenSSL specific settings - use vendored version
+export OPENSSL_STATIC=1
+export OPENSSL_NO_VENDOR=0  # Use vendored OpenSSL
+export OPENSSL_LIB_DIR=""   # Clear any existing OpenSSL paths
+export OPENSSL_INCLUDE_DIR=""
+
+# Cross compilation settings for OpenSSL
+export CC_aarch64_apple_darwin=clang
+export AR_aarch64_apple_darwin=llvm-ar
+export RANLIB_aarch64_apple_darwin=llvm-ranlib
+
 # Ensure the environment is properly configured
 export RUST_BACKTRACE=1 
