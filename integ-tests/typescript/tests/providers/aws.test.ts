@@ -3,7 +3,7 @@ import { ClientRegistry } from '@boundaryml/baml'
 import { b } from '../test-setup'
 
 describe('AWS Provider', () => {
-  it('should support AWS', async () => {
+  it('should support AWS - basic', async () => {
     const res = await b.TestAws('Dr. Pepper')
     expect(res.length).toBeGreaterThan(0)
   })
