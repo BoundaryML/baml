@@ -1,5 +1,6 @@
 use anyhow::Context;
 use futures::channel::mpsc;
+use futures::stream::{self as stream, StreamExt};
 use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -259,6 +260,81 @@ pub async fn eval_to_value<'a>(
     for steps in 0..max_steps {
         match current_expr {
             Expr::Atom(value) => return Ok(Some(value.clone().map_meta(|_| ()))),
+            Expr::List(items, meta) => {
+                let stream: Vec<Result<Option<BamlValueWithMeta<()>>, _>> = stream::iter(
+                    items
+                        .iter()
+                        .map(|value| async move { eval_to_value(env, value).await }),
+                )
+                .buffer_unordered(4)
+                .collect::<Vec<Result<_, _>>>()
+                .await;
+                let new_maybe_items = stream
+                    .into_iter()
+                    .collect::<Result<Vec<Option<BamlValueWithMeta<()>>>, _>>()?;
+                let new_items = new_maybe_items
+                    .into_iter()
+                    .collect::<Option<Vec<BamlValueWithMeta<()>>>>()
+                    .ok_or(anyhow::anyhow!("Failed to evaluate list"))?;
+                let val = BamlValueWithMeta::List(new_items, ());
+                return Ok(Some(val));
+            }
+            Expr::Map(items, meta) => {
+                let stream: Vec<Result<(String, BamlValueWithMeta<()>), _>> =
+                    stream::iter(items.iter().map(|(key, value)| async move {
+                        let res = eval_to_value(env, value)
+                            .await?
+                            .ok_or(anyhow::anyhow!("Failed to evaluate map"))?;
+                        Ok((key.clone(), res))
+                    }))
+                    .buffer_unordered(4)
+                    .collect::<Vec<Result<(String, BamlValueWithMeta<()>), _>>>()
+                    .await;
+                let new_items = stream.into_iter().collect::<anyhow::Result<_>>()?;
+                return Ok(Some(BamlValueWithMeta::Map(new_items, ())));
+            }
+            Expr::ClassConstructor {
+                name,
+                fields,
+                spread,
+                meta,
+            } => {
+                let stream: Vec<Result<(String, BamlValueWithMeta<()>), anyhow::Error>> =
+                    stream::iter(fields.iter().map(|(key, value)| async move {
+                        let res = Box::pin(eval_to_value(env, value))
+                            .await?
+                            .ok_or(anyhow::anyhow!("Failed to evaluate class constructor"))?;
+                        Ok((key.clone(), res))
+                    }))
+                    .buffer_unordered(2)
+                    .collect::<Vec<Result<(String, BamlValueWithMeta<()>), _>>>()
+                    .await;
+                let fields = stream
+                    .into_iter()
+                    .collect::<Result<Vec<(String, BamlValueWithMeta<()>)>, anyhow::Error>>()?;
+
+                let mut spread_fields = match spread {
+                    Some(spread) => {
+                        let res = Box::pin(eval_to_value(env, spread.as_ref())).await?;
+                        match res {
+                            Some(BamlValueWithMeta::Class(spread_class_name, spread_fields, _)) => {
+                                if name != spread_class_name {
+                                    return Err(anyhow::anyhow!("Class constructor name mismatch"));
+                                }
+                                spread_fields.clone()
+                            }
+                            _ => {
+                                return Err(anyhow::anyhow!("Spread is not a class"));
+                            }
+                        }
+                    }
+                    None => BamlMap::new(),
+                };
+
+                spread_fields.extend(fields);
+                let val = BamlValueWithMeta::Class(name.clone(), spread_fields, ());
+                return Ok(Some(val));
+            }
             other => {
                 // let new_expr = step(env, &other).await?;
                 let new_expr = Box::pin(beta_reduce(env, &other)).await?;

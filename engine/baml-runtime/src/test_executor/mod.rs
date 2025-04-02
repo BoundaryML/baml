@@ -9,6 +9,7 @@ pub use test_execution_args::TestFilter;
 use std::{
     collections::{BTreeMap, BTreeSet},
     ops::Deref,
+    sync::Arc,
     time::Instant,
 };
 
@@ -216,14 +217,14 @@ impl TestExecutor for BamlRuntime {
                 let tx = tx.clone();
                 // Clone the Arc pointer for self here.
                 let runtime = self.clone();
-                let function_name = fn_name.clone();
-                let test_name = tt_name.clone();
+                let function_name = fn_name.to_string();
+                let test_name = tt_name.to_string();
                 let fut = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
-                    let ctx_manager = runtime.create_ctx_manager(
+                    let ctx_manager = Arc::new(runtime.create_ctx_manager(
                         BamlValue::String("cli".to_string()),
                         Some(Box::new(file_reader_pinned)),
-                    );
+                    ));
 
                     let start_instant = Instant::now();
                     let _ = tx.send((
@@ -232,18 +233,12 @@ impl TestExecutor for BamlRuntime {
                         TestExecutionStatus::Running,
                     ));
                     let (result, _) = runtime
-                        .run_test(
-                            function_name.as_str(),
-                            test_name.as_str(),
-                            &ctx_manager,
-                            Some(|_| {}),
-                            None,
-                        )
+                        .run_test(&function_name, &test_name, todo!(), Some(|_| {}), None)
                         .await;
                     let duration = start_instant.elapsed();
                     let _ = tx.send((
-                        function_name.clone(),
-                        test_name.clone(),
+                        function_name,
+                        test_name,
                         TestExecutionStatus::Finished(result, duration),
                     ));
                 });
