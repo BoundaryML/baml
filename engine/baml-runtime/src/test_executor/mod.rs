@@ -232,15 +232,16 @@ impl TestExecutor for BamlRuntime {
                         test_name.clone(),
                         TestExecutionStatus::Running,
                     ));
-                    let (result, _) = runtime
-                        .run_test(&function_name, &test_name, todo!(), Some(|_| {}), None)
-                        .await;
-                    let duration = start_instant.elapsed();
-                    let _ = tx.send((
-                        function_name,
-                        test_name,
-                        TestExecutionStatus::Finished(result, duration),
-                    ));
+                    // TODO: BRING THIS BACK!!!
+                    // let (result, _) = runtime
+                    //     .run_test(&function_name, &test_name, ctx_manager, Some(|_| {}), None)
+                    //     .await;
+                    // let duration = start_instant.elapsed();
+                    // let _ = tx.send((
+                    //     function_name,
+                    //     test_name,
+                    //     TestExecutionStatus::Finished(result, duration),
+                    // ));
                 });
                 (
                     fut,
