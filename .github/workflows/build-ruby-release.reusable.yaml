@@ -33,11 +33,7 @@ jobs:
           - platform: aarch64-linux
           - platform: aarch64-linux-musl
           - platform: arm-linux
-            target: arm-unknown-linux-gnueabihf
-            rb-sys-dock-setup: ./arm-linux-setup.sh
           - platform: arm64-darwin
-            target: aarch64-apple-darwin
-            rb-sys-dock-setup: ./arm-darwin-setup.sh
           # - platform: x64-mingw32
           # - platform: x86-mingw-ucrt
 
@@ -81,44 +77,6 @@ jobs:
           cat >>$GITHUB_ENV <<EOF
           RUSTFLAGS=--cfg tracing_unstable
           EOF
-
-      - name: Install osxcross dependencies
-        shell: bash
-        if: ${{ matrix._.platform == 'arm64-darwin' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            clang \
-            gcc \
-            g++ \
-            zlib1g-dev \
-            libmpc-dev \
-            libmpfr-dev \
-            libgmp-dev \
-            make \
-            lzma-dev \
-            libxml2-dev \
-            patch \
-            wget \
-            git \
-            cmake \
-            xz-utils
-
-      - name: Install latest LLVM tools
-        shell: bash
-        if: ${{ matrix._.platform == 'arm64-darwin' }}
-        run: |
-          wget https://apt.llvm.org/llvm.sh
-          chmod +x llvm.sh
-          sudo ./llvm.sh 17
-          sudo apt-get install -y \
-            llvm-17 \
-            clang-17 \
-            lld-17
-          sudo update-alternatives --install /usr/bin/llvm-ar llvm-ar /usr/bin/llvm-ar-17 100
-          sudo update-alternatives --install /usr/bin/llvm-ranlib llvm-ranlib /usr/bin/llvm-ranlib-17 100
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-17 100
-          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-17 100
 
       - name: Setup rb-sys
         shell: bash
