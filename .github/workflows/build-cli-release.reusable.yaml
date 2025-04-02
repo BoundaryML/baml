@@ -1,7 +1,18 @@
 name: BAML Release - Build BAML CLI
 
 on:
-  workflow_call: {}
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version'
+        required: false
+        type: string
+      package_for_release:
+        description: 'Create archives for release instead of raw binaries'
+        type: boolean
+        default: true
+        required: false
+
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -14,6 +25,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Always include these targets
           - os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-20.04
@@ -21,20 +33,60 @@ jobs:
             static: true
           - os: macos-14
             target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
           - os: windows-latest
             target: x86_64-pc-windows-msvc
+          
+          # ARM targets (will be conditionally skipped if not needed)
+          - os: ubuntu-20.04
+            target: aarch64-unknown-linux-gnu
+            arm: true
+          - os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+            static: true
+            arm: true
+    
     runs-on: ${{ matrix.os }}
+    env:
+      CROSS_VERSION: v0.2.5
+      CARGO: cargo
+      TARGET_FLAGS: ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
+      
     steps:
       - uses: actions/checkout@v4
+      
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
+      
+      # Use cross for Linux cross-compilation
+      - name: Install cross
+        if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/cross-download"
+          mkdir "$dir"
+          echo "$dir" >> $GITHUB_PATH
+          cd "$dir"
+          curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
+          tar xf cross-x86_64-unknown-linux-musl.tar.gz
+          echo "CARGO=cross" >> $GITHUB_ENV
+
+      # Install cross-compilation tools
       - name: Install musl tools
-        if: matrix.static == true
+        if: matrix.static == true && contains(matrix.target, 'x86_64')
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
+      
+      - name: Setup ARM Linux cross-compilation
+        if: contains(matrix.target, 'aarch64') && contains(matrix.target, 'linux')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+      
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
@@ -43,16 +95,62 @@ jobs:
       - name: Build CLI (Static)
         if: matrix.static == true
         run: >
-          cargo build --release --bin baml-cli --target=${{ matrix.target }}
+          ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
           --features static-ssl
           --no-default-features
         working-directory: engine
+      
       - name: Build CLI (Dynamic)
         if: matrix.static != true
-        run: cargo build --release --bin baml-cli --target=${{ matrix.target }}
+        run: ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
         working-directory: engine
 
-      - name: Upload CLI artifact
+      # Determine binary path and archive name
+      - name: Set binary and archive paths
+        id: paths
+        if: inputs.package_for_release
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            bin="engine/target/${{ matrix.target }}/release/baml-cli.exe"
+          else
+            bin="engine/target/${{ matrix.target }}/release/baml-cli"
+          fi
+          echo "bin=$bin" >> $GITHUB_OUTPUT
+          echo "archive=baml-cli-${{ inputs.version }}-${{ matrix.target }}" >> $GITHUB_OUTPUT
+
+      # Create archives with proper format
+      - name: Create archive (Windows)
+        if: matrix.os == 'windows-latest' && inputs.package_for_release
+        shell: bash
+        run: |
+          mkdir -p "${{ steps.paths.outputs.archive }}"
+          cp "${{ steps.paths.outputs.bin }}" "${{ steps.paths.outputs.archive }}/"
+          cp README.md LICENSE* "${{ steps.paths.outputs.archive }}/" || true
+          7z a "${{ steps.paths.outputs.archive }}.zip" "${{ steps.paths.outputs.archive }}"
+          certutil -hashfile "${{ steps.paths.outputs.archive }}.zip" SHA256 > "${{ steps.paths.outputs.archive }}.zip.sha256"
+
+      - name: Create archive (Unix)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p "${{ steps.paths.outputs.archive }}"
+          cp "${{ steps.paths.outputs.bin }}" "${{ steps.paths.outputs.archive }}/"
+          cp README.md LICENSE* "${{ steps.paths.outputs.archive }}/" || true
+          tar czf "${{ steps.paths.outputs.archive }}.tar.gz" "${{ steps.paths.outputs.archive }}"
+          shasum -a 256 "${{ steps.paths.outputs.archive }}.tar.gz" > "${{ steps.paths.outputs.archive }}.tar.gz.sha256"
+
+      # Upload different artifacts based on mode
+      - name: Upload CLI artifacts (Release)
+        if: inputs.package_for_release
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-cli-${{ matrix.target }}
+          path: |
+            ${{ steps.paths.outputs.archive }}.*
+
+      - name: Upload CLI artifacts (CI)
+        if: inputs.package_for_release == false
         uses: actions/upload-artifact@v4
         with:
           name: baml-cli-${{ matrix.target }}

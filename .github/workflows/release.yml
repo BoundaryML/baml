@@ -38,10 +38,16 @@ jobs:
   
   build-cli:
     uses: ./.github/workflows/build-cli-release.reusable.yaml
+    with:
+      version: ${{ github.ref_name }}
+      package_for_release: true
 
   build-vscode:
     needs: build-cli
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
+    with:
+      artifact_name: baml-vscode-vsix
+      is_release_build: true
 
   # placeholder fan-in step
   all-builds:
