@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{BamlRuntime, FunctionResult};
-use baml_types::Arrow;
 use baml_types::expr::{Expr, ExprMetadata, Name};
+use baml_types::Arrow;
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
 
@@ -79,23 +79,47 @@ fn subst2<'a>(
             }
         }
         Expr::List(items, meta) => {
-            let new_items = items.iter().map(|item| subst2(item, var_name, val, env)).collect::<anyhow::Result<Vec<_>>>()?;
+            let new_items = items
+                .iter()
+                .map(|item| subst2(item, var_name, val, env))
+                .collect::<anyhow::Result<Vec<_>>>()?;
             Ok(Expr::List(new_items, meta.clone()))
         }
         Expr::Map(items, meta) => {
-            let new_items = items.iter().map(|(key, value)| {
-                let new_value = subst2(value, var_name, val, env)?;
-                Ok((key.clone(), new_value))
-            }).collect::<anyhow::Result<BamlMap<_,_>>>()?;
+            let new_items = items
+                .iter()
+                .map(|(key, value)| {
+                    let new_value = subst2(value, var_name, val, env)?;
+                    Ok((key.clone(), new_value))
+                })
+                .collect::<anyhow::Result<BamlMap<_, _>>>()?;
             Ok(Expr::Map(new_items, meta.clone()))
         }
-        Expr::ClassConstructor{name, fields, spread, meta} => {
-            let new_fields = fields.iter().map(|(key, value)| {
-                let new_value = subst2(value, var_name, val, env)?;
-                Ok((key.clone(), new_value))
-            }).collect::<anyhow::Result<BamlMap<_,_>>>()?;
-            let new_spread = spread.as_ref().map(|spread| subst2(spread, var_name, val, env).map(|spread| Box::new(spread.clone()))).transpose()?;
-            Ok(Expr::ClassConstructor{name: name.clone(), fields: new_fields, spread: new_spread, meta: meta.clone()})
+        Expr::ClassConstructor {
+            name,
+            fields,
+            spread,
+            meta,
+        } => {
+            let new_fields = fields
+                .iter()
+                .map(|(key, value)| {
+                    let new_value = subst2(value, var_name, val, env)?;
+                    Ok((key.clone(), new_value))
+                })
+                .collect::<anyhow::Result<BamlMap<_, _>>>()?;
+            let new_spread = spread
+                .as_ref()
+                .map(|spread| {
+                    subst2(spread, var_name, val, env).map(|spread| Box::new(spread.clone()))
+                })
+                .transpose()?;
+            Ok(Expr::ClassConstructor {
+                name: name.clone(),
+                fields: new_fields,
+                spread: new_spread,
+                meta: meta.clone(),
+            })
         }
     };
     let res = res?;
