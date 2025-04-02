@@ -13,6 +13,9 @@ on:
         default: true
         required: false
 
+env:
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+        
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -26,9 +29,9 @@ jobs:
       matrix:
         include:
           # Always include these targets
-          - os: ubuntu-20.04
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-20.04
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             static: true
           - os: macos-14
@@ -39,10 +42,10 @@ jobs:
             target: x86_64-pc-windows-msvc
           
           # ARM targets (will be conditionally skipped if not needed)
-          - os: ubuntu-20.04
+          - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             arm: true
-          - os: ubuntu-20.04
+          - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
             static: true
             arm: true
@@ -52,6 +55,7 @@ jobs:
       CROSS_VERSION: v0.2.5
       CARGO: cargo
       TARGET_FLAGS: ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
+      RUST_BACKTRACE: 1
       
     steps:
       - uses: actions/checkout@v4
