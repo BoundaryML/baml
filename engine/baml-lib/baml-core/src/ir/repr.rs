@@ -379,6 +379,12 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     ),
                 })
             }
+            ast::Expression::ExprBlock(block, span) => {
+                // We use "function_body" and "expr_block" interchangeably.
+                // This may need to be revisited?
+                let body = convert_function_body(block.clone(), db);
+                Ok(body)
+            }
         }
     }
 }

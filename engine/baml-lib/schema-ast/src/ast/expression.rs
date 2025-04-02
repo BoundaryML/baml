@@ -115,6 +115,8 @@ pub enum Expression {
     FnApp(Identifier, Vec<Expression>, Span),
     /// A class constructor, e.g. `MyClass { x = 1, y = 2 }`.
     ClassConstructor(ClassConstructor, Span),
+    /// An expression block, e.g. `{ let x = 1; x + 2 }`.
+    ExprBlock(ExpressionBlock, Span),
 }
 
 impl fmt::Display for Expression {
@@ -168,6 +170,14 @@ impl fmt::Display for Expression {
                 }
                 write!(f, ")")?;
                 Ok(())
+            }
+            Expression::ExprBlock(block, _span) => {
+                write!(f, "{{")?;
+                for stmt in &block.stmts {
+                    write!(f, "{stmt};")?;
+                }
+                write!(f, "{}", block.expr)?;
+                write!(f, "}}")
             }
         }
     }
@@ -281,6 +291,7 @@ impl Expression {
             Self::ClassConstructor(_, span) => span,
             Self::Lambda(_, _, span) => span,
             Self::FnApp(_, _, span) => span,
+            Self::ExprBlock(_, span) => span,
         }
     }
 
@@ -308,6 +319,7 @@ impl Expression {
             Expression::ClassConstructor(cc, _) => cc.class_name.name(),
             Expression::Lambda(_, _, _) => "function",
             Expression::FnApp(_, _, _) => "function_application",
+            Expression::ExprBlock(_, _) => "expression_block",
         }
     }
 
@@ -382,6 +394,13 @@ impl Expression {
                 }
             }
             (FnApp(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (ExprBlock(block1, _), ExprBlock(block2, _)) => {
+                for (stmt1, stmt2) in block1.stmts.iter().zip(block2.stmts.iter()) {
+                    stmt1.assert_eq_up_to_span(stmt2);
+                }
+                block1.expr.assert_eq_up_to_span(&block2.expr);
+            }
+            (ExprBlock(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -470,7 +489,8 @@ impl Expression {
                 ))
             }
             Expression::Lambda(_arg_names, _body, _span) => todo!(),
-            Expression::FnApp(_, _, _) => todo!(),
+            Expression::FnApp(_, _, _) => None, // Is this right?
+            Expression::ExprBlock(_, _) => None, // Is this right?
         }
     }
 }
@@ -534,7 +554,7 @@ impl ClassConstructorField {
 #[derive(Debug, Clone)]
 pub struct ExpressionBlock {
     pub stmts: Vec<Stmt>,
-    pub expr: Expression,
+    pub expr: Box<Expression>,
 }
 
 // TODO: How do we indent the inner statements?

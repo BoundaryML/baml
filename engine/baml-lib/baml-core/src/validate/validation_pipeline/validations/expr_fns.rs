@@ -172,5 +172,13 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                 }
             }
         }
+        Expression::ExprBlock(block, span) => {
+            let mut scope = scope.clone();
+            for stmt in block.stmts.iter() {
+                validate_stmt(ctx, stmt, &mut scope);
+                scope.insert(stmt.identifier.name().to_string());
+            }
+            validate_expression(ctx, &block.expr, &scope);
+        }
     }
 }

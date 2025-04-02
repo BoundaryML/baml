@@ -83,14 +83,14 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let maybe_body = match rhs.as_rule() {
         Rule::expr_block => {
             eprintln!("parsing expr_block");
-            parse_function_body(rhs, diagnostics)
+            parse_expr_block(rhs, diagnostics)
         }
         Rule::expression => {
             eprintln!("parsing expr");
             let maybe_expr = parse_expression(rhs, diagnostics);
             maybe_expr.map(|expr| ExpressionBlock {
                 stmts: Vec::new(),
-                expr,
+                expr: Box::new(expr),
             })
         }
         _ => {
@@ -116,6 +116,52 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         body,
         span,
     })
+}
+
+pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<ExpressionBlock> {
+    assert_correct_parser!(token, Rule::expr_block);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let mut stmts = Vec::new();
+    let mut expr = None;
+    let _open_bracket = tokens.next()?;
+    for item in tokens {
+        match item.as_rule() {
+            Rule::stmt => {
+                let maybe_stmt = parse_statement(item, diagnostics);
+                if let Some(stmt) = maybe_stmt {
+                    stmts.push(stmt);
+                }
+            }
+            Rule::expression => {
+                let maybe_expr = parse_expression(item, diagnostics);
+                if let Some(parsed_expr) = maybe_expr {
+                    expr = Some(parsed_expr);
+                    break;
+                }
+            }
+            Rule::BLOCK_CLOSE => {
+                if expr.is_none() {
+                    diagnostics.push_error(DatamodelError::new_static(
+                        "Function must end in an expression.",
+                        span.clone(),
+                    ));
+                }
+                break;
+            }
+            Rule::NEWLINE => {
+                continue;
+            }
+            _ => {
+                diagnostics.push_error(DatamodelError::new_static(
+                    "Internal Error: Parser only allows statements and expressions in function body.",
+                    span.clone()
+                ));
+            }
+        }
+    }
+    expr.map(|e| ExpressionBlock { stmts, expr: Box::new(e) })
+
 }
 
 // pub fn parse_expr(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::ExprWithSpan> {
@@ -173,46 +219,5 @@ pub fn parse_function_body(
     token: Pair<'_>,
     diagnostics: &mut Diagnostics,
 ) -> Option<ExpressionBlock> {
-    assert_correct_parser!(token, Rule::expr_block);
-    let span = diagnostics.span(token.as_span());
-    let mut tokens = token.into_inner();
-    let mut stmts = Vec::new();
-    let mut expr = None;
-    let _open_bracket = tokens.next()?;
-    for item in tokens {
-        match item.as_rule() {
-            Rule::stmt => {
-                let maybe_stmt = parse_statement(item, diagnostics);
-                if let Some(stmt) = maybe_stmt {
-                    stmts.push(stmt);
-                }
-            }
-            Rule::expression => {
-                let maybe_expr = parse_expression(item, diagnostics);
-                if let Some(parsed_expr) = maybe_expr {
-                    expr = Some(parsed_expr);
-                    break;
-                }
-            }
-            Rule::BLOCK_CLOSE => {
-                if expr.is_none() {
-                    diagnostics.push_error(DatamodelError::new_static(
-                        "Function must end in an expression.",
-                        span.clone(),
-                    ));
-                }
-                break;
-            }
-            Rule::NEWLINE => {
-                continue;
-            }
-            _ => {
-                diagnostics.push_error(DatamodelError::new_static(
-                    "Internal Error: Parser only allows statements and expressions in function body.",
-                    span.clone()
-                ));
-            }
-        }
-    }
-    expr.map(|e| ExpressionBlock { stmts, expr: e })
+    parse_expr_block(token, diagnostics)
 }

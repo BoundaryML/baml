@@ -115,8 +115,9 @@ jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
 expression        =  {
     fn_app |
     lambda |
-    jinja_expression |
     map_expression |
+    expr_block |
+    jinja_expression |
     array_expression |
     numeric_literal |
     class_constructor |
@@ -217,7 +218,9 @@ COMMA = { "," }
 // #################################################
 
 // Constant applicative form.
-// e.g. top-level `let x = go(1,2)`
+// e.g. top-level
+//   - `let x = go(1,2)`
+//   - `let z = { let b = 2; [b, 3] }
 top_level_assignment = { stmt }
 
 // Regular function.
