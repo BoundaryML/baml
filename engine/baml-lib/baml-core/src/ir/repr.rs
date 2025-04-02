@@ -5,8 +5,7 @@ use anyhow::{anyhow, Result};
 use baml_types::BamlMap;
 use baml_types::{
     expr::{self, Expr, ExprMetadata, Name},
-    Arrow,
-    BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable,
+    Arrow, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable,
     StreamingBehavior, StringOr, TypeValue, UnresolvedValue,
 };
 use either::Either;
@@ -148,10 +147,7 @@ impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
             .map(|e| e.node(db))
             .collect::<Result<Vec<_>>>()
             .unwrap_or(vec![]); // TODO: weird default.
-        let arg_types = args
-            .iter()
-            .map(|(_, arg_type)| arg_type.clone())
-            .collect();
+        let arg_types = args.iter().map(|(_, arg_type)| arg_type.clone()).collect();
         let return_type = self
             .expr_fn()
             .return_type
@@ -161,10 +157,9 @@ impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
             .unwrap_or(Some(weird_default()));
         let lambda_type = FieldType::Arrow(Box::new(Arrow {
             param_types: arg_types,
-            return_type: 
-                return_type
-                    .as_ref()
-                    .map_or(weird_default(), |ty| ty.clone()),
+            return_type: return_type
+                .as_ref()
+                .map_or(weird_default(), |ty| ty.clone()),
         }));
         let expr_fn = ExprFunction {
             name: self.expr_fn().name.to_string(),
@@ -248,46 +243,61 @@ fn convert_function_body(
             });
             expr
         })
-        .unwrap_or(Expr::Atom(
-            BamlValueWithMeta::Null((Span::fake(), None)),
-        ))
+        .unwrap_or(Expr::Atom(BamlValueWithMeta::Null((Span::fake(), None))))
 }
 
 // TODO: This is a temporary implementation.
 impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
     fn repr(&self, db: &ParserDatabase) -> Result<Expr<ExprMetadata>> {
         match self {
-            ast::Expression::BoolValue(val, span) => Ok(Expr::Atom(
-                BamlValueWithMeta::Bool(*val, (span.clone(), Some(FieldType::Primitive(TypeValue::Bool)))),
-            )),
+            ast::Expression::BoolValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::Bool(
+                *val,
+                (span.clone(), Some(FieldType::Primitive(TypeValue::Bool))),
+            ))),
             ast::Expression::NumericValue(val, span) => val
                 .parse::<i64>()
                 .map(|v| {
-                    Expr::Atom(
-                        BamlValueWithMeta::Int(v, (span.clone(), Some(FieldType::Primitive(TypeValue::Int)))),
-                    )
+                    Expr::Atom(BamlValueWithMeta::Int(
+                        v,
+                        (span.clone(), Some(FieldType::Primitive(TypeValue::Int))),
+                    ))
                 })
                 .or_else(|_| {
                     val.parse::<f64>()
                         .map(|v| {
-                            Expr::Atom(
-                                BamlValueWithMeta::Float(v, (span.clone(), Some(FieldType::Primitive(TypeValue::Float)))),
-                            )
+                            Expr::Atom(BamlValueWithMeta::Float(
+                                v,
+                                (span.clone(), Some(FieldType::Primitive(TypeValue::Float))),
+                            ))
                         })
                         .or_else(|_| Err(anyhow!("Invalid numeric value: {}", val)))
                 }),
-            ast::Expression::StringValue(val, span) => Ok(Expr::Atom(
-                BamlValueWithMeta::String(val.to_string(), (span.clone(), Some(FieldType::Primitive(TypeValue::String)))),
-            )),
-            ast::Expression::RawStringValue(val) => Ok(Expr::Atom(
-                BamlValueWithMeta::String(val.value().to_string(), (val.span().clone(), Some(FieldType::Primitive(TypeValue::String)))),
-            )),
-            ast::Expression::JinjaExpressionValue(val, span) => Ok(Expr::Atom(
-                BamlValueWithMeta::String(val.to_string(), (span.clone(), Some(FieldType::Primitive(TypeValue::String)))),
-            )),
-            ast::Expression::Array(vals, meta) => {
-                let new_items = vals.iter().map(|v| v.repr(db)).collect::<Result<Vec<_>>>()?;
-                let mut item_types = new_items.iter().filter_map(|v| v.meta().1.clone()).collect::<Vec<_>>();
+            ast::Expression::StringValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::String(
+                val.to_string(),
+                (span.clone(), Some(FieldType::Primitive(TypeValue::String))),
+            ))),
+            ast::Expression::RawStringValue(val) => Ok(Expr::Atom(BamlValueWithMeta::String(
+                val.value().to_string(),
+                (
+                    val.span().clone(),
+                    Some(FieldType::Primitive(TypeValue::String)),
+                ),
+            ))),
+            ast::Expression::JinjaExpressionValue(val, span) => {
+                Ok(Expr::Atom(BamlValueWithMeta::String(
+                    val.to_string(),
+                    (span.clone(), Some(FieldType::Primitive(TypeValue::String))),
+                )))
+            }
+            ast::Expression::Array(vals, span) => {
+                let new_items = vals
+                    .iter()
+                    .map(|v| v.repr(db))
+                    .collect::<Result<Vec<_>>>()?;
+                let mut item_types = new_items
+                    .iter()
+                    .filter_map(|v| v.meta().1.clone())
+                    .collect::<Vec<_>>();
                 item_types.dedup();
                 let item_type = match item_types.len() {
                     0 => None,
@@ -295,25 +305,28 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     _ => Some(FieldType::Union(item_types)),
                 };
                 let list_type = item_type.map(|t| FieldType::List(Box::new(t)));
-                Ok(Expr::List(
-                    new_items,
-                    (meta.clone(), list_type),
-                ))
-            } ,
-            ast::Expression::Map(vals, span) => Ok(Expr::Atom(
-                //TODO: Figure out the type as in list.
-                BamlValueWithMeta::Map(
-                    vals.iter()
-                        .map(|(k, v)| {
-                            (
-                                k.to_string(), // TODO: Probably wrong.
-                                v.repr(db).unwrap().as_atom().unwrap().clone(),
-                            )
-                        })
-                        .collect(),
-                    (span.clone(), None), // TODO: This is as hard as List.
-                ),
-            )),
+                Ok(Expr::List(new_items, (span.clone(), list_type)))
+            }
+            ast::Expression::Map(vals, span) => {
+                let new_items = vals
+                    .iter()
+                    .map(|(k, v)| v.repr(db).map(|v2| (k.to_string(), v2)))
+                    .collect::<Result<IndexMap<_, _>>>()?;
+                let mut item_types = new_items
+                    .iter()
+                    .filter_map(|v| v.1.meta().1.clone())
+                    .collect::<Vec<_>>();
+                item_types.dedup();
+                let item_type = match item_types.len() {
+                    0 => None,
+                    1 => Some(item_types[0].clone()),
+                    _ => Some(FieldType::Union(item_types)),
+                };
+                // TODO: Is this correct?
+                let key_type = FieldType::Primitive(TypeValue::String);
+                let map_type = item_type.map(|t| FieldType::Map(Box::new(key_type), Box::new(t)));
+                Ok(Expr::Map(new_items, (span.clone(), map_type)))
+            }
             ast::Expression::Identifier(id) => {
                 Ok(Expr::Var(id.name().to_string(), (id.span().clone(), None)))
             }
@@ -356,17 +369,19 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                         }
                     }
                 }
-                Ok(Expr::ClassConstructor{
+                Ok(Expr::ClassConstructor {
                     name: class_name.name().to_string(),
                     fields: new_fields,
                     spread,
-                    meta: (span.clone(), Some(FieldType::Class(class_name.name().to_string()))),
+                    meta: (
+                        span.clone(),
+                        Some(FieldType::Class(class_name.name().to_string())),
+                    ),
                 })
             }
         }
     }
 }
-
 
 /// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
@@ -1606,24 +1621,53 @@ pub fn annotate_variable(
         ),
         Expr::Atom(_) => expr,
         Expr::LLMFunction(_, _, _) => expr,
-        Expr::ClassConstructor{name, fields, spread, meta  } => {
-            let new_fields = fields.iter().map(|(key, value)| {
-                (key.clone(), annotate_variable(name, r#type.clone(), value.clone()))
-            }).collect();
+        Expr::ClassConstructor {
+            name,
+            fields,
+            spread,
+            meta,
+        } => {
+            let new_fields = fields
+                .iter()
+                .map(|(key, value)| {
+                    (
+                        key.clone(),
+                        annotate_variable(name, r#type.clone(), value.clone()),
+                    )
+                })
+                .collect();
             let new_spread = match spread {
                 None => None,
-                Some(expr) => Some(Box::new(annotate_variable(name, r#type.clone(), expr.as_ref().clone()))),
+                Some(expr) => Some(Box::new(annotate_variable(
+                    name,
+                    r#type.clone(),
+                    expr.as_ref().clone(),
+                ))),
             };
-            Expr::ClassConstructor{name: name.clone(), fields: new_fields, spread: new_spread, meta: meta.clone()}
+            Expr::ClassConstructor {
+                name: name.clone(),
+                fields: new_fields,
+                spread: new_spread,
+                meta: meta.clone(),
+            }
         }
         Expr::Map(entries, meta) => {
-            let new_entries = entries.iter().map(|(key, value)| {
-                (key.clone(), annotate_variable(name, r#type.clone(), value.clone()))
-            }).collect();
+            let new_entries = entries
+                .iter()
+                .map(|(key, value)| {
+                    (
+                        key.clone(),
+                        annotate_variable(name, r#type.clone(), value.clone()),
+                    )
+                })
+                .collect();
             Expr::Map(new_entries, meta.clone())
         }
         Expr::List(items, meta) => {
-            let new_items = items.iter().map(|item| annotate_variable(name, r#type.clone(), item.clone())).collect();
+            let new_items = items
+                .iter()
+                .map(|item| annotate_variable(name, r#type.clone(), item.clone()))
+                .collect();
             Expr::List(new_items, meta.clone())
         }
     }
