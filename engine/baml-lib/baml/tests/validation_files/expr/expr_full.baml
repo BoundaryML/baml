@@ -1,3 +1,4 @@
+
 function MakePoem(length: int) -> string {
     client GPT4o
     prompt #"Write a poem {{ length }} lines long."#

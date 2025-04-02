@@ -133,7 +133,8 @@ async fn beta_reduce<'a>(
     env: &EvalEnv<'a>,
     expr: &Expr<ExprMetadata>,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
-    // eprintln!("BETA_REDUCE:\n{}\n", expr.dump_str());
+    eprintln!("BETA_REDUCE:\n{}\n", expr.dump_str());
+
     match expr {
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::Let(name, value, body, meta) => {
@@ -244,6 +245,9 @@ async fn beta_reduce<'a>(
                 .context(format!("Variable not found: {:?}", name))?;
             Ok(var_lookup.clone())
         }
+        Expr::List(_,_) => Ok(expr.clone()),
+        Expr::Map(_,_) => Ok(expr.clone()),
+        Expr::ClassConstructor { .. } => Ok(expr.clone()),
         _ => Err(anyhow::anyhow!("Not an application: {:?}", expr)),
     }
 }
@@ -299,6 +303,7 @@ pub async fn eval_to_value<'a>(
                 spread,
                 meta,
             } => {
+                dbg!(&fields);
                 let stream: Vec<Result<(String, BamlValueWithMeta<()>), anyhow::Error>> =
                     stream::iter(fields.iter().map(|(key, value)| async move {
                         let res = Box::pin(eval_to_value(env, value))
@@ -312,6 +317,7 @@ pub async fn eval_to_value<'a>(
                 let fields = stream
                     .into_iter()
                     .collect::<Result<Vec<(String, BamlValueWithMeta<()>)>, anyhow::Error>>()?;
+                dbg!(&fields);
 
                 let mut spread_fields = match spread {
                     Some(spread) => {
@@ -330,6 +336,7 @@ pub async fn eval_to_value<'a>(
                     }
                     None => BamlMap::new(),
                 };
+                dbg!(&spread_fields);
 
                 spread_fields.extend(fields);
                 let val = BamlValueWithMeta::Class(name.clone(), spread_fields, ());
@@ -414,8 +421,28 @@ fn Pyramid() -> string {
   CombinePoems( CombinePoems( MakePoem(10), MakePoem(10)), MakePoem(10))
 }
 
+let default_person = Person {
+  name: "John Doe",
+  age: 20,
+  poem: "Never was there a man more plain."
+};
+
+class Person {
+  name string
+  age int
+  poem string
+}
+
+fn MakePerson() -> Person {
+  Person { name: "Greg", poem: "Hello, world!", ..default_person }
+}
+
 fn OuterPyramid() -> string {
   CombinePoems(poem, another)
+}
+
+fn ExprList() -> string[] {
+  [ MakePoem(10), MakePoem(2) ]
 }
 
 test TestPipeline() {
@@ -445,6 +472,16 @@ test TestMakePoem() {
     functions [MakePoem]
     args { length 4 }
 }
+
+test TestExprList() {
+  functions [ExprList]
+  args { }
+}
+
+test TestMakePerson() {
+  functions [MakePerson]
+  args { }
+}
         "##,
         );
         let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
@@ -454,7 +491,8 @@ test TestMakePoem() {
         };
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None)
+            // .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None)
+            .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
             .await;

@@ -311,7 +311,8 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
         tokens.next().expect("Guaranteed by the grammar"),
         diagnostics,
     );
-    let _open_bracket = tokens.next().expect("Guaranteed by the grammar");
+    // let _open_bracket = tokens.next().expect("Guaranteed by the grammar");
+    // dbg!(&_open_bracket);
     let mut fields = Vec::new();
     while let Some(field_or_close_bracket) = tokens.next() {
         if field_or_close_bracket.as_str() == "}" {
@@ -333,6 +334,8 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                     );
                     if let Some(expr) = maybe_expr {
                         fields.push(ClassConstructorField::Spread(expr));
+                    } else {
+                        panic!("HUH?");
                     }
                     if let Some(token) = tokens.next() {
                         diagnostics.push_error(DatamodelError::new_validation_error(
@@ -343,6 +346,10 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                 }
                 Rule::identifier => {
                     let field_name = parse_identifier(identifier_or_spread, diagnostics);
+
+                    eprintln!("Going to send this to parse_expression:");
+                    let _colon = field_tokens.next();
+                    dbg!(&field_tokens);
                     let maybe_expr = parse_expression(
                         field_tokens.next().expect("Guaranteed by the grammar"),
                         diagnostics,
@@ -350,15 +357,15 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                     if let Some(expr) = maybe_expr {
                         fields.push(ClassConstructorField::Named(field_name, expr));
                     }
-                    let maybe_comma = tokens.next();
-                    if let Some(comma) = maybe_comma {
-                        if comma.as_str() != "," {
-                            diagnostics.push_error(DatamodelError::new_static(
-                                "expected comma",
-                                span.clone(),
-                            ));
-                        }
-                    }
+                    // let maybe_comma = tokens.next();
+                    // if let Some(comma) = maybe_comma {
+                    //     if comma.as_str() != "," {
+                    //         diagnostics.push_error(DatamodelError::new_static(
+                    //             "expected comma",
+                    //             span.clone(),
+                    //         ));
+                    //     }
+                    // }
                 }
                 _ => unreachable_rule!(identifier_or_spread, Rule::class_field_value_pair),
             }
@@ -368,6 +375,7 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
     }
     let class_constructor = ClassConstructor { class_name, fields };
 
+    dbg!(&class_constructor);
     Expression::ClassConstructor(class_constructor, span)
 }
 

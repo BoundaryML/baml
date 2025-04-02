@@ -3,5 +3,5 @@ fn Id(x: int) -> int {
 }
 
 fn Go(x: int) -> int[] {
- [x, Id(x), Id(Id(x))]
+ [x, Id(x), 3]
 }
