@@ -63,7 +63,7 @@ jobs:
       
       # Use cross for Linux cross-compilation
       - name: Install cross
-        if: matrix.os == 'ubuntu-latest' && matrix.target != 'x86_64-unknown-linux-gnu'
+        if: contains(matrix.os, 'ubuntu') && matrix.target != 'x86_64-unknown-linux-gnu'
         shell: bash
         run: |
           dir="$RUNNER_TEMP/cross-download"
