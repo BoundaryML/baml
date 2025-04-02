@@ -1,9 +1,9 @@
-import { History, RefreshCw } from 'lucide-react'
+import { FastForward, History, RefreshCw } from 'lucide-react'
 
 import { useAtomValue } from 'jotai'
 import { useAtom } from 'jotai'
 import { selectedHistoryIndexAtom, testHistoryAtom, TestHistoryEntry } from '../atoms'
-import { useRunTests } from '../test-runner'
+import { useParallelRunTests, useRunTests } from '../test-runner'
 import { ViewSelector } from './ViewSelector'
 import { Tooltip, TooltipTrigger } from '~/components/ui/tooltip'
 import { TooltipContent, TooltipProvider } from '~/components/ui/tooltip'
@@ -75,6 +75,7 @@ export const TestMenu = () => {
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useAtom(selectedHistoryIndexAtom)
   const testHistory = useAtomValue(testHistoryAtom)
   const { setRunningTests } = useRunTests()
+  const { setParallelTests } = useParallelRunTests()
   const currentRun = testHistory[selectedHistoryIndex]
   if (!currentRun)
     return (
@@ -127,6 +128,30 @@ export const TestMenu = () => {
             </TooltipTrigger>
             <TooltipContent>
               <p>Re-run all tests</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
+        <TooltipProvider>
+          <Tooltip delayDuration={0}>
+            <TooltipTrigger asChild>
+              <Button
+                variant='ghost'
+                size='icon'
+                className='w-6 h-6'
+                onClick={() => {
+                  const allTests = currentRun.tests.map((test) => ({
+                    functionName: test.functionName,
+                    testName: test.testName,
+                  }))
+                  setParallelTests(allTests)
+                }}
+              >
+                <FastForward className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Run tests in parallel</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>

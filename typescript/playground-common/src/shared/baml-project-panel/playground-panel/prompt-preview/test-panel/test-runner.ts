@@ -1,4 +1,4 @@
-import type { WasmFunctionResponse } from '@gloo-ai/baml-schema-wasm-web'
+import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { findMediaFile } from '../media-utils'
 import { ctxAtom, runtimeAtom, wasmAtom } from '../../../atoms'
@@ -156,4 +156,160 @@ export const useRunTests = (maxBatchSize = 5) => {
   )
 
   return { setRunningTests: runTests }
+}
+
+export const useParallelRunTests = (maxBatchSize = 5) => {
+  const { rt } = useAtomValue(runtimeAtom)
+  const ctx = useAtomValue(ctxAtom)
+  const wasm = useAtomValue(wasmAtom)
+  const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
+  const setSelectedFunction = useSetAtom(selectedFunctionAtom)
+  const setIsClientCallGraphEnabled = useSetAtom(isClientCallGraphEnabledAtom)
+
+  const runParallelTests = useAtomCallback(
+    useCallback(
+      async (get, set, tests: { functionName: string; testName: string }[]) => {
+        // Create a new history run
+        const historyRun: TestHistoryRun = {
+          timestamp: Date.now(),
+          tests: tests.map((test) => ({
+            timestamp: Date.now(),
+            functionName: test.functionName,
+            testName: test.testName,
+            response: { status: 'running' },
+            input: get(testCaseAtom(test))?.tc.inputs, // Store input
+          })),
+        }
+
+        setIsClientCallGraphEnabled(false)
+
+        set(testHistoryAtom, (prev) => [historyRun, ...prev])
+        set(selectedHistoryIndexAtom, 0)
+
+        const setState = (test: { functionName: string; testName: string }, update: TestState) => {
+          set(testHistoryAtom, (prev) => {
+            const newHistory = [...prev]
+            const currentRun = newHistory[0]
+            if (!currentRun) return prev
+
+            const testIndex = currentRun.tests.findIndex(
+              (t) => t.functionName === test.functionName && t.testName === test.testName,
+            )
+            if (testIndex === -1) return prev
+
+            const existingTest = currentRun.tests[testIndex]
+            if (!existingTest) return prev
+
+            currentRun.tests[testIndex] = {
+              ...existingTest,
+              response: update,
+              timestamp: Date.now(),
+              functionName: existingTest.functionName,
+              testName: existingTest.testName,
+            }
+            return newHistory
+          })
+        }
+
+        const run = async () => {
+          if (!rt || !ctx || !wasm) {
+            console.error('Missing required dependencies')
+            return
+          }
+
+          if (tests.length === 0) {
+            console.error('No tests found')
+            return
+          }
+
+          const firstTest = get(testCaseAtom(tests[0]))
+          if (firstTest) {
+            setSelectedFunction(firstTest.fn.name)
+            setSelectedTestcase(firstTest.tc.name)
+          } else {
+            console.error("Invalid test found, so won't select this test case in the prompt preview", tests[0])
+          }
+
+          try {
+            // Prepare test cases for `run_many_tests`
+            const testCases = tests.map((test) => {
+              const testCase = get(testCaseAtom(test))
+              if (!testCase) {
+                setState(test, { status: 'error', message: 'Test case not found' })
+                return null
+              }
+              return {
+                functionName: testCase.fn.name,
+                testName: testCase.tc.name,
+                inputs: testCase.tc.inputs,
+              }
+            }).filter(Boolean)
+
+            if (testCases.length === 0) {
+              console.error('No valid test cases found')
+              return
+            }
+
+            const startTime = performance.now()
+            set(areTestsRunningAtom, true)
+
+            // Call `run_many_tests` on the runtime
+            const results = await rt.run_many_tests(testCases, (partial: WasmFunctionResponse) => {
+              // const test = tests.find(
+              //   (t) => t.functionName === partial.functionName && t.testName === partial.testName,
+              // )
+              // if (test) {
+              //   setState(test, { status: 'running', response: partial })
+              // }
+              // setState({functionName: }, { status: 'running', response: partial });
+              // console.log('Partial result:', partial);
+            }, findMediaFile)
+
+            const endTime = performance.now()
+
+            // Process results
+            // results.forEach((result: WasmTestResponse, index: number) => {
+            //   const test = tests[index]
+            //   if (!test) return
+
+            //   // Hardcoded response status for now
+            //   // const response_status = wasm.TestStatus.Passed
+            //   // const responseStatusMap = {
+            //   //   [wasm.TestStatus.Passed]: 'passed',
+            //   //   [wasm.TestStatus.LLMFailure]: 'llm_failed',
+            //   //   [wasm.TestStatus.ParseFailure]: 'parse_failed',
+            //   //   [wasm.TestStatus.ConstraintsFailed]: 'constraints_failed',
+            //   //   [wasm.TestStatus.AssertFailed]: 'assert_failed',
+            //   //   [wasm.TestStatus.UnableToRun]: 'error',
+            //   //   [wasm.TestStatus.FinishReasonFailed]: 'error',
+            //   // } as const
+            //   console.log('result', result)
+
+            //   setState(test, {
+            //     status: 'done',
+            //     response: result,
+            //     response_status: 'passed',
+            //     latency_ms: endTime - startTime,
+            //   })
+            // })
+          } catch (e) {
+            console.error('Error running tests:', e)
+            tests.forEach((test) => {
+              setState(test, {
+                status: 'error',
+                message: e instanceof Error ? e.message : 'Unknown error',
+              })
+            })
+          } finally {
+            set(areTestsRunningAtom, false)
+          }
+        }
+
+        await run()
+      },
+      [maxBatchSize, rt, ctx, wasm],
+    ),
+  )
+
+  return { setParallelTests: runParallelTests }
 }

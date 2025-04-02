@@ -397,9 +397,25 @@ pub struct WasmParam {
     pub error: Option<String>,
 }
 
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Debug, Clone)]
+pub struct WasmFunctionTestPair{
+    #[wasm_bindgen(readonly)]
+    pub function_name: String,
+    #[wasm_bindgen(readonly)]
+    pub test_name: String,
+}
+
+
 #[wasm_bindgen]
 pub struct WasmFunctionResponse {
     function_response: baml_runtime::FunctionResult,
+    func_test_pair: WasmFunctionTestPair,
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+pub struct WasmTestResponses{
+    responses: Vec<WasmTestResponse>,
 }
 
 #[wasm_bindgen]
@@ -509,6 +525,10 @@ impl WasmFunctionResponse {
             self.function_response.scope(),
         )
             .into_wasm()
+    }
+
+    pub fn func_test_pair(&self) -> WasmFunctionTestPair {
+        self.func_test_pair.clone()
     }
 }
 
@@ -918,6 +938,10 @@ impl WasmRuntime {
             .into_iter()
             .map(|g| g.into())
             .collect())
+    }
+
+    pub fn env_vars(&self) -> &HashMap<String, String> {
+        &self.runtime.env_vars()
     }
 }
 
@@ -1516,7 +1540,79 @@ impl WasmRuntime {
         }
         None
     }
+
+    #[wasm_bindgen]
+    pub async fn run_many_tests(
+        &mut self,
+        function_test_pairs: js_sys::Array,
+        on_partial_response: js_sys::Function,
+        get_baml_src_cb: js_sys::Function,
+    ) -> JsResult<Vec<WasmTestResponse>, JsValue> {
+        // Create a vector to store all test futures
+        let mut test_futures = Vec::new();
+
+        for i in 0..function_test_pairs.length() {
+            if let Ok(pair) = js_sys::Reflect::get(&function_test_pairs, &i.into()) {
+                if let (Ok(function_name), Ok(test_name)) = (
+                    js_sys::Reflect::get(&pair, &JsValue::from_str("functionName")),
+                    js_sys::Reflect::get(&pair, &JsValue::from_str("testName")),
+                ) {
+                    let function_name = function_name.as_string().unwrap_or_default();
+                    let test_name = test_name.as_string().unwrap_or_default();
+
+                    let function_name_for_test_pair = function_name.clone();
+                    let test_name_for_test_pair = test_name.clone();
+
+
+                    // Create a closure to handle partial responses for this test
+                    let on_partial_response_clone = on_partial_response.clone();
+                    let cb = Box::new(move |r| {
+                        let this = JsValue::NULL;
+                        let res = WasmFunctionResponse {
+                            function_response: r,
+                            func_test_pair: WasmFunctionTestPair {
+                                // TODO: clone?
+                                function_name: function_name_for_test_pair,
+                                test_name: test_name_for_test_pair,
+                            },
+                        }.into();
+                        on_partial_response_clone.call1(&this, &res).unwrap();
+                    });
+
+                    // Create evaluation context for the test
+                    let ctx = self.runtime.create_ctx_manager(
+                        BamlValue::String("wasm".to_string()),
+                        js_fn_to_baml_src_reader(get_baml_src_cb.clone()),
+                    );
+
+                    // Reference to the runtime
+                    let rt = &self.runtime;
+                    
+                    // Create a future for this test
+                    let future = async move {
+                        let (test_response, span) = rt
+                            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
+                            .await;
+
+                        // Return WasmTestResponse for this test
+                        WasmTestResponse {
+                            test_response,
+                            span,
+                            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
+                        }
+                    };
+
+                    test_futures.push(future);
+                }
+            }
+        }
+
+        // Run all tests in parallel
+        let results = futures::future::join_all(test_futures).await;
+        Ok(results)
+    }
 }
+
 // Define a new struct to store the important information
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Serialize, Deserialize, Debug)]
@@ -1710,11 +1806,18 @@ impl WasmFunction {
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
+        let function_name_for_test_pair = function_name.clone();
+        let test_name_for_test_pair = test_name.clone();
+
         // Create the closure to handle partial responses:
         let cb = Box::new(move |r| {
             let this = JsValue::NULL;
             let res = WasmFunctionResponse {
                 function_response: r,
+                func_test_pair: WasmFunctionTestPair {
+                    function_name: function_name_for_test_pair,
+                    test_name: test_name_for_test_pair,
+                },
             }
             .into();
             on_partial_response.call1(&this, &res).unwrap();
@@ -1816,5 +1919,89 @@ impl ToJsValue for OrchestrationScope {
             array.push(&scope.to_js_value());
         }
         array.into()
+    }
+}
+
+impl ToJsValue for WasmTestResponse {
+    fn to_js_value(&self) -> JsValue {
+        let obj = js_sys::Object::new();
+        let set_property = |obj: &js_sys::Object, key: &str, value: JsValue| {
+            js_sys::Reflect::set(obj, &JsValue::from_str(key), &value).unwrap_or(false)
+        };
+
+        // Convert status to JsValue
+        let status = match self.status() {
+            TestStatus::Passed => "Passed",
+            TestStatus::LLMFailure => "LLMFailure",
+            TestStatus::ParseFailure => "ParseFailure",
+            TestStatus::FinishReasonFailed => "FinishReasonFailed",
+            TestStatus::ConstraintsFailed => "ConstraintsFailed",
+            TestStatus::AssertFailed => "AssertFailed",
+            TestStatus::UnableToRun => "UnableToRun",
+        };
+        set_property(&obj, "status", JsValue::from_str(status));
+
+        // Add failure message if any
+        if let Some(msg) = self.failure_message() {
+            set_property(&obj, "failure_message", JsValue::from_str(&msg));
+        }
+
+        // Add parsed response if any
+        if let Some(parsed) = self.parsed_response() {
+            let parsed_obj = js_sys::Object::new();
+            set_property(&parsed_obj, "value", JsValue::from_str(&parsed.value));
+            set_property(&parsed_obj, "check_count", JsValue::from_f64(parsed.check_count as f64));
+            if let Some(explanation) = &parsed.explanation {
+                set_property(&parsed_obj, "explanation", JsValue::from_str(explanation));
+            }
+            set_property(&obj, "parsed_response", parsed_obj.into());
+        }
+
+        // Add LLM response if any
+        if let Some(llm_response) = self.llm_response() {
+            let llm_obj = js_sys::Object::new();
+            set_property(&llm_obj, "model", JsValue::from_str(&llm_response.model));
+            set_property(&llm_obj, "content", JsValue::from_str(&llm_response.content));
+            set_property(&llm_obj, "client_name", JsValue::from_str(&llm_response.client_name()));
+            set_property(&llm_obj, "start_time_unix_ms", JsValue::from_f64(llm_response.start_time_unix_ms as f64));
+            set_property(&llm_obj, "latency_ms", JsValue::from_f64(llm_response.latency_ms as f64));
+            
+            if let Some(tokens) = llm_response.input_tokens {
+                set_property(&llm_obj, "input_tokens", JsValue::from_f64(tokens as f64));
+            }
+            if let Some(tokens) = llm_response.output_tokens {
+                set_property(&llm_obj, "output_tokens", JsValue::from_f64(tokens as f64));
+            }
+            if let Some(tokens) = llm_response.total_tokens {
+                set_property(&llm_obj, "total_tokens", JsValue::from_f64(tokens as f64));
+            }
+            if let Some(reason) = &llm_response.stop_reason {
+                set_property(&llm_obj, "stop_reason", JsValue::from_str(reason));
+            }
+            
+            set_property(&obj, "llm_response", llm_obj.into());
+        }
+        
+        // Add LLM failure if any
+        if let Some(llm_failure) = self.llm_failure() {
+            let failure_obj = js_sys::Object::new();
+            if let Some(model) = &llm_failure.model {
+                set_property(&failure_obj, "model", JsValue::from_str(model));
+            }
+            set_property(&failure_obj, "client_name", JsValue::from_str(&llm_failure.client_name()));
+            set_property(&failure_obj, "message", JsValue::from_str(&llm_failure.message));
+            set_property(&failure_obj, "code", JsValue::from_str(&llm_failure.code));
+            set_property(&failure_obj, "start_time_unix_ms", JsValue::from_f64(llm_failure.start_time_unix_ms as f64));
+            set_property(&failure_obj, "latency_ms", JsValue::from_f64(llm_failure.latency_ms as f64));
+            
+            set_property(&obj, "llm_failure", failure_obj.into());
+        }
+
+        // Add trace URL if available
+        if let Some(url) = self.trace_url() {
+            set_property(&obj, "trace_url", JsValue::from_str(&url));
+        }
+
+        obj.into()
     }
 }
