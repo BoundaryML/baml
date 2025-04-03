@@ -45,7 +45,6 @@ web-time.workspace = true
 either = "1.8.1"
 itertools = "0.13.0"
 once_cell.workspace = true
-futures.workspace = true
 [dependencies.web-sys]
 version = "0.3.69"
 features = [
