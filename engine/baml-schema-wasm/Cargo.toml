@@ -14,7 +14,9 @@ crate-type = ["cdylib", "rlib"]
 elided_named_lifetimes = "deny"
 
 [dependencies]
+reqwest.workspace = true
 anyhow.workspace = true
+futures.workspace = true
 baml-runtime = { path = "../baml-runtime", features = [
   "internal",
 ], default-features = false }

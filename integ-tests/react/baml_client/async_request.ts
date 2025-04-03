@@ -3011,6 +3011,26 @@ export class AsyncHttpRequest {
     }
   }
   
+  async TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestOpenAIDummyClient",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async TestOpenAIGPT4oMini(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -6384,6 +6404,26 @@ export class AsyncHttpStreamRequest {
     try {
       return await this.runtime.buildRequest(
         "TestOpenAI",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestOpenAIDummyClient",
         {
           "input": input
         },

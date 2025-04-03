@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401,F821
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-__version__ = "0.81.3"
+__version__ = "0.82.0"
 
 try:
   from baml_py.safe_import import EnsureBamlPyImport

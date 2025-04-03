@@ -145,6 +145,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b62fc65de8e4e7f52534fb52b0f3ed04746ae267519eef2a83941e8085068b"
 
 [[package]]
+name = "arrayvec"
+version = "0.7.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
+
+[[package]]
 name = "askama"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -809,7 +815,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "ambassador",
  "anyhow",
@@ -899,7 +905,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -915,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -928,7 +934,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -958,8 +964,51 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-rpc"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "base64 0.22.1",
+ "bytes",
+ "console_log",
+ "derive_more",
+ "dissimilar",
+ "dunce",
+ "either",
+ "env_logger",
+ "eventsource-stream",
+ "expect-test",
+ "futures",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "indexmap 2.2.6",
+ "indoc",
+ "log",
+ "num",
+ "pretty_assertions",
+ "rand",
+ "regex",
+ "rstest",
+ "scopeguard",
+ "serde",
+ "serde_json",
+ "static_assertions",
+ "strsim 0.11.1",
+ "strum",
+ "strum_macros",
+ "time",
+ "ts-rs",
+ "type-safe-id",
+ "uuid",
+ "walkdir",
+ "wasm-bindgen-test",
+ "web-time",
+]
+
+[[package]]
 name = "baml-runtime"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "ambassador",
  "anyhow",
@@ -1070,7 +1119,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1094,6 +1143,7 @@ dependencies = [
  "jsonish",
  "log",
  "once_cell",
+ "reqwest",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
@@ -1112,7 +1162,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1134,7 +1184,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1248,7 +1298,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2798,7 +2848,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2824,7 +2874,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2861,7 +2911,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -2874,7 +2924,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2895,7 +2945,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -2914,7 +2964,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2939,7 +2989,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -2951,7 +3001,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -2972,7 +3022,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3083,7 +3133,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.81.3"
+version = "0.82.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3993,7 +4043,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b55c4d17d994b637e2f4daf6e5dc5d660d209d5642377d675d7a1c3ab69fa579"
 dependencies = [
- "arrayvec",
+ "arrayvec 0.5.2",
  "typed-arena",
  "unicode-width",
 ]
@@ -5187,6 +5237,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "termcolor"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
+dependencies = [
+ "winapi-util",
+]
+
+[[package]]
 name = "termtree"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5574,6 +5633,41 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "ts-rs"
+version = "10.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e640d9b0964e9d39df633548591090ab92f7a4567bc31d3891af23471a3365c6"
+dependencies = [
+ "lazy_static",
+ "thiserror 2.0.12",
+ "ts-rs-macros",
+]
+
+[[package]]
+name = "ts-rs-macros"
+version = "10.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e9d8656589772eeec2cf7a8264d9cda40fb28b9bc53118ceb9e8c07f8f38730"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+ "termcolor",
+]
+
+[[package]]
+name = "type-safe-id"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa0f2333ec5a49706b6f29896d0e4cdba1665d2bf2d752d0c4f130634935d42f"
+dependencies = [
+ "arrayvec 0.7.6",
+ "rand",
+ "thiserror 2.0.12",
+ "uuid",
+]
 
 [[package]]
 name = "typed-arena"

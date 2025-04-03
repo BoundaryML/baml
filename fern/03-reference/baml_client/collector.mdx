@@ -465,7 +465,7 @@ The `HttpRequest` class has the following properties:
 | `url` | `str` | The URL of the request. |
 | `method` | `str` | The HTTP method of the request. |
 | `headers` | `object` | The request headers. |
-| `body` | `object` | The request body. |
+| `body` | `HTTPBody` | The request body. |
 
 ### HttpResponse Class
 
@@ -475,7 +475,16 @@ The `HttpResponse` class has the following properties:
 |----------|------|-------------|
 | `status` | `int` | The HTTP status code. |
 | `headers` | `object` | The response headers. |
-| `body` | `object` | The response body. |
+| `body` | `HTTPBody` | The response body. |
+
+### HTTPBody Class
+
+The `HTTPBody` class has the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `text()` | `string` | The body as a string. |
+| `json()` | `object` | The body as a JSON object. |
 
 ## Related Topics
 - [Using with_options](/ref/baml_client/with-options) - Learn how to configure logging globally

@@ -3011,6 +3011,26 @@ export class HttpRequest {
     }
   }
   
+  TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestOpenAIDummyClient",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestOpenAIGPT4oMini(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -6384,6 +6404,26 @@ export class HttpStreamRequest {
     try {
       return this.runtime.buildRequestSync(
         "TestOpenAI",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestOpenAIDummyClient",
         {
           "input": input
         },

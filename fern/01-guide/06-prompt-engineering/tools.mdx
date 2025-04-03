@@ -69,7 +69,9 @@ import assert from 'assert'
 const main = async () => {
   const weatherInfo = await b.UseTool("What's the weather like in San Francisco?")
   console.log(weatherInfo)
-  assert(weatherInfo instanceof WeatherAPI)
+  // BAML doesn't generate concrete types in TypeScript
+  // so we can only validate the interfaces
+  assert("city" in weatherInfo)
   console.log(`City: ${weatherInfo.city}`)
   console.log(`Time of Day: ${weatherInfo.timeOfDay}`)
 }
@@ -133,14 +135,40 @@ const main = async () => {
   const tool = await b.UseTool("What's the weather like in San Francisco?")
   console.log(tool)
   
-  if (tool instanceof WeatherAPI) {
+  // BAML doesn't generate concrete types in TypeScript
+  // We check which tool by checking if certain fields exist
+  if ("city" in tool) {
     console.log("Weather API called:")
     console.log(`City: ${tool.city}`)
     console.log(`Time of Day: ${tool.timeOfDay}`)
-  } else if (tool instanceof MyOtherAPI) {
+  } else if ("operation" in tool) {
     console.log("MyOtherAPI called:")
     // Handle MyOtherAPI specific attributes here
   }
+
+  /*
+   * Alternatively, we could modify our BAML file as such
+   * 
+   * class WeatherAPI {
+   *   class_name "WeatherAPI"
+   *   city string
+   *   time string @description("Current time in ISO8601 format")
+   * }
+   *
+   * class MyOtherAPI {
+   *   class_name "MyOtherAPI"
+   *   operation "add" | "subtract" | "multiply" | "divide"
+   *   numbers float[]
+   * }
+   *
+   * Then, in typescript, we could check the class_name to determine which tool to call
+   * 
+   * if (tool.class_name === "WeatherAPI") {
+   *   // Handle WeatherAPI specific attributes here
+   * } else if (tool.class_name === "MyOtherAPI") {
+   *   // Handle MyOtherAPI specific attributes here
+   * }
+   */
 }
 
 main()
@@ -220,11 +248,11 @@ const main = async () => {
   console.log(tools)
   
   tools.forEach(tool => {
-    if (tool instanceof WeatherAPI) {
+    if ("city" in tool) {
       console.log("Weather API called:")
       console.log(`City: ${tool.city}`)
       console.log(`Time of Day: ${tool.timeOfDay}`)
-    } else if (tool instanceof MyOtherAPI) {
+    } else if ("operation" in tool) {
       console.log("MyOtherAPI called:")
       // Handle MyOtherAPI specific attributes here
     }

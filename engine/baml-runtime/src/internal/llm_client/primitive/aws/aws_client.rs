@@ -1,27 +1,35 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use aws_config::Region;
 use aws_config::{identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader};
 use aws_credential_types::Credentials;
+use aws_sdk_bedrockruntime::config::Intercept;
+use aws_sdk_bedrockruntime::Client as BedrockRuntimeClient;
 use aws_sdk_bedrockruntime::{self as bedrock, operation::converse::ConverseOutput};
 
 use anyhow::{Context, Result};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::Blob;
-use baml_types::tracing::events::HttpRequestId;
+use baml_types::tracing::events::{
+    ContentId, FunctionId, HTTPBody, HTTPRequest, HTTPResponse, HttpRequestId, TraceData,
+    TraceEvent, TraceLevel,
+};
 use baml_types::{BamlMap, BamlMediaContent};
 use baml_types::{BamlMedia, BamlMediaType};
 use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::aws_bedrock::ResolvedAwsBedrock;
+use internal_llm_client::aws_bedrock::{self, ResolvedAwsBedrock};
 use internal_llm_client::{
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
 use serde::Deserialize;
 use serde_json::{json, Map};
+use uuid::Uuid;
 use web_time::Instant;
 use web_time::SystemTime;
 
@@ -36,7 +44,8 @@ use crate::internal::llm_client::{
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     ModelFeatures, ResolveMediaUrls,
 };
-use crate::{RenderCurlSettings, RuntimeContext};
+use crate::tracingv2::storage::storage::BAML_TRACER;
+use crate::{json_body, JsonBodyInput, RenderCurlSettings, RuntimeContext};
 
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {
@@ -71,6 +80,121 @@ fn resolve_properties(
     };
 
     Ok(props)
+}
+
+#[derive(Debug)]
+struct CollectorInterceptor {
+    span_id: Option<Uuid>,
+    http_request_id: HttpRequestId,
+}
+
+impl CollectorInterceptor {
+    fn new(span_id: Option<Uuid>, http_request_id: HttpRequestId) -> Self {
+        Self {
+            span_id,
+            http_request_id,
+        }
+    }
+}
+
+pub fn smithy_json_headers(headers: &Headers) -> serde_json::Value {
+    let mut json_headers = serde_json::Map::new();
+    for (key, value) in headers.iter() {
+        json_headers.insert(key.to_string(), json!(value));
+    }
+    serde_json::Value::Object(json_headers)
+}
+
+impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterceptor {
+    fn name(&self) -> &'static str {
+        "CollectorInterceptor"
+    }
+
+    fn read_before_attempt(
+        &self,
+        context: &aws_sdk_bedrockruntime::config::interceptors::BeforeTransmitInterceptorContextRef<
+            '_,
+        >,
+        _runtime_components: &aws_sdk_bedrockruntime::config::RuntimeComponents,
+        _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
+        if let Some(span_id) = self.span_id.clone() {
+            let request = context.request();
+            let headers = smithy_json_headers(request.headers());
+            let body = if let Some(bytes) = request.body().bytes() {
+                json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
+            } else {
+                serde_json::Value::Null
+            };
+
+            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+                span_id: FunctionId(span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "".to_string(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
+                    id: self.http_request_id.clone(),
+                    url: request.uri().to_string(),
+                    method: request.method().to_string(),
+                    headers,
+                    body: HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
+                })),
+                tags: Default::default(),
+            }));
+        }
+
+        Ok(())
+    }
+
+    fn read_after_attempt(
+        &self,
+        context: &aws_sdk_bedrockruntime::config::interceptors::FinalizerInterceptorContextRef<'_>,
+        _runtime_components: &aws_sdk_bedrockruntime::config::RuntimeComponents,
+        _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
+        if let Some(span_id) = self.span_id.clone() {
+            let trace_level = if let Some(response) = context.response() {
+                if response.status().is_success() {
+                    TraceLevel::Info
+                } else {
+                    TraceLevel::Error
+                }
+            } else {
+                TraceLevel::Error
+            };
+
+            if let Some(response) = context.response() {
+                let headers = smithy_json_headers(response.headers());
+                let body = if let Some(bytes) = response.body().bytes() {
+                    json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
+                } else {
+                    serde_json::Value::Null
+                };
+
+                BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+                    span_id: FunctionId(span_id.to_string()),
+                    event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                    span_chain: vec![],
+                    timestamp: web_time::SystemTime::now(),
+                    callsite: "".to_string(),
+                    verbosity: trace_level,
+                    content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
+                        request_id: self.http_request_id.clone(),
+                        status: response.status().as_u16(),
+                        headers,
+                        body: HTTPBody::new(
+                            response.body().bytes().unwrap_or_default().to_vec().into(),
+                        ),
+                    })),
+                    tags: Default::default(),
+                }));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl AwsClient {
@@ -136,7 +260,11 @@ impl AwsClient {
     // Note: This function necessarily exposes secret keys when they are provided, so it should
     // only be called while generating real requests to the provider, not when rendering raw
     // cURL previews.
-    async fn client_anyhow(&self) -> Result<bedrock::Client> {
+    async fn client_anyhow(
+        &self,
+        span_id: Option<Uuid>,
+        http_request_id: &HttpRequestId,
+    ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
         let mut loader = super::wasm::load_aws_config();
         #[cfg(not(target_arch = "wasm32"))]
@@ -221,7 +349,11 @@ impl AwsClient {
         }
 
         let config = loader.load().await;
-        Ok(bedrock::Client::new(&config))
+
+        let bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
+            .interceptor(CollectorInterceptor::new(span_id, http_request_id.clone()))
+            .build();
+        Ok(BedrockRuntimeClient::from_conf(bedrock_config))
     }
 
     async fn chat_anyhow<'r>(&self, response: &'r ConverseOutput) -> Result<&'r String> {
@@ -388,7 +520,10 @@ impl WithStreamChat for AwsClient {
         let request_options = Default::default();
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
-        let aws_client = match self.client_anyhow().await {
+        let aws_client = match self
+            .client_anyhow(ctx.span_id.clone(), &http_request_id)
+            .await
+        {
             Ok(c) => c,
             Err(e) => {
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -671,7 +806,7 @@ impl AwsClient {
 impl WithChat for AwsClient {
     async fn chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         chat_messages: &[RenderedChatMessage],
         http_request_id: HttpRequestId,
     ) -> LLMResponse {
@@ -681,7 +816,10 @@ impl WithChat for AwsClient {
         let request_options = Default::default();
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
-        let aws_client = match self.client_anyhow().await {
+        let aws_client = match self
+            .client_anyhow(ctx.span_id.clone(), &http_request_id)
+            .await
+        {
             Ok(c) => c,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {
@@ -697,7 +835,7 @@ impl WithChat for AwsClient {
             }
         };
 
-        let request = match self.build_request(_ctx, chat_messages) {
+        let request = match self.build_request(ctx, chat_messages) {
             Ok(r) => r,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {

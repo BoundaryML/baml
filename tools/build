@@ -162,7 +162,7 @@ case "$_path" in
         --ext rs,hb,hbs,j2,toml \
         --watch "${_repo_root}/engine" \
         --ignore 'target/**' \
-        --exec "${command}" --verbose
+        --exec "${command}"
     else
       eval "${command}"
     fi
