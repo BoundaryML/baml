@@ -22,7 +22,7 @@ pub struct ListFunctionSpansResponse {
     type_definitions: Vec<BamlTypeDefinition>,
 }
 
-struct ListFunctionSpans;
+pub struct ListFunctionSpans;
 
 impl ApiEndpoint for ListFunctionSpans {
     type Request = ListFunctionSpansRequest;

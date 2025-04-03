@@ -17,7 +17,7 @@ pub struct Organization {
 pub struct CreateOrganizationRequest {
     pub org_id: String,
     pub org_slug: String,
-    pub org_display_name: Option<String>,
+    pub org_display_name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -26,7 +26,7 @@ pub struct CreateOrganizationResponse {
     pub org: Organization,
 }
 
-struct CreateOrganization;
+pub struct CreateOrganization;
 
 impl ApiEndpoint for CreateOrganization {
     type Request = CreateOrganizationRequest;
@@ -51,7 +51,7 @@ pub struct UpdateOrganizationResponse {
     pub org: Organization,
 }
 
-struct UpdateOrganization;
+pub struct UpdateOrganization;
 
 impl ApiEndpoint for UpdateOrganization {
     type Request = UpdateOrganizationRequest;
@@ -72,7 +72,7 @@ pub struct GetOrganizationResponse {
     pub org: Organization,
 }
 
-struct GetOrganization;
+pub struct GetOrganization;
 
 impl ApiEndpoint for GetOrganization {
     type Request = GetOrganizationRequest;

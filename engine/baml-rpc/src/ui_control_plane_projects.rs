@@ -6,24 +6,25 @@ use ts_rs::TS;
 #[ts(export)]
 pub struct Project {
     pub project_id: String,
-    pub short_name: String,
+    pub project_slug: String,
+    pub org_id: String,
     pub environments: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct ListProjectsRequest {
-    org_slug: String,
+    pub org_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct ListProjectsResponse {
-    projects: Vec<Project>,
-    total_project_count: i64,
+    pub projects: Vec<Project>,
+    pub total_project_count: i64,
 }
 
-struct ListProjects;
+pub struct ListProjects;
 
 impl ApiEndpoint for ListProjects {
     type Request = ListProjectsRequest;
@@ -35,18 +36,18 @@ impl ApiEndpoint for ListProjects {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateProjectRequest {
-    short_name: String,
-    org_id: String,
-    environments: Vec<String>,
+    pub project_slug: String,
+    pub org_id: String,
+    pub environments: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateProjectResponse {
-    project: Project,
+    pub project: Project,
 }
 
-struct CreateProject;
+pub struct CreateProject;
 
 impl ApiEndpoint for CreateProject {
     type Request = CreateProjectRequest;
@@ -60,8 +61,8 @@ impl ApiEndpoint for CreateProject {
 #[ts(export)]
 pub struct UpdateProjectRequest {
     pub project_id: String,
-    pub short_name: String,
-    pub environments: Vec<String>,
+    pub project_slug: Option<String>,
+    pub environments: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -70,7 +71,7 @@ pub struct UpdateProjectResponse {
     pub project: Project,
 }
 
-struct UpdateProject;
+pub struct UpdateProject;
 
 impl ApiEndpoint for UpdateProject {
     type Request = UpdateProjectRequest;

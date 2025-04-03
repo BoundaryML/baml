@@ -12,6 +12,12 @@ macro_rules! define_id {
         #[derive(Debug, Clone)]
         pub struct $name(TypeSafeId<$inner_name>);
 
+        impl $name {
+            pub fn new() -> Self {
+                Self(TypeSafeId::<$inner_name>::new())
+            }
+        }
+
         impl serde::Serialize for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
@@ -34,10 +40,16 @@ macro_rules! define_id {
                 }
             }
         }
+
+        impl ToString for $name {
+            fn to_string(&self) -> String {
+                self.0.to_string()
+            }
+        }
     };
 }
 
-// Example usage:
 define_id!(SpanId, Span_, "bspan");
 define_id!(TraceEventId, TraceEvent_, "bevent");
 define_id!(HttpRequestId, HttpRequest_, "breq");
+define_id!(ProjectId, Project_, "proj");

@@ -19,8 +19,8 @@ pub trait ApiEndpoint {
     const PATH: &'static str;
 
     /// Returns the endpoint path (e.g., "/users/42").
-    fn path(&self) -> String {
+    fn path() -> &'static str {
         debug_assert!(Self::PATH.starts_with('/'));
-        Self::PATH.to_string()
+        Self::PATH
     }
 }

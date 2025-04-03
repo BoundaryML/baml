@@ -17,6 +17,11 @@ pub enum TraceLevel {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct TraceEventBatch {
+    pub events: Vec<TraceEvent>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TraceEvent {
     /*
      * (span_id, content_span_id) is a unique identifier for a log event
