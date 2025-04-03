@@ -4,8 +4,8 @@ use crate::server::client::Requester;
 use crate::server::{client::Notifier, Result};
 use crate::DocumentKey;
 use crate::Session;
+use baml_lsp_types::BamlSpan;
 use baml_runtime::InternalRuntimeInterface;
-use baml_schema_build::runtime_wasm::WasmSpan;
 use lsp_types::{request, CodeLensParams, Command, Position, Range};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -44,14 +44,14 @@ impl SyncRequestHandler for CodeLens {
             return Ok(None);
         }
 
-        let mk_range = |span: &WasmSpan| {
+        let mk_range = |span: &BamlSpan| {
             Range::new(
                 Position::new(span.start_line as u32, span.start as u32),
                 Position::new(span.end_line as u32, span.end as u32),
             )
         };
 
-        let doc_matches = |span: &WasmSpan| {
+        let doc_matches = |span: &BamlSpan| {
             let absolute_file = DocumentKey::from_url(project.root_path(), &url);
             let absolute_target =
                 DocumentKey::from_path(project.root_path(), &PathBuf::from(span.file_path.clone()));

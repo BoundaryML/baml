@@ -14,16 +14,9 @@ use internal_baml_codegen::GenerateOutput;
 use internal_baml_diagnostics::Diagnostics;
 use lsp_server::Notification;
 
-use baml_schema_build::runtime_wasm::{
+use baml_lsp_types::{
+    BamlFunction, BamlGeneratorConfig, BamlParam, BamlParentFunction, BamlSpan, BamlTestCase,
     SymbolLocation,
-    // WasmDiagnosticError,
-    // WasmError,
-    WasmFunction,
-    WasmGeneratorConfig,
-    WasmParam,
-    WasmParentFunction,
-    WasmSpan,
-    WasmTestCase,
 };
 use lsp_types::{
     Hover,
@@ -183,24 +176,24 @@ impl BamlProject {
 }
 
 pub trait BamlRuntimeExt {
-    fn list_testcases(&self) -> Vec<WasmTestCase>;
+    fn list_testcases(&self) -> Vec<BamlTestCase>;
 
     fn get_testcase_from_position(
         &self,
-        parent_function: WasmFunction,
+        parent_function: BamlFunction,
         cursor_idx: usize,
-    ) -> Option<WasmTestCase>;
+    ) -> Option<BamlTestCase>;
 
     fn get_function_of_testcase(
         &self,
         file_name: &str,
         cursor_idx: usize,
-    ) -> Option<WasmParentFunction>;
+    ) -> Option<BamlParentFunction>;
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation>;
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
-    fn list_functions(&self) -> Vec<WasmFunction>;
-    fn list_generators(&self) -> Vec<WasmGeneratorConfig>;
+    fn list_functions(&self) -> Vec<BamlFunction>;
+    fn list_generators(&self) -> Vec<BamlGeneratorConfig>;
     fn is_valid_class(&self, symbol: &str) -> bool;
     fn is_valid_enum(&self, symbol: &str) -> bool;
     fn is_valid_type_alias(&self, symbol: &str) -> bool;
@@ -208,12 +201,12 @@ pub trait BamlRuntimeExt {
 }
 
 impl BamlRuntimeExt for BamlRuntime {
-    fn list_generators(&self) -> Vec<WasmGeneratorConfig> {
+    fn list_generators(&self) -> Vec<BamlGeneratorConfig> {
         self.codegen_generators()
-            .map(|generator| WasmGeneratorConfig {
+            .map(|generator| BamlGeneratorConfig {
                 output_type: generator.output_type.clone().to_string(),
                 version: generator.version.clone(),
-                span: WasmSpan {
+                span: BamlSpan {
                     file_path: generator.span.file.path().to_string(),
                     start: generator.span.start,
                     end: generator.span.end,
@@ -259,7 +252,7 @@ impl BamlRuntimeExt for BamlRuntime {
             .collect()
     }
 
-    fn list_functions(&self) -> Vec<WasmFunction> {
+    fn list_functions(&self) -> Vec<BamlFunction> {
         let ctx = &self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
         let ctx = ctx.create_ctx_with_default();
         let ctx = ctx.eval_ctx(false);
@@ -288,10 +281,10 @@ impl BamlRuntimeExt for BamlRuntime {
 
                 let wasm_span = match f.span() {
                     Some(span) => span.into(),
-                    None => WasmSpan::default(),
+                    None => BamlSpan::default(),
                 };
 
-                WasmFunction {
+                BamlFunction {
                     name: f.name().to_string(),
                     span: wasm_span,
                     signature: {
@@ -326,7 +319,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                             Err(e) => (None, Some(e)),
                                         };
 
-                                        WasmParam {
+                                        BamlParam {
                                             name: k.to_string(),
                                             value,
                                             error,
@@ -347,7 +340,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                 {
                                     params.insert(
                                         0,
-                                        WasmParam {
+                                        BamlParam {
                                             name: param_name.to_string(),
                                             value: None,
                                             error: Some("Missing parameter".to_string()),
@@ -358,10 +351,10 @@ impl BamlRuntimeExt for BamlRuntime {
 
                             let wasm_span = match tc.span() {
                                 Some(span) => span.into(),
-                                None => WasmSpan::default(),
+                                None => BamlSpan::default(),
                             };
 
-                            WasmTestCase {
+                            BamlTestCase {
                                 name: tc.test_case().name.clone(),
                                 inputs: params,
                                 error,
@@ -376,7 +369,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                             .span
                                             .as_ref()
                                             .map_or((0, 0), |f| (f.start, f.end));
-                                        WasmParentFunction {
+                                        BamlParentFunction {
                                             start,
                                             end,
                                             name: f.elem.name().to_string(),
@@ -490,7 +483,7 @@ impl BamlRuntimeExt for BamlRuntime {
 
         None
     }
-    fn list_testcases(&self) -> Vec<WasmTestCase> {
+    fn list_testcases(&self) -> Vec<BamlTestCase> {
         let ctx = self.create_ctx_manager(BamlValue::String("wasm".to_string()), None);
 
         let ctx = ctx.create_ctx_with_default();
@@ -517,7 +510,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                 Err(e) => (None, Some(e)),
                             };
 
-                            WasmParam {
+                            BamlParam {
                                 name: k.to_string(),
                                 value,
                                 error,
@@ -536,7 +529,7 @@ impl BamlRuntimeExt for BamlRuntime {
                 tc.function().inputs().iter().for_each(|func_params| {
                     let (param_name, t) = func_params;
                     if !params.iter().any(|p| p.name == *param_name) && !t.is_optional() {
-                        params.push(WasmParam {
+                        params.push(BamlParam {
                             name: param_name.to_string(),
                             value: None,
                             error: Some("Missing parameter".to_string()),
@@ -545,10 +538,10 @@ impl BamlRuntimeExt for BamlRuntime {
                 });
                 let wasm_span = match tc.span() {
                     Some(span) => span.into(),
-                    None => WasmSpan::default(),
+                    None => BamlSpan::default(),
                 };
 
-                WasmTestCase {
+                BamlTestCase {
                     name: tc.test_case().name.clone(),
                     inputs: params,
                     error,
@@ -563,7 +556,7 @@ impl BamlRuntimeExt for BamlRuntime {
                                 .span
                                 .as_ref()
                                 .map_or((0, 0), |f| (f.start, f.end));
-                            WasmParentFunction {
+                            BamlParentFunction {
                                 start,
                                 end,
                                 name: f.elem.name().to_string(),
@@ -577,9 +570,9 @@ impl BamlRuntimeExt for BamlRuntime {
 
     fn get_testcase_from_position(
         &self,
-        parent_function: WasmFunction,
+        parent_function: BamlFunction,
         cursor_idx: usize,
-    ) -> Option<WasmTestCase> {
+    ) -> Option<BamlTestCase> {
         let testcases = parent_function.test_cases;
         for testcase in testcases {
             let span = testcase.clone().span;
@@ -597,7 +590,7 @@ impl BamlRuntimeExt for BamlRuntime {
         &self,
         file_name: &str,
         cursor_idx: usize,
-    ) -> Option<WasmParentFunction> {
+    ) -> Option<BamlParentFunction> {
         let testcases = self.list_testcases();
 
         for tc in testcases {
@@ -650,7 +643,7 @@ impl Project {
     /// (In this stub, we assume `WasmRuntime::check_version` is available as a static method.)
     pub fn check_version(
         &self,
-        generator: &WasmGeneratorConfig,
+        generator: &BamlGeneratorConfig,
         _is_diagnostic: bool,
     ) -> Option<String> {
         Some(generator.version.clone())
@@ -866,7 +859,7 @@ impl Project {
     }
 
     /// Returns a list of functions from the WASM runtime.
-    pub fn list_functions(&self) -> Result<Vec<WasmFunction>, &str> {
+    pub fn list_functions(&self) -> Result<Vec<BamlFunction>, &str> {
         if let Ok(runtime) = self.runtime() {
             Ok(runtime.list_functions())
         } else {
@@ -875,7 +868,7 @@ impl Project {
     }
 
     /// Returns a list of test cases from the WASM runtime.
-    pub fn list_testcases(&self) -> Result<Vec<WasmTestCase>, &str> {
+    pub fn list_testcases(&self) -> Result<Vec<BamlTestCase>, &str> {
         if let Ok(runtime) = self.runtime() {
             Ok(runtime.list_testcases())
         } else {
@@ -884,7 +877,7 @@ impl Project {
     }
 
     /// Returns a list of generator configurations.
-    pub fn list_generators(&self) -> Result<Vec<WasmGeneratorConfig>, &str> {
+    pub fn list_generators(&self) -> Result<Vec<BamlGeneratorConfig>, &str> {
         if let Some(ref runtime) = self.current_runtime {
             Ok(runtime.list_generators())
         } else {

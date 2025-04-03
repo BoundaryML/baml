@@ -14,6 +14,7 @@ baml-types = { path = "../baml-lib/baml-types" }
 baml-runtime = { path = "../baml-runtime", features = [
     "internal",
 ], default-features = false }
+baml-lsp-types = { path = "../baml-lsp-types" }
 internal-baml-core = { path = "../baml-lib/baml-core" }
 internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
 internal-baml-codegen = { workspace = true }
@@ -54,9 +55,6 @@ path-absolutize = { version = "3.1.1", features = [
     "use_unix_paths_on_wasm",
 ] }
 pathdiff = { version = "0.2.1" }
-
-# baml_project
-baml-schema-build = { path = "../baml-schema-wasm" }
 
 # baml project dependency
 serde-wasm-bindgen = "0.4"

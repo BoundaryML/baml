@@ -915,6 +915,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-lsp-types"
+version = "0.81.3"
+dependencies = [
+ "anyhow",
+ "baml-runtime",
+ "baml-types",
+ "cfg-if",
+ "dissimilar",
+ "either",
+ "expect-test",
+ "indexmap 2.2.6",
+ "indoc",
+ "internal-baml-codegen",
+ "internal-baml-core",
+ "internal-llm-client",
+ "itertools 0.13.0",
+ "js-sys",
+ "jsonish",
+ "log",
+ "once_cell",
+ "serde",
+ "serde_json",
+ "time",
+ "url",
+ "uuid",
+ "walkdir",
+ "web-time",
+]
+
+[[package]]
 name = "baml-python-ffi"
 version = "0.81.3"
 dependencies = [
@@ -971,6 +1001,7 @@ dependencies = [
  "chrono",
  "clap",
  "colored 2.1.0",
+ "console_error_panic_hook",
  "console_log",
  "criterion",
  "dashmap",
@@ -3279,8 +3310,8 @@ name = "language-server"
 version = "0.81.3"
 dependencies = [
  "anyhow",
+ "baml-lsp-types",
  "baml-runtime",
- "baml-schema-build",
  "baml-types",
  "colored 3.0.0",
  "crossbeam",
