@@ -340,12 +340,12 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
                     } else {
                         panic!("HUH?");
                     }
-                    if let Some(token) = tokens.next() {
-                        diagnostics.push_error(DatamodelError::new_validation_error(
-                            "spread must be the last field in a class constructor",
-                            diagnostics.span(token.as_span()),
-                        ));
-                    }
+                    // if let Some(token) = tokens.next() {
+                    //     diagnostics.push_error(DatamodelError::new_validation_error(
+                    //         "spread must be the last field in a class constructor",
+                    //         diagnostics.span(token.as_span()),
+                    //     ));
+                    // }
                 }
                 Rule::identifier => {
                     let field_name = parse_identifier(identifier_or_spread, diagnostics);

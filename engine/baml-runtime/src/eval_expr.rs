@@ -245,8 +245,8 @@ async fn beta_reduce<'a>(
                 .context(format!("Variable not found: {:?}", name))?;
             Ok(var_lookup.clone())
         }
-        Expr::List(_,_) => Ok(expr.clone()),
-        Expr::Map(_,_) => Ok(expr.clone()),
+        Expr::List(_, _) => Ok(expr.clone()),
+        Expr::Map(_, _) => Ok(expr.clone()),
         Expr::ClassConstructor { .. } => Ok(expr.clone()),
         _ => Err(anyhow::anyhow!("Not an application: {:?}", expr)),
     }
@@ -270,7 +270,7 @@ pub async fn eval_to_value<'a>(
                         .iter()
                         .map(|value| async move { eval_to_value(env, value).await }),
                 )
-                .buffer_unordered(4)
+                .buffered(4)
                 .collect::<Vec<Result<_, _>>>()
                 .await;
                 let new_maybe_items = stream
@@ -291,7 +291,7 @@ pub async fn eval_to_value<'a>(
                             .ok_or(anyhow::anyhow!("Failed to evaluate map"))?;
                         Ok((key.clone(), res))
                     }))
-                    .buffer_unordered(4)
+                    .buffered(4)
                     .collect::<Vec<Result<(String, BamlValueWithMeta<()>), _>>>()
                     .await;
                 let new_items = stream.into_iter().collect::<anyhow::Result<_>>()?;
@@ -311,7 +311,7 @@ pub async fn eval_to_value<'a>(
                             .ok_or(anyhow::anyhow!("Failed to evaluate class constructor"))?;
                         Ok((key.clone(), res))
                     }))
-                    .buffer_unordered(2)
+                    .buffered(2)
                     .collect::<Vec<Result<(String, BamlValueWithMeta<()>), _>>>()
                     .await;
                 let fields = stream
