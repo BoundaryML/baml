@@ -169,6 +169,11 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
   const runParallelTests = useAtomCallback(
     useCallback(
       async (get, set, tests: { functionName: string; testName: string }[]) => {
+        // if tests are already running just return
+        if (get(areTestsRunningAtom)) {
+          return
+        }
+
         // Create a new history run
         const historyRun: TestHistoryRun = {
           timestamp: Date.now(),
@@ -177,7 +182,7 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
             functionName: test.functionName,
             testName: test.testName,
             response: { status: 'running' },
-            input: get(testCaseAtom(test))?.tc.inputs, // Store input
+            input: get(testCaseAtom(test))?.tc.inputs,
           })),
         }
 
@@ -231,7 +236,7 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
           }
 
           try {
-            // Prepare test cases for `run_many_tests`
+            // Prepare test cases for `run_tests`
             const testCases = tests.map((test) => {
               const testCase = get(testCaseAtom(test))
               if (!testCase) {
@@ -253,8 +258,8 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
             const startTime = performance.now()
             set(areTestsRunningAtom, true)
 
-            // Call `run_many_tests` on the runtime
-            const results = await rt.run_many_tests(testCases, (partial: WasmFunctionResponse) => {
+            // Call `run_tests` on the runtime
+            const results = await rt.run_tests(testCases, (partial: WasmFunctionResponse) => {
               let pair = partial.func_test_pair()
               setState({functionName: pair.function_name, testName: pair.test_name}, { status: 'running', response: partial });
             }, findMediaFile)

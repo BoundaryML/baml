@@ -35,7 +35,6 @@ use std::str::FromStr;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
-use futures::future::join_all;
 use self::runtime_prompt::WasmScope;
 use wasm_bindgen::JsValue;
 
@@ -1558,7 +1557,7 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
-    pub async fn run_many_tests(
+    pub async fn run_tests(
         &mut self,
         function_test_pairs: js_sys::Array,
         on_partial_response: js_sys::Function,
@@ -1576,8 +1575,8 @@ impl WasmRuntime {
                     let function_name = function_name.as_string().unwrap_or_default();
                     let test_name = test_name.as_string().unwrap_or_default();
 
-                    let function_name_for_test_pair = function_name.clone();
-                    let test_name_for_test_pair = test_name.clone();
+                    let fn_name_copy = function_name.clone();
+                    let test_name_copy = test_name.clone();
 
 
                     // Create a closure to handle partial responses for this test
@@ -1587,8 +1586,8 @@ impl WasmRuntime {
                         let res = WasmFunctionResponse {
                             function_response: r,
                             func_test_pair: WasmFunctionTestPair {
-                                function_name: function_name_for_test_pair.clone(),
-                                test_name: test_name_for_test_pair.clone(),
+                                function_name: fn_name_copy.clone(),
+                                test_name: test_name_copy.clone(),
                             },
                         }.into();
                         on_partial_response_clone.call1(&this, &res).unwrap();
