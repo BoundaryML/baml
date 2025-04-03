@@ -255,43 +255,38 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
 
             // Call `run_many_tests` on the runtime
             const results = await rt.run_many_tests(testCases, (partial: WasmFunctionResponse) => {
-              // const test = tests.find(
-              //   (t) => t.functionName === partial.functionName && t.testName === partial.testName,
-              // )
-              // if (test) {
-              //   setState(test, { status: 'running', response: partial })
-              // }
-              // setState({functionName: }, { status: 'running', response: partial });
-              // console.log('Partial result:', partial);
+              let pair = partial.func_test_pair()
+              setState({functionName: pair.function_name, testName: pair.test_name}, { status: 'running', response: partial });
             }, findMediaFile)
 
             const endTime = performance.now()
+            const responseStatusMap = {
+              [wasm.TestStatus.Passed]: 'passed',
+              [wasm.TestStatus.LLMFailure]: 'llm_failed',
+              [wasm.TestStatus.ParseFailure]: 'parse_failed',
+              [wasm.TestStatus.ConstraintsFailed]: 'constraints_failed',
+              [wasm.TestStatus.AssertFailed]: 'assert_failed',
+              [wasm.TestStatus.UnableToRun]: 'error',
+              [wasm.TestStatus.FinishReasonFailed]: 'error',
+            } as const
 
             // Process results
-            // results.forEach((result: WasmTestResponse, index: number) => {
-            //   const test = tests[index]
-            //   if (!test) return
-
-            //   // Hardcoded response status for now
-            //   // const response_status = wasm.TestStatus.Passed
-            //   // const responseStatusMap = {
-            //   //   [wasm.TestStatus.Passed]: 'passed',
-            //   //   [wasm.TestStatus.LLMFailure]: 'llm_failed',
-            //   //   [wasm.TestStatus.ParseFailure]: 'parse_failed',
-            //   //   [wasm.TestStatus.ConstraintsFailed]: 'constraints_failed',
-            //   //   [wasm.TestStatus.AssertFailed]: 'assert_failed',
-            //   //   [wasm.TestStatus.UnableToRun]: 'error',
-            //   //   [wasm.TestStatus.FinishReasonFailed]: 'error',
-            //   // } as const
-            //   console.log('result', result)
-
-            //   setState(test, {
-            //     status: 'done',
-            //     response: result,
-            //     response_status: 'passed',
-            //     latency_ms: endTime - startTime,
-            //   })
-            // })
+            // TODO: is there a better way to handle Rust's Option? Or do we even need Option?
+            let response: WasmTestResponse | null | undefined;
+            while ((response = results.yield_next()) != null) {
+                const pair = response.func_test_pair();
+                const status = response.status();
+                setState(
+                    { functionName: pair.function_name, testName: pair.test_name },
+                    {
+                        status: 'done',
+                        response: response,
+                        response_status: responseStatusMap[status] || 'error',
+                        latency_ms: endTime - startTime,
+                    }
+                );
+            }
+            
           } catch (e) {
             console.error('Error running tests:', e)
             tests.forEach((test) => {

@@ -1081,6 +1081,7 @@ dependencies = [
  "dissimilar",
  "either",
  "expect-test",
+ "futures",
  "futures-timer",
  "getrandom 0.2.15",
  "indexmap 2.2.6",
