@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use std::collections::HashSet;
 
 use internal_baml_diagnostics::DatamodelError;
@@ -119,16 +120,18 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
         Expression::RawStringValue(_) => {}
         Expression::JinjaExpressionValue(_, _) => {}
         Expression::ClassConstructor(cc, span) => {
-            let mut fields = cc.fields.clone();
-            fields.reverse();
-            let last_field = fields.pop();
-            fields.reverse();
-            if fields
-                .iter()
-                .any(|field| matches!(field, ClassConstructorField::Spread(_)))
+            let fields = cc.fields.clone();
+
+            if fields.iter().len()
+                != fields
+                    .iter()
+                    .map(|f| format!("{:?}", f))
+                    .dedup()
+                    .collect::<Vec<_>>()
+                    .len()
             {
                 ctx.push_error(DatamodelError::new_validation_error(
-                    "Class constructor can have at most one spread field",
+                    "Class constructor fields must be unique",
                     span.clone(),
                 ));
             }
@@ -144,28 +147,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
 
             for field in cc.fields.iter() {
                 match field {
-                    ClassConstructorField::Named(name, value) => {
-                        let n_matches = cc
-                            .fields
-                            .iter()
-                            .filter_map(|f| match f {
-                                ClassConstructorField::Named(name, _) => {
-                                    if name.to_string() == name.to_string() {
-                                        Some(())
-                                    } else {
-                                        None
-                                    }
-                                }
-                                ClassConstructorField::Spread(_) => None,
-                            })
-                            .count();
-                        if n_matches > 1 {
-                            ctx.push_error(DatamodelError::new_anyhow_error(
-                                anyhow::anyhow!("Duplicate field name: {}", name.to_string()),
-                                span.clone(),
-                            ));
-                        }
-                    }
+                    ClassConstructorField::Named(field_name, value) => {}
                     ClassConstructorField::Spread(expr) => {
                         validate_expression(ctx, expr, scope);
                     }
