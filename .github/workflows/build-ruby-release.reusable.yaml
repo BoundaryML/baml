@@ -52,6 +52,7 @@ jobs:
           bundler-cache: false
           cargo-cache: false
           cargo-vendor: false
+          rustup-toolchain: stable
 
       #################################################################################################################
       #
