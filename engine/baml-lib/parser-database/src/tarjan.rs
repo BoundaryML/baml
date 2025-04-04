@@ -129,6 +129,7 @@ impl<'g, V: Eq + Ord + Hash + Copy> Tarjan<'g, V> {
         // Update state. We store this in a hash map
         // so we have to run the hashing algorithm every time we update the
         // state. Keep it to a minimum :)
+        self.state.insert(node_id, node);
         self.stack.push(node_id);
 
         // TODO: @antoniosarosi: HashSet is random, won't always iterate in the
