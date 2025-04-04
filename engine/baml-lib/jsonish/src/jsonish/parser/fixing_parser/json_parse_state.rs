@@ -54,9 +54,9 @@ impl JsonParseState {
                 JsonCollection::Object(keys, values, _) => {
                     if keys.len() == values.len() {
                         match value {
-                            Value::String(s, _) => keys.push(s.trim().to_string()),
-                            Value::AnyOf(_, s) => keys.push(s.trim().to_string()),
-                            _ => keys.push(value.to_string().trim().to_string()),
+                            Value::String(s, _) => keys.push(s),
+                            Value::AnyOf(_, s) => keys.push(s),
+                            _ => keys.push(value.to_string()),
                         }
                     } else {
                         values.push(value);
