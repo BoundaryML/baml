@@ -10,6 +10,7 @@ use baml_runtime::AwsCredProvider;
 use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
+use baml_runtime::RuntimeCallbackError;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
@@ -1543,7 +1544,9 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             async move {
                 let null = JsValue::NULL;
                 let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
-                    anyhow::bail!("readFileRef did not return a promise")
+                    return Err(RuntimeCallbackError::BamlSrcReadError(
+                        "readFileRef did not return a promise".to_string(),
+                    ));
                 };
 
                 let read = JsFuture::from(Promise::unchecked_from_js(read)).await;
@@ -1553,11 +1556,17 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
                     Err(err) => {
                         if let Some(e) = err.dyn_ref::<js_sys::Error>() {
                             if let Some(e_str) = e.message().as_string() {
-                                anyhow::bail!("{}", e_str)
+                                return Err(RuntimeCallbackError::BamlSrcReadError(format!(
+                                    "readFileRef failure: {}",
+                                    e_str
+                                )));
                             }
                         }
 
-                        return Err(anyhow::anyhow!("{:?}", err).context("readFileRef rejected"));
+                        return Err(RuntimeCallbackError::BamlSrcReadError(format!(
+                            "readFileRef rejected: {:?}",
+                            err
+                        )));
                     }
                 };
 
@@ -1568,44 +1577,63 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
     }))
 }
 
+// fn js_fn_to_aws_cred_provider(load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
+//     Some(Box::new(move |profile_name| {
+//         Box::pin({
+//             let profile_name = profile_name.map(|s| s.to_string());
+//             let load_aws_creds_cb = load_aws_creds_cb.clone();
+//             async move {
+//                 let null = JsValue::NULL;
+//                 let profile_name = if let Some(profile_name) = profile_name {
+//                     JsValue::from(profile_name)
+//                 } else {
+//                     JsValue::NULL
+//                 };
+//                 let Ok(load) = load_aws_creds_cb.call1(&null, &profile_name) else {
+//                     return Err(RuntimeCallbackError::AwsCredProviderError(
+//                         "loadAwsCreds did not return a promise".to_string(),
+//                     ));
+//                 };
+
+//                 let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
+
+//                 let load = match load {
+//                     Ok(load) => load,
+//                     Err(err) => {
+//                         if let Some(e) = err.dyn_ref::<js_sys::Error>() {
+//                             if let Some(e_str) = e.message().as_string() {
+//                                 return Err(RuntimeCallbackError::AwsCredProviderError(format!(
+//                                     "loadAwsCreds failure: {}",
+//                                     e_str
+//                                 )));
+//                             }
+//                         }
+
+//                         return Err(RuntimeCallbackError::AwsCredProviderError(format!(
+//                             "loadAwsCreds rejected: {:?}",
+//                             err
+//                         )));
+//                     }
+//                 };
+
+//                 match serde_wasm_bindgen::from_value::<HashMap<String, String>>(load) {
+//                     Ok(creds) => Ok(creds),
+//                     Err(e) => Err(RuntimeCallbackError::AwsCredProviderError(format!(
+//                         "Expected loadAwsCreds to return a HashMap<string, string>. {}",
+//                         e
+//                     ))),
+//                 }
+//             }
+//         })
+//     }))
+// }
+
 fn js_fn_to_aws_cred_provider(load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
     Some(Box::new(move |profile_name| {
         Box::pin({
-            let profile_name = profile_name.map(|s| s.to_string());
-            let load_aws_creds_cb = load_aws_creds_cb.clone();
             async move {
-                let null = JsValue::NULL;
-                let profile_name = if let Some(profile_name) = profile_name {
-                    JsValue::from(profile_name)
-                } else {
-                    JsValue::NULL
-                };
-                let Ok(load) = load_aws_creds_cb.call1(&null, &profile_name) else {
-                    anyhow::bail!("loadAwsCreds did not return a promise")
-                };
-
-                let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
-
-                let load = match load {
-                    Ok(load) => load,
-                    Err(err) => {
-                        if let Some(e) = err.dyn_ref::<js_sys::Error>() {
-                            if let Some(e_str) = e.message().as_string() {
-                                anyhow::bail!("{}", e_str)
-                            }
-                        }
-
-                        return Err(anyhow::anyhow!("{:?}", err).context("loadAwsCreds rejected"));
-                    }
-                };
-
-                match serde_wasm_bindgen::from_value::<HashMap<String, String>>(load) {
-                    Ok(creds) => Ok(creds),
-                    Err(e) => Err(anyhow::anyhow!(
-                        "Expected loadAwsCreds to return a HashMap<string, string>. {}",
-                        e
-                    )),
-                }
+                log::info!("Loading AWS creds");
+                Ok(HashMap::new())
             }
         })
     }))
@@ -1769,9 +1797,10 @@ impl WasmFunction {
         });
 
         // Create your evaluation context, etc.
-        let ctx = rt.create_ctx_manager(
+        let ctx = rt.create_ctx_manager_with_env(
             BamlValue::String("wasm".to_string()),
-            env_vars,
+            serde_wasm_bindgen::from_value::<HashMap<String, String>>(env_vars)
+                .map_err(|e| JsValue::from_str(&format!("Failed to parse env_vars: {:?}", e)))?,
             js_fn_to_baml_src_reader(get_baml_src_cb),
             js_fn_to_aws_cred_provider(load_aws_creds_cb),
         );

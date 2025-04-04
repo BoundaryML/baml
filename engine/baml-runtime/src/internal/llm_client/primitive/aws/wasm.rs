@@ -171,14 +171,14 @@ impl HttpClient for BrowserHttp2 {
 }
 
 pub(super) struct WasmAwsCreds {
-    pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
-    // pub aws_cred_provider: Arc<AwsCredProvider>,
+    // pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
+    pub aws_cred_provider: Arc<AwsCredProvider>,
 }
 
 impl std::fmt::Debug for WasmAwsCreds {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WasmAwsCreds")
-            .field("default_chain", &self.default_chain)
+            // .field("default_chain", &self.default_chain)
             .field("aws_cred_provider", &"<no-repr-available>")
             .finish()
     }

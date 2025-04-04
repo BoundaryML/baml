@@ -67,6 +67,7 @@ use tracingv2::storage::storage::BAML_TRACER;
 pub use cli::RuntimeCliDefaults;
 pub use runtime_context::AwsCredProvider;
 pub use runtime_context::BamlSrcReader;
+pub use runtime_context::RuntimeCallbackError;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;

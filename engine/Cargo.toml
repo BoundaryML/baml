@@ -94,6 +94,7 @@ serde_yaml = "0.9.34"
 static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
+thiserror = "2.0.12"
 time = { version = "0.3.36", features = ["formatting"] }
 tracing-core = { version = "0.1.31" }
 pin-project-lite = "0.2.14"

@@ -3,6 +3,7 @@ use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::FieldType;
 use std::{collections::HashMap, sync::Arc};
+use thiserror::Error;
 
 use crate::{internal::llm_client::llm_provider::LLMProvider, tracing::BamlTracer};
 
@@ -34,6 +35,20 @@ pub struct RuntimeClassOverride {
     pub(crate) update_fields: IndexMap<String, PropertyAttributes>,
 }
 
+#[derive(Debug, Error)]
+/// For baml-src-reader and aws-cred-provider, provide a statically defined type which is Send + Sync
+/// anyhow::Error is not Send + Sync, so it's convoluted to use it in this callback context
+pub enum RuntimeCallbackError {
+    #[error("Failed to read baml_src: {0}")]
+    BamlSrcReadError(String),
+    #[error("Failed to load aws creds: {0}")]
+    AwsCredProviderError(String),
+}
+
+static_assertions::assert_impl_all!(RuntimeCallbackError: Send, Sync);
+
+pub type RuntimeCallbackResult<T> = Result<T, RuntimeCallbackError>;
+
 // #[cfg(target_arch = "wasm32")]
 // pub type BamlSrcReader = Box<dyn Fn(&str) -> Result<String>>;
 // #[cfg(not(target_arch = "wasm32"))]
@@ -42,12 +57,12 @@ cfg_if::cfg_if!(
     if #[cfg(target_arch = "wasm32")] {
         use core::pin::Pin;
         use core::future::Future;
-        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
-        pub type AwsCredProvider = Option<Box<dyn Fn(Option<&str>) -> core::pin::Pin<Box<dyn Future<Output = Result<HashMap<String, String>>>>>>>;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<Vec<u8>>>>>>>;
+        pub type AwsCredProvider = Option<Box<dyn Fn(Option<&str>) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<HashMap<String, String>>>>> + Send + Sync>>;
     } else {
         use futures::future::BoxFuture;
-        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
-        pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, Result<HashMap<String, String>>>>>>;
+        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, RuntimeCallbackResult<Vec<u8>>>>>;
+        pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, RuntimeCallbackResult<HashMap<String, String>>>>>;
     }
 );
 

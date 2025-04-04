@@ -57,6 +57,7 @@ serde_json.workspace = true
 strsim = "0.11.1"
 strum.workspace = true
 strum_macros.workspace = true
+thiserror.workspace = true
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
@@ -100,7 +101,6 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "valuable",
 ] }
-thiserror = "2.0.1"
 log-once = "0.4.1"
 once_cell.workspace = true
 time.workspace = true

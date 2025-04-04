@@ -45,7 +45,7 @@ use crate::internal::llm_client::{
     ModelFeatures, ResolveMediaUrls,
 };
 use crate::tracingv2::storage::storage::BAML_TRACER;
-use crate::{json_body, JsonBodyInput, RenderCurlSettings, RuntimeContext};
+use crate::{json_body, AwsCredProvider, JsonBodyInput, RenderCurlSettings, RuntimeContext};
 
 #[cfg(target_arch = "wasm32")]
 use super::wasm::WasmAwsCreds;
@@ -267,6 +267,7 @@ impl AwsClient {
         &self,
         span_id: Option<Uuid>,
         http_request_id: &HttpRequestId,
+        aws_cred_provider: Arc<AwsCredProvider>,
     ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
         let mut loader = {
@@ -278,13 +279,13 @@ impl AwsClient {
             }
             log::debug!("Building wasm aws credentials chain - UNCONDITIONALLY BECAUSE BULLSHIT $ENV_VAR UNCONDITIONAL SUBSTITUTION");
             loader.credentials_provider(WasmAwsCreds {
-                default_chain: builder.build().await,
-                // aws_cred_provider: ctx.aws_cred_provider.clone(),
+                // default_chain: builder.build().await,
+                aws_cred_provider,
             })
         };
         #[cfg(not(target_arch = "wasm32"))]
-        let loader = {
-            aws_config::defaults(BehaviorVersion::latest());
+        let mut loader = {
+            let loader = aws_config::defaults(BehaviorVersion::latest());
 
             // Set credentials provider
             let mut loader = match (
@@ -366,6 +367,8 @@ impl AwsClient {
                     ))
                 }
             };
+
+            loader
         };
 
         // Set region if specified
@@ -553,7 +556,11 @@ impl WithStreamChat for AwsClient {
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
         let aws_client = match self
-            .client_anyhow(ctx.span_id.clone(), &http_request_id)
+            .client_anyhow(
+                ctx.span_id.clone(),
+                &http_request_id,
+                ctx.aws_cred_provider.clone(),
+            )
             .await
         {
             Ok(c) => c,
@@ -849,7 +856,11 @@ impl WithChat for AwsClient {
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
         let aws_client = match self
-            .client_anyhow(ctx.span_id.clone(), &http_request_id)
+            .client_anyhow(
+                ctx.span_id.clone(),
+                &http_request_id,
+                ctx.aws_cred_provider.clone(),
+            )
             .await
         {
             Ok(c) => c,
