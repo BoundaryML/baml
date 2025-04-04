@@ -125,8 +125,10 @@ impl<'g, V: Eq + Ord + Hash + Copy> Tarjan<'g, V> {
 
         // Increment index and push node to stack.
         self.index += 1;
-        // Immediately record the node's state in the state map.
-        self.state.insert(node_id, node);
+        
+        // Update state. We store this in a hash map
+        // so we have to run the hashing algorithm every time we update the
+        // state. Keep it to a minimum :)
         self.stack.push(node_id);
 
         // TODO: @antoniosarosi: HashSet is random, won't always iterate in the
@@ -149,11 +151,6 @@ impl<'g, V: Eq + Ord + Hash + Copy> Tarjan<'g, V> {
                 node.low_link = cmp::min(node.low_link, successor.index);
             }
         }
-
-        // Update state in case we haven't already. We store this in a hash map
-        // so we have to run the hashing algorithm every time we update the
-        // state. Keep it to a minimum :)
-        self.state.insert(node_id, node);
 
         // Root node of a strongly connected component.
         if node.low_link == node.index {
