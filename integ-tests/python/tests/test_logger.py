@@ -2,8 +2,6 @@ from ..baml_client.config import set_log_level, get_log_level
 import os
 
 import pytest
-import io
-import contextlib
 
 from ..baml_client import b
 
