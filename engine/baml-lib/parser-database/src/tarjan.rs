@@ -125,6 +125,8 @@ impl<'g, V: Eq + Ord + Hash + Copy> Tarjan<'g, V> {
 
         // Increment index and push node to stack.
         self.index += 1;
+        // Immediately record the node's state in the state map.
+        self.state.insert(node_id, node);
         self.stack.push(node_id);
 
         // TODO: @antoniosarosi: HashSet is random, won't always iterate in the
@@ -139,8 +141,6 @@ impl<'g, V: Eq + Ord + Hash + Copy> Tarjan<'g, V> {
             // Grab owned state to circumvent borrow checker.
             let mut successor = self.state[successor_id];
             if successor.index == Self::UNVISITED {
-                // Make sure state is updated before the recursive call.
-                self.state.insert(node_id, node);
                 self.strong_connect(*successor_id);
                 // Grab updated state after recursive call.
                 successor = self.state[successor_id];
@@ -234,6 +234,53 @@ mod tests {
             .iter()
             .map(|ids| type_exp_ids(ids).collect())
             .collect()
+    }
+
+    #[test]
+    fn find_cycles_names() {
+        // Define the graph using a key-value type with string literals
+        let graph_data = [
+            (
+                "ProcessNextStepArgs",
+                vec!["JSONSchemaValue", "Tool", "Message"],
+            ),
+            ("JSONSchemaProperty", vec!["JSONSchemaValue"]),
+            ("Message", vec![]),
+            ("ParameterValue", vec![]),
+            ("Tool", vec!["JSONSchemaValue"]),
+            ("UserCommandQuestion", vec![]),
+            ("Parameter", vec![]),
+            ("UserTool", vec![]),
+            ("ScriptStep", vec!["JSONSchemaValue"]),
+            ("JSONSchemaValue", vec!["JSONSchemaValue"]),
+            ("UserCommandParameter", vec![]),
+            (
+                "StepDescriptionRequest",
+                vec!["JSONSchemaValue", "UserTool", "ScriptStep"],
+            ),
+            ("GetUnstructuredContentArgs", vec![]),
+            ("SummarizedToolExecutionResults", vec!["StructuredResponse"]),
+            ("StructuredResponse", vec![]),
+            ("StepDescriptionResponse", vec![]),
+            ("GetUnstructuredContentResponse", vec![]),
+            ("ToolCall", vec!["ParameterValue"]),
+            ("SummarizeToolExecutionResultsArgs", vec!["Message"]),
+            (
+                "UserCommand",
+                vec!["UserCommandQuestion", "UserCommandParameter"],
+            ),
+            ("ProcessNextStepResponse", vec!["ToolCall"]),
+        ];
+
+        // Transform the key-value type into an IndexMap with IndexSet
+        let graph = HashMap::from_iter(
+            graph_data
+                .into_iter()
+                .map(|(node, successors)| (node, HashSet::from_iter(successors.into_iter()))),
+        );
+
+        let components = Tarjan::components(&graph);
+        assert_eq!(components, &[&["JSONSchemaValue"]]);
     }
 
     #[test]
