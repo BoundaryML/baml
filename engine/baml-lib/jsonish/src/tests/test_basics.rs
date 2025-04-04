@@ -661,7 +661,7 @@ test_deserializer!(
   "#,
   r#"{" answer ": {" content ": 78.54}}"#,
   FieldType::string(),
-  "{\" answer \": {\" content \": 78.54}}"
+  r#"{" answer ": {" content ": 78.54}}"#
 );
 
 // This test verifies that when using class deserialization,
