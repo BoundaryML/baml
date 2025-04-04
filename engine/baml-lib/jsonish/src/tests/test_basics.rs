@@ -648,6 +648,22 @@ Then would add a summary of sorts.
     }
 );
 
+test_deserializer!(
+  test_whitespace_in_keys,
+  r#"
+  class Test {
+      answer Answer
+  }
+  
+  class Answer {
+      content float
+  }
+  "#,
+  r#"{" answer ": {" content ": 78.54}}"#,
+  FieldType::class("Test"),
+  {"answer": {"content": 78.54}}
+);
+
 test_partial_deserializer!(
   test_mal_formed_json_sequence,
   r#"
