@@ -660,8 +660,26 @@ test_deserializer!(
   }
   "#,
   r#"{" answer ": {" content ": 78.54}}"#,
+  FieldType::string(),
+  "{\" answer \": {\" content \": 78.54}}"
+);
+
+// This test verifies that when using class deserialization,
+// field matching happens correctly with whitespace-padded keys
+test_deserializer!(
+  test_class_with_whitespace_keys,
+  r#"
+  class Test {
+      answer Answer
+  }
+  
+  class Answer {
+      content float
+  }
+  "#,
+  r#"{" answer ": {" content ": 78.54}}"#,
   FieldType::class("Test"),
-  {" answer ": {" content ": 78.54}}
+  {"answer": {"content": 78.54}}
 );
 
 test_partial_deserializer!(
