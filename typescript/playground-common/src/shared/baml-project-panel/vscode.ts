@@ -9,6 +9,10 @@ import {
   InitializedResponse,
   InitializedRequest,
   SetProxySettingsRequest,
+  LoadEnvRequest,
+  LoadEnvResponse,
+  LoadAwsCredsRequest,
+  LoadAwsCredsResponse,
 } from './vscode-rpc'
 import type { WebviewApi } from 'vscode-webview'
 
@@ -63,7 +67,6 @@ class VSCodeAPIWrapper {
 
   public async readFile(path: string): Promise<Uint8Array> {
     const uri = await this.readLocalFile('', path)
-    console.log('read file', uri)
 
     if (uri.readError) {
       throw new Error(`Failed to read file: ${path}\n${uri.readError}`)
@@ -112,13 +115,28 @@ class VSCodeAPIWrapper {
     })
   }
 
+  public async loadEnv() {
+    const resp = await this.rpc<LoadEnvRequest, LoadEnvResponse>({
+      vscodeCommand: 'LOAD_ENV',
+    })
+    return resp
+  }
+
+  public loadAwsCreds = async (profile: string | null) => {
+    const resp = await this.rpc<LoadAwsCredsRequest, LoadAwsCredsResponse>({
+      vscodeCommand: 'LOAD_AWS_CREDS',
+      profile,
+    })
+    return resp
+  }
+
   public async markInitialized() {
     try {
       await this.rpc<InitializedRequest, InitializedResponse>({
         vscodeCommand: 'INITIALIZED',
       })
     } catch (e) {
-      console.log('Error marking initialized', e)
+      console.error('Error marking initialized', e)
     }
   }
 
@@ -127,11 +145,12 @@ class VSCodeAPIWrapper {
       const rpcId = this.rpcId++
       this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void })
 
-      this.postMessage({
+      const message = {
         rpcMethod: (data as unknown as { vscodeCommand: string }).vscodeCommand,
         rpcId,
         data,
-      })
+      }
+      this.postMessage(message)
 
       // Timeout to prevent hanging requests
       setTimeout(() => {
@@ -144,10 +163,7 @@ class VSCodeAPIWrapper {
   }
 
   private listenForRpcResponses(event: any) {
-    // console.log('unfiltered messages to webview', event.data)
-
     if (isRpcResponse(event.data)) {
-      // console.log('filtered to RPC responses', event.data)
       const rpcData = event.data as RpcResponse
       const entry = this.rpcTable.get(rpcData.rpcId)
       if (entry) {
@@ -169,7 +185,6 @@ class VSCodeAPIWrapper {
     if (this.vsCodeApi) {
       this.vsCodeApi.postMessage(message)
     } else {
-      console.log('posting message' + JSON.stringify(message))
       window.postMessage(message)
     }
   }

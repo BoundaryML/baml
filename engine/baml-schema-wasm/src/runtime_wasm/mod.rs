@@ -1,38 +1,32 @@
 pub mod generator;
 pub mod runtime_prompt;
+use crate::aws_cred_bridge::js_fn_to_aws_cred_provider;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use anyhow::Context;
+use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
-use baml_runtime::tracingv2::storage::storage::Collector;
 use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_types::BamlValueWithMeta;
 use baml_types::ResponseCheck;
 use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 use internal_llm_client::AllowedRoleMetadata;
-use jsonish::deserializer::deserialize_flags::Flag;
-use jsonish::BamlValueWithFlags;
-
-use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
 use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -62,7 +56,7 @@ pub fn on_wasm_init() {
         if #[cfg(debug_assertions)] {
             const LOG_LEVEL: log::Level = log::Level::Debug;
         } else {
-            const LOG_LEVEL: log::Level = log::Level::Warn;
+            const LOG_LEVEL: log::Level = log::Level::Debug;
         }
     };
     // I dont think we need this line anymore -- seems to break logging if you add it.
@@ -513,8 +507,6 @@ impl WasmFunctionResponse {
 }
 
 fn serialize_value_counting_checks(value: &ResponseBamlValue) -> (serde_json::Value, usize) {
-    type J = serde_json::Value;
-
     let checks = value
         .0
         .meta()
@@ -1540,7 +1532,7 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             async move {
                 let null = JsValue::NULL;
                 let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
-                    anyhow::bail!("readFileRef did not return a promise")
+                    anyhow::bail!("readFileRef did not return a promise");
                 };
 
                 let read = JsFuture::from(Promise::unchecked_from_js(read)).await;
@@ -1550,11 +1542,11 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
                     Err(err) => {
                         if let Some(e) = err.dyn_ref::<js_sys::Error>() {
                             if let Some(e_str) = e.message().as_string() {
-                                anyhow::bail!("{}", e_str)
+                                anyhow::bail!("readFileRef failure: {}", e_str);
                             }
                         }
 
-                        return Err(anyhow::anyhow!("{:?}", err).context("readFileRef rejected"));
+                        anyhow::bail!("readFileRef rejected: {:?}", err);
                     }
                 };
 
@@ -1704,8 +1696,10 @@ impl WasmFunction {
         &self,
         rt: &mut WasmRuntime,
         test_name: String,
+        env_vars: JsValue,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
+        load_aws_creds_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -1721,9 +1715,12 @@ impl WasmFunction {
         });
 
         // Create your evaluation context, etc.
-        let ctx = rt.create_ctx_manager(
+        let ctx = rt.create_ctx_manager_with_env(
             BamlValue::String("wasm".to_string()),
+            serde_wasm_bindgen::from_value::<HashMap<String, String>>(env_vars)
+                .map_err(|e| JsValue::from_str(&format!("Failed to parse env_vars: {:?}", e)))?,
             js_fn_to_baml_src_reader(get_baml_src_cb),
+            js_fn_to_aws_cred_provider(load_aws_creds_cb),
         );
 
         // Now pass collector_arc to your runtime's run_test
