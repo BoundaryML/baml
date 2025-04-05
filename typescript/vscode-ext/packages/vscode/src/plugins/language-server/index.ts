@@ -347,28 +347,88 @@ const plugin: BamlVSCodePlugin = {
     //   },
     // }
 
-    var serverExecutableName = 'baml-cli'
-    let subdir = ''
+    let serverExecutableName = 'baml-cli'
+    let targetTriple = ''
     const platform = os.platform()
-    if (platform === 'win32') {
-      serverExecutableName = `${serverExecutableName}.exe`
-      subdir = 'windows'
-    } else if (platform === 'darwin') {
-      subdir = 'darwin'
-    } else {
-      subdir = 'linux'
-    }
-    var serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', subdir, serverExecutableName))
-    const devServerPath = context.asAbsolutePath(path.join('server', serverExecutableName))
+    const arch = os.arch()
 
-    // If the dev server file exists, overwrite serverAbsolutePath with it.
+    switch (platform) {
+      case 'win32':
+        serverExecutableName = `${serverExecutableName}.exe`
+        if (arch === 'x64') {
+          targetTriple = 'x86_64-pc-windows-msvc'
+        } else if (arch === 'arm64') {
+          targetTriple = 'aarch64-pc-windows-msvc'
+        }
+        break
+      case 'darwin':
+        if (arch === 'x64') {
+          targetTriple = 'x86_64-apple-darwin'
+        } else if (arch === 'arm64') {
+          targetTriple = 'aarch64-apple-darwin'
+        }
+        break
+      case 'linux':
+        // Defaulting to gnu. Musl detection is complex in VSCode extensions.
+        // Users on musl systems might need a configuration option if this fails.
+        if (arch === 'x64') {
+          targetTriple = 'x86_64-unknown-linux-gnu'
+        } else if (arch === 'arm64') {
+          targetTriple = 'aarch64-unknown-linux-gnu'
+        }
+        break
+      // Add other platforms/arches as needed
+    }
+
+    if (!targetTriple) {
+      throw new Error(`Unsupported platform/architecture combination: ${platform}/${arch}`)
+    }
+
+    let serverAbsolutePath = context.asAbsolutePath(path.join('server', targetTriple, serverExecutableName))
+    const devServerPath = context.asAbsolutePath(
+      path.join('..', '..', 'engine', 'target', 'debug', serverExecutableName),
+    ) // Adjust dev path if necessary
+
+    // If the dev server file exists, overwrite serverAbsolutePath with it for local development.
     if (fs.existsSync(devServerPath)) {
+      console.log('Using dev server path:', devServerPath)
       serverAbsolutePath = devServerPath
+    } else {
+      // Check if the bundled server exists at the determined path
+      if (!fs.existsSync(serverAbsolutePath)) {
+        // Fallback or specific error handling if the primary target binary isn't found
+        // For example, try the musl variant on Linux if gnu wasn't found?
+        if (platform === 'linux' && targetTriple.endsWith('-gnu')) {
+          const muslTargetTriple = targetTriple.replace('-gnu', '-musl')
+          const muslServerPath = context.asAbsolutePath(path.join('server', muslTargetTriple, serverExecutableName))
+          if (fs.existsSync(muslServerPath)) {
+            console.log(`GNU variant not found for ${arch}, falling back to MUSL variant.`)
+            serverAbsolutePath = muslServerPath
+            targetTriple = muslTargetTriple // Update targetTriple for clarity if needed elsewhere
+          } else {
+            window.showErrorMessage(
+              `BAML Language Server executable not found for your system (${platform}/${arch}). Tried: ${serverAbsolutePath} and ${muslServerPath}`,
+            )
+            throw new Error(`BAML Language Server executable not found for ${targetTriple} or ${muslTargetTriple}.`)
+          }
+        } else {
+          window.showErrorMessage(
+            `BAML Language Server executable not found for your system (${platform}/${arch}). Expected at: ${serverAbsolutePath}`,
+          )
+          throw new Error(`BAML Language Server executable not found for ${targetTriple}.`)
+        }
+      }
     }
-    console.log('serverAbsolutePath: ', serverAbsolutePath)
 
-    if (platform != 'win32') {
-      fs.chmodSync(serverAbsolutePath, '755')
+    console.log(`Using BAML Language Server: ${serverAbsolutePath}`)
+
+    if (platform !== 'win32' && fs.existsSync(serverAbsolutePath)) {
+      try {
+        fs.chmodSync(serverAbsolutePath, '755')
+      } catch (err) {
+        console.error(`Failed to chmod server executable: ${err}`)
+        // Decide if this should be a fatal error
+      }
     }
 
     const serverOptions: ServerOptions = {
