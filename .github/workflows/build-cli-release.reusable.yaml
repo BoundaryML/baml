@@ -27,7 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
+        _:
           # Always include these targets
           - os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
@@ -52,12 +52,12 @@ jobs:
             container: quay.io/pypa/manylinux2014_aarch64
 
     
-    runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
+    runs-on: ${{ matrix._.os }}
+    container: ${{ matrix._.container }}
     env:
       CROSS_VERSION: v0.2.5
       CARGO: cargo
-      TARGET_FLAGS: ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}
+      TARGET_FLAGS: ${{ matrix._.target != '' && format('--target {0}', matrix._.target) || '' }}
       RUST_BACKTRACE: 1
       
     steps:
@@ -66,11 +66,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix._.target }}
       
       # Use cross for Linux cross-compilation
       - name: Install cross
-        if: contains(matrix.os, 'ubuntu') && matrix.target != 'x86_64-unknown-linux-gnu'
+        if: contains(matrix._.os, 'ubuntu') && matrix._.target != 'x86_64-unknown-linux-gnu'
         shell: bash
         run: |
           dir="$RUNNER_TEMP/cross-download"
@@ -83,13 +83,13 @@ jobs:
 
       # Install cross-compilation tools
       - name: Install musl tools
-        if: matrix.static == true && contains(matrix.target, 'x86_64')
+        if: matrix._.static == true && contains(matrix._.target, 'x86_64')
         run: |
           sudo apt-get update
           sudo apt-get install -y musl-tools
       
       - name: Setup ARM Linux cross-compilation
-        if: contains(matrix.target, 'aarch64') && contains(matrix.target, 'linux')
+        if: contains(matrix._.target, 'aarch64') && contains(matrix._.target, 'linux')
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
@@ -97,10 +97,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+          prefix-key: "v1-rust"
 
       # Build the CLI
       - name: Build CLI (Static)
-        if: matrix.static == true
+        if: matrix._.static == true
         run: >
           ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
           --features static-ssl
@@ -108,7 +109,7 @@ jobs:
         working-directory: engine
       
       - name: Build CLI (Dynamic)
-        if: matrix.static != true
+        if: matrix._.static != true
         run: ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
         working-directory: engine
 
@@ -118,17 +119,17 @@ jobs:
         if: inputs.package_for_release
         shell: bash
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            bin="engine/target/${{ matrix.target }}/release/baml-cli.exe"
+          if [ "${{ matrix._.os }}" = "windows-latest" ]; then
+            bin="engine/target/${{ matrix._.target }}/release/baml-cli.exe"
           else
-            bin="engine/target/${{ matrix.target }}/release/baml-cli"
+            bin="engine/target/${{ matrix._.target }}/release/baml-cli"
           fi
           echo "bin=$bin" >> $GITHUB_OUTPUT
-          echo "archive=baml-cli-${{ inputs.version }}-${{ matrix.target }}" >> $GITHUB_OUTPUT
+          echo "archive=baml-cli-${{ inputs.version }}-${{ matrix._.target }}" >> $GITHUB_OUTPUT
 
       # Create archives with proper format
       - name: Create archive (Windows)
-        if: matrix.os == 'windows-latest' && inputs.package_for_release
+        if: matrix._.os == 'windows-latest' && inputs.package_for_release
         shell: bash
         run: |
           mkdir -p "${{ steps.paths.outputs.archive }}"
@@ -138,7 +139,7 @@ jobs:
           certutil -hashfile "${{ steps.paths.outputs.archive }}.zip" SHA256 > "${{ steps.paths.outputs.archive }}.zip.sha256"
 
       - name: Create archive (Unix)
-        if: matrix.os != 'windows-latest'
+        if: matrix._.os != 'windows-latest'
         shell: bash
         run: |
           mkdir -p "${{ steps.paths.outputs.archive }}"
@@ -152,7 +153,7 @@ jobs:
         if: inputs.package_for_release
         uses: actions/upload-artifact@v4
         with:
-          name: baml-cli-${{ matrix.target }}
+          name: baml-cli-${{ matrix._.target }}
           path: |
             ${{ steps.paths.outputs.archive }}.*
 
@@ -160,6 +161,6 @@ jobs:
         if: inputs.package_for_release == false
         uses: actions/upload-artifact@v4
         with:
-          name: baml-cli-${{ matrix.target }}
+          name: baml-cli-${{ matrix._.target }}
           path: |
-            ${{ matrix.os == 'windows-latest' && format('engine/target/{0}/release/baml-cli.exe', matrix.target) || format('engine/target/{0}/release/baml-cli', matrix.target) }}
+            ${{ matrix._.os == 'windows-latest' && format('engine/target/{0}/release/baml-cli.exe', matrix._.target) || format('engine/target/{0}/release/baml-cli', matrix._.target) }}
