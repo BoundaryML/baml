@@ -36,6 +36,7 @@ use futures::Stream;
 use pin_project_lite::pin_project;
 use std::sync::Arc;
 use std::time::SystemTime;
+use time::OffsetDateTime;
 
 use crate::{AwsCredProvider, AwsCredProviderImpl, AwsCredResult};
 
@@ -218,6 +219,7 @@ impl WasmAwsCreds {
                         access_key_id,
                         secret_access_key,
                         session_token,
+                        expiration,
                         // session_token,
                         // expires_after
                         // provider_name,
@@ -226,8 +228,14 @@ impl WasmAwsCreds {
                         access_key_id,
                         secret_access_key,
                         session_token,
-                        None,
-                        "wasm-provider-name",
+                        match expiration {
+                            Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
+                                Ok(dt) => Some(dt.into()),
+                                Err(_) => None,
+                            },
+                            None => None,
+                        },
+                        "baml-playground-wasm-bridge",
                     )),
                     AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(
                         format!("{}: {}", name, message),

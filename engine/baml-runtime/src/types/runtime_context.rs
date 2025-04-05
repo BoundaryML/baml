@@ -75,6 +75,7 @@ pub enum AwsCredResult {
         secret_access_key: String,
         session_token: Option<String>,
         credential_scope: Option<String>,
+        expiration: Option<String>,
         account_id: Option<String>,
     },
 }
