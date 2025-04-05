@@ -27,14 +27,14 @@ permissions:
   id-token: write
 
 jobs:
-  build-python-release:
-    uses: ./.github/workflows/build-python-release.reusable.yaml
+  # build-python-release:
+  #   uses: ./.github/workflows/build-python-release.reusable.yaml
 
-  build-ruby-release:
-    uses: ./.github/workflows/build-ruby-release.reusable.yaml
+  # build-ruby-release:
+  #   uses: ./.github/workflows/build-ruby-release.reusable.yaml
 
-  build-typescript-release:
-    uses: ./.github/workflows/build-typescript-release.reusable.yaml
+  # build-typescript-release:
+  #   uses: ./.github/workflows/build-typescript-release.reusable.yaml
   
   build-cli:
     uses: ./.github/workflows/build-cli-release.reusable.yaml
