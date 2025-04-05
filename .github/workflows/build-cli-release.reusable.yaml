@@ -44,16 +44,11 @@ jobs:
           # ARM targets (will be conditionally skipped if not needed)
           - os: ubuntu-20.04
             target: aarch64-unknown-linux-gnu
-            arm: true
           - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
-            static: true
-            arm: true
-            container: ghcr.io/rust-cross/manylinux_2_28-cross:aarch64
 
     
     runs-on: ${{ matrix._.os }}
-    container: ${{ matrix._.container }}
     env:
       CROSS_VERSION: v0.2.5
       CARGO: cargo
@@ -81,38 +76,20 @@ jobs:
           tar xf cross-x86_64-unknown-linux-musl.tar.gz
           echo "CARGO=cross" >> $GITHUB_ENV
 
-      # Install cross-compilation tools
-      - name: Install musl tools
-        if: matrix._.static == true && contains(matrix._.target, 'x86_64')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-      
-      - name: Setup ARM Linux cross-compilation
-        if: contains(matrix._.target, 'aarch64') && contains(matrix._.target, 'linux')
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-      
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
           prefix-key: "v1-rust"
 
-      # Build the CLI
-      - name: Build CLI (Static)
-        if: matrix._.static == true
+      # Build the CLI - Always use static-ssl features
+      - name: Build CLI
+        # This single step now handles all builds
         run: >
           ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
           --features static-ssl
           --no-default-features
         working-directory: engine
       
-      - name: Build CLI (Dynamic)
-        if: matrix._.static != true
-        run: ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
-        working-directory: engine
-
       # Determine binary path and archive name
       - name: Set binary and archive paths
         id: paths
