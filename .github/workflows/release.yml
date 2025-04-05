@@ -69,15 +69,15 @@ jobs:
   # build-typescript-release:
   #   uses: ./.github/workflows/build-typescript-release.reusable.yaml
   
-  # build-cli:
-  #   needs: determine-version
-  #   uses: ./.github/workflows/build-cli-release.reusable.yaml
-  #   with:
-  #     version: ${{ needs.determine-version.outputs.version_string }}
-  #     package_for_release: true
+  build-cli:
+    needs: determine-version
+    uses: ./.github/workflows/build-cli-release.reusable.yaml
+    with:
+      version: ${{ needs.determine-version.outputs.version_string }}
+      package_for_release: true
 
   build-vscode:
-    needs: [ determine-version]
+    needs: [ determine-version, build-cli]
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
       artifact_name: baml-vscode-vsix
@@ -93,7 +93,7 @@ jobs:
       # - build-python-release
       # - build-ruby-release
       # - build-typescript-release
-      # - build-cli
+      - build-cli
       - build-vscode
     steps:
       - run: echo "::do-nothing::" >/dev/null
