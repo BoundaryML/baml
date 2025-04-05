@@ -31,21 +31,21 @@ jobs:
           # Always include these targets
           - os: ubuntu-20.04
             target: x86_64-unknown-linux-gnu
-          # - os: ubuntu-latest
-          #   target: x86_64-unknown-linux-musl
-          #   static: true
+          - os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+            static: true
           - os: macos-14
             target: x86_64-apple-darwin
           - os: macos-14
             target: aarch64-apple-darwin
-          # - os: windows-2022
-          #   target: x86_64-pc-windows-msvc
-          # - os: windows-2022
-          #   target: aarch64-pc-windows-msvc
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+          - os: windows-2022
+            target: aarch64-pc-windows-msvc
           # ARM targets (will be conditionally skipped if not needed)
           - os: ubuntu-20.04
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             target: aarch64-unknown-linux-musl
 
     
