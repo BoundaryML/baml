@@ -17,6 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Download CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-cli-*
+          path: cli-artifacts
+          merge-multiple: true
+      - run: ls -R cli-artifacts
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -49,6 +56,8 @@ jobs:
           
           # Define platform configurations
           declare -A platforms=(
+            ["x86_64-unknown-linux-gnu"]="linux-x64/baml-cli"
+            ["aarch64-unknown-linux-gnu"]="linux-arm64/baml-cli"
             ["x86_64-unknown-linux-musl"]="linux-x64/baml-cli"
             ["aarch64-unknown-linux-musl"]="linux-arm64/baml-cli"
             ["x86_64-apple-darwin"]="darwin-x64/baml-cli"
