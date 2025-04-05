@@ -97,6 +97,9 @@ jobs:
               exit 1
             fi
             
+            # Define destination path
+            dest_path="../../typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
+            
             echo "Copying $binary_path to $dest_path"
             cp "$binary_path" "$dest_path"
             chmod +x "$dest_path"
