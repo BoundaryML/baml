@@ -213,6 +213,15 @@ jobs:
           echo "Archive and checksum created successfully:"
           ls -l "${archive_base}".*
 
+      # Debug: List root directory contents
+      - name: List root directory contents
+        shell: bash
+        run: |
+          echo "Listing root directory contents:"
+          ls -la
+          echo "Looking for specific archive files:"
+          find . -name "${{ steps.paths.outputs.archive_base }}.*" -type f
+
       # Upload different artifacts based on mode
       - name: Upload CLI artifacts (Release)
         if: inputs.package_for_release
@@ -221,7 +230,8 @@ jobs:
           # Artifact name in GitHub Actions UI remains the same
           name: baml-cli-${{ matrix._.target }}
           path: |
-            ${{ steps.paths.outputs.archive_base }}.* # Upload the zip/tar.gz and sha256 file
+            ${{ steps.paths.outputs.archive_base }}.*
+          if-no-files-found: error
 
       - name: Upload CLI artifacts (CI)
         if: inputs.package_for_release == false
