@@ -150,9 +150,9 @@ class VSCodeAPIWrapper {
         rpcMethod: (data as unknown as { vscodeCommand: string }).vscodeCommand,
         rpcId,
         data,
-      };
+      }
       console.log('Webview->WebviewPanelHost message', message)
-      this.postMessage(message);
+      this.postMessage(message)
 
       // Timeout to prevent hanging requests
       setTimeout(() => {

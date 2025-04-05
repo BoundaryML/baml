@@ -347,12 +347,12 @@ export class WebviewPanelHost {
                 this._panel.webview.postMessage({
                   rpcId: message.rpcId,
                   rpcMethod: vscodeCommand,
-                  data: { ok: awsCreds }
+                  data: { ok: awsCreds },
                 })
               } catch (error) {
                 console.error('Error loading aws creds:', error)
                 if (error instanceof Error) {
-                  this._panel.webview.postMessage({ 
+                  this._panel.webview.postMessage({
                     rpcId: message.rpcId,
                     rpcMethod: vscodeCommand,
                     data: {
@@ -364,7 +364,7 @@ export class WebviewPanelHost {
                     },
                   })
                 } else {
-                  this._panel.webview.postMessage({ 
+                  this._panel.webview.postMessage({
                     rpcId: message.rpcId,
                     rpcMethod: vscodeCommand,
                     data: { error },
