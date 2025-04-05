@@ -11,6 +11,10 @@ on:
         description: 'Whether this is a release build (affects artifact naming)'
         type: boolean
         default: true
+      version:
+        description: 'Version string to use for the build'
+        type: string
+        required: true
 
 jobs:
   build-vscode:
@@ -145,5 +149,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
-          path: typescript/vscode-ext/packages/vscode/baml*.vsix
+          path: typescript/vscode-ext/packages/vscode/*.vsix
 

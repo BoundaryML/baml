@@ -36,20 +36,20 @@ jobs:
       - name: Set Version Info
         id: set-version
         run: |
-          VERSION="canary" # Default version
+          VERSION="0.1.0" # Default version
           IS_RELEASE="false"
           REF_NAME="${{ github.ref_name }}"
           REF_TYPE="${{ github.ref_type }}"
 
           if [[ "$REF_TYPE" == "branch" ]]; then
-            # Use sanitized branch name for version
-            VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
+            # If it's a branch, keep the version as the default
+            : # No-op, version remains "canary"
           elif [[ "$REF_TYPE" == "tag" ]];
           then
-            # Use sanitized tag name for version
+            # Use sanitized tag name for version initially
             VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
             # Check if it's a release tag matching vX.Y.Z
-            if [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            if [[ "$REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               IS_RELEASE="true"
               # Use the exact tag name for releases
               VERSION="$REF_NAME"
@@ -81,7 +81,8 @@ jobs:
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
       artifact_name: baml-vscode-vsix
-      is_release_build: ${{ startsWith(github.ref, 'refs/tags/') }}
+      version: ${{ needs.determine-version.outputs.version_string }}
+      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
 
   # placeholder fan-in step
   all-builds:

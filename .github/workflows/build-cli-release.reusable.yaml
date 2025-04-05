@@ -129,33 +129,89 @@ jobs:
         if: matrix._.os == 'windows-latest' && inputs.package_for_release
         shell: bash
         run: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+
           staging_dir="${{ steps.paths.outputs.archive_dir }}"
           archive_base="${{ steps.paths.outputs.archive_base }}"
+          archive_file="${archive_base}.zip"
+          checksum_file="${archive_base}.zip.sha256"
+
+          echo "Creating staging directory: $staging_dir"
           mkdir -p "$staging_dir"
+
+          echo "Copying files to staging directory"
           cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
-          cp README.md LICENSE* "$staging_dir/" || true
-          # Change directory into the staging dir before creating the archive
-          cd "$staging_dir"
-          7z a "../${archive_base}.zip" .
-          # Change back to the parent directory
-          cd ..
-          certutil -hashfile "${archive_base}.zip" SHA256 > "${archive_base}.zip.sha256"
+          # Use find for robust copy
+          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
+
+          echo "Creating archive: $archive_file"
+          # Use original cd logic for 7z stability, but run in subshell
+          (
+            cd "$staging_dir"
+            7z a "../${archive_file}" .
+          )
+          # Check if 7z command succeeded and file exists
+          if [ ! -f "${archive_file}" ]; then
+            echo "Archive creation failed or file not found: ${archive_file}"
+            exit 1
+          fi
+
+          echo "Creating checksum file: $checksum_file"
+          certutil -hashfile "${archive_file}" SHA256 > "${checksum_file}"
+          # Check if certutil command succeeded and file exists
+          if [ ! -f "${checksum_file}" ]; then
+            echo "Checksum creation failed or file not found: ${checksum_file}"
+            exit 1
+          fi
+          # Add check for empty checksum file
+          if [ ! -s "${checksum_file}" ]; then
+             echo "Checksum file is empty: ${checksum_file}"
+             exit 1
+          fi
+
+          echo "Archive and checksum created successfully:"
+          ls -l "${archive_base}".*
 
       - name: Create archive (Unix)
         if: matrix._.os != 'windows-latest' && inputs.package_for_release
         shell: bash
         run: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+
           staging_dir="${{ steps.paths.outputs.archive_dir }}"
           archive_base="${{ steps.paths.outputs.archive_base }}"
+          archive_file="${archive_base}.tar.gz"
+          checksum_file="${archive_file}.sha256"
+
+          echo "Creating staging directory: $staging_dir"
           mkdir -p "$staging_dir"
+
+          echo "Copying files to staging directory"
           cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
-          cp README.md LICENSE* "$staging_dir/" || true
-          # Change directory into the staging dir before creating the archive
-          cd "$staging_dir"
-          tar czf "../${archive_base}.tar.gz" .
-          # Change back to the parent directory
-          cd ..
-          shasum -a 256 "${archive_base}.tar.gz" > "${archive_base}.tar.gz.sha256"
+          # Use find for robust copy
+          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
+
+          echo "Creating archive: $archive_file"
+          # Create the archive in the parent directory directly using -C
+          tar czf "${archive_file}" -C "$staging_dir" .
+          # Check if tar command succeeded and file exists
+          if [ ! -f "${archive_file}" ]; then
+            echo "Archive creation failed or file not found: ${archive_file}"
+            exit 1
+          fi
+
+          echo "Creating checksum file: $checksum_file"
+          shasum -a 256 "${archive_file}" > "${checksum_file}"
+          # Check if shasum command succeeded and file exists
+          if [ ! -f "${checksum_file}" ]; then
+            echo "Checksum creation failed or file not found: ${checksum_file}"
+            exit 1
+          fi
+
+          echo "Archive and checksum created successfully:"
+          ls -l "${archive_base}".*
 
       # Upload different artifacts based on mode
       - name: Upload CLI artifacts (Release)
