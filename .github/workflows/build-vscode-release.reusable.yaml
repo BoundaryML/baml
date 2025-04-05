@@ -33,39 +33,111 @@ jobs:
       - uses: pnpm/action-setup@v3
         with:
           version: 9.12.0
+
       - name: Download all CLI artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: baml-cli-*
           path: cli-artifacts
-      - name: Copy binaries to language server
+
+      - name: Extract and copy binaries
+        shell: bash
         run: |
-          rm -r typescript/vscode-ext/packages/vscode/server || true
-          mkdir -p typescript/vscode-ext/packages/vscode/server
-          mkdir -p typescript/vscode-ext/packages/vscode/server/linux
-          mkdir -p typescript/vscode-ext/packages/vscode/server/darwin
-          mkdir -p typescript/vscode-ext/packages/vscode/server/windows
-          cp cli-artifacts/baml-cli-x86_64-unknown-linux-musl/baml-cli typescript/vscode-ext/packages/vscode/server/linux/baml-cli
-          cp cli-artifacts/baml-cli-x86_64-apple-darwin/baml-cli typescript/vscode-ext/packages/vscode/server/darwin/baml-cli
-          cp cli-artifacts/baml-cli-x86_64-pc-windows-msvc/baml-cli.exe typescript/vscode-ext/packages/vscode/server/windows/baml-cli.exe
-          chmod +x typescript/vscode-ext/packages/vscode/server/linux/baml-cli*
-          chmod +x typescript/vscode-ext/packages/vscode/server/darwin/baml-cli*
-          chmod +x typescript/vscode-ext/packages/vscode/server/windows/baml-cli.exe
+          # Setup server directories
+          rm -rf typescript/vscode-ext/packages/vscode/server
+          mkdir -p typescript/vscode-ext/packages/vscode/server/{linux-x64,linux-arm64,darwin-x64,darwin-arm64,windows}
+          
+          # Define platform configurations
+          declare -A platforms=(
+            ["x86_64-unknown-linux-musl"]="linux-x64/baml-cli"
+            ["aarch64-unknown-linux-musl"]="linux-arm64/baml-cli"
+            ["x86_64-apple-darwin"]="darwin-x64/baml-cli"
+            ["aarch64-apple-darwin"]="darwin-arm64/baml-cli"
+            ["x86_64-pc-windows-msvc"]="windows/baml-cli.exe"
+          )
+          
+          # Process each platform
+          for target in "${!platforms[@]}"; do
+            echo "Processing $target..."
+            
+            # Verify artifact directory exists
+            if [ ! -d "cli-artifacts/baml-cli-$target" ]; then
+              echo "Error: Missing artifact directory for $target"
+              exit 1
+            fi
+            
+            pushd "cli-artifacts/baml-cli-$target" > /dev/null
+            
+            # Extract archive
+            if [[ $target == *"windows"* ]]; then
+              unzip -o baml-cli-*.zip
+            else
+              tar xzf baml-cli-*.tar.gz
+            fi
+            
+            # Find and copy binary
+            if [[ $target == *"windows"* ]]; then
+              binary_path=$(find . -type f -name "baml-cli.exe" -not -path "*/\.*")
+            else
+              binary_path=$(find . -type f -name "baml-cli" -not -path "*/\.*")
+            fi
+            
+            # Update the path to look inside the versioned directory
+            if [ -z "$binary_path" ] && [ -d "baml-cli-"*"-$target" ]; then
+              if [[ $target == *"windows"* ]]; then
+                binary_path=$(find "baml-cli-"*"-$target" -type f -name "baml-cli.exe")
+              else
+                binary_path=$(find "baml-cli-"*"-$target" -type f -name "baml-cli")
+              fi
+            fi
+            
+            if [ -z "$binary_path" ]; then
+              echo "Error: Could not find binary for $target"
+              popd > /dev/null
+              exit 1
+            fi
+            
+            echo "Copying $binary_path to $dest_path"
+            cp "$binary_path" "$dest_path"
+            chmod +x "$dest_path"
+            
+            popd > /dev/null
+          done
+          
+          # Verify all binaries are present and executable
+          echo "Verifying all binaries..."
+          for target in "${!platforms[@]}"; do
+            binary_path="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
+            if [ ! -f "$binary_path" ]; then
+              echo "Error: Missing binary at $binary_path"
+              exit 1
+            fi
+            if [ ! -x "$binary_path" ]; then
+              echo "Error: Binary not executable at $binary_path"
+              exit 1
+            fi
+            echo "✓ Verified $binary_path"
+          done
+
       - name: Install dependencies
         run: pnpm install && pnpm build
         working-directory: typescript
+
       - name: Build VSCode extension
         run: pnpm build
         working-directory: typescript/vscode-ext/packages/vscode
+
       - name: Prepackage VSIX
         run: pnpm vscode:prepublish
         working-directory: typescript/vscode-ext/packages/vscode
+
       - name: Package VSIX
         run: npx @vscode/vsce package --no-dependencies
-        working-directory: typescript/vscode-ext/packages
+        working-directory: typescript/vscode-ext/packages/vscode
+
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.artifact_name }}
-          path: typescript/vscode-ext/packages/baml*.vsix
+          path: typescript/vscode-ext/packages/vscode/baml*.vsix
 
