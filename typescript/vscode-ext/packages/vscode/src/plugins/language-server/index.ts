@@ -16,7 +16,7 @@ import {
 } from 'vscode-languageclient/node'
 import { z } from 'zod'
 import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
-import { WebPanelView } from '../../panels/WebPanelView'
+import { WebviewPanelHost } from '../../panels/WebviewPanelHost'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
@@ -97,7 +97,7 @@ const LatestVersions = z.object({
 })
 type LatestVersions = z.infer<typeof LatestVersions>
 
-const checkForUpdates = async ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
+const checkForUpdates = ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
   try {
     if (telemetry) {
       telemetry.sendTelemetryEvent({
@@ -234,7 +234,7 @@ const activateClient = (
         console.log('baml_settings_updated', config)
         bamlConfig.config = config.config
         bamlConfig.cliVersion = config.cliVersion
-        WebPanelView.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
+        WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
       })
 
       // Handler for both notifications and requests of type "runtime_updated".
@@ -249,7 +249,7 @@ const activateClient = (
           const rootPathUri = URI.file(params.root_path).fsPath
           if (currentFilePath.startsWith(rootPathUri)) {
             console.log('sending add_project message')
-            WebPanelView.currentPanel?.postMessage('add_project', {
+            WebviewPanelHost.currentPanel?.postMessage('add_project', {
               ...params,
               root_path: URI.file(params.root_path).toString(),
             })
@@ -271,6 +271,13 @@ const activateClient = (
       client.onNotification('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
         console.log('NOTIF: runtime_updated')
         handleRuntimeUpdated(params)
+      })
+
+      client.onRequest('baml_settings_updated', (config: typeof bamlConfig) => {
+        console.log('baml_settings_updated', config)
+        bamlConfig.config = config.config
+        bamlConfig.cliVersion = config.cliVersion
+        WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
       })
 
       // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
@@ -425,7 +432,7 @@ const plugin: BamlVSCodePlugin = {
     if (platform !== 'win32' && fs.existsSync(serverAbsolutePath)) {
       try {
         fs.chmodSync(serverAbsolutePath, '755')
-      } catch (err) {
+      } catch (err: any) {
         console.error(`Failed to chmod server executable: ${err}`)
         // Decide if this should be a fatal error
       }
@@ -460,7 +467,7 @@ const plugin: BamlVSCodePlugin = {
       revealOutputChannelOn: RevealOutputChannelOn.Never,
       // initializationOptions // TODO add settings here.
       synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
+        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
       },
     }
 
@@ -470,10 +477,8 @@ const plugin: BamlVSCodePlugin = {
         window.showInformationMessage('Baml language server restarted.') // eslint-disable-line @typescript-eslint/no-floating-promises
       }),
 
-      commands.registerCommand('baml.checkForUpdates', async () => {
-        await checkForUpdates({ showIfNoUpdates: true }).catch((e) => {
-          console.error('Failed to check for updates', e)
-        })
+      commands.registerCommand('baml.checkForUpdates', () => {
+        checkForUpdates({ showIfNoUpdates: true })
       }),
 
       commands.registerCommand(
@@ -513,7 +518,7 @@ const plugin: BamlVSCodePlugin = {
             const range = new vscode.Range(start, end)
 
             await vscode.window.showTextDocument(doc, { selection: range, viewColumn: vscode.ViewColumn.Beside })
-          } catch (error) {
+          } catch (error: any) {
             vscode.window.showErrorMessage(`Error navigating to function definition: ${error}`)
           }
         },

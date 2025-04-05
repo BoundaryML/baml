@@ -2736,6 +2736,24 @@ export const TestOpenAI = async (
 };
 
 /**
+ * Executes the "TestOpenAIDummyClient" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIDummyClient"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIDummyClient = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIDummyClient(
+    input,
+  );
+};
+
+/**
  * Executes the "TestOpenAIGPT4oMini" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIGPT4oMini"

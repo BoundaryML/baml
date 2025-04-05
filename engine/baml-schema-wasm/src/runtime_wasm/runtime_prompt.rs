@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 
 use baml_runtime::{
-    internal::llm_client::orchestrator::{ExecutionScope, OrchestrationScope},
-    ChatMessagePart, RenderedPrompt,
+    internal::llm_client::orchestrator::OrchestrationScope, ChatMessagePart, RenderedPrompt,
 };
 use internal_llm_client::AllowedRoleMetadata;
 use serde_json::json;
 
 use crate::runtime_wasm::ToJsValue;
 use baml_types::{BamlMediaContent, BamlMediaType, MediaBase64};
-use serde_wasm_bindgen::to_value;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(getter_with_clone)]
@@ -174,12 +172,6 @@ impl WasmScope {
     pub fn get_orchestration_scope_info(&self) -> JsValue {
         self.scope.to_js_value()
     }
-}
-
-#[wasm_bindgen]
-pub struct ScopeIterator {
-    scopes: Vec<ExecutionScope>,
-    index: usize,
 }
 
 #[wasm_bindgen]

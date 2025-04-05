@@ -7524,6 +7524,54 @@ export function useTestOpenAI(
   return useBamlAction(action, props)
 }
 /**
+ * A specialized hook for the TestOpenAIDummyClient BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestOpenAIDummyClient({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestOpenAIDummyClient({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestOpenAIDummyClient(props: HookInput<'TestOpenAIDummyClient', { stream: false }>): HookOutput<'TestOpenAIDummyClient', { stream: false }>
+export function useTestOpenAIDummyClient(props?: HookInput<'TestOpenAIDummyClient', { stream?: true }>): HookOutput<'TestOpenAIDummyClient', { stream: true }>
+export function useTestOpenAIDummyClient(
+  props: HookInput<'TestOpenAIDummyClient', { stream?: boolean }> = {},
+): HookOutput<'TestOpenAIDummyClient', { stream: true }> | HookOutput<'TestOpenAIDummyClient', { stream: false }> {
+  let action = Actions.TestOpenAIDummyClient;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestOpenAIDummyClient;
+  }
+  return useBamlAction(action, props)
+}
+/**
  * A specialized hook for the TestOpenAIGPT4oMini BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

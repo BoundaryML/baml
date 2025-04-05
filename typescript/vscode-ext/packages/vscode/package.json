@@ -30,10 +30,14 @@
     "clean": "rimraf out"
   },
   "dependencies": {
+    "@aws-sdk/credential-providers": "^3.750.0",
     "@baml/common": "workspace:*",
+    "@smithy/types": "^4.1.0",
     "@types/semver": "^7.5.6",
     "axios": "^1.6.8",
+    "comlink": "^4.4.2",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "env-paths": "2.2.1",
     "express": "^4.21.1",
     "http-proxy": "^1.18.1",

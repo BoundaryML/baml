@@ -4,6 +4,28 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.82.0](https://github.com/boundaryml/baml/compare/0.81.3..0.82.0) - 2025-04-01
+
+
+### Breaking changes
+
+- HTTPResponses have a HTTPBody object. You must now call `.json()` or `.text()` to access the http response message.
+
+```python
+    response = call.http_response
+    assert response is not None
+    response_body = response.body.json()
+    assert isinstance(response_body, dict)
+    assert "candidates" in response_body
+```
+
+### Features
+- Support AWS Bedrock in the Collector API (#1703) - ([e7c45c2](https://github.com/boundaryml/baml/commit/e7c45c27a63aba273151f246834d9a049c763168)) - aaronvg
+
+
+### Bugfixes
+- Allow multiple unique block-level attributes (#1686) - ([f945204](https://github.com/boundaryml/baml/commit/f94520489bd597b7dc69fdaf7617c5a9edcf9079)) - Greg Hale
+
 ## [0.81.3](https://github.com/boundaryml/baml/compare/0.81.2..0.81.3) - 2025-03-26
 
 

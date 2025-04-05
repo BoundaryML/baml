@@ -128,7 +128,7 @@ export declare class HttpResponse {
   toString(): string
   get status(): number
   get headers(): object
-  get body(): any
+  get body(): HttpBody
 }
 export type HTTPResponse = HttpResponse
 

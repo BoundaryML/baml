@@ -162,9 +162,9 @@ fn resolve_type_exp_block_attributes<'db>(
             // Now validate the class attributes.
             ctx.assert_all_attributes_processed(type_id.into());
 
-            for _ in 0..ast_typexpr.attributes.len() {
-                let attrs = to_string_attribute::visit(ctx, &span, true);
-                class_attributes.extend_serializer(&attrs);
+            // Process all attributes, including multiple block comments
+            while let Some(attrs) = to_string_attribute::visit(ctx, &span, true) {
+                class_attributes.extend_serializer(&Some(attrs));
             }
             ctx.validate_visited_attributes();
             ctx.types.class_attributes.insert(type_id, class_attributes);

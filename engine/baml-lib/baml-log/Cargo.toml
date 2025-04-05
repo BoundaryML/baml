@@ -6,6 +6,12 @@ authors.workspace = true
 license-file.workspace = true
 description = "Logging library for BAML for end user logging"
 
+[lints.rust]
+dead_code = "deny"
+elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json.workspace = true

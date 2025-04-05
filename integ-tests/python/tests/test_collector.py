@@ -1,6 +1,5 @@
 from baml_py.errors import BamlInvalidArgumentError, BamlError, BamlClientError
 import pytest
-import dotenv
 from openai.types.chat import ChatCompletion
 
 from ..baml_client import b
@@ -9,8 +8,6 @@ from baml_py import ClientRegistry, Collector
 import gc
 import sys
 import asyncio
-
-dotenv.load_dotenv()
 
 
 def function_span_count():
@@ -82,14 +79,15 @@ async def test_collector_async_no_stream_success():
     # Verify http response
     response = call.http_response
     assert response is not None
+    response_body = response.body.json()
     assert response.status == 200
-    assert response.body is not None
-    assert isinstance(response.body, dict)
-    completion = ChatCompletion(**response.body)
-    assert "choices" in response.body
-    assert len(response.body["choices"]) > 0
-    assert "message" in response.body["choices"][0]
-    assert "content" in response.body["choices"][0]["message"]
+    assert response_body is not None
+    assert isinstance(response_body, dict)
+    completion = ChatCompletion(**response_body)
+    assert "choices" in response_body
+    assert len(response_body["choices"]) > 0
+    assert "message" in response_body["choices"][0]
+    assert "content" in response_body["choices"][0]["message"]
     assert completion.choices[0].message.content is not None
 
     # Verify call timing
@@ -362,16 +360,20 @@ async def test_collector_parallel_async_calls():
         assert log.log_type == "call"
 
     # # Check usage for each call
-    # usage_call1 = logs[0].usage
-    # usage_call2 = logs[1].usage
-    # assert usage_call1 is not None
-    # assert usage_call2 is not None
+    usage_call1 = logs[0].usage
+    usage_call2 = logs[1].usage
+    assert usage_call1 is not None
+    assert usage_call2 is not None
+    assert usage_call1.input_tokens is not None
+    assert usage_call2.input_tokens is not None
+    assert usage_call1.output_tokens is not None
+    assert usage_call2.output_tokens is not None
 
     # # Verify that total collector usage equals the sum of the two logs
-    # total_input = usage_call1.input_tokens + usage_call2.input_tokens
-    # total_output = usage_call1.output_tokens + usage_call2.output_tokens
-    # assert collector.usage.input_tokens == total_input
-    # assert collector.usage.output_tokens == total_output
+    total_input = usage_call1.input_tokens + usage_call2.input_tokens
+    total_output = usage_call1.output_tokens + usage_call2.output_tokens
+    assert collector.usage.input_tokens == total_input
+    assert collector.usage.output_tokens == total_output
 
 
 @pytest.mark.asyncio
@@ -450,3 +452,120 @@ async def test_collector_failures_client_registry_streaming():
     last_log = collector.last
     assert last_log is not None
     assert last_log.function_name == "TestOpenAIGPT4oMini"
+
+
+@pytest.mark.asyncio
+async def test_collector_aws_bedrock():
+    collector = Collector(name="my-collector")
+    await b.TestAws("hi there", baml_options={"collector": collector})
+    logs = collector.logs
+    assert len(logs) == 1
+    assert logs[0].function_name == "TestAws"
+
+    # Verify the HTTP request body for AWS Bedrock
+    log = logs[0]
+    calls = log.calls
+    print("------------------------- calls", calls)
+    assert len(calls) == 1
+
+    call = calls[0]
+    assert call.provider == "aws-bedrock"
+
+    # Verify request
+    request = call.http_request
+    assert request is not None
+    body = request.body.json()
+    assert isinstance(body, dict)
+    assert "inferenceConfig" in body
+
+
+@pytest.mark.asyncio
+async def test_collector_vertex():
+    collector = Collector(name="my-collector")
+    await b.TestVertex("donkey kong", baml_options={"collector": collector})
+    logs = collector.logs
+    assert len(logs) == 1
+    assert logs[0].function_name == "TestVertex"
+    assert logs[0].log_type == "call"
+
+    call = logs[0].calls[0]
+    assert call.provider == "vertex-ai"
+    assert call.client_name == "Vertex"
+    assert call.selected
+
+    # Verify request
+    request = call.http_request
+    assert request is not None
+    body = request.body.json()
+    assert isinstance(body, dict)
+
+    # Verify response
+    response = call.http_response
+    assert response is not None
+    response_body = response.body.json()
+    assert isinstance(response_body, dict)
+    assert "candidates" in response_body
+
+
+@pytest.mark.asyncio
+async def test_collector_gemini():
+    collector = Collector(name="my-collector")
+    geminiRes = await b.TestGemini(
+        input="Dr. Pepper", baml_options={"collector": collector}
+    )
+    print(f"LLM output from Gemini: {geminiRes}")
+    assert len(geminiRes) > 0, "Expected non-empty result but got empty."
+
+    logs = collector.logs
+    assert len(logs) == 1
+    assert logs[0].function_name == "TestGemini"
+    assert logs[0].log_type == "call"
+
+    call = logs[0].calls[0]
+    assert call.provider == "google-ai"
+    assert call.client_name == "Gemini"
+    assert call.selected
+
+    # Verify request
+    request = call.http_request
+    assert request is not None
+    body = request.body.json()
+    assert isinstance(body, dict)
+
+    # Verify response
+    response = call.http_response
+    assert response is not None
+    response_body = response.body.json()
+    assert isinstance(response_body, dict)
+
+
+@pytest.mark.asyncio
+async def test_collector_claude():
+    collector = Collector(name="my-collector")
+    res = await b.PromptTestClaude(
+        input="Mt Rainier is tall", baml_options={"collector": collector}
+    )
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+    logs = collector.logs
+    assert len(logs) == 1
+    assert logs[0].function_name == "PromptTestClaude"
+    assert logs[0].log_type == "call"
+
+    call = logs[0].calls[0]
+    assert call.provider == "anthropic"
+    assert call.selected
+
+    # Verify request
+    request = call.http_request
+    assert request is not None
+    body = request.body.json()
+    assert isinstance(body, dict)
+
+    # Verify response
+    response = call.http_response
+    assert response is not None
+    response_body = response.body.json()
+    assert isinstance(response_body, dict)
+    assert "content" in response_body
+    assert len(response_body["content"]) > 0
