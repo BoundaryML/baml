@@ -87,10 +87,10 @@ cfg_if::cfg_if!(
     if #[cfg(target_arch = "wasm32")] {
         use core::pin::Pin;
         use core::future::Future;
-        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<Vec<u8>>>>>>>;
     } else {
         use futures::future::BoxFuture;
-        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
+        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, RuntimeCallbackResult<Vec<u8>>>>>;
     }
 );
 
