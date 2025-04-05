@@ -35,7 +35,7 @@ pub struct RuntimeClassOverride {
     pub(crate) update_fields: IndexMap<String, PropertyAttributes>,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 /// For baml-src-reader and aws-cred-provider, provide a statically defined type which is Send + Sync
 /// anyhow::Error is not Send + Sync, so it's convoluted to use it in this callback context
 pub enum RuntimeCallbackError {
@@ -53,24 +53,58 @@ pub type RuntimeCallbackResult<T> = Result<T, RuntimeCallbackError>;
 // pub type BamlSrcReader = Box<dyn Fn(&str) -> Result<String>>;
 // #[cfg(not(target_arch = "wasm32"))]
 // pub type BamlSrcReader = fn(&str) -> Result<String>;
-cfg_if::cfg_if!(
-    if #[cfg(target_arch = "wasm32")] {
-        use core::pin::Pin;
-        use core::future::Future;
-        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<Vec<u8>>>>>>>;
-        pub type AwsCredProvider = Option<Box<dyn Fn(Option<&str>) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<HashMap<String, String>>>>> + Send + Sync>>;
-    } else {
-        use futures::future::BoxFuture;
-        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, RuntimeCallbackResult<Vec<u8>>>>>;
-        pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, RuntimeCallbackResult<HashMap<String, String>>>>>;
+// #[cfg(target_arch = "wasm32")]
+// {
+use core::future::Future;
+use core::pin::Pin;
+pub type BamlSrcReader = Option<
+    Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<Vec<u8>>>>>>,
+>;
+// pub type AwsCredProvider = Option<Box<dyn Fn(Option<String>) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<HashMap<String, String>>> + Send>> + Send + Sync>>;
+pub type AwsCredProvider = Option<AwsCredProviderImpl>;
+
+#[derive(serde::Deserialize, Debug, Clone)]
+pub enum AwsCredResult {
+    #[serde(rename = "error", rename_all = "camelCase")]
+    Err { name: String, message: String },
+
+    #[serde(rename = "ok", rename_all = "camelCase")]
+    /// This is 1:1 with AwsCredentialIdentity in @smithy/types
+    Ok {
+        access_key_id: String,
+        secret_access_key: String,
+        session_token: Option<String>,
+        credential_scope: Option<String>,
+        account_id: Option<String>,
+    },
+}
+
+pub struct AwsCredProviderImpl {
+    pub req_tx: tokio::sync::mpsc::Sender<Option<String>>,
+    pub resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<AwsCredResult>>,
+}
+
+impl Clone for AwsCredProviderImpl {
+    fn clone(&self) -> Self {
+        Self {
+            req_tx: self.req_tx.clone(),
+            resp_rx: self.resp_rx.resubscribe(),
+        }
     }
-);
+}
+// }
+//     #[cfg(not(target_arch = "wasm32"))]
+//     {
+//         use futures::future::BoxFuture;
+//         pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, RuntimeCallbackResult<Vec<u8>>>>>;
+//         pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, RuntimeCallbackResult<HashMap<String, String>>>>>;
+//     }
 
 // #[derive(Debug)]
 pub struct RuntimeContext {
     // path to baml_src in the local filesystem
     pub baml_src: Arc<BamlSrcReader>,
-    pub aws_cred_provider: Arc<AwsCredProvider>,
+    pub aws_cred_provider: AwsCredProvider,
     env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
     pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
@@ -98,7 +132,7 @@ impl RuntimeContext {
 
     pub fn new(
         baml_src: Arc<BamlSrcReader>,
-        aws_cred_provider: Arc<AwsCredProvider>,
+        aws_cred_provider: AwsCredProvider,
         env: HashMap<String, String>,
         tags: HashMap<String, BamlValue>,
         client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,

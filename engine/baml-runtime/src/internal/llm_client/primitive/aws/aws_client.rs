@@ -267,7 +267,7 @@ impl AwsClient {
         &self,
         span_id: Option<Uuid>,
         http_request_id: &HttpRequestId,
-        aws_cred_provider: Arc<AwsCredProvider>,
+        aws_cred_provider: AwsCredProvider,
     ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
         let mut loader = {

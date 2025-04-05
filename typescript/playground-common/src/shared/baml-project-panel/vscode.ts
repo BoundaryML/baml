@@ -123,9 +123,10 @@ class VSCodeAPIWrapper {
     return resp
   }
 
-  public async loadAwsCreds() {
+  public loadAwsCreds = async (profile: string | null) => {
     const resp = await this.rpc<LoadAwsCredsRequest, LoadAwsCredsResponse>({
       vscodeCommand: 'LOAD_AWS_CREDS',
+      profile,
     })
     return resp
   }
@@ -145,11 +146,13 @@ class VSCodeAPIWrapper {
       const rpcId = this.rpcId++
       this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void })
 
-      this.postMessage({
+      const message = {
         rpcMethod: (data as unknown as { vscodeCommand: string }).vscodeCommand,
         rpcId,
         data,
-      })
+      };
+      console.log('Webview->WebviewPanelHost message', message)
+      this.postMessage(message);
 
       // Timeout to prevent hanging requests
       setTimeout(() => {

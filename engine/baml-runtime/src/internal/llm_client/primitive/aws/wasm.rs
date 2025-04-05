@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aws_config::ConfigLoader;
-use aws_credential_types::{provider::future::ProvideCredentials, Credentials};
+use aws_credential_types::{
+    provider::{
+        error::{CredentialsError, CredentialsNotLoaded},
+        future::ProvideCredentials,
+    },
+    Credentials,
+};
 use aws_smithy_async::{
     rt::sleep::{AsyncSleep, Sleep},
     time::TimeSource,
@@ -31,7 +37,7 @@ use pin_project_lite::pin_project;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use crate::runtime_context::AwsCredProvider;
+use crate::{AwsCredProvider, AwsCredProviderImpl, AwsCredResult};
 
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");
@@ -172,7 +178,7 @@ impl HttpClient for BrowserHttp2 {
 
 pub(super) struct WasmAwsCreds {
     // pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
-    pub aws_cred_provider: Arc<AwsCredProvider>,
+    pub aws_cred_provider: AwsCredProvider,
 }
 
 impl std::fmt::Debug for WasmAwsCreds {
@@ -184,6 +190,55 @@ impl std::fmt::Debug for WasmAwsCreds {
     }
 }
 
+impl WasmAwsCreds {
+    async fn provide_credentials_impl(&self) -> aws_credential_types::provider::Result {
+        match self.aws_cred_provider.clone() {
+            Some(AwsCredProviderImpl {
+                req_tx,
+                mut resp_rx,
+            }) => {
+                req_tx
+                    // TODO: do not hardcode this!!!!
+                    // placceholder-aws-profile-name
+                    .send(Some("boundaryml-dev".to_string()))
+                    .await
+                    .expect("Failed to send cred request");
+                let creds = resp_rx
+                    .recv()
+                    .await
+                    .expect("Failed to recv cred response")
+                    .map_err(|e| CredentialsError::unhandled(e))?;
+                log::debug!(
+                    "AWS credentials provided via callback provider: {:?}",
+                    creds
+                );
+
+                match creds {
+                    AwsCredResult::Ok {
+                        access_key_id,
+                        secret_access_key,
+                        session_token,
+                        // session_token,
+                        // expires_after
+                        // provider_name,
+                        ..
+                    } => Ok(Credentials::new(
+                        access_key_id,
+                        secret_access_key,
+                        session_token,
+                        None,
+                        "wasm-provider-name",
+                    )),
+                    AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(
+                        format!("{}: {}", name, message),
+                    )),
+                }
+            }
+            None => Err(CredentialsError::not_loaded_no_source()),
+        }
+    }
+}
+
 impl aws_credential_types::provider::ProvideCredentials for WasmAwsCreds {
     fn provide_credentials<'a>(
         &'a self,
@@ -192,17 +247,20 @@ impl aws_credential_types::provider::ProvideCredentials for WasmAwsCreds {
         Self: 'a,
     {
         log::debug!("Providing AWS credentials for wasm");
+        let creds = ProvideCredentials::new(self.provide_credentials_impl());
+        log::debug!("AWS credentials provided for wasm: {:?}", creds);
         // self.default_chain.provide_credentials()
         // let datetime_str = "2025-02-24T19:38:05.000Z";
         // let datetime: DateTime<Utc> = datetime_str.parse().expect("Invalid datetime format");
         // let expires_after =
         //     web_time::UNIX_EPOCH + web_time::Duration::from_secs(datetime.timestamp() as u64);
-        ProvideCredentials::ready(Ok(Credentials::new(
-            "fake-access-key-id".to_string(),
-            "fake-secret-access-key".to_string(),
-            None,
-            None,
-            "hardcoded-boundaryml-dev",
-        )))
+        // ProvideCredentials::ready(Ok(Credentials::new(
+        //     "fake-access-key-id".to_string(),
+        //     "fake-secret-access-key".to_string(),
+        //     None,
+        //     None,
+        //     "hardcoded-boundaryml-dev",
+        // )))
+        creds
     }
 }

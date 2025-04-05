@@ -70,7 +70,7 @@ export interface Dimension {
 export const orchIndexAtom = atom(0)
 export const currentClientsAtom = atom((get) => {
   const func = get(selectedFunctionObjectAtom)
-  const runtime = get(runtimeAtom)?.rt
+  const runtime = get(runtimeAtom).rt
   if (!func || !runtime) {
     return []
   }
@@ -92,7 +92,7 @@ export const currentClientsAtom = atom((get) => {
 // something about the orchestration graph is broken, comment it out to make it work
 export const orchestrationNodesAtom = atom((get): { nodes: GroupEntry[]; edges: Edge[] } => {
   const func = get(selectedFunctionObjectAtom)
-  const runtime = get(runtimeAtom)?.rt
+  const runtime = get(runtimeAtom).rt
   if (!func || !runtime) {
     return { nodes: [], edges: [] }
   }

@@ -78,14 +78,15 @@ export const ctxAtom = atom((get) => {
   return context
 })
 
-export const runtimeAtom = unwrap(
-  atom(async (get) => {
-    try {
-      const wasm = get(wasmAtom)
-      const project = get(projectAtom)
-      const envVars = get(envVarsAtom)
-      const vscodeEnv = (await vscode.loadEnv())?.envVars ?? {}
-
+export const runtimeAtom = atom<{
+  rt: WasmRuntime | undefined
+  diags: WasmDiagnosticError | undefined
+  lastValidRt: WasmRuntime | undefined
+}>((get) => {
+  try {
+    const wasm = get(wasmAtom)
+    const project = get(projectAtom)
+    const envVars = get(envVarsAtom)
     if (wasm === undefined || project === undefined) {
       let previousState: {
         rt: WasmRuntime | undefined
@@ -123,7 +124,7 @@ export const runtimeAtom = unwrap(
 
 export const diagnosticsAtom = atom((get) => {
   const runtime = get(runtimeAtom)
-  return runtime?.diags?.errors() ?? []
+  return runtime.diags?.errors() ?? []
 })
 
 export const numErrorsAtom = atom((get) => {
@@ -141,7 +142,7 @@ export const generatedFilesAtom = atom((get) => {
     return undefined
   }
   const runtime = get(runtimeAtom)
-  if (runtime?.rt === undefined) {
+  if (runtime.rt === undefined) {
     return undefined
   }
 
@@ -178,20 +179,6 @@ const vscodeSettingsAtom = atom<{ enablePlaygroundProxy: boolean }>((get) => {
     enablePlaygroundProxy: config.config?.enablePlaygroundProxy ?? true,
   }
 })
-
-const vscodeEnvAtom = unwrap(
-  atom(async () => {
-    try {
-      const res = await vscode.loadEnv()
-      console.log('fetched env vars from vscode', res)
-
-      return res
-    } catch (e) {
-      console.error(`Error occurred while loading env from vscode:\n${JSON.stringify(e)}`)
-      return { envVars: {}, awsCreds: undefined }
-    }
-  }),
-)
 
 const playgroundPortAtom = unwrap(
   atom(async () => {
@@ -255,7 +242,6 @@ export const envKeyValuesAtom = atom(
     }
   },
 )
-
 export const envVarsAtom = atom(
   (get) => {
     if (typeof window === 'undefined') {
@@ -292,11 +278,7 @@ export const envVarsAtom = atom(
 )
 
 export const requiredEnvVarsAtom = atom((get) => {
-  const runtime = get(runtimeAtom)
-  if (runtime === undefined) {
-    return []
-  }
-  const rt = runtime.rt
+  const { rt } = get(runtimeAtom)
   if (rt === undefined) {
     return []
   }

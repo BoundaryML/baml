@@ -127,14 +127,17 @@ export interface LoadEnvResponse {
 
 export interface LoadAwsCredsRequest {
   vscodeCommand: 'LOAD_AWS_CREDS'
+  profile: string | null
 }
 
 export type LoadAwsCredsResponse =
   | {
-      awsCreds: AwsCredentialIdentity
+      ok: AwsCredentialIdentity
     }
   | {
-      error: string
+      error: {
+        message: string
+      }
     }
 
 export interface InitializedRequest {

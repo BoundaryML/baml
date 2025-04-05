@@ -16,7 +16,7 @@ import { testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from '
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 
 export const useRunTests = (maxBatchSize = 5) => {
-  const rt = useAtomValue(runtimeAtom)?.rt
+  const { rt } = useAtomValue(runtimeAtom)
   const ctx = useAtomValue(ctxAtom)
   const wasm = useAtomValue(wasmAtom)
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
@@ -87,7 +87,7 @@ export const useRunTests = (maxBatchSize = 5) => {
                 setState(test, { status: 'running', response: partial })
               },
               findMediaFile,
-              vscode.loadAwsCreds,
+              vscode.loadAwsCreds.bind(vscode),
             )
             console.log('result', result)
 

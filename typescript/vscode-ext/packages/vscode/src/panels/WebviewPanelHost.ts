@@ -27,6 +27,7 @@ import { dirname, join } from 'path'
 import * as dotenv from 'dotenv'
 import * as fs from 'fs'
 import { AwsCredentialIdentity } from '@smithy/types'
+// import { CredentialsProviderError } from '@aws-sdk/credential-providers'
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
   separator: '_',
@@ -268,7 +269,7 @@ export class WebviewPanelHost {
           return
         }
 
-        // console.log('message from webview, after above handlers:', message)
+        console.log('message from webview, after above handlers:', message)
         const vscodeMessage = message.data
         const vscodeCommand = vscodeMessage.vscodeCommand
 
@@ -338,14 +339,37 @@ export class WebviewPanelHost {
           case 'LOAD_AWS_CREDS':
             ;(async () => {
               try {
+                const profile = vscodeMessage.profile
                 const credentialProvider = fromIni({
-                  profile: 'boundaryml-prod',
+                  profile: profile ?? undefined,
                 })
                 const awsCreds = await credentialProvider()
-                this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: { awsCreds } })
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: { ok: awsCreds }
+                })
               } catch (error) {
                 console.error('Error loading aws creds:', error)
-                this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: { error } })
+                if (error instanceof Error) {
+                  this._panel.webview.postMessage({ 
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: {
+                      error: {
+                        ...error,
+                        name: error.name,
+                        message: error.message,
+                      },
+                    },
+                  })
+                } else {
+                  this._panel.webview.postMessage({ 
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: { error },
+                  })
+                }
               }
             })()
             return

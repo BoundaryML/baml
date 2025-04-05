@@ -65,9 +65,9 @@ use tracingv2::storage::storage::BAML_TRACER;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
-pub use runtime_context::AwsCredProvider;
-pub use runtime_context::BamlSrcReader;
-pub use runtime_context::RuntimeCallbackError;
+pub use runtime_context::{
+    AwsCredProvider, AwsCredProviderImpl, AwsCredResult, BamlSrcReader, RuntimeCallbackError,
+};
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;

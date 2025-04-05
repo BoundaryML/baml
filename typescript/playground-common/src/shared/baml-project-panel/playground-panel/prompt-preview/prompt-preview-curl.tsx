@@ -12,7 +12,7 @@ import { loadable } from 'jotai/utils'
 type CurlResult = string | undefined | Error
 
 const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
-  const rt = get(runtimeAtom)?.rt
+  const rt = get(runtimeAtom).rt
   const ctx = get(ctxAtom)
   const { selectedFn, selectedTc } = get(selectionAtom)
 

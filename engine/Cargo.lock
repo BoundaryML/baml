@@ -1151,6 +1151,7 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "time",
+ "tokio",
  "url",
  "uuid",
  "walkdir",

@@ -18,7 +18,7 @@ pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 #[derive(Clone)]
 pub struct RuntimeContextManager {
     baml_src_reader: Arc<BamlSrcReader>,
-    aws_cred_provider: Arc<AwsCredProvider>,
+    aws_cred_provider: AwsCredProvider,
     context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
@@ -60,7 +60,7 @@ impl RuntimeContextManager {
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
-            aws_cred_provider: Arc::new(aws_cred_provider),
+            aws_cred_provider: aws_cred_provider,
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),
