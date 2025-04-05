@@ -1,42 +1,32 @@
 pub mod generator;
 pub mod runtime_prompt;
+use crate::aws_cred_bridge::js_fn_to_aws_cred_provider;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use anyhow::Context;
+use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
-use baml_runtime::tracingv2::storage::storage::Collector;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_runtime::{
-    AwsCredProvider, AwsCredProviderImpl, AwsCredResult, BamlSrcReader, RuntimeCallbackError,
-};
-use baml_types::BamlValueWithMeta;
+use baml_runtime::{BamlSrcReader, RuntimeCallbackError};
 use baml_types::ResponseCheck;
 use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 use internal_llm_client::AllowedRoleMetadata;
-use js_sys::Object;
-use jsonish::deserializer::deserialize_flags::Flag;
-use jsonish::BamlValueWithFlags;
-
-use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
 use jsonish::ResponseBamlValue;
-use log::kv;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
@@ -517,8 +507,6 @@ impl WasmFunctionResponse {
 }
 
 fn serialize_value_counting_checks(value: &ResponseBamlValue) -> (serde_json::Value, usize) {
-    type J = serde_json::Value;
-
     let checks = value
         .0
         .meta()
@@ -1575,89 +1563,6 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             }
         })
     }))
-}
-
-async fn drive_aws_cred_provider(
-    load_aws_creds_cb: js_sys::Function,
-    mut req_rx: tokio::sync::mpsc::Receiver<Option<String>>,
-    resp_tx: tokio::sync::broadcast::Sender<Result<AwsCredResult, RuntimeCallbackError>>,
-) {
-    while let Some(profile_name) = req_rx.recv().await {
-        log::info!(
-            "Driving aws cred provider, received profile name: {:?}",
-            profile_name
-        );
-
-        // let creds = load_aws_creds_cb.call1(&JsValue::NULL, &JsValue::from(profile_name)).await.unwrap();
-        let Ok(load) = load_aws_creds_cb.call1(&JsValue::NULL, &JsValue::from(profile_name)) else {
-            resp_tx
-                .send(Err(RuntimeCallbackError::AwsCredProviderError(
-                    "loadAwsCreds did not return a promise".to_string(),
-                )))
-                // .await
-                .expect("Failed to send creds");
-            continue;
-        };
-
-        let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
-
-        log::info!("Driving aws cred provider, load: {:?}", load);
-
-        let load = match load {
-            Ok(load) => load,
-            Err(err) => {
-                if let Some(e) = err.dyn_ref::<js_sys::Error>() {
-                    if let Some(e_str) = e.message().as_string() {
-                        resp_tx
-                            .send(Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                                "loadAwsCreds failure: {}",
-                                e_str
-                            ))))
-                            // .await
-                            .expect("Failed to send creds");
-                        continue;
-                    }
-                }
-
-                resp_tx
-                    .send(Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                        "loadAwsCreds rejected: {:?}",
-                        err
-                    ))))
-                    // .await
-                    .expect("Failed to send creds");
-                continue;
-            }
-        };
-
-        let creds_result = match serde_wasm_bindgen::from_value::<AwsCredResult>(load) {
-            Ok(creds) => Ok(creds),
-            Err(e) => Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                "Expected loadAwsCreds to return a HashMap<string, string>. {}",
-                e
-            ))),
-        };
-
-        log::info!(
-            "Driving aws cred provider, sending creds: {:?}",
-            creds_result
-        );
-
-        resp_tx
-            .send(creds_result)
-            // .await
-            .expect("Failed to send creds");
-    }
-}
-
-fn js_fn_to_aws_cred_provider(load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
-    let (req_tx, req_rx) = tokio::sync::mpsc::channel::<Option<String>>(1);
-    let (resp_tx, mut resp_rx) =
-        tokio::sync::broadcast::channel::<Result<AwsCredResult, RuntimeCallbackError>>(1);
-
-    wasm_bindgen_futures::spawn_local(drive_aws_cred_provider(load_aws_creds_cb, req_rx, resp_tx));
-
-    Some(AwsCredProviderImpl { req_tx, resp_rx })
 }
 
 #[wasm_bindgen]
