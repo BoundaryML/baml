@@ -183,11 +183,9 @@ impl BamlRuntime {
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
         baml_log::set_from_env(&copy)?;
-<<<<<<< HEAD
 
         let inner = InternalBamlRuntime::from_file_content(root_path, files)?;
-=======
->>>>>>> canary
+
         Ok(BamlRuntime {
             inner,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
