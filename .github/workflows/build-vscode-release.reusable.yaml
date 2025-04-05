@@ -35,118 +35,119 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+      # Install wasm-bindgen
       - uses: jetli/wasm-bindgen-action@v0.2.0
         with:
           version: "0.2.92"
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          cache: "pnpm"
+          node-version: 20
+          cache-dependency-path: |
+            typescript/**/pnpm-lock.yaml
       - uses: pnpm/action-setup@v3
         with:
           version: 9.12.0
 
-      - name: Extract and copy binaries
-        shell: bash
-        run: |
-          # Setup server directories
-          rm -rf typescript/vscode-ext/packages/vscode/server
-          mkdir -p typescript/vscode-ext/packages/vscode/server
+      # - name: Extract and copy binaries
+      #   shell: bash
+      #   run: |
+      #     # Setup server directories
+      #     rm -rf typescript/vscode-ext/packages/vscode/server
+      #     mkdir -p typescript/vscode-ext/packages/vscode/server
 
-          # Define platform configurations: Keys are Rust target triples, Values are destination paths
-          declare -A platforms=(
-            ["x86_64-unknown-linux-gnu"]="x86_64-unknown-linux-gnu/baml-cli"
-            ["aarch64-unknown-linux-gnu"]="aarch64-unknown-linux-gnu/baml-cli"
-            ["x86_64-unknown-linux-musl"]="x86_64-unknown-linux-musl/baml-cli"
-            ["aarch64-unknown-linux-musl"]="aarch64-unknown-linux-musl/baml-cli"
-            ["x86_64-apple-darwin"]="x86_64-apple-darwin/baml-cli"
-            ["aarch64-apple-darwin"]="aarch64-apple-darwin/baml-cli"
-            ["x86_64-pc-windows-msvc"]="x86_64-pc-windows-msvc/baml-cli.exe"
-            ["aarch64-pc-windows-msvc"]="aarch64-pc-windows-msvc/baml-cli.exe"
-          )
+      #     # Define platform configurations: Keys are Rust target triples, Values are destination paths
+      #     declare -A platforms=(
+      #       ["x86_64-unknown-linux-gnu"]="x86_64-unknown-linux-gnu/baml-cli"
+      #       ["aarch64-unknown-linux-gnu"]="aarch64-unknown-linux-gnu/baml-cli"
+      #       ["x86_64-unknown-linux-musl"]="x86_64-unknown-linux-musl/baml-cli"
+      #       ["aarch64-unknown-linux-musl"]="aarch64-unknown-linux-musl/baml-cli"
+      #       ["x86_64-apple-darwin"]="x86_64-apple-darwin/baml-cli"
+      #       ["aarch64-apple-darwin"]="aarch64-apple-darwin/baml-cli"
+      #       ["x86_64-pc-windows-msvc"]="x86_64-pc-windows-msvc/baml-cli.exe"
+      #       ["aarch64-pc-windows-msvc"]="aarch64-pc-windows-msvc/baml-cli.exe"
+      #     )
 
-          # Process each platform
-          for target in "${!platforms[@]}"; do
-            echo "Processing $target..."
+      #     # Process each platform
+      #     for target in "${!platforms[@]}"; do
+      #       echo "Processing $target..."
 
-            # Create temporary directory for extraction
-            mkdir -p "tmp-extract-$target"
+      #       # Create temporary directory for extraction
+      #       mkdir -p "tmp-extract-$target"
 
-            # Find the appropriate archive file (ignoring version in pattern)
-            if [[ $target == *"windows"* ]]; then
-              archive_file=$(find cli-artifacts -name "baml-cli-*-$target.zip" -type f)
-            else
-              archive_file=$(find cli-artifacts -name "baml-cli-*-$target.tar.gz" -type f)
-            fi
+      #       # Find the appropriate archive file (ignoring version in pattern)
+      #       if [[ $target == *"windows"* ]]; then
+      #         archive_file=$(find cli-artifacts -name "baml-cli-*-$target.zip" -type f)
+      #       else
+      #         archive_file=$(find cli-artifacts -name "baml-cli-*-$target.tar.gz" -type f)
+      #       fi
 
-            if [ -z "$archive_file" ]; then
-              echo "Error: Could not find archive file for $target"
-              exit 1
-            fi
+      #       if [ -z "$archive_file" ]; then
+      #         echo "Error: Could not find archive file for $target"
+      #         exit 1
+      #       fi
 
-            echo "Found archive: $archive_file"
+      #       echo "Found archive: $archive_file"
 
-            # Extract archive to temporary directory
-            if [[ $target == *"windows"* ]]; then
-              unzip -o "$archive_file" -d "tmp-extract-$target"
-            else
-              tar xzf "$archive_file" -C "tmp-extract-$target"
-            fi
+      #       # Extract archive to temporary directory
+      #       if [[ $target == *"windows"* ]]; then
+      #         unzip -o "$archive_file" -d "tmp-extract-$target"
+      #       else
+      #         tar xzf "$archive_file" -C "tmp-extract-$target"
+      #       fi
 
-            # Find and copy binary
-            if [[ $target == *"windows"* ]]; then
-              binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli.exe" -not -path "*/\.*")
-            else
-              binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli" -not -path "*/\.*")
-            fi
+      #       # Find and copy binary
+      #       if [[ $target == *"windows"* ]]; then
+      #         binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli.exe" -not -path "*/\.*")
+      #       else
+      #         binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli" -not -path "*/\.*")
+      #       fi
 
-            if [ -z "$binary_path" ]; then
-              echo "Error: Could not find binary for $target in extracted files"
-              exit 1
-            fi
+      #       if [ -z "$binary_path" ]; then
+      #         echo "Error: Could not find binary for $target in extracted files"
+      #         exit 1
+      #       fi
 
-            # Define destination path and ensure directory exists
-            dest_path_dir="typescript/vscode-ext/packages/vscode/server/$(dirname "${platforms[$target]}")"
-            dest_path_file="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
-            mkdir -p "$dest_path_dir"
+      #       # Define destination path and ensure directory exists
+      #       dest_path_dir="typescript/vscode-ext/packages/vscode/server/$(dirname "${platforms[$target]}")"
+      #       dest_path_file="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
+      #       mkdir -p "$dest_path_dir"
 
-            echo "Copying $binary_path to $dest_path_file"
-            cp "$binary_path" "$dest_path_file"
-            chmod +x "$dest_path_file"
+      #       echo "Copying $binary_path to $dest_path_file"
+      #       cp "$binary_path" "$dest_path_file"
+      #       chmod +x "$dest_path_file"
 
-            # Clean up temporary directory
-            rm -rf "tmp-extract-$target"
-          done
+      #       # Clean up temporary directory
+      #       rm -rf "tmp-extract-$target"
+      #     done
 
-          # Verify all binaries are present and executable
-          echo "Verifying all binaries..."
-          for target in "${!platforms[@]}"; do
-            binary_path="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
-            if [ ! -f "$binary_path" ]; then
-              echo "Error: Missing binary at $binary_path"
-              exit 1
-            fi
-            # Skip execute check on Windows runners for .exe files if needed, though chmod +x is usually harmless
-            if [[ $target != *"windows"* ]] && [ ! -x "$binary_path" ]; then
-              echo "Error: Binary not executable at $binary_path"
-              exit 1
-            fi
-            echo "✓ Verified $binary_path"
-          done
+      #     # Verify all binaries are present and executable
+      #     echo "Verifying all binaries..."
+      #     for target in "${!platforms[@]}"; do
+      #       binary_path="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
+      #       if [ ! -f "$binary_path" ]; then
+      #         echo "Error: Missing binary at $binary_path"
+      #         exit 1
+      #       fi
+      #       # Skip execute check on Windows runners for .exe files if needed, though chmod +x is usually harmless
+      #       if [[ $target != *"windows"* ]] && [ ! -x "$binary_path" ]; then
+      #         echo "Error: Binary not executable at $binary_path"
+      #         exit 1
+      #       fi
+      #       echo "✓ Verified $binary_path"
+      #     done
 
-      - name: Install dependencies
-        run: pnpm install && pnpm build
-        working-directory: typescript
-
-      - name: Build VSCode extension
-        run: pnpm build
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
         working-directory: typescript/vscode-ext/packages
+      - name: Build Typescript Project
+        run: pnpm run build
+        working-directory: typescript/
 
-      - name: Prepackage VSIX
-        run: pnpm vscode:prepublish
-        working-directory: typescript/vscode-ext/packages
-
-      - name: Package VSIX
-        run: npx @vscode/vsce package --no-dependencies
+      - name: Build VSCode Extension
+        id: build
+        run: pnpm run vscode:package
         working-directory: typescript/vscode-ext/packages
 
       - name: Upload VSIX artifact
@@ -154,4 +155,11 @@ jobs:
         with:
           name: ${{ inputs.artifact_name }}
           path: typescript/vscode-ext/packages/vscode/*.vsix
+          if-no-files-found: error
 
+      - name: Upload VSCode Playground Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-playground
+          path: typescript/vscode-ext/packages/web-panel/dist
+          if-no-files-found: error
