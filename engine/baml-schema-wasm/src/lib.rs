@@ -1,8 +1,9 @@
+pub(crate) mod aws_cred_bridge;
+
 #[cfg(target_arch = "wasm32")]
 pub mod runtime_wasm;
 
 use internal_baml_core::internal_baml_schema_ast::{format_schema, FormatOptions};
-use std::env;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

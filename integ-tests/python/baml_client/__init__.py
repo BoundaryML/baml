@@ -40,7 +40,6 @@ with EnsureBamlPyImport(__version__) as e:
   from . import partial_types
   from . import config
   from .config import reset_baml_env_vars
-
   
   from .async_client import b
   
@@ -51,5 +50,6 @@ __all__ = [
   "tracing",
   "types",
   "reset_baml_env_vars",
+  "config",
   "logging",
 ]

@@ -1,0 +1,3 @@
+# assume tests run from this directory.
+# Dont change this. It will get picked up by test_logger.py
+BAML_LOG=warn

@@ -1,13 +1,10 @@
 import pytest
-from dotenv import load_dotenv
 
 from ..baml_client import b
 from ..baml_client.sync_client import b as b_sync
 from baml_py import Collector
 import gc
 import sys
-
-load_dotenv()
 
 
 @pytest.fixture(autouse=True)

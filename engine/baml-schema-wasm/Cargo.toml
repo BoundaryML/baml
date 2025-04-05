@@ -11,7 +11,10 @@ license-file.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [lints.rust]
+dead_code = "deny"
 elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
 
 [dependencies]
 reqwest.workspace = true
@@ -36,6 +39,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen = "0.6.5"
 time.workspace = true
+tokio = { workspace = true, features = ["sync"] }
 url.workspace = true
 uuid = { version = "1.8", features = ["v4", "js"] }
 wasm-bindgen = "=0.2.92"
