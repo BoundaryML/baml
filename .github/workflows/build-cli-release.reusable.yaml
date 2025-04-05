@@ -45,11 +45,11 @@ jobs:
           - os: ubuntu-20.04
             target: aarch64-unknown-linux-gnu
             arm: true
-          - os: ubuntu-latest
+          - os: ubuntu-20.04
             target: aarch64-unknown-linux-musl
             static: true
             arm: true
-            container: quay.io/pypa/manylinux2014_aarch64
+            container: quay.io/pypa/manylinux_2_24_aarch64
 
     
     runs-on: ${{ matrix._.os }}

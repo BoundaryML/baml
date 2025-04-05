@@ -41,12 +41,6 @@ jobs:
         with:
           version: 9.12.0
 
-      - name: Download all CLI artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: baml-cli-*
-          path: cli-artifacts
-
       - name: Extract and copy binaries
         shell: bash
         run: |
