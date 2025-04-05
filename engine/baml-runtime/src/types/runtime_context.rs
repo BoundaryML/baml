@@ -49,18 +49,6 @@ static_assertions::assert_impl_all!(RuntimeCallbackError: Send, Sync);
 
 pub type RuntimeCallbackResult<T> = Result<T, RuntimeCallbackError>;
 
-// #[cfg(target_arch = "wasm32")]
-// pub type BamlSrcReader = Box<dyn Fn(&str) -> Result<String>>;
-// #[cfg(not(target_arch = "wasm32"))]
-// pub type BamlSrcReader = fn(&str) -> Result<String>;
-// #[cfg(target_arch = "wasm32")]
-// {
-use core::future::Future;
-use core::pin::Pin;
-pub type BamlSrcReader = Option<
-    Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<Vec<u8>>>>>>,
->;
-// pub type AwsCredProvider = Option<Box<dyn Fn(Option<String>) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<HashMap<String, String>>> + Send>> + Send + Sync>>;
 pub type AwsCredProvider = Option<AwsCredProviderImpl>;
 
 #[derive(serde::Deserialize, Debug, Clone)]
@@ -94,13 +82,17 @@ impl Clone for AwsCredProviderImpl {
         }
     }
 }
-// }
-//     #[cfg(not(target_arch = "wasm32"))]
-//     {
-//         use futures::future::BoxFuture;
-//         pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, RuntimeCallbackResult<Vec<u8>>>>>;
-//         pub type AwsCredProvider = Option<Box<fn(Option<&str>) -> BoxFuture<'static, RuntimeCallbackResult<HashMap<String, String>>>>>;
-//     }
+
+cfg_if::cfg_if!(
+    if #[cfg(target_arch = "wasm32")] {
+        use core::pin::Pin;
+        use core::future::Future;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
+    } else {
+        use futures::future::BoxFuture;
+        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
+    }
+);
 
 // #[derive(Debug)]
 pub struct RuntimeContext {

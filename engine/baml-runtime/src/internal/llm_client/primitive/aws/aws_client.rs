@@ -320,12 +320,6 @@ impl AwsClient {
             self.properties.session_token.as_ref(),
         ) {
             (None, None, None) => {
-                let mut builder =
-                    aws_config::default_provider::credentials::DefaultCredentialsChain::builder();
-                if let Some(profile) = self.properties.profile.as_ref() {
-                    builder = builder.profile_name(profile);
-                }
-
                 #[cfg(target_arch = "wasm32")]
                 {
                     loader.credentials_provider(WasmAwsCreds {
@@ -336,6 +330,12 @@ impl AwsClient {
 
                 #[cfg(not(target_arch = "wasm32"))]
                 {
+                    let mut builder =
+                        aws_config::default_provider::credentials::DefaultCredentialsChain::builder(
+                        );
+                    if let Some(profile) = self.properties.profile.as_ref() {
+                        builder = builder.profile_name(profile);
+                    }
                     loader.credentials_provider(builder.build().await)
                 }
             }

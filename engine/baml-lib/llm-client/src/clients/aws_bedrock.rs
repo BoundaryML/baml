@@ -273,8 +273,6 @@ impl UnresolvedAwsBedrock {
                             Some(token)
                         }
                         _ => None,
-                        Ok(key) if !key.is_empty() => Some(key),
-                        _ => None,
                     };
                     (access_key_id, secret_access_key, session_token)
                 }

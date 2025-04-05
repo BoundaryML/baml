@@ -349,11 +349,8 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
-        let ctx_mgr = RuntimeContextManager::new_from_env_vars(
-            std::env::vars().collect(),
-            None,
-            unimplemented!(),
-        );
+        let ctx_mgr =
+            RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None, None);
         let client_registry = b_options.and_then(|options| options.client_registry);
 
         let locked = self.b.read().await;
@@ -444,11 +441,8 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         let client_registry = b_options.and_then(|options| options.client_registry);
 
         tokio::spawn(async move {
-            let ctx_mgr = RuntimeContextManager::new_from_env_vars(
-                std::env::vars().collect(),
-                None,
-                unimplemented!(),
-            );
+            let ctx_mgr =
+                RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None, None);
 
             let result_stream = self.b.read().await.stream_function(
                 b_fn,
