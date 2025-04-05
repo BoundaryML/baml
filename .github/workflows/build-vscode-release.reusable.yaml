@@ -67,51 +67,51 @@ jobs:
           for target in "${!platforms[@]}"; do
             echo "Processing $target..."
             
-            # Verify artifact directory exists
-            if [ ! -d "cli-artifacts/baml-cli-$target" ]; then
-              echo "Error: Missing artifact directory for $target"
+            # Create temporary directory for extraction
+            mkdir -p "tmp-extract-$target"
+            
+            # Find the appropriate archive file
+            if [[ $target == *"windows"* ]]; then
+              archive_file=$(find cli-artifacts -name "baml-cli-*-$target.zip" -type f)
+            else
+              archive_file=$(find cli-artifacts -name "baml-cli-*-$target.tar.gz" -type f)
+            fi
+            
+            if [ -z "$archive_file" ]; then
+              echo "Error: Could not find archive file for $target"
               exit 1
             fi
             
-            pushd "cli-artifacts/baml-cli-$target" > /dev/null
+            echo "Found archive: $archive_file"
             
-            # Extract archive
+            # Extract archive to temporary directory
             if [[ $target == *"windows"* ]]; then
-              unzip -o baml-cli-*.zip
+              unzip -o "$archive_file" -d "tmp-extract-$target"
             else
-              tar xzf baml-cli-*.tar.gz
+              tar xzf "$archive_file" -C "tmp-extract-$target"
             fi
             
             # Find and copy binary
             if [[ $target == *"windows"* ]]; then
-              binary_path=$(find . -type f -name "baml-cli.exe" -not -path "*/\.*")
+              binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli.exe" -not -path "*/\.*")
             else
-              binary_path=$(find . -type f -name "baml-cli" -not -path "*/\.*")
-            fi
-            
-            # Update the path to look inside the versioned directory
-            if [ -z "$binary_path" ] && [ -d "baml-cli-"*"-$target" ]; then
-              if [[ $target == *"windows"* ]]; then
-                binary_path=$(find "baml-cli-"*"-$target" -type f -name "baml-cli.exe")
-              else
-                binary_path=$(find "baml-cli-"*"-$target" -type f -name "baml-cli")
-              fi
+              binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli" -not -path "*/\.*")
             fi
             
             if [ -z "$binary_path" ]; then
-              echo "Error: Could not find binary for $target"
-              popd > /dev/null
+              echo "Error: Could not find binary for $target in extracted files"
               exit 1
             fi
             
             # Define destination path
-            dest_path="../../typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
+            dest_path="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
             
             echo "Copying $binary_path to $dest_path"
             cp "$binary_path" "$dest_path"
             chmod +x "$dest_path"
             
-            popd > /dev/null
+            # Clean up temporary directory
+            rm -rf "tmp-extract-$target"
           done
           
           # Verify all binaries are present and executable

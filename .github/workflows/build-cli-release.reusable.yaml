@@ -174,7 +174,7 @@ jobs:
           ls -l "${archive_base}".*
 
       - name: Create archive (Unix)
-        if:  contains(matrix._.os, 'windows' == false && inputs.package_for_release)
+        if:  (! contains(matrix._.os, 'windows') && inputs.package_for_release)
         shell: bash
         run: |
           set -e # Exit immediately if a command exits with a non-zero status.
