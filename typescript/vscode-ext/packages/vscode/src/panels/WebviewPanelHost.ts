@@ -269,7 +269,7 @@ export class WebviewPanelHost {
           return
         }
 
-        console.log('message from webview, after above handlers:', message)
+        // console.log('message from webview, after above handlers:', message)
         const vscodeMessage = message.data
         const vscodeCommand = vscodeMessage.vscodeCommand
 

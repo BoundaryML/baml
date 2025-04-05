@@ -67,7 +67,6 @@ class VSCodeAPIWrapper {
 
   public async readFile(path: string): Promise<Uint8Array> {
     const uri = await this.readLocalFile('', path)
-    console.log('read file', uri)
 
     if (uri.readError) {
       throw new Error(`Failed to read file: ${path}\n${uri.readError}`)
@@ -137,7 +136,7 @@ class VSCodeAPIWrapper {
         vscodeCommand: 'INITIALIZED',
       })
     } catch (e) {
-      console.log('Error marking initialized', e)
+      console.error('Error marking initialized', e)
     }
   }
 
@@ -151,7 +150,6 @@ class VSCodeAPIWrapper {
         rpcId,
         data,
       }
-      console.log('Webview->WebviewPanelHost message', message)
       this.postMessage(message)
 
       // Timeout to prevent hanging requests
@@ -165,10 +163,7 @@ class VSCodeAPIWrapper {
   }
 
   private listenForRpcResponses(event: any) {
-    // console.log('unfiltered messages to webview', event.data)
-
     if (isRpcResponse(event.data)) {
-      // console.log('filtered to RPC responses', event.data)
       const rpcData = event.data as RpcResponse
       const entry = this.rpcTable.get(rpcData.rpcId)
       if (entry) {
@@ -190,7 +185,6 @@ class VSCodeAPIWrapper {
     if (this.vsCodeApi) {
       this.vsCodeApi.postMessage(message)
     } else {
-      console.log('posting message' + JSON.stringify(message))
       window.postMessage(message)
     }
   }
