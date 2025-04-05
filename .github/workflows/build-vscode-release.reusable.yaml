@@ -27,7 +27,7 @@ jobs:
           pattern: baml-cli-*
           path: cli-artifacts
           merge-multiple: true
-      - run: ls -R cli-artifacts
+      # - run: ls -R cli-artifacts
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
