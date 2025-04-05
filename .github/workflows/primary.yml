@@ -143,15 +143,15 @@ jobs:
         run: |
           cd integ-tests/python
           ./run_tests.sh
-  build-cli:
-    uses: ./.github/workflows/build-cli-release.reusable.yaml
-    with:
-      package_for_release: false
-      # No version needed for CI builds
+  # build-cli:
+  #   uses: ./.github/workflows/build-cli-release.reusable.yaml
+  #   with:
+  #     package_for_release: false
+  #     # No version needed for CI builds
 
-  build-vscode:
-    needs: build-cli
-    uses: ./.github/workflows/build-vscode-release.reusable.yaml
-    with:
-      artifact_name: baml.vsix
-      is_release_build: false
+  # build-vscode:
+  #   needs: build-cli
+  #   uses: ./.github/workflows/build-vscode-release.reusable.yaml
+  #   with:
+  #     artifact_name: baml.vsix
+  #     is_release_build: false
