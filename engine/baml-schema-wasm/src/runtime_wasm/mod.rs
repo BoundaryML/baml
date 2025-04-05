@@ -7,12 +7,12 @@ use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
+use baml_runtime::BamlSrcReader;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_runtime::{BamlSrcReader, RuntimeCallbackError};
 use baml_types::ResponseCheck;
 use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
@@ -1532,9 +1532,7 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             async move {
                 let null = JsValue::NULL;
                 let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
-                    return Err(RuntimeCallbackError::BamlSrcReadError(
-                        "readFileRef did not return a promise".to_string(),
-                    ));
+                    anyhow::bail!("readFileRef did not return a promise");
                 };
 
                 let read = JsFuture::from(Promise::unchecked_from_js(read)).await;
@@ -1544,17 +1542,11 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
                     Err(err) => {
                         if let Some(e) = err.dyn_ref::<js_sys::Error>() {
                             if let Some(e_str) = e.message().as_string() {
-                                return Err(RuntimeCallbackError::BamlSrcReadError(format!(
-                                    "readFileRef failure: {}",
-                                    e_str
-                                )));
+                                anyhow::bail!("readFileRef failure: {}", e_str);
                             }
                         }
 
-                        return Err(RuntimeCallbackError::BamlSrcReadError(format!(
-                            "readFileRef rejected: {:?}",
-                            err
-                        )));
+                        anyhow::bail!("readFileRef rejected: {:?}", err);
                     }
                 };
 

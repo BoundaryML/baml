@@ -39,8 +39,6 @@ pub struct RuntimeClassOverride {
 /// For baml-src-reader and aws-cred-provider, provide a statically defined type which is Send + Sync
 /// anyhow::Error is not Send + Sync, so it's convoluted to use it in this callback context
 pub enum RuntimeCallbackError {
-    #[error("Failed to read baml_src: {0}")]
-    BamlSrcReadError(String),
     #[error("Failed to load aws creds: {0}")]
     AwsCredProviderError(String),
 }
@@ -87,10 +85,10 @@ cfg_if::cfg_if!(
     if #[cfg(target_arch = "wasm32")] {
         use core::pin::Pin;
         use core::future::Future;
-        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = RuntimeCallbackResult<Vec<u8>>>>>>>;
+        pub type BamlSrcReader = Option<Box<dyn Fn(&str) -> core::pin::Pin<Box<dyn Future<Output = Result<Vec<u8>>>>>>>;
     } else {
         use futures::future::BoxFuture;
-        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, RuntimeCallbackResult<Vec<u8>>>>>;
+        pub type BamlSrcReader = Option<Box<fn(&str) -> BoxFuture<'static, Result<Vec<u8>>>>>;
     }
 );
 
