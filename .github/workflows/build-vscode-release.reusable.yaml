@@ -21,6 +21,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
       - name: Download CLI artifacts
         uses: actions/download-artifact@v4
         with:
@@ -46,9 +49,7 @@ jobs:
           node-version: 20
           cache-dependency-path: |
             typescript/**/pnpm-lock.yaml
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.12.0
+      
 
       # - name: Extract and copy binaries
       #   shell: bash
