@@ -93,7 +93,7 @@ jobs:
       # - build-python-release
       # - build-ruby-release
       # - build-typescript-release
-      - build-cli
+      # - build-cli
       - build-vscode
     steps:
       - run: echo "::do-nothing::" >/dev/null
