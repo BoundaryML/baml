@@ -3,7 +3,13 @@ use std::sync::Arc;
 
 use aws_config::Region;
 use aws_config::{identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader};
-use aws_credential_types::Credentials;
+use aws_credential_types::{
+    provider::{
+        error::{CredentialsError, CredentialsNotLoaded},
+        future::ProvideCredentials,
+    },
+    Credentials,
+};
 use aws_sdk_bedrockruntime::config::Intercept;
 use aws_sdk_bedrockruntime::Client as BedrockRuntimeClient;
 use aws_sdk_bedrockruntime::{self as bedrock, operation::converse::ConverseOutput};
@@ -17,7 +23,7 @@ use baml_types::tracing::events::{
     ContentId, FunctionId, HTTPBody, HTTPRequest, HTTPResponse, HttpRequestId, TraceData,
     TraceEvent, TraceLevel,
 };
-use baml_types::{BamlMap, BamlMediaContent};
+use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMediaContent};
 use baml_types::{BamlMedia, BamlMediaType};
 use futures::stream;
 use internal_baml_core::ir::ClientWalker;
@@ -200,6 +206,39 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
     }
 }
 
+/// If the user has explicitly provided credentials via options on a client,
+/// we use this provider
+#[derive(Debug)]
+struct ExplicitCredentialsProvider {
+    access_key_id: Option<String>,
+    secret_access_key: Option<ApiKeyWithProvenance>,
+    session_token: Option<String>,
+}
+
+impl aws_credential_types::provider::ProvideCredentials for ExplicitCredentialsProvider {
+    fn provide_credentials<'a>(
+        &'a self,
+    ) -> aws_credential_types::provider::future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        ProvideCredentials::ready(match (&self.access_key_id, &self.secret_access_key, &self.session_token) {
+            (None, None, None) => {
+                Err(CredentialsError::unhandled("BAML internal error: ExplicitCredentialsProvider should only be constructed if either access_key_id or secret_access_key are provided"))
+            }
+            (Some(access_key_id), Some(secret_access_key), session_token) => {
+                Ok(Credentials::new(access_key_id, secret_access_key.api_key.expose_secret(), session_token.clone(), None, "baml-explicit-credentials"))
+            }
+            (_, _, None) => {
+                Err(CredentialsError::invalid_configuration("If either access_key_id or secret_access_key are provided, both must be provided."))
+            }
+            (_, _, Some(_)) => {
+                Err(CredentialsError::invalid_configuration("If either access_key_id or secret_access_key are provided, both must be provided. If session_token is provided, all three must be provided."))
+            }
+        })
+    }
+}
+
 impl AwsClient {
     pub fn dynamic_new(client: &ClientProperty, ctx: &RuntimeContext) -> Result<AwsClient> {
         let properties = resolve_properties(&client.provider, &client.unresolved_options()?, ctx)?;
@@ -270,105 +309,70 @@ impl AwsClient {
         aws_cred_provider: AwsCredProvider,
     ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
-        let mut loader = {
-            let loader = super::wasm::load_aws_config();
-            let mut builder =
-                aws_config::default_provider::credentials::DefaultCredentialsChain::builder();
-            if let Some(profile) = self.properties.profile.as_ref() {
-                builder = builder.profile_name(profile);
-            }
-            log::debug!("Building wasm aws credentials chain - UNCONDITIONALLY BECAUSE BULLSHIT $ENV_VAR UNCONDITIONAL SUBSTITUTION");
-            loader.credentials_provider(WasmAwsCreds {
-                // default_chain: builder.build().await,
-                aws_cred_provider,
-            })
-        };
+        let loader = super::wasm::load_aws_config();
+
         #[cfg(not(target_arch = "wasm32"))]
-        let mut loader = {
-            let loader = aws_config::defaults(BehaviorVersion::latest());
+        let loader = aws_config::defaults(BehaviorVersion::latest());
 
-            // Set credentials provider
-            let mut loader = match (
-                self.properties.access_key_id.as_ref(),
-                self.properties.secret_access_key.as_ref(),
-                self.properties.session_token.as_ref(),
-            ) {
-                (None, None, None) => {
-                    let mut builder =
-                        aws_config::default_provider::credentials::DefaultCredentialsChain::builder(
-                        );
-                    if let Some(profile) = self.properties.profile.as_ref() {
-                        builder = builder.profile_name(profile);
-                    }
-                    log::debug!("Building wasm aws credentials chain - none of access key id / secret access key / session token provided");
-                    // is it because of the 'static lifetime requirement?
-                    #[cfg(target_arch = "wasm32")]
-                    {
-                        loader.credentials_provider(WasmAwsCreds {
-                            default_chain: builder.build().await,
-                            // aws_cred_provider: ctx.aws_cred_provider.clone(),
-                        })
-                    }
-
-                    #[cfg(not(target_arch = "wasm32"))]
-                    {
-                        loader.credentials_provider(builder.build().await)
-                    }
+        let mut loader = match (
+            self.properties.access_key_id.as_ref(),
+            self.properties.secret_access_key.as_ref(),
+            self.properties.session_token.as_ref(),
+        ) {
+            (None, None, None) => {
+                let mut builder =
+                    aws_config::default_provider::credentials::DefaultCredentialsChain::builder();
+                if let Some(profile) = self.properties.profile.as_ref() {
+                    builder = builder.profile_name(profile);
                 }
-                _ => {
-                    log::debug!(
-                        "Building wasm aws credentials chain - at least one was provided {:?} {} {:?}",
-                        self.properties.access_key_id,
-                        self.properties.secret_access_key.is_some(),
-                        self.properties.session_token,
-                    );
-                    if let Some(aws_access_key_id) = self.properties.access_key_id.as_ref() {
-                        if aws_access_key_id.starts_with("$") {
-                            return Err(anyhow::anyhow!(
-                                "AWS access key id expected, please set: env.{}",
-                                &aws_access_key_id[1..]
-                            ));
-                        }
-                    }
-                    if let Some(aws_secret_access_key) = self.properties.secret_access_key.as_ref()
-                    {
-                        // Exposing the secret key here is relatively safe. First, we expose it only
-                        // to check if it starts with $. If so, the remainer should be an env
-                        // var name, which is also safe to expose.
-                        if aws_secret_access_key
-                            .api_key
-                            .expose_secret()
-                            .starts_with("$")
-                        {
-                            return Err(anyhow::anyhow!(
-                                "AWS secret access key expected, please set: env.{}",
-                                &aws_secret_access_key.api_key.expose_secret()[1..]
-                            ));
-                        }
-                    }
-                    if let Some(aws_session_token) = self.properties.session_token.as_ref() {
-                        if aws_session_token.starts_with("$") {
-                            return Err(anyhow::anyhow!(
-                                "AWS session token expected, please set: env.{}",
-                                &aws_session_token[1..]
-                            ));
-                        }
-                    }
-                    loader.credentials_provider(Credentials::new(
-                        self.properties.access_key_id.clone().unwrap_or("".into()),
-                        self.properties
-                            .secret_access_key
-                            .as_ref()
-                            .map_or("", |key| key.api_key.expose_secret())
-                            .to_string(),
-                        self.properties.session_token.clone(),
-                        None,
-                        "baml-runtime",
-                    ))
-                }
-            };
 
-            loader
+                #[cfg(target_arch = "wasm32")]
+                {
+                    loader.credentials_provider(WasmAwsCreds {
+                        aws_cred_provider: aws_cred_provider.clone(),
+                        profile: self.properties.profile.clone(),
+                    })
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    loader.credentials_provider(builder.build().await)
+                }
+            }
+            // Env var resolution is pretty nasty, see
+            // https://gloo-global.slack.com/archives/C03KV1PJ6EM/p1743832043661209
+            _ => loader.credentials_provider(ExplicitCredentialsProvider {
+                access_key_id: match &self.properties.access_key_id {
+                    Some(access_key_id) => {
+                        if access_key_id.starts_with("$") {
+                            None
+                        } else {
+                            Some(access_key_id.clone())
+                        }
+                    }
+                    None => None,
+                },
+                secret_access_key: match &self.properties.secret_access_key {
+                    Some(secret_access_key) => {
+                        if secret_access_key.api_key.expose_secret().starts_with("$") {
+                            None
+                        } else {
+                            Some(secret_access_key.clone())
+                        }
+                    }
+                    None => None,
+                },
+                session_token: match &self.properties.session_token {
+                    Some(session_token) => {
+                        if session_token.starts_with("$") {
+                            None
+                        } else {
+                            Some(session_token.clone())
+                        }
+                    }
+                    None => None,
+                },
+            }),
         };
 
         // Set region if specified

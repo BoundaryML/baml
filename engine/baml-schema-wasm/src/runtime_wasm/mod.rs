@@ -1577,57 +1577,6 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
     }))
 }
 
-// fn js_fn_to_aws_cred_provider(load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
-//     Some(Box::new(move |profile_name| {
-//         Box::pin({
-//             let profile_name = profile_name.map(|s| s.to_string());
-//             let load_aws_creds_cb = load_aws_creds_cb.clone();
-//             async move {
-//                 let null = JsValue::NULL;
-//                 let profile_name = if let Some(profile_name) = profile_name {
-//                     JsValue::from(profile_name)
-//                 } else {
-//                     JsValue::NULL
-//                 };
-//                 let Ok(load) = load_aws_creds_cb.call1(&null, &profile_name) else {
-//                     return Err(RuntimeCallbackError::AwsCredProviderError(
-//                         "loadAwsCreds did not return a promise".to_string(),
-//                     ));
-//                 };
-
-//                 let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
-
-//                 let load = match load {
-//                     Ok(load) => load,
-//                     Err(err) => {
-//                         if let Some(e) = err.dyn_ref::<js_sys::Error>() {
-//                             if let Some(e_str) = e.message().as_string() {
-//                                 return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-//                                     "loadAwsCreds failure: {}",
-//                                     e_str
-//                                 )));
-//                             }
-//                         }
-
-//                         return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-//                             "loadAwsCreds rejected: {:?}",
-//                             err
-//                         )));
-//                     }
-//                 };
-
-//                 match serde_wasm_bindgen::from_value::<HashMap<String, String>>(load) {
-//                     Ok(creds) => Ok(creds),
-//                     Err(e) => Err(RuntimeCallbackError::AwsCredProviderError(format!(
-//                         "Expected loadAwsCreds to return a HashMap<string, string>. {}",
-//                         e
-//                     ))),
-//                 }
-//             }
-//         })
-//     }))
-// }
-
 async fn drive_aws_cred_provider(
     load_aws_creds_cb: js_sys::Function,
     mut req_rx: tokio::sync::mpsc::Receiver<Option<String>>,
@@ -1701,24 +1650,6 @@ async fn drive_aws_cred_provider(
     }
 }
 
-// fn wrap_aws_cred_future(
-//     req_tx: tokio::sync::mpsc::Sender<String>,
-//     mut resp_rx: tokio::sync::mpsc::Receiver<Result<HashMap<String, String>, RuntimeCallbackError>>,
-// ) -> AwsCredProvider {
-//     |profile_name| async move {
-//         log::info!("Loading AWS creds via callback");
-//         req_tx
-//             .send(match profile_name {
-//                 Some(profile_name) => profile_name,
-//                 None => "default".to_string(),
-//             })
-//             .await
-//             .expect("Failed to send cred request");
-//         resp_rx.recv().await.expect("Failed to recv cred response")
-//     }
-// }
-
-// TODO: try Arc+Mutex again
 fn js_fn_to_aws_cred_provider(load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
     let (req_tx, req_rx) = tokio::sync::mpsc::channel::<Option<String>>(1);
     let (resp_tx, mut resp_rx) =

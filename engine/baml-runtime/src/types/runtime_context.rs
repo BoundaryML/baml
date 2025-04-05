@@ -70,6 +70,7 @@ pub enum AwsCredResult {
 
     #[serde(rename = "ok", rename_all = "camelCase")]
     /// This is 1:1 with AwsCredentialIdentity in @smithy/types
+    /// https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-smithy-types/Interface/AwsCredentialIdentity/
     Ok {
         access_key_id: String,
         secret_access_key: String,

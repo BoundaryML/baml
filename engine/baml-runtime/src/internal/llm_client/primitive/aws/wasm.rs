@@ -42,28 +42,10 @@ use crate::{AwsCredProvider, AwsCredProviderImpl, AwsCredResult};
 
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");
-    let aws_config_contents = r#"
-                [profile boundaryml-dev]
-sso_session = boundaryml
-sso_account_id = 147997132427
-sso_role_name = AdministratorAccess
-region = us-east-1
-output = table
-"#;
     aws_config::defaults(BehaviorVersion::latest())
         .sleep_impl(BrowserSleep)
         .time_source(BrowserTime)
         .http_client(BrowserHttp2::new())
-        .profile_files(
-            aws_runtime::env_config::file::EnvConfigFiles::builder()
-                .include_default_config_file(false)
-                .include_default_credentials_file(false)
-                .with_contents(
-                    aws_runtime::env_config::file::EnvConfigFileKind::Config,
-                    aws_config_contents,
-                )
-                .build(),
-        )
 }
 
 #[derive(Debug)]
@@ -180,13 +162,14 @@ impl HttpClient for BrowserHttp2 {
 pub(super) struct WasmAwsCreds {
     // pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
     pub aws_cred_provider: AwsCredProvider,
+    pub profile: Option<String>,
 }
 
 impl std::fmt::Debug for WasmAwsCreds {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WasmAwsCreds")
-            // .field("default_chain", &self.default_chain)
             .field("aws_cred_provider", &"<no-repr-available>")
+            .field("profile", &self.profile)
             .finish()
     }
 }
@@ -199,9 +182,7 @@ impl WasmAwsCreds {
                 mut resp_rx,
             }) => {
                 req_tx
-                    // TODO: do not hardcode this!!!!
-                    // placceholder-aws-profile-name
-                    .send(Some("boundaryml-dev".to_string()))
+                    .send(self.profile.clone())
                     .await
                     .expect("Failed to send cred request");
                 let creds = resp_rx
@@ -220,9 +201,6 @@ impl WasmAwsCreds {
                         secret_access_key,
                         session_token,
                         expiration,
-                        // session_token,
-                        // expires_after
-                        // provider_name,
                         ..
                     } => Ok(Credentials::new(
                         access_key_id,
@@ -254,21 +232,6 @@ impl aws_credential_types::provider::ProvideCredentials for WasmAwsCreds {
     where
         Self: 'a,
     {
-        log::debug!("Providing AWS credentials for wasm");
-        let creds = ProvideCredentials::new(self.provide_credentials_impl());
-        log::debug!("AWS credentials provided for wasm: {:?}", creds);
-        // self.default_chain.provide_credentials()
-        // let datetime_str = "2025-02-24T19:38:05.000Z";
-        // let datetime: DateTime<Utc> = datetime_str.parse().expect("Invalid datetime format");
-        // let expires_after =
-        //     web_time::UNIX_EPOCH + web_time::Duration::from_secs(datetime.timestamp() as u64);
-        // ProvideCredentials::ready(Ok(Credentials::new(
-        //     "fake-access-key-id".to_string(),
-        //     "fake-secret-access-key".to_string(),
-        //     None,
-        //     None,
-        //     "hardcoded-boundaryml-dev",
-        // )))
-        creds
+        ProvideCredentials::new(self.provide_credentials_impl())
     }
 }
