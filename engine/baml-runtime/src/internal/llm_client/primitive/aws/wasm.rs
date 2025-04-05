@@ -181,19 +181,27 @@ impl WasmAwsCreds {
                 req_tx,
                 mut resp_rx,
             }) => {
-                req_tx
-                    .send(self.profile.clone())
-                    .await
-                    .expect("Failed to send cred request");
-                let creds = resp_rx
-                    .recv()
-                    .await
-                    .expect("Failed to recv cred response")
-                    .map_err(|e| CredentialsError::unhandled(e))?;
-                log::debug!(
-                    "AWS credentials provided via callback provider: {:?}",
-                    creds
-                );
+                if let Err(e) = req_tx.send(self.profile.clone()).await {
+                    log::error!(
+                        "Failed to send AWS cred request across WASM bridge: {:?}",
+                        e
+                    );
+                    return Err(CredentialsError::unhandled(e));
+                };
+                let creds = match resp_rx.recv().await {
+                    Ok(Ok(creds)) => creds,
+                    Ok(Err(e)) => {
+                        log::error!("Error in AWS cred provider: {:?}", e);
+                        return Err(CredentialsError::unhandled(e));
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Failed to recv AWS cred response across WASM bridge: {:?}",
+                            e
+                        );
+                        return Err(CredentialsError::unhandled(e));
+                    }
+                };
 
                 match creds {
                     AwsCredResult::Ok {
