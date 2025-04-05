@@ -97,6 +97,7 @@ jobs:
         if: inputs.package_for_release
         shell: bash
         run: |
+          echo "version: ${{ inputs.version }}"
           if [ "${{ matrix._.os }}" = "windows-latest" ]; then
             bin="engine/target/${{ matrix._.target }}/release/baml-cli.exe"
           else

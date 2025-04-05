@@ -27,6 +27,39 @@ permissions:
   id-token: write
 
 jobs:
+  determine-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version_string: ${{ steps.set-version.outputs.version }}
+      is_release_tag: ${{ steps.set-version.outputs.is_release_tag }}
+    steps:
+      - name: Set Version Info
+        id: set-version
+        run: |
+          VERSION="canary" # Default version
+          IS_RELEASE="false"
+          REF_NAME="${{ github.ref_name }}"
+          REF_TYPE="${{ github.ref_type }}"
+
+          if [[ "$REF_TYPE" == "branch" ]]; then
+            # Use sanitized branch name for version
+            VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
+          elif [[ "$REF_TYPE" == "tag" ]];
+          then
+            # Use sanitized tag name for version
+            VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
+            # Check if it's a release tag matching vX.Y.Z
+            if [[ "$REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              IS_RELEASE="true"
+              # Use the exact tag name for releases
+              VERSION="$REF_NAME"
+            fi
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_release_tag=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Determined version: $VERSION"
+          echo "Is release tag: $IS_RELEASE"
   # build-python-release:
   #   uses: ./.github/workflows/build-python-release.reusable.yaml
 
@@ -37,23 +70,25 @@ jobs:
   #   uses: ./.github/workflows/build-typescript-release.reusable.yaml
   
   build-cli:
+    needs: determine-version
     uses: ./.github/workflows/build-cli-release.reusable.yaml
     with:
-      version: ${{ github.ref_name }}
+      version: ${{ needs.determine-version.outputs.version_string }}
       package_for_release: true
 
   build-vscode:
-    needs: build-cli
+    needs: [build-cli, determine-version]
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
       artifact_name: baml-vscode-vsix
-      is_release_build: true
+      is_release_build: ${{ startsWith(github.ref, 'refs/tags/') }}
 
   # placeholder fan-in step
   all-builds:
     name: Assert all builds passed
     runs-on: ubuntu-latest
     needs:
+      - determine-version
       # - build-python-release
       # - build-ruby-release
       # - build-typescript-release
