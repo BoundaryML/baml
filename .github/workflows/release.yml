@@ -76,12 +76,14 @@ jobs:
       version: ${{ needs.determine-version.outputs.version_string }}
       package_for_release: true
 
-  build-vscode:
-    needs: [ determine-version, build-cli]
+  # This job now calls the reusable workflow which contains the matrix strategy
+  build-vscode-reusable: # Renamed job for clarity
+    needs: [ determine-version, build-cli ]
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
-      artifact_name: baml-vscode-vsix
+      # No artifact_name needed here anymore
       version: ${{ needs.determine-version.outputs.version_string }}
+      # Pass the boolean output directly
       is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
 
   # placeholder fan-in step
@@ -94,7 +96,7 @@ jobs:
       # - build-ruby-release
       # - build-typescript-release
       - build-cli
-      - build-vscode
+      - build-vscode-reusable # Depends on the job calling the reusable workflow
     steps:
       - run: echo "::do-nothing::" >/dev/null
       
@@ -235,46 +237,68 @@ jobs:
   #       with:
   #         body: ${{steps.latest_release.outputs.changelog}}
 
-  # publish-to-open-vsx:
-  #   environment: release
-  #   needs: [all-builds]
-  #   runs-on: ubuntu-latest
-  #   if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: jdx/mise-action@v2
-  #     - name: Install Dependencies
-  #       run: pnpm install --frozen-lockfile
-  #       working-directory: typescript/
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: baml-vscode-vsix
-  #         path: typescript/vscode-ext/packages/out/
-  #     - name: Publish to open-vsx
-  #       run: |
-  #         cd typescript/vscode-ext/packages
-  #         pnpm ovsx publish --packagePath ./out/*.vsix
-  #       env:
-  #         OVSX_PAT: ${{ secrets.OVSX_PAT }}
+  publish-to-open-vsx:
+    environment: release
+    needs: [determine-version, all-builds] # Also need determine-version for the condition
+    runs-on: ubuntu-latest
+    # Updated condition to use the output from determine-version
+    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    steps:
+      # No checkout needed if only publishing downloaded artifacts
+      # Setup Node/PNPM/Mise only if needed to run the ovsx CLI tool
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Use pattern matching to get all target-specific VSIXs
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts # Download to a dedicated directory
+          merge-multiple: true # Combine artifacts from the matrix runs
+      - name: List downloaded VSIXs
+        run: ls -l vsix-artifacts/
+      - name: Publish to open-vsx
+        run: |
+          # Use npx to run the globally available or project-local ovsx tool
+          # Publish all downloaded VSIXs using a glob pattern
+          npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
-  # publish-to-vscode-marketplace:
-  #   environment: release
-  #   needs: [all-builds]
-  #   runs-on: ubuntu-latest
-  #   if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: jdx/mise-action@v2
-  #     - name: Install Dependencies
-  #       run: pnpm install --frozen-lockfile
-  #       working-directory: typescript/
-  #     - uses: actions/download-artifact@v4
-  #       with:
-  #         name: baml-vscode-vsix
-  #         path: typescript/vscode-ext/packages/out/
-  #     - name: Publish to VSCode Marketplace
-  #       run: |
-  #         cd typescript/vscode-ext/packages
-  #         pnpm vsce publish --packagePath ./out/*.vsix
-  #       env:
-  #         VSCE_PAT: ${{ secrets.VSCODE_PAT }}
+  publish-to-vscode-marketplace:
+    environment: release
+    needs: [determine-version, all-builds] # Also need determine-version for the condition
+    runs-on: ubuntu-latest
+    # Updated condition to use the output from determine-version and check for tag/force
+    if: ${{ (startsWith(github.ref, 'refs/tags/') && needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+    steps:
+      # No checkout needed if only publishing downloaded artifacts
+      # Setup Node/PNPM/Mise only if needed to run the vsce CLI tool
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Use pattern matching to get all target-specific VSIXs
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts # Download to a dedicated directory
+          merge-multiple: true # Combine artifacts from the matrix runs
+      - name: List downloaded VSIXs
+        run: ls -l vsix-artifacts/
+      - name: Publish to VSCode Marketplace
+        run: |
+          # Use npx to run the vsce tool
+          # Publish all downloaded VSIXs using a glob pattern
+          npx vsce publish --packagePath ./vsix-artifacts/*.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCODE_PAT }}

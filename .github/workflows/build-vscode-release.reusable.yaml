@@ -1,14 +1,22 @@
-name: BAML Release - Build VSCode Extension
+name: BAML Release - Build VSCode Extension (Single Target)
 
 on:
   workflow_call:
     inputs:
-      artifact_name:
-        description: 'Name of the uploaded VSIX artifact'
+      os:
+        description: 'Runner OS (ubuntu-latest, windows-latest, macos-*)'
         type: string
-        default: 'baml.vsix'
+        required: true
+      target:
+        description: 'Rust target triple (e.g., x86_64-unknown-linux-gnu)'
+        type: string
+        required: true
+      code-target:
+        description: 'VSCode target identifier (e.g., linux-x64)'
+        type: string
+        required: true
       is_release_build:
-        description: 'Whether this is a release build (affects artifact naming)'
+        description: 'Whether this is a release build (affects --pre-release flag)'
         type: boolean
         default: true
       version:
@@ -17,20 +25,42 @@ on:
         required: true
 
 jobs:
-  build-vscode:
-    runs-on: ubuntu-latest
+  # Renamed job - it no longer runs a matrix itself
+  build-vscode-single-target:
+    runs-on: ${{ inputs.os }} # Run on the OS specified by the calling workflow matrix
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v3
         with:
           version: 9.12.0
-      - name: Download CLI artifacts
+
+      - name: Determine CLI Artifact Name
+        id: cli_artifact
+        run: |
+          TARGET="${{ inputs.target }}"
+          VERSION="${{ inputs.version }}"
+          ARTIFACT_BASE="baml-cli-${VERSION}-${TARGET}"
+          if [[ "$TARGET" == *"windows"* ]]; then
+            ARTIFACT_NAME="${ARTIFACT_BASE}.zip"
+          else
+            ARTIFACT_NAME="${ARTIFACT_BASE}.tar.gz"
+          fi
+          echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+          echo "Determined artifact name: ${ARTIFACT_NAME}"
+
+      - name: Download single CLI artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: baml-cli-*
-          path: cli-artifacts
-          merge-multiple: true
-      # - run: ls -R cli-artifacts
+          # Download the specific artifact built by build-cli for this target
+          name: ${{ steps.cli_artifact.outputs.artifact_name }}
+          path: cli-artifact # Download to a distinct directory
+
+      - name: List downloaded artifact content
+        run: |
+           echo "Contents of cli-artifact directory:"
+           ls -R cli-artifact
+
+      # Rust toolchain setup (only needed for WASM part, not the native CLI)
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -38,10 +68,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      # Install wasm-bindgen
+          # Key differently per OS if needed, though wasm build might be OS-independent
+          # key: ${{ runner.os }}-rust-${{ hashFiles('**/Cargo.lock') }}
       - uses: jetli/wasm-bindgen-action@v0.2.0
         with:
           version: "0.2.92"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -49,116 +81,113 @@ jobs:
           node-version: 20
           cache-dependency-path: |
             typescript/**/pnpm-lock.yaml
-      
 
-      - name: Extract and copy binaries
-        shell: bash
+      # This step now extracts and copies ONLY the single downloaded binary
+      - name: Extract and copy the specific binary
+        shell: bash # Use bash for consistency across OS, ensure it's available
         run: |
+          TARGET="${{ inputs.target }}"
+          echo "Preparing server directory for target: $TARGET"
+
           # Setup server directories
           rm -rf typescript/vscode-ext/packages/vscode/server
           mkdir -p typescript/vscode-ext/packages/vscode/server
 
-          # Define platform configurations: Keys are Rust target triples, Values are destination paths
-          declare -A platforms=(
-            ["x86_64-unknown-linux-gnu"]="x86_64-unknown-linux-gnu/baml-cli"
-            ["aarch64-unknown-linux-gnu"]="aarch64-unknown-linux-gnu/baml-cli"
-            ["x86_64-unknown-linux-musl"]="x86_64-unknown-linux-musl/baml-cli"
-            ["aarch64-unknown-linux-musl"]="aarch64-unknown-linux-musl/baml-cli"
-            ["x86_64-apple-darwin"]="x86_64-apple-darwin/baml-cli"
-            ["aarch64-apple-darwin"]="aarch64-apple-darwin/baml-cli"
-            ["x86_64-pc-windows-msvc"]="x86_64-pc-windows-msvc/baml-cli.exe"
-            ["aarch64-pc-windows-msvc"]="aarch64-pc-windows-msvc/baml-cli.exe"
-          )
+          # Determine expected binary name based on OS
+          local binary_name="baml-cli"
+          local archive_file="cli-artifact/${{ steps.cli_artifact.outputs.artifact_name }}"
+          local extract_dir="tmp-extract"
 
-          # Process each platform
-          for target in "${!platforms[@]}"; do
-            echo "Processing $target..."
+          if [[ "$TARGET" == *"windows"* ]]; then
+            binary_name="baml-cli.exe"
+            echo "Extracting Zip: $archive_file"
+            unzip -o "$archive_file" -d "$extract_dir"
+          else
+            echo "Extracting Tarball: $archive_file"
+            mkdir -p "$extract_dir"
+            tar xzf "$archive_file" -C "$extract_dir"
+          fi
 
-            # Create temporary directory for extraction
-            mkdir -p "tmp-extract-$target"
+          echo "Extracted contents:"
+          ls -R "$extract_dir"
 
-            # Find the appropriate archive file (ignoring version in pattern)
-            if [[ $target == *"windows"* ]]; then
-              archive_file=$(find cli-artifacts -name "baml-cli-*-$target.zip" -type f)
-            else
-              archive_file=$(find cli-artifacts -name "baml-cli-*-$target.tar.gz" -type f)
-            fi
+          # Find the binary within the extracted files
+          # Handle potential nested directories (e.g., archive might contain bin/baml-cli)
+          binary_path=$(find "$extract_dir" -type f -name "$binary_name")
 
-            if [ -z "$archive_file" ]; then
-              echo "Error: Could not find archive file for $target"
-              exit 1
-            fi
+          if [ -z "$binary_path" ]; then
+            echo "Error: Could not find binary '$binary_name' for target '$TARGET' in extracted files"
+            exit 1
+          fi
+          # Take the first one found if multiple matches (shouldn't happen in clean artifacts)
+          binary_path=$(echo "$binary_path" | head -n 1)
+          echo "Found binary at: $binary_path"
 
-            echo "Found archive: $archive_file"
+          # Define the destination path using the Rust target triple convention
+          # Example: typescript/vscode-ext/packages/vscode/server/x86_64-unknown-linux-gnu/baml-cli
+          dest_dir="typescript/vscode-ext/packages/vscode/server/$TARGET"
+          dest_path="$dest_dir/$binary_name"
+          mkdir -p "$dest_dir"
 
-            # Extract archive to temporary directory
-            if [[ $target == *"windows"* ]]; then
-              unzip -o "$archive_file" -d "tmp-extract-$target"
-            else
-              tar xzf "$archive_file" -C "tmp-extract-$target"
-            fi
+          echo "Copying '$binary_path' to '$dest_path'"
+          cp "$binary_path" "$dest_path"
+          # Ensure executable flag is set (important on Linux/macOS)
+          chmod +x "$dest_path"
 
-            # Find and copy binary
-            if [[ $target == *"windows"* ]]; then
-              binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli.exe" -not -path "*/\.*")
-            else
-              binary_path=$(find "tmp-extract-$target" -type f -name "baml-cli" -not -path "*/\.*")
-            fi
+          # Clean up
+          rm -rf "$extract_dir"
 
-            if [ -z "$binary_path" ]; then
-              echo "Error: Could not find binary for $target in extracted files"
-              exit 1
-            fi
+          echo "Verification: checking presence of $dest_path"
+          if [ ! -f "$dest_path" ]; then
+             echo "Error: Binary not found at destination $dest_path after copy!"
+             exit 1
+          fi
+          echo "Binary copied successfully."
+          ls -l "$dest_path" # Show details of the copied binary
 
-            # Define destination path and ensure directory exists
-            dest_path_dir="typescript/vscode-ext/packages/vscode/server/$(dirname "${platforms[$target]}")"
-            dest_path_file="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
-            mkdir -p "$dest_path_dir"
-
-            echo "Copying $binary_path to $dest_path_file"
-            cp "$binary_path" "$dest_path_file"
-            chmod +x "$dest_path_file"
-
-            # Clean up temporary directory
-            rm -rf "tmp-extract-$target"
-          done
-
-          # Verify all binaries are present and executable
-          echo "Verifying all binaries..."
-          for target in "${!platforms[@]}"; do
-            binary_path="typescript/vscode-ext/packages/vscode/server/${platforms[$target]}"
-            if [ ! -f "$binary_path" ]; then
-              echo "Error: Missing binary at $binary_path"
-              exit 1
-            fi
-            # Skip execute check on Windows runners for .exe files if needed, though chmod +x is usually harmless
-            if [[ $target != *"windows"* ]] && [ ! -x "$binary_path" ]; then
-              echo "Error: Binary not executable at $binary_path"
-              exit 1
-            fi
-            echo "✓ Verified $binary_path"
-          done
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
         working-directory: typescript/vscode-ext/packages
-      - name: Build Typescript Project
-        run: pnpm run build
+
+      - name: Build Typescript Project (incl. WASM)
+        run: pnpm run build # Builds common code, WASM
         working-directory: typescript/
 
-      - name: Build VSCode Extension
-        id: build
-        run: pnpm run vscode:package
-        working-directory: typescript/vscode-ext/packages
+      - name: Create dist directory
+        run: mkdir -p typescript/vscode-ext/packages/vscode/dist # Ensure dist exists before packaging
+
+      - name: Package VSCode Extension (Targeted)
+        id: package
+        run: |
+           # Determine pre-release flag based on input
+           PRE_RELEASE_FLAG=""
+           if [[ "${{ inputs.is_release_build }}" == "false" ]]; then
+             PRE_RELEASE_FLAG="--pre-release"
+           fi
+           OUTPUT_FILENAME="./dist/baml-${{ inputs.code-target }}.vsix"
+           echo "Packaging for target: ${{ inputs.code-target }}"
+           npx vsce package $PRE_RELEASE_FLAG --target ${{ inputs.code-target }} -o $OUTPUT_FILENAME
+           echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
+        working-directory: typescript/vscode-ext/packages/vscode # Run from the dir with package.json
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.artifact_name }}
-          path: typescript/vscode-ext/packages/*.vsix
+          name: baml-vscode-vsix-${{ inputs.code-target }} # Use code-target for artifact name consistency
+          path: typescript/vscode-ext/packages/vscode/${{ steps.package.outputs.vsix_path }} # Use output path from packaging step
           if-no-files-found: error
 
-      - name: Upload VSCode Playground Artifact
+      # Optional: Keep playground build conditional on one specific target run
+      - name: Build & Upload VSCode Playground Artifact
+        if: inputs.code-target == 'linux-x64' # Or any single target you prefer
+        run: |
+          echo "Building playground..."
+          pnpm --filter @baml/playground build
+          echo "Uploading playground artifact..."
+        working-directory: typescript/ # Run build from monorepo root or adjust filter path
+      - name: Upload Playground Artifact (conditional)
+        if: inputs.code-target == 'linux-x64' # Must match condition above
         uses: actions/upload-artifact@v4
         with:
           name: vscode-playground
