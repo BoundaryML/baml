@@ -391,7 +391,7 @@ const plugin: BamlVSCodePlugin = {
       throw new Error(`Unsupported platform/architecture combination: ${platform}/${arch}`)
     }
 
-    let serverAbsolutePath = context.asAbsolutePath(path.join('server', targetTriple, serverExecutableName))
+    let serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', targetTriple, serverExecutableName))
     const devServerPath = context.asAbsolutePath(
       path.join('..', '..', 'engine', 'target', 'debug', serverExecutableName),
     ) // Adjust dev path if necessary

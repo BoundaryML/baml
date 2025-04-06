@@ -2,7 +2,7 @@
   "name": "test-extension-preview",
   "displayName": "Test - development",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.82.0",
+  "version": "0.82.1",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",
