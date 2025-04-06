@@ -69,22 +69,22 @@ jobs:
   # build-typescript-release:
   #   uses: ./.github/workflows/build-typescript-release.reusable.yaml
   
-  build-cli:
-    needs: determine-version
-    uses: ./.github/workflows/build-cli-release.reusable.yaml
-    with:
-      version: ${{ needs.determine-version.outputs.version_string }}
-      package_for_release: true
+  # build-cli:
+  #   needs: determine-version
+  #   uses: ./.github/workflows/build-cli-release.reusable.yaml
+  #   with:
+  #     version: ${{ needs.determine-version.outputs.version_string }}
+  #     package_for_release: true
 
-  # This job now calls the reusable workflow which contains the matrix strategy
-  build-vscode-reusable: # Renamed job for clarity
-    needs: [ determine-version, build-cli ]
-    uses: ./.github/workflows/build-vscode-release.reusable.yaml
-    with:
-      # No artifact_name needed here anymore
-      version: ${{ needs.determine-version.outputs.version_string }}
-      # Pass the boolean output directly
-      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+  # # This job now calls the reusable workflow which contains the matrix strategy
+  # build-vscode-reusable: # Renamed job for clarity
+  #   needs: [ determine-version, build-cli ]
+  #   uses: ./.github/workflows/build-vscode-release.reusable.yaml
+  #   with:
+  #     # No artifact_name needed here anymore
+  #     version: ${{ needs.determine-version.outputs.version_string }}
+  #     # Pass the boolean output directly
+  #     is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
 
   # placeholder fan-in step
   all-builds:
@@ -95,8 +95,8 @@ jobs:
       # - build-python-release
       # - build-ruby-release
       # - build-typescript-release
-      - build-cli
-      - build-vscode-reusable # Depends on the job calling the reusable workflow
+      # - build-cli
+      # - build-vscode-reusable # Depends on the job calling the reusable workflow
     steps:
       - run: echo "::do-nothing::" >/dev/null
       
@@ -285,39 +285,65 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCODE_PAT }}
 
-  # publish-to-github:
-  #   environment: release
-  #   permissions:
-  #     contents: write
-  #   needs: [all-builds]
-  #   if: ${{ startsWith(github.ref, 'refs/tags/') }}
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Get latest tag or fallback
-  #       id: get_tag
-  #       run: |
-  #         TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-  #         if [ -z "$TAG" ]; then
-  #           TAG="canary-0.1.1"
-  #           PRERELEASE=true
-  #         else
-  #           PRERELEASE=false
-  #         fi
-  #         echo "tag=$TAG" >> $GITHUB_OUTPUT
-  #         echo "prerelease=$PRERELEASE" >> $GITHUB_OUTPUT
-  #     - name: Get Changelog
-  #       id: latest_release
-  #       if: steps.get_tag.outputs.prerelease == 'false'
-  #       run: |
-  #         # Extract the latest changelog section using awk
-  #         CHANGELOG_BODY=$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)
-  #         # Use heredoc syntax to correctly handle multi-line output
-  #         echo "changelog<<EOF" >> $GITHUB_OUTPUT
-  #         echo "$CHANGELOG_BODY" >> $GITHUB_OUTPUT
-  #         echo "EOF" >> $GITHUB_OUTPUT
+  publish-to-github:
+    environment: release
+    permissions:
+      contents: write
+    # Depend on all builds AND the version determination
+    needs: [all-builds, determine-version]
+    # Run regardless of tag or branch, flags will handle draft/prerelease state
+    # if: ${{ startsWith(github.ref, 'refs/tags/') }} # Removed condition
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # Checkout needed for CHANGELOG.md
 
-  #     - name: Create Release
-  #       uses: mikepenz/action-gh-release@v1 #softprops/action-gh-release
-  #       with:
-  #         body: ${{steps.latest_release.outputs.changelog}}
+      # Download all CLI artifacts produced by the build-cli job
+      # - name: Download all baml-cli artifacts
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     pattern: baml-cli-* # Match artifacts starting with 'baml-cli-'
+      #     path: cli-artifacts # Download into this directory
+      #     merge-multiple: true # Merge artifacts from different OS/arch into the path
+      - name: Create fake CLI artifacts for testing
+        run: |
+          mkdir -p cli-artifacts/fake-target
+          echo "This is a fake artifact" > cli-artifacts/fake-target/baml-cli-fake-artifact.txt
+        
+
+      - name: List downloaded CLI artifacts
+        run: |
+          echo "Downloaded CLI artifacts:"
+          ls -R cli-artifacts/
+
+      # Get changelog only if it's a proper release tag
+      - name: Get Changelog for Release
+        id: latest_release
+        # Condition updated to use output from determine-version
+        if: needs.determine-version.outputs.is_release_tag == 'true'
+        run: |
+          # Extract the latest changelog section using awk
+          # This assumes the latest release is at the top and starts with ## [version]
+          CHANGELOG_BODY=$(awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d') # Skip the header line itself
+          # Use heredoc syntax to correctly handle multi-line output
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Use version string from determine-version job
+          name: ${{ needs.determine-version.outputs.version_string }}
+          tag_name: ${{ needs.determine-version.outputs.version_string }}
+          # Use changelog if it's a release tag, otherwise empty
+          body: ${{ steps.latest_release.outputs.changelog }}
+          # Set draft and prerelease based on whether it's a release tag
+          draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          # Upload all files from the cli-artifacts directory and its subdirectories
+          files: cli-artifacts/**/*
+          fail_on_unmatched_files: true
+          # Use default GITHUB_TOKEN
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Do not auto-generate release notes, rely on changelog or empty body
+          generate_release_notes: false

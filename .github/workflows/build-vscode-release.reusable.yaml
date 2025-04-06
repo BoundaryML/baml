@@ -61,7 +61,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: baml-cli-${{ matrix.rust-target }}
-          path: cli-artifact-${{ matrix.code-target }} # Unique path per job
+          path: cli-artifact-${{ matrix.code-target }} 
+          # Unique path per job
         # Add error handling if the specific artifact isn't found
 
       - name: List downloaded artifact content
@@ -183,7 +184,7 @@ jobs:
         working-directory: typescript/
 
       - name: Create dist directory
-        run: mkdir -p typescript/vscode-ext/packages/vscode/dist
+        run: mkdir -p typescript/vscode-ext/packages/dist
 
       - name: Package VSCode Extension for ${{ matrix.code-target }}
         id: package
