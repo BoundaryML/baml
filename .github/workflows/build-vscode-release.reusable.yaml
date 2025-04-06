@@ -62,7 +62,6 @@ jobs:
           name: ${{ steps.cli_artifact.outputs.artifact_name }}
           path: cli-artifact-${{ matrix.code-target }} # Unique path per job
         # Add error handling if the specific artifact isn't found
-        continue-on-error: false # Fail the job if the required binary is missing
 
       - name: List downloaded artifact content
         run: |
