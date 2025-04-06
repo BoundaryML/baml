@@ -195,7 +195,7 @@ jobs:
            OUTPUT_FILENAME="./dist/baml-${{ matrix.code-target }}.vsix"
            echo "Packaging for target: ${{ matrix.code-target }}"
            # Run vsce from the directory containing the extension's package.json
-           npx vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME
+           npx vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
            echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
         working-directory: typescript/vscode-ext/packages/vscode
 
