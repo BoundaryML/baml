@@ -322,7 +322,7 @@ jobs:
       # Get changelog only if it's a proper release tag
       - name: Populate Changelog File for Release
         # Condition updated to use output from determine-version
-        if: needs.determine-version.outputs.is_release_tag == 'true'
+        # if: needs.determine-version.outputs.is_release_tag == 'true'
         run: |
           # Extract the latest changelog section using awk and write it to CHANGELOG.txt
           # This assumes the latest release is at the top and starts with ## [version]
