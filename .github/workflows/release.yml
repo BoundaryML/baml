@@ -294,7 +294,7 @@ jobs:
           path: vsix-artifacts # Download to a dedicated directory
           merge-multiple: true # Combine artifacts from the matrix runs
       - name: List downloaded VSIXs
-        run: ls -l vsix-artifacts/
+        run: ls -al vsix-artifacts/
       - name: Publish to VSCode Marketplace
         run: |
           # Use npx to run the vsce tool
