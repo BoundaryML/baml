@@ -69,22 +69,22 @@ jobs:
   # build-typescript-release:
   #   uses: ./.github/workflows/build-typescript-release.reusable.yaml
   
-  # build-cli:
-  #   needs: determine-version
-  #   uses: ./.github/workflows/build-cli-release.reusable.yaml
-  #   with:
-  #     version: ${{ needs.determine-version.outputs.version_string }}
-  #     package_for_release: true
+  build-cli:
+    needs: determine-version
+    uses: ./.github/workflows/build-cli-release.reusable.yaml
+    with:
+      version: ${{ needs.determine-version.outputs.version_string }}
+      package_for_release: true
 
-  # # This job now calls the reusable workflow which contains the matrix strategy
-  # build-vscode-reusable: # Renamed job for clarity
-  #   needs: [ determine-version, build-cli ]
-  #   uses: ./.github/workflows/build-vscode-release.reusable.yaml
-  #   with:
-  #     # No artifact_name needed here anymore
-  #     version: ${{ needs.determine-version.outputs.version_string }}
-  #     # Pass the boolean output directly
-  #     is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+  # This job now calls the reusable workflow which contains the matrix strategy
+  build-vscode-reusable: # Renamed job for clarity
+    needs: [ determine-version, build-cli ]
+    uses: ./.github/workflows/build-vscode-release.reusable.yaml
+    with:
+      # No artifact_name needed here anymore
+      version: ${{ needs.determine-version.outputs.version_string }}
+      # Pass the boolean output directly
+      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
 
   # placeholder fan-in step
   all-builds:
@@ -95,8 +95,8 @@ jobs:
       # - build-python-release
       # - build-ruby-release
       # - build-typescript-release
-      # - build-cli
-      # - build-vscode-reusable # Depends on the job calling the reusable workflow
+      - build-cli
+      - build-vscode-reusable # Depends on the job calling the reusable workflow
     steps:
       - run: echo "::do-nothing::" >/dev/null
       
@@ -298,16 +298,18 @@ jobs:
       - uses: actions/checkout@v4 # Checkout needed for CHANGELOG.md
 
       # Download all CLI artifacts produced by the build-cli job
-      # - name: Download all baml-cli artifacts
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     pattern: baml-cli-* # Match artifacts starting with 'baml-cli-'
-      #     path: cli-artifacts # Download into this directory
-      #     merge-multiple: true # Merge artifacts from different OS/arch into the path
-      - name: Create fake CLI artifacts for testing
-        run: |
-          mkdir -p cli-artifacts/fake-target
-          echo "This is a fake artifact" > cli-artifacts/fake-target/baml-cli-fake-artifact.txt
+      - name: Download all baml-cli artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Match artifacts starting with 'baml-cli-'
+          pattern: baml-cli-* 
+          # Download into this directory
+          path: cli-artifacts 
+          merge-multiple: true # Merge artifacts from different OS/arch into the path
+      # - name: Create fake CLI artifacts for testing
+      #   run: |
+      #     mkdir -p cli-artifacts/fake-target
+      #     echo "This is a fake artifact" > cli-artifacts/fake-target/baml-cli-fake-artifact.txt
         
 
       - name: List downloaded CLI artifacts
