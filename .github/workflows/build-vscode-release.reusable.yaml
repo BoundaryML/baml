@@ -95,6 +95,7 @@ jobs:
       - name: Extract and copy binary for ${{ matrix.code-target }}
         shell: bash
         run: |
+          set -euo pipefail
           TARGET="${{ matrix.rust-target }}"
           CODE_TARGET="${{ matrix.code-target }}"
           echo "Preparing server directory for target: $TARGET ($CODE_TARGET)"
@@ -105,9 +106,9 @@ jobs:
           mkdir -p typescript/vscode-ext/packages/vscode/server
 
           # Determine expected binary name based on Rust target OS part
-          local binary_name="baml-cli"
-          local archive_file="cli-artifact-$CODE_TARGET/${{ steps.cli_artifact.outputs.artifact_name }}"
-          local extract_dir="tmp-extract-$CODE_TARGET"
+          binary_name="baml-cli"
+          archive_file="cli-artifact-$CODE_TARGET/${{ steps.cli_artifact.outputs.artifact_name }}"
+          extract_dir="tmp-extract-$CODE_TARGET"
 
           if [[ "$TARGET" == *"windows"* ]]; then
             binary_name="baml-cli.exe"
