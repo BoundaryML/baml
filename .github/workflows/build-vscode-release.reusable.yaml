@@ -173,7 +173,7 @@ jobs:
       - name: Install Dependencies
         # Install deps in the context of the specific extension package
         run: pnpm install --frozen-lockfile
-        working-directory: typescript/vscode-ext/packages/vscode
+        working-directory: typescript/vscode-ext/packages
 
       - name: Build Typescript Project (Common Code & WASM)
         # This might be redundant if it doesn't change per target,
@@ -197,7 +197,7 @@ jobs:
            # Run vsce from the directory containing the extension's package.json
            npx vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
            echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
-        working-directory: typescript/vscode-ext/packages/vscode
+        working-directory: typescript/vscode-ext/packages
 
       - name: Upload VSIX artifact for ${{ matrix.code-target }}
         uses: actions/upload-artifact@v4
