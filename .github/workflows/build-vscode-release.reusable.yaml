@@ -98,40 +98,44 @@ jobs:
           set -euo pipefail
           TARGET="${{ matrix.rust-target }}"
           CODE_TARGET="${{ matrix.code-target }}"
-          echo "Preparing server directory for target: $TARGET ($CODE_TARGET)"
+          VERSION="${{ inputs.version }}" # Get version input
+          echo "Preparing server directory for target: $TARGET ($CODE_TARGET) version $VERSION"
 
           # Setup server directories (relative to checkout root)
-          # Ensure it's clean for each matrix run within its workspace
           rm -rf typescript/vscode-ext/packages/vscode/server
           mkdir -p typescript/vscode-ext/packages/vscode/server
 
           # Determine expected binary name based on Rust target OS part
           binary_name="baml-cli"
-          archive_file="cli-artifact-$CODE_TARGET/${{ steps.cli_artifact.outputs.artifact_name }}"
+          download_dir="cli-artifact-$CODE_TARGET"
           extract_dir="tmp-extract-$CODE_TARGET"
+          archive_base_name="baml-cli-$VERSION-$TARGET" # Construct base name with version
+          actual_archive_file="" # Variable to hold the full archive file path
 
           if [[ "$TARGET" == *"windows"* ]]; then
             binary_name="baml-cli.exe"
-            echo "Extracting Zip: $archive_file"
+            actual_archive_file="$download_dir/${archive_base_name}.zip" # Construct full zip path
+            echo "Expecting archive file: $actual_archive_file"
             # Add check for zip file existence
-            if [ ! -f "$archive_file" ]; then
-              echo "Error: Archive file (zip) not found at $archive_file"
-              echo "Contents of download directory (cli-artifact-$CODE_TARGET):"
-              ls -R "cli-artifact-$CODE_TARGET"
+            if [ ! -f "$actual_archive_file" ]; then
+              echo "Error: Expected archive file not found at $actual_archive_file"
+              echo "Contents of download directory ($download_dir):"
+              ls -R "$download_dir"
               exit 1
             fi
-            unzip -o "$archive_file" -d "$extract_dir"
+            unzip -o "$actual_archive_file" -d "$extract_dir"
           else
-            echo "Extracting Tarball: $archive_file"
+            actual_archive_file="$download_dir/${archive_base_name}.tar.gz" # Construct full tar.gz path
+            echo "Expecting archive file: $actual_archive_file"
             # Add check for tarball file existence
-            if [ ! -f "$archive_file" ]; then
-              echo "Error: Archive file (tar.gz) not found at $archive_file"
-              echo "Contents of download directory (cli-artifact-$CODE_TARGET):"
-              ls -R "cli-artifact-$CODE_TARGET"
-              exit 1
+            if [ ! -f "$actual_archive_file" ]; then
+               echo "Error: Expected archive file not found at $actual_archive_file"
+               echo "Contents of download directory ($download_dir):"
+               ls -R "$download_dir"
+               exit 1
             fi
             mkdir -p "$extract_dir"
-            tar xzf "$archive_file" -C "$extract_dir"
+            tar xzf "$actual_archive_file" -C "$extract_dir"
           fi
 
           echo "Extracted contents:"
