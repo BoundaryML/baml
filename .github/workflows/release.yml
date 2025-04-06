@@ -237,38 +237,38 @@ jobs:
   #       with:
   #         body: ${{steps.latest_release.outputs.changelog}}
 
-  publish-to-open-vsx:
-    environment: release
-    needs: [determine-version, all-builds] # Also need determine-version for the condition
-    runs-on: ubuntu-latest
-    # Updated condition to use the output from determine-version
-    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
-    steps:
-      # No checkout needed if only publishing downloaded artifacts
-      # Setup Node/PNPM/Mise only if needed to run the ovsx CLI tool
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9.12.0
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - name: Download VSIX artifacts
-        uses: actions/download-artifact@v4
-        with:
-          # Use pattern matching to get all target-specific VSIXs
-          pattern: baml-vscode-vsix-*
-          path: vsix-artifacts # Download to a dedicated directory
-          merge-multiple: true # Combine artifacts from the matrix runs
-      - name: List downloaded VSIXs
-        run: ls -l vsix-artifacts/
-      - name: Publish to open-vsx
-        run: |
-          # Use npx to run the globally available or project-local ovsx tool
-          # Publish all downloaded VSIXs using a glob pattern
-          npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+  # publish-to-open-vsx:
+  #   environment: release
+  #   needs: [determine-version, all-builds] # Also need determine-version for the condition
+  #   runs-on: ubuntu-latest
+  #   # Updated condition to use the output from determine-version
+  #   if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
+  #   steps:
+  #     # No checkout needed if only publishing downloaded artifacts
+  #     # Setup Node/PNPM/Mise only if needed to run the ovsx CLI tool
+  #     - uses: pnpm/action-setup@v3
+  #       with:
+  #         version: 9.12.0
+  #     - name: Setup Node.js
+  #       uses: actions/setup-node@v4
+  #       with:
+  #         node-version: 20
+  #     - name: Download VSIX artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         # Use pattern matching to get all target-specific VSIXs
+  #         pattern: baml-vscode-vsix-*
+  #         path: vsix-artifacts # Download to a dedicated directory
+  #         merge-multiple: true # Combine artifacts from the matrix runs
+  #     - name: List downloaded VSIXs
+  #       run: ls -l vsix-artifacts/
+  #     - name: Publish to open-vsx
+  #       run: |
+  #         # Use npx to run the globally available or project-local ovsx tool
+  #         # Publish all downloaded VSIXs using a glob pattern
+  #         npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
+  #       env:
+  #         OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
   publish-to-vscode-marketplace:
     environment: release
