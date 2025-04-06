@@ -47,7 +47,7 @@ jobs:
         run: |
           TARGET="${{ matrix.rust-target }}" # Use rust-target from matrix
           VERSION="${{ inputs.version }}"
-          ARTIFACT_BASE="baml-cli-${VERSION}-${TARGET}"
+          ARTIFACT_BASE="baml-cli-${TARGET}"
           if [[ "$TARGET" == *"windows"* ]]; then
             ARTIFACT_NAME="${ARTIFACT_BASE}.zip"
           else
