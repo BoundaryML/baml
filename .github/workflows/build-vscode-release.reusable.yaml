@@ -113,9 +113,23 @@ jobs:
           if [[ "$TARGET" == *"windows"* ]]; then
             binary_name="baml-cli.exe"
             echo "Extracting Zip: $archive_file"
+            # Add check for zip file existence
+            if [ ! -f "$archive_file" ]; then
+              echo "Error: Archive file (zip) not found at $archive_file"
+              echo "Contents of download directory (cli-artifact-$CODE_TARGET):"
+              ls -R "cli-artifact-$CODE_TARGET"
+              exit 1
+            fi
             unzip -o "$archive_file" -d "$extract_dir"
           else
             echo "Extracting Tarball: $archive_file"
+            # Add check for tarball file existence
+            if [ ! -f "$archive_file" ]; then
+              echo "Error: Archive file (tar.gz) not found at $archive_file"
+              echo "Contents of download directory (cli-artifact-$CODE_TARGET):"
+              ls -R "cli-artifact-$CODE_TARGET"
+              exit 1
+            fi
             mkdir -p "$extract_dir"
             tar xzf "$archive_file" -C "$extract_dir"
           fi
