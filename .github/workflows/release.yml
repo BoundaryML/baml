@@ -315,19 +315,21 @@ jobs:
           echo "Downloaded CLI artifacts:"
           ls -R cli-artifacts/
 
+      # Always create the changelog file, it will be empty for non-releases
+      - name: Initialize Changelog File
+        run: touch CHANGELOG.txt
+
       # Get changelog only if it's a proper release tag
-      - name: Get Changelog for Release
-        id: latest_release
+      - name: Populate Changelog File for Release
         # Condition updated to use output from determine-version
         if: needs.determine-version.outputs.is_release_tag == 'true'
         run: |
-          # Extract the latest changelog section using awk
+          # Extract the latest changelog section using awk and write it to CHANGELOG.txt
           # This assumes the latest release is at the top and starts with ## [version]
-          CHANGELOG_BODY=$(awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d') # Skip the header line itself
-          # Use heredoc syntax to correctly handle multi-line output
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG_BODY" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt # Skip the header line itself
+
+      - name: List CHANGELOG.txt
+        run: ls -l CHANGELOG.txt
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -335,8 +337,8 @@ jobs:
           # Use version string from determine-version job
           name: ${{ needs.determine-version.outputs.version_string }}
           tag_name: ${{ needs.determine-version.outputs.version_string }}
-          # Use changelog if it's a release tag, otherwise empty
-          body: ${{ steps.latest_release.outputs.changelog }}
+          # Use the generated CHANGELOG.txt file path for the body
+          body_path: CHANGELOG.txt
           # Set draft and prerelease based on whether it's a release tag
           draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
           prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
