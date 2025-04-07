@@ -47,7 +47,7 @@ import BamlProjectManager, { GeneratorDisabledReason, GeneratorStatus, Generator
 import type { LSOptions, LSSettings } from './lib/types'
 import { BamlWasm } from './lib/wasm'
 import { SymbolLocation } from '@gloo-ai/baml-schema-wasm-node'
-import { downloadCli } from './cliDownloader'
+import { checkIfCliBinaryExists, cliBinaryPath, downloadCli } from './cliDownloader'
 
 try {
   // only required on vscode versions 1.89 and below.
@@ -392,10 +392,21 @@ export function startServer(options?: LSOptions): void {
         return
       }
 
-      // TODO: Grab correct version, this is for testing.
-      const cliPath = await downloadCli(process.platform.toString(), process.arch, '0.1.0')
+      const cliVersion = {
+        architecture: process.arch,
+        platform: process.platform.toString(),
+        // TODO: If no generators found then do something.
+        version: proj.list_generators()[0].version,
+      }
 
-      console.log('cliPath', cliPath)
+      if (!(await checkIfCliBinaryExists(cliVersion))) {
+        console.log('Downloading CLI binary...', cliVersion)
+        await downloadCli(cliVersion)
+      }
+
+      const cliPath = cliBinaryPath(cliVersion)
+
+      console.log('Execute LSP using binary: ' + cliPath)
 
       if (bamlConfig.config?.cliPath) {
         cliBuild(

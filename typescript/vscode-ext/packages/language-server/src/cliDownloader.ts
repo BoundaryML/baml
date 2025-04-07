@@ -8,6 +8,12 @@ import https from 'https'
 import extractZip from 'extract-zip'
 import axios from 'axios'
 
+type CliVersion = {
+  architecture: string
+  platform: string
+  version: string
+}
+
 // TODO: This is a draft release for testing.
 const BASE_URL = 'https://github.com/BoundaryML/baml/releases/download/untagged-c52d304b99ce91cdc208'
 
@@ -70,14 +76,54 @@ function getCliCompressedFileExtension(platform: string): string {
   }
 }
 
-export async function downloadCli(platform: string, architecture: string, version: string): Promise<string> {
-  // TODO: Validate params.
+/**
+ * Returns the filename of the CLI binary for the given platform, architecture and version.
+ *
+ * @param platform Current Node.js platform.
+ * @param architecture The architecture of the Node.js runtime.
+ * @param version The version of the CLI.
+ *
+ * @returns The filename of the CLI binary.
+ */
+function cliBinaryFileName({ architecture, platform, version }: CliVersion): string {
   architecture = getReleaseArchitecture(architecture)
   platform = getReleasePlatform(platform)
-  const extension = getCliCompressedFileExtension(platform)
 
+  return `baml-cli-${version}-${architecture}-${platform}`
+}
+
+/**
+ * Returns the full path to the CLI binary for the given platform, architecture
+ * and version.
+ *
+ * @param cliVersion The version of the CLI.
+ *
+ * @returns The full path to the CLI binary.
+ */
+export function cliBinaryPath(cliVersion: CliVersion): string {
+  return path.join(INSTALL_PATH, cliBinaryFileName(cliVersion))
+}
+
+/**
+ * Checks if the CLI binary exists in the installation path.
+ *
+ * @param binaryFileName The filename of the CLI binary.
+ *
+ * @returns True if the CLI binary exists, false otherwise.
+ */
+export async function checkIfCliBinaryExists(cliVersion: CliVersion): Promise<boolean> {
+  return await fs
+    .access(cliBinaryPath(cliVersion))
+    .then(() => true)
+    .catch(() => false)
+}
+
+export async function downloadCli(cliVersion: CliVersion): Promise<void> {
   // Filenames.
-  const binaryFileName = `baml-cli-${version}-${architecture}-${platform}`
+  const binaryFileName = cliBinaryFileName(cliVersion)
+  const extension = getCliCompressedFileExtension(cliVersion.platform)
+
+  // Complete filename in the Github release.
   const compressedFileName = `${binaryFileName}.${extension}`
 
   // Github release download URL.
@@ -86,9 +132,6 @@ export async function downloadCli(platform: string, architecture: string, versio
   // TODO: Testing
   const url =
     'https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz'
-
-  // Full path on disk of the CLI binary.
-  const binaryFilePath = path.join(INSTALL_PATH, binaryFileName)
 
   // Make HTTP request, follow redirects.
   const res = await axios.get(url, { responseType: 'stream' })
@@ -110,7 +153,7 @@ export async function downloadCli(platform: string, architecture: string, versio
     tar.extract(
       {
         cwd: INSTALL_PATH,
-        onReadEntry: (entry) => entry.path = binaryFileName
+        onReadEntry: (entry) => (entry.path = binaryFileName),
       },
       ['ripgrep-14.1.1-x86_64-unknown-linux-musl/rg'], // TODO: Change this to ['./baml-cli']
     ),
@@ -120,6 +163,4 @@ export async function downloadCli(platform: string, architecture: string, versio
   // const unzip = zlib.createGunzip()
   // unzip.pipe(createWriteStream(path.join(INSTALL_PATH, binaryFileName)))
   // await extractZip(compressedFilePath, { dir: INSTALL_PATH })
-
-  return binaryFilePath
 }
