@@ -3,57 +3,123 @@ import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import zlib from 'zlib'
+import * as tar from 'tar'
 import https from 'https'
 import extractZip from 'extract-zip'
+import axios from 'axios'
 
-// const BASE_URL = 'https://github.com/BoundaryML/baml/archive/refs/tags'
+// TODO: This is a draft release for testing.
+const BASE_URL = 'https://github.com/BoundaryML/baml/releases/download/untagged-c52d304b99ce91cdc208'
 
-// Greg test binaries. (Github makes this avaialable temporarily).
-const BASE_URL = 'https://productionresultssa17.blob.core.windows.net/actions-results/416b3245-9c0e-455e-ad03-06d303c50a91/workflow-job-run-061a9379-8e44-5d89-a290-172f1bb22565/artifacts/ba0b3c839a2939ecd0c2dda1b78093fece8b9c1cb58d91bbdcab7771fe1b8239.zip?rscd=attachment%3B+filename%3D%22baml-cli-x86_64-unknown-linux-gnu.zip%22&se=2025-03-31T14%3A00%3A24Z&sig=ivrkTl7apHUMLqKph5n1Jhp4ZQIonXzbAfM58EV3FZc%3D&ske=2025-04-01T00%3A00%3A27Z&skoid=ca7593d4-ee42-46cd-af88-8b886a2f84eb&sks=b&skt=2025-03-31T12%3A00%3A27Z&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skv=2025-01-05&sp=r&spr=https&sr=b&st=2025-03-31T13%3A50%3A19Z&sv=2025-01-05'
-
-// $HOME/.baml
+// TODO: $HOME/.baml for Linux, figure out other platforms.
 const INSTALL_PATH = path.join(os.homedir(), '.baml')
 
+/**
+ * Returns the architecture name correctly formatted for the Github release.
+ *
+ * @param nodeArch The architecture of the Node.js runtime.
+ * @returns The architecture for the release.
+ */
+function getReleaseArchitecture(nodeArch: string): string {
+  switch (nodeArch) {
+    case 'arm64':
+      return 'aarch64'
+    case 'x64':
+      return 'x86_64'
+    default:
+      return nodeArch
+  }
+}
+
+/**
+ * Returns the platform name correctly formatted for the Github release.
+ *
+ * @param platform Current Node.js platform.
+ * @returns The platform for the release.
+ */
+function getReleasePlatform(platform: string): string {
+  switch (platform) {
+    case 'win32':
+      return 'pc-windows-msvc'
+    case 'darwin':
+      return 'apple-darwin'
+    // TODO: linux-musl
+    case 'linux':
+      return 'unknown-linux-gnu'
+    default:
+      return platform
+  }
+}
+
+/**
+ * Returns the extension for the compressed file for the Github release.
+ *
+ * @param platform Current Node.js platform (already formatted).
+ * @returns The extension for the compressed file.
+ */
+function getCliCompressedFileExtension(platform: string): string {
+  switch (platform) {
+    case 'pc-windows-msvc':
+      return 'zip'
+    case 'apple-darwin':
+    case 'unknown-linux-gnu':
+    case 'unknown-linux-musl':
+      return 'tar.gz'
+    default:
+      return 'zip' // TODO: Throw error or something.
+  }
+}
+
 export async function downloadCli(platform: string, architecture: string, version: string): Promise<string> {
-  console.debug('downloadCli', { platform, architecture, version })
-  return path.join(INSTALL_PATH, `baml-cli-${platform}-${architecture}-${version}`)
-
   // TODO: Validate params.
+  architecture = getReleaseArchitecture(architecture)
+  platform = getReleasePlatform(platform)
+  const extension = getCliCompressedFileExtension(platform)
 
-  // const url = `${BASE_URL}/${version}/baml-cli-${platform}-${architecture}-${version}.tar.gz`
-  // const url = "https://github.com/BoundaryML/baml/archive/refs/tags/0.81.1.zip"
-  const url = BASE_URL
+  // Filenames.
+  const binaryFileName = `baml-cli-${version}-${architecture}-${platform}`
+  const compressedFileName = `${binaryFileName}.${extension}`
 
-  console.log('downloading', url)
-  const req = https.get(url, async (res) => {
-    try {
-      console.log('access', INSTALL_PATH)
-      await fs.access(INSTALL_PATH)
-    } catch (e) {
-      console.log('mkdir', INSTALL_PATH)
-      await fs.mkdir(INSTALL_PATH, { recursive: true })
-    }
+  // Github release download URL.
+  // const url = `${BASE_URL}/${compressedFileName}`
 
-    try {
-      console.log('access', INSTALL_PATH)
-      await fs.access(INSTALL_PATH)
-    } catch (e) {
-      console.log('mkdir', INSTALL_PATH)
-      await fs.mkdir(INSTALL_PATH, { recursive: true })
-    }
+  // TODO: Testing
+  const url =
+    'https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz'
 
-    const compressedFilePath = path.join(INSTALL_PATH, `baml-cli-${platform}-${architecture}-${version}.zip`)
-    res.pipe(createWriteStream(compressedFilePath))
+  // Full path on disk of the CLI binary.
+  const binaryFilePath = path.join(INSTALL_PATH, binaryFileName)
 
-    console.log('decompress', compressedFilePath)
-    // const unzip = zlib.createGunzip()
-    // res.pipe(unzip).pipe(filePath)
-    await extractZip(compressedFilePath, { dir: INSTALL_PATH })
+  // Make HTTP request, follow redirects.
+  const res = await axios.get(url, { responseType: 'stream' })
 
-    await fs.unlink(compressedFilePath)
-  })
+  if (res.status !== 200) {
+    throw new Error(`Failed to download CLI: HTTP ${res.status}`)
+  }
 
-  req.on('error', (err) => {
-    console.error('Request error:', err)
-  })
+  // Create binaries directory if it doesn't exist.
+  try {
+    await fs.access(INSTALL_PATH)
+  } catch (e) {
+    await fs.mkdir(INSTALL_PATH, { recursive: true })
+  }
+
+  // Download the compressed file, extract and write the binary.
+  // TODO: Check zip vs tar.gz.
+  res.data.pipe(
+    tar.extract(
+      {
+        cwd: INSTALL_PATH,
+        onReadEntry: (entry) => entry.path = binaryFileName
+      },
+      ['ripgrep-14.1.1-x86_64-unknown-linux-musl/rg'], // TODO: Change this to ['./baml-cli']
+    ),
+  )
+
+  // TODO: Zip files
+  // const unzip = zlib.createGunzip()
+  // unzip.pipe(createWriteStream(path.join(INSTALL_PATH, binaryFileName)))
+  // await extractZip(compressedFilePath, { dir: INSTALL_PATH })
+
+  return binaryFilePath
 }

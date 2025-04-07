@@ -382,54 +382,20 @@ export function startServer(options?: LSOptions): void {
     try {
       const error = proj.checkVersionOnSave()
 
-      // TODO: On extension load, if binary not found then:
-      for (const generator of proj.list_generators()) {
-        try {
-          // TODO: Check if already downloaded, retries, etc
-          const cliPath = await downloadCli(process.platform.toString(), process.arch, generator.version)
-
-          console.debug(`Running build for generator ${generator.toString()} with cli ${cliPath}`)
-
-          // Skip build for now just debugging
-          if (cliPath) {
-            continue
-          }
-
-          cliBuild(
-            cliPath,
-            URI.file(proj.rootPath()),
-            (message) => {
-              connection.window
-                .showErrorMessage(message, {
-                  title: 'Show Details',
-                })
-                .then((item) => {
-                  if (item?.title === 'Show Details') {
-                    connection.sendNotification('baml/showLanguageServerOutput')
-                  }
-                })
-            },
-            () => {
-              connection.sendNotification('baml/message', {
-                type: 'info',
-                message: 'BAML: Client generated! (Using installed baml-cli ' + bamlConfig.cliVersion + ')',
-              })
-            },
-          )
-        } catch (e) {
-          console.error(`Error downloading CLI v${generator.version}: ${e}`)
-        }
+      if (error) {
+        console.error('Error generating: ' + error)
+        connection.sendNotification('baml/message', {
+          type: 'info',
+          message: error,
+          durationMs: 7000,
+        })
+        return
       }
 
-      // if (error) {
-      //   console.error('Error generating: ' + error)
-      //   connection.sendNotification('baml/message', {
-      //     type: 'info',
-      //     message: error,
-      //     durationMs: 7000,
-      //   })
-      //   return
-      // }
+      // TODO: Grab correct version, this is for testing.
+      const cliPath = await downloadCli(process.platform.toString(), process.arch, '0.1.0')
+
+      console.log('cliPath', cliPath)
 
       if (bamlConfig.config?.cliPath) {
         cliBuild(
