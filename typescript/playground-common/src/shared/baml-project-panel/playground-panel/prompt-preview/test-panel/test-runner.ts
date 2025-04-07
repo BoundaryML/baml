@@ -11,6 +11,7 @@ import {
   selectedTestcaseAtom,
   selectedFunctionAtom,
 } from '../../atoms'
+import { vscode } from '../../../vscode'
 import { testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 
@@ -81,10 +82,12 @@ export const useRunTests = (maxBatchSize = 5) => {
             const result = await testCase.fn.run_test(
               rt,
               testCase.tc.name,
+              vscode.loadEnv(),
               (partial: WasmFunctionResponse) => {
                 setState(test, { status: 'running', response: partial })
               },
               findMediaFile,
+              vscode.loadAwsCreds.bind(vscode),
             )
             console.log('result', result)
 

@@ -9,13 +9,13 @@ To set up BAML with Typescript do the following:
       - syntax highlighting
       - testing playground
       - prompt previews
-  
+
   ### Install BAML
       <CodeBlocks>
         ```bash npm
         npm install @boundaryml/baml
         ```
-        
+
         ```bash pnpm
         pnpm add @boundaryml/baml
         ```
@@ -24,19 +24,23 @@ To set up BAML with Typescript do the following:
         yarn add @boundaryml/baml
         ```
 
+        ```bash bun
+        bun add @boundaryml/baml
+        ```
+
         ```bash deno
         deno install npm:@boundaryml/baml
         ```
     </CodeBlocks>
-  
+
   ### Add BAML to your existing project
       This will give you some starter BAML code in a `baml_src` directory.
-      
+
       <CodeBlocks>
         ```bash npm
         npx baml-cli init
         ```
-        
+
         ```bash pnpm
         pnpm exec baml-cli init
         ```
@@ -45,29 +49,48 @@ To set up BAML with Typescript do the following:
         yarn baml-cli init
         ```
 
+        ```bash bun
+        bun baml-cli init
+        ```
+
         ```bash deno
         deno run -A npm:@boundaryml/baml/baml-cli init
         ```
     </CodeBlocks>
-  
+
   ### Generate the `baml_client` typescript package from `.baml` files
 
     One of the files in your `baml_src` directory will have a [generator block](/ref/baml/generator). This tells BAML how to generate the `baml_client` directory, which will have auto-generated typescript code to call your BAML functions.
 
-    ```bash
-    npx baml-cli generate
-    ```
-    ```bash deno
-    deno run --unstable-sloppy-imports -A npm:@boundaryml/baml/baml-cli generate
-    # Note: ESM is especially important for Deno, so you must explicitly
-    # allow our Node import style, with the `--unstable-sloppy-imports` flag
-    # and in your Deno VSCode configuration:
-    #
-    # {
-    #   "deno.unstable": ["sloppy-imports"] 
-    # }
+    <CodeBlocks>
+      ```bash npm
+      npx baml-cli generate
+      ```
 
-    ```
+      ```bash pnpm
+      pnpm exec baml-cli generate
+      ```
+
+      ```bash yarn
+      yarn baml-cli generate
+      ```
+
+      ```bash bun
+      bun baml-cli generate
+      ```
+
+      ```bash deno
+      deno run --unstable-sloppy-imports -A npm:@boundaryml/baml/baml-cli generate
+      # Note: ESM is especially important for Deno, so you must explicitly
+      # allow our Node import style, with the `--unstable-sloppy-imports` flag
+      # and in your Deno VSCode configuration:
+      #
+      # {
+      #   "deno.unstable": ["sloppy-imports"]
+      # }
+
+      ```
+    </CodeBlocks>
 
     You can modify your `package.json` so you have a helper prefix in front of your build command.
 
@@ -81,44 +104,44 @@ To set up BAML with Typescript do the following:
       }
     }
     ```
-    
+
     See [What is baml_src](/guide/introduction/baml_src) to learn more about how this works.
     <img src="/assets/languages/baml-to-ts.png" />
 
-   
+
     <Tip>
       If you set up the [VSCode extension](https://marketplace.visualstudio.com/items?itemName=Boundary.baml-extension), it will automatically run `baml-cli generate` on saving a BAML file.
     </Tip>
-  
+
   ### Use a BAML function in Typescript!
     <Error>If `baml_client` doesn't exist, make sure to run the previous step! </Error>
 
     <CodeBlocks>
     ```typescript index.ts
-    import {b} from "baml_client"
-    import type {Resume} from "baml_client/types"
+    import { b } from "./baml_client"
+    import type { Resume } from "./baml_client/types"
 
-    async function Example(raw_resume: string): Resume {
+    async function Example(raw_resume: string): Promise<Resume> {
       // BAML's internal parser guarantees ExtractResume
       // to be always return a Resume type
       const response = await b.ExtractResume(raw_resume);
       return response;
     }
 
-    async function ExampleStream(raw_resume: string): Resume {
+    async function ExampleStream(raw_resume: string): Promise<Resume> {
       const stream = b.stream.ExtractResume(raw_resume);
       for await (const msg of stream) {
         console.log(msg) // This will be a Partial<Resume> type
       }
 
       // This is guaranteed to be a Resume type.
-      return await stream.get_final_response();
+      return await stream.getFinalResponse();
     }
     ```
 
     ```typescript sync_example.ts
-    import {b} from "baml_client/sync_client"
-    import type {Resume} from "baml_client/types"
+    import { b } from "./baml_client/sync_client"
+    import type { Resume } from "./baml_client/types"
 
     function Example(raw_resume: string): Resume {
       // BAML's internal parser guarantees ExtractResume

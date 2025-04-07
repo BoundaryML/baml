@@ -61,7 +61,7 @@ export const testcaseObjectAtom = atomFamily((params: { functionName: string; te
 export const updateCursorAtom = atom(
   null,
   (get, set, cursor: { fileName: string; fileText: string; line: number; column: number }) => {
-    const runtime = get(runtimeAtom).rt
+    const runtime = get(runtimeAtom)?.rt
 
     if (runtime) {
       const fileName = cursor.fileName

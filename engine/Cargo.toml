@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "baml-lib/*",
+  "baml-rpc",
   "baml-runtime",
   "baml-schema-wasm",
   "bstd",
@@ -14,6 +15,7 @@ members = [
 ]
 default-members = [
   "baml-lib/*",
+  "baml-rpc",
   "baml-runtime",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
   # Building baml-schema-wasm in combination with everything else triggers feature unification,
@@ -92,6 +94,7 @@ serde_yaml = "0.9.34"
 static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
+thiserror = "2.0.12"
 time = { version = "0.3.36", features = ["formatting"] }
 tracing-core = { version = "0.1.31" }
 pin-project-lite = "0.2.14"
@@ -105,7 +108,7 @@ tokio = { version = "1", default-features = false, features = [
 ] }
 
 [workspace.package]
-version = "0.81.3"
+version = "0.82.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

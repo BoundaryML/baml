@@ -1,10 +1,7 @@
-from dotenv import load_dotenv
 from ..baml_client import partial_types
 from ..baml_client.types import LinkedList, Node
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
-
-load_dotenv()
 
 
 def test_parse_llm_response():
@@ -45,6 +42,7 @@ def test_parse_llm_response():
         ),
     )
 
+
 def test_parse_llm_response_sync():
     llm_response = """
         ```json
@@ -83,6 +81,7 @@ def test_parse_llm_response_sync():
         ),
     )
 
+
 def test_parse_llm_stream():
     stream = """
         ```json
@@ -100,8 +99,9 @@ def test_parse_llm_stream():
         phone=None,
         experience=[],
         education=[],
-        skills=[]
+        skills=[],
     )
+
 
 def test_parse_llm_stream_sync():
     stream = """
@@ -120,5 +120,5 @@ def test_parse_llm_stream_sync():
         phone=None,
         experience=[],
         education=[],
-        skills=[]
+        skills=[],
     )
