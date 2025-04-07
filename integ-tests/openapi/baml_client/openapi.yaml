@@ -2399,22 +2399,7 @@ components:
             type: object
             properties:
               money:
-                type: object
-                properties:
-                  value:
-                    type: integer
-                  checks:
-                    type: object
-                    properties:
-                      gt_ten:
-                        $ref: '#components/schemas/Check'
-                    required:
-                    - gt_ten
-                    additionalProperties: false
-                required:
-                - value
-                - checks
-                additionalProperties: false
+                type: integer
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -3863,22 +3848,7 @@ components:
             type: object
             properties:
               money:
-                type: object
-                properties:
-                  value:
-                    type: integer
-                  checks:
-                    type: object
-                    properties:
-                      gt_ten:
-                        $ref: '#components/schemas/Check'
-                    required:
-                    - gt_ten
-                    additionalProperties: false
-                required:
-                - value
-                - checks
-                additionalProperties: false
+                type: integer
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'

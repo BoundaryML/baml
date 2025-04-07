@@ -456,7 +456,7 @@ export function useAliasThatPointsToRecursiveType(
  *
  * **Input Types:**
  *
- * - money: Checked<number,"gt_ten">
+ * - money: number
  *
  *
  * **Return Type:**
@@ -4644,7 +4644,7 @@ export function useRecursiveClassWithAliasIndirection(
  *
  * **Input Types:**
  *
- * - money: Checked<number,"gt_ten">
+ * - money: number
  *
  *
  * **Return Type:**
