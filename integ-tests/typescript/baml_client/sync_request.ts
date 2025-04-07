@@ -72,7 +72,7 @@ export class HttpRequest {
   }
   
   AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
@@ -1812,7 +1812,7 @@ export class HttpRequest {
   }
   
   ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
@@ -3478,7 +3478,7 @@ export class HttpStreamRequest {
   }
   
   AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
@@ -5218,7 +5218,7 @@ export class HttpStreamRequest {
   }
   
   ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {

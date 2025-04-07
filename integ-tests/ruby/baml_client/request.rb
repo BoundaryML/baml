@@ -95,7 +95,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
+        money: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Ffi::HTTPRequest)
     }
@@ -2792,7 +2792,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
+        money: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Ffi::HTTPRequest)
     }
@@ -5377,7 +5377,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
+        money: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Ffi::HTTPRequest)
     }
@@ -8074,7 +8074,7 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
+        money: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Ffi::HTTPRequest)
     }
