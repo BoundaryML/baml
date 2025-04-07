@@ -65,7 +65,9 @@ use tracingv2::storage::storage::BAML_TRACER;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
-pub use runtime_context::BamlSrcReader;
+pub use runtime_context::{
+    AwsCredProvider, AwsCredProviderImpl, AwsCredResult, BamlSrcReader, RuntimeCallbackError,
+};
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
@@ -180,7 +182,6 @@ impl BamlRuntime {
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
         baml_log::set_from_env(&copy)?;
-
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
@@ -200,7 +201,25 @@ impl BamlRuntime {
         language: BamlValue,
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
-        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
+        let ctx =
+            RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader, None);
+        let tags: HashMap<String, BamlValue> = [("baml.language", language)]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+        ctx.upsert_tags(tags);
+        ctx
+    }
+
+    pub fn create_ctx_manager_with_env(
+        &self,
+        language: BamlValue,
+        env_vars: HashMap<String, String>,
+        baml_src_reader: BamlSrcReader,
+        aws_cred_provider: AwsCredProvider,
+    ) -> RuntimeContextManager {
+        let ctx =
+            RuntimeContextManager::new_from_env_vars(env_vars, baml_src_reader, aws_cred_provider);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))

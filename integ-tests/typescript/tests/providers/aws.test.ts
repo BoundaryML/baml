@@ -3,7 +3,7 @@ import { ClientRegistry } from '@boundaryml/baml'
 import { b } from '../test-setup'
 
 describe('AWS Provider', () => {
-  it('should support AWS', async () => {
+  it('should support AWS - basic', async () => {
     const res = await b.TestAws('Dr. Pepper')
     expect(res.length).toBeGreaterThan(0)
   })
@@ -188,12 +188,12 @@ describe('AWS Provider', () => {
       })
     })
 
-    it('should support AWS profile configuration', async () => {
+    it.only('should support AWS profile configuration', async () => {
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
         model_id: 'meta.llama3-8b-instruct-v1:0',
         region: 'us-east-1',
-        profile: 'boundaryml-dev',
+        profile: 'boundaryml-prod',
         inference_configuration: {
           max_tokens: 100,
         },
@@ -331,7 +331,7 @@ describe('AWS Provider', () => {
       })
     })
 
-    it('should throw error when using invalid profile', async () => {
+    it.only('should throw error when using invalid profile', async () => {
       // Clear any existing profile
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {

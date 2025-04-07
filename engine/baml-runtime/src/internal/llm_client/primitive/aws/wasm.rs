@@ -2,6 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use aws_config::ConfigLoader;
+use aws_credential_types::{
+    provider::{
+        error::{CredentialsError, CredentialsNotLoaded},
+        future::ProvideCredentials,
+    },
+    Credentials,
+};
 use aws_smithy_async::{
     rt::sleep::{AsyncSleep, Sleep},
     time::TimeSource,
@@ -22,14 +29,19 @@ use aws_smithy_runtime_api::{
 use aws_smithy_types::body::SdkBody;
 
 use aws_config::{BehaviorVersion, SdkConfig};
+use chrono::{DateTime, Utc};
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use futures::Stream;
 use pin_project_lite::pin_project;
 use std::sync::Arc;
 use std::time::SystemTime;
+use time::OffsetDateTime;
+
+use crate::{AwsCredProvider, AwsCredProviderImpl, AwsCredResult};
 
 pub fn load_aws_config() -> ConfigLoader {
+    log::debug!("Loading AWS config for wasm specifically");
     aws_config::defaults(BehaviorVersion::latest())
         .sleep_impl(BrowserSleep)
         .time_source(BrowserTime)
@@ -144,5 +156,90 @@ impl HttpClient for BrowserHttp2 {
         _components: &RuntimeComponents,
     ) -> SharedHttpConnector {
         self.clone().into_shared()
+    }
+}
+
+pub(super) struct WasmAwsCreds {
+    // pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
+    pub aws_cred_provider: AwsCredProvider,
+    pub profile: Option<String>,
+}
+
+impl std::fmt::Debug for WasmAwsCreds {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WasmAwsCreds")
+            .field("aws_cred_provider", &"<no-repr-available>")
+            .field("profile", &self.profile)
+            .finish()
+    }
+}
+
+impl WasmAwsCreds {
+    async fn provide_credentials_impl(&self) -> aws_credential_types::provider::Result {
+        match self.aws_cred_provider.clone() {
+            Some(AwsCredProviderImpl {
+                req_tx,
+                mut resp_rx,
+            }) => {
+                if let Err(e) = req_tx.send(self.profile.clone()).await {
+                    log::error!(
+                        "Failed to send AWS cred request across WASM bridge: {:?}",
+                        e
+                    );
+                    return Err(CredentialsError::unhandled(e));
+                };
+                let creds = match resp_rx.recv().await {
+                    Ok(Ok(creds)) => creds,
+                    Ok(Err(e)) => {
+                        log::error!("Error in AWS cred provider: {:?}", e);
+                        return Err(CredentialsError::unhandled(e));
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "Failed to recv AWS cred response across WASM bridge: {:?}",
+                            e
+                        );
+                        return Err(CredentialsError::unhandled(e));
+                    }
+                };
+
+                match creds {
+                    AwsCredResult::Ok {
+                        access_key_id,
+                        secret_access_key,
+                        session_token,
+                        expiration,
+                        ..
+                    } => Ok(Credentials::new(
+                        access_key_id,
+                        secret_access_key,
+                        session_token,
+                        match expiration {
+                            Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
+                                Ok(dt) => Some(dt.into()),
+                                Err(_) => None,
+                            },
+                            None => None,
+                        },
+                        "baml-playground-wasm-bridge",
+                    )),
+                    AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(
+                        format!("{}: {}", name, message),
+                    )),
+                }
+            }
+            None => Err(CredentialsError::not_loaded_no_source()),
+        }
+    }
+}
+
+impl aws_credential_types::provider::ProvideCredentials for WasmAwsCreds {
+    fn provide_credentials<'a>(
+        &'a self,
+    ) -> aws_credential_types::provider::future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        ProvideCredentials::new(self.provide_credentials_impl())
     }
 }
