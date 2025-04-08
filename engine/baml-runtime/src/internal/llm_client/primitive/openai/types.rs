@@ -35,13 +35,13 @@ where
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum FloatOrInt {
-        Float(f64),
         Int(u32),
+        Float(f64),
     }
 
     match Option::<FloatOrInt>::deserialize(deserializer)? {
-        Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
         Some(FloatOrInt::Int(i)) => Ok(Some(i)),
+        Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
         None => Ok(None),
     }
 }
