@@ -1,12 +1,15 @@
-import { createWriteStream } from 'fs'
+/**
+ * Language server is bundled in the baml CLI, so we need to download the
+ * correct binary based on the version.
+ */
+
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
-import zlib from 'zlib'
 import * as tar from 'tar'
-import https from 'https'
-import extractZip from 'extract-zip'
 import axios from 'axios'
+// import zlib from 'zlib'
+// import extractZip from 'extract-zip'
 
 type CliVersion = {
   architecture: string

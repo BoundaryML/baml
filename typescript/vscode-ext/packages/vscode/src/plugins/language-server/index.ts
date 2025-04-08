@@ -17,6 +17,7 @@ import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 import { getCurrentOpenedFile } from '../../helpers/get-open-file'
 import { bamlConfig, getConfig } from './bamlConfig'
+import { checkIfCliBinaryExists, downloadCli } from './cliDownloader'
 
 export { bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line
@@ -426,6 +427,17 @@ const plugin: BamlVSCodePlugin = {
         }
       }),
     )
+
+    const cliVersion = {
+      architecture: process.arch,
+      platform: process.platform,
+      version: "0.82.0", // TODO: Get version on the client side.
+    }
+
+    // TODO: Send notification, loading state, etc.
+    if (!(await checkIfCliBinaryExists(cliVersion))) {
+      await downloadCli(cliVersion)
+    }
 
     activateClient(context, serverOptions, clientOptions)
 
