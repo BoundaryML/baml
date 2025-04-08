@@ -1,0 +1,141 @@
+---
+title: Image
+description: Learn how to handle image inputs in BAML functions
+---
+
+Image values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle image data. For more details, refer to [image types](/ref/baml/types#image).
+
+## Usage Examples
+
+<CodeBlocks>
+```python
+from baml_py import Image
+from baml_client import b
+
+async def test_image_input():
+    # Create an Image from a URL
+    img = Image.from_url("https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png")
+    res = await b.TestImageInput(img=img)
+
+    # Create an Image from Base64 data
+    image_b64 = "iVB0xyz..."
+    img = Image.from_base64("image/png", image_b64)
+    res = await b.TestImageInput(img=img)
+```
+
+```typescript
+import { b } from '../baml_client'
+import { Image } from "@boundaryml/baml"
+
+// Create an Image from a URL
+let res = await b.TestImageInput(
+    Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png')
+)
+
+// Create an Image from Base64 data
+const image_b64 = "iVB0xyz..."
+res = await b.TestImageInput(
+    Image.fromBase64('image/png', image_b64)
+)
+
+// Browser-specific methods
+const fileImage = await Image.fromFile(file)
+const blobImage = await Image.fromBlob(blob, 'image/png')
+```
+
+```tsx
+import { useTestImageInput } from '../baml_client/react/hooks'
+import { Image } from "../baml_client/react/media"
+
+export function TestImageInput() {
+    const { mutate } = useTestImageInput()
+
+    const handleClick = async () => {
+        const image = await Image.fromUrl('https://upload.wikimedia.org/wikipedia/en/4/4d/Shrek_%28character%29.png')
+        mutate(image)
+    }
+
+    return (
+      <div>
+          <button onClick={handleClick}>
+              Test Image Input
+          </button>
+      </div>
+    )
+}
+```
+
+```ruby
+# Ruby implementation is in development.
+```
+</CodeBlocks>
+
+## Static Methods
+
+<ParamField
+  path="fromUrl"
+  type="(url: string, mediaType?: string) => Image"
+>
+  Creates an Image object from a URL. Optionally specify the media type, otherwise it will be inferred from the URL.
+</ParamField>
+
+<ParamField
+  path="fromBase64"
+  type="(mediaType: string, base64: string) => Image"
+>
+  Creates an Image object using Base64 encoded data along with the given MIME type.
+</ParamField>
+
+<ParamField
+  path="fromFile"
+  type="(file: File) => Promise<Image>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates an Image object from a File object. Available in browser environments only.
+</ParamField>
+
+<ParamField
+  path="fromBlob"
+  type="(blob: Blob, mediaType?: string) => Promise<Image>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates an Image object from a Blob object. Available in browser environments only.
+</ParamField>
+
+<ParamField
+  path="fromUrlToBase64"
+  type="(url: string) => Promise<Image>"
+>
+  <Info>Only available in browser environments. </Info>
+  Creates an Image object by fetching from a URL. Available in browser environments only.
+</ParamField>
+
+## Instance Methods
+
+<ParamField
+  path="isUrl"
+  type="() => boolean"
+>
+  Check if the image is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="asUrl"
+  type="() => string"
+>
+  Get the URL of the image if it's stored as a URL. Throws an Error if the image is not stored as a URL.
+</ParamField>
+
+<ParamField
+  path="asBase64"
+  type="() => [string, string]"
+>
+  Get the base64 data and media type if the image is stored as base64. Returns [base64Data, mediaType]. Throws an Error if the image is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="toJSON"
+  type="() => { url: string } | { base64: string; media_type: string }"
+>
+  Convert the image to a JSON representation. Returns either a URL object or a base64 object with media type.
+</ParamField>

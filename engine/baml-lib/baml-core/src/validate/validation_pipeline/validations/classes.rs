@@ -1,5 +1,5 @@
 use baml_types::GeneratorOutputType;
-use internal_baml_schema_ast::ast::{Field, FieldType, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{Field, FieldType, WithIdentifier, WithName, WithSpan};
 
 use super::types::validate_type;
 use crate::validate::validation_pipeline::context::Context;
@@ -58,7 +58,7 @@ pub(super) fn assert_no_field_name_collisions(
     generator_output_types: &HashSet<GeneratorOutputType>,
 ) {
     // The list of reserved words for all user-requested codegen targets.
-    let reserved = reserved_names(generator_output_types);
+    let reserved = reserved_names(generator_output_types, ReservedNamesMode::FieldNames);
 
     for cls in ctx.db.walk_classes() {
         for c in cls.static_fields() {
@@ -78,7 +78,7 @@ pub(super) fn assert_no_field_name_collisions(
                     "class",
                     c.name(),
                     field.name(),
-                    field.span.clone(),
+                    field.identifier().span().clone(),
                 ))
             }
 
@@ -94,12 +94,48 @@ pub(super) fn assert_no_field_name_collisions(
                         "class",
                         c.name(),
                         field.name(),
-                        field.span.clone()
+                        field.identifier().span().clone(),
                     ))
                 }
             }
         }
     }
+
+    // check for reserved names in function parameters
+    let reserved = reserved_names(generator_output_types, ReservedNamesMode::FunctionParameters);
+    for func in ctx.db.walk_functions() {
+        for param in func.walk_input_args() {
+            match param.ast_arg().0 {
+                Some(id) => {
+                    match reserved.get(id.name()) {
+                        Some(langs) => {
+                            match langs.as_slice() {
+                                [lang] => {
+                                    ctx.push_error(DatamodelError::new_validation_error(
+                                        &format!("{} is a reserved word in {}", id.name(), lang),
+                                        id.span().clone(),
+                                    ));
+                                }
+                                _ => {
+                                    ctx.push_error(DatamodelError::new_validation_error(
+                                        &format!("{} is a reserved word in language clients: {}", id.name(), join(langs, ", ")),
+                                        id.span().clone(),
+                                    ));
+                                }
+                            }
+                        }
+                        None => {}
+                    }
+                }
+                None => {}
+            }
+        }
+    }
+}
+
+enum ReservedNamesMode {
+    FieldNames,
+    FunctionParameters,
 }
 
 /// For a given set of target languages, construct a map from keyword to the
@@ -110,15 +146,27 @@ pub(super) fn assert_no_field_name_collisions(
 /// `return` because that is a keyword in Python and Typescript".
 fn reserved_names(
     generator_output_types: &HashSet<GeneratorOutputType>,
+    mode: ReservedNamesMode,
 ) -> HashMap<&'static str, Vec<GeneratorOutputType>> {
     let mut keywords: HashMap<&str, Vec<GeneratorOutputType>> = HashMap::new();
 
     let language_keywords: Vec<(&str, GeneratorOutputType)> = [
         if generator_output_types.contains(&GeneratorOutputType::PythonPydantic) {
-            RESERVED_NAMES_PYTHON
-                .iter()
-                .map(|name| (*name, GeneratorOutputType::PythonPydantic))
-                .collect()
+            match mode {
+                ReservedNamesMode::FieldNames => {
+                    RESERVED_NAMES_PYTHON
+                        .iter()
+                        .map(|name| (*name, GeneratorOutputType::PythonPydantic))
+                        .collect()
+                }
+                ReservedNamesMode::FunctionParameters => {
+                    RESERVED_NAMES_FUNCTION_PARAMETERS
+                        .iter()
+                        .chain(RESERVED_NAMES_PYTHON.iter())
+                        .map(|name| (*name, GeneratorOutputType::PythonPydantic))
+                        .collect()
+                }
+            }
         } else {
             Vec::new()
         },
@@ -155,7 +203,11 @@ const RESERVED_NAMES_PYTHON: &[&str] = &[
     "False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue",
     "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import",
     "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
-    "with", "yield",
+    "with", "yield", // additional keywords that we use in BAML as they are types
+];
+
+const RESERVED_NAMES_FUNCTION_PARAMETERS: &[&str] = &[
+    "list", "dict", "set", "tuple", "int", "float", "str", "bool",
 ];
 
 // Typescript is much more flexible in the key names it allows.

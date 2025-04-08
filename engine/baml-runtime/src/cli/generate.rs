@@ -20,7 +20,7 @@ impl GenerateArgs {
         let result = self.generate_clients(defaults);
 
         if let Err(e) = result {
-            log::error!("Error generating clients: {:?}", e);
+            baml_log::error!("Error generating clients: {:?}", e);
             return Err(e);
         }
 
@@ -89,11 +89,11 @@ impl GenerateArgs {
                     output_dir_relative_to_baml_src.display()
                 ))?;
 
-            log::info!(
+            baml_log::info!(
                 "Generated 1 baml_client: {}",
                 generate_output.output_dir_full.display()
             );
-            log::info!(
+            baml_log::info!(
                 r#"
 You can automatically generate a client by adding the following to any one of your BAML files:
 generator my_client {{
@@ -107,11 +107,11 @@ generator my_client {{
             );
         } else {
             match generated.len() {
-                1 => log::info!(
+                1 => baml_log::info!(
                     "Generated 1 baml_client: {}",
                     generated[0].output_dir_full.display()
                 ),
-                n => log::info!(
+                n => baml_log::info!(
                     "Generated {n} baml_clients: {}",
                     generated
                         .iter()

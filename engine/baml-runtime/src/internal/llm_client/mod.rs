@@ -12,7 +12,7 @@ pub mod traits;
 use anyhow::{Context, Result};
 
 use baml_types::{BamlMap, BamlValueWithMeta, FieldType, JinjaExpression, ResponseCheck};
-use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
+use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker, IRHelper, IRHelperExtended};
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::AllowedRoleMetadata;
 pub use jsonish::ResponseBamlValue;
@@ -33,7 +33,7 @@ use wasm_bindgen::JsValue;
 
 /// Validate a parsed value, checking asserts and checks.
 pub fn parsed_value_to_response(
-    ir: &IntermediateRepr,
+    ir: &impl IRHelperExtended,
     baml_value: BamlValueWithFlags,
     field_type: &FieldType,
     allow_partials: bool,
@@ -87,10 +87,11 @@ pub enum ResolveMediaUrls {
 
     // aws: supports b64 w mime
     // anthropic: supports b64 w mime
-    // google: supports b64 w mime
+    // google: supports b64 w mime, url if its a google file uri (gs://)
     // openai: supports URLs w/o mime (b64 data URLs also work here)
     // vertex: supports URLs w/ mime, b64 w/ mime
     Always,
+    IfMatchesGoogleFileUri,
     EnsureMime,
     Never,
 }
@@ -111,7 +112,7 @@ pub struct RetryLLMResponse {
     pub failed: Vec<LLMResponse>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum LLMResponse {
     /// BAML was able to successfully make the HTTP request and got a 2xx
     /// response from the model provider
@@ -130,7 +131,7 @@ pub enum LLMResponse {
 impl Error for LLMResponse {}
 
 impl crate::tracing::Visualize for LLMResponse {
-    fn visualize(&self, max_chunk_size: usize) -> String {
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String {
         match self {
             Self::Success(response) => response.visualize(max_chunk_size),
             Self::LLMFailure(failure) => failure.visualize(max_chunk_size),
@@ -175,7 +176,7 @@ impl LLMResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
@@ -190,7 +191,7 @@ pub struct LLMErrorResponse {
     pub code: ErrorCode,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum ErrorCode {
     InvalidAuthentication, // 401
     NotSupported,          // 403
@@ -255,7 +256,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
@@ -268,7 +269,7 @@ pub struct LLMCompleteResponse {
     pub metadata: LLMCompleteResponseMetadata,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct LLMCompleteResponseMetadata {
     pub baml_is_complete: bool,
     pub finish_reason: Option<String>,
@@ -310,7 +311,7 @@ impl std::fmt::Display for LLMCompleteResponse {
 
 // This is the one that gets logged by BAML_LOG, for baml_events log.
 impl crate::tracing::Visualize for LLMCompleteResponse {
-    fn visualize(&self, max_chunk_size: usize) -> String {
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String {
         let s = [
             format!(
                 "{}",
@@ -334,7 +335,8 @@ impl crate::tracing::Visualize for LLMCompleteResponse {
             format!("{}", "---PROMPT---".blue()),
             format!(
                 "{}",
-                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size).dimmed()
+                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size.clone())
+                    .dimmed()
             ),
             format!("{}", "---LLM REPLY---".blue()),
             format!(
@@ -347,7 +349,7 @@ impl crate::tracing::Visualize for LLMCompleteResponse {
 }
 
 impl crate::tracing::Visualize for LLMErrorResponse {
-    fn visualize(&self, max_chunk_size: usize) -> String {
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String {
         let mut s = vec![
             format!(
                 "{}",
@@ -362,7 +364,8 @@ impl crate::tracing::Visualize for LLMErrorResponse {
             format!("{}", "---PROMPT---".blue()),
             format!(
                 "{}",
-                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size).dimmed()
+                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size.clone())
+                    .dimmed()
             ),
             format!("{}", "---REQUEST OPTIONS---".blue()),
         ];
@@ -370,13 +373,13 @@ impl crate::tracing::Visualize for LLMErrorResponse {
             s.push(format!(
                 "{}: {}",
                 k,
-                crate::tracing::truncate_string(&v.to_string(), max_chunk_size)
+                crate::tracing::truncate_string(&v.to_string(), max_chunk_size.clone())
             ));
         }
         s.push(format!("{}", format!("---ERROR ({})---", self.code).red()));
         s.push(format!(
             "{}",
-            crate::tracing::truncate_string(&self.message, max_chunk_size).red()
+            crate::tracing::truncate_string(&self.message, max_chunk_size.clone()).red()
         ));
         s.join("\n")
     }

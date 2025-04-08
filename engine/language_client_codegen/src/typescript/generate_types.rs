@@ -5,7 +5,7 @@ use itertools::Itertools;
 
 use internal_baml_core::ir::{
     repr::{Docstring, IntermediateRepr, Walker},
-    ClassWalker, EnumWalker, FieldType, IRHelper,
+    ClassWalker, EnumWalker, FieldType, IRHelperExtended,
 };
 
 use crate::{type_check_attributes, GeneratorArgs, TypeCheckAttributes};
@@ -180,7 +180,7 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
                     (
                         Cow::Borrowed(f.elem.name.as_str()),
                         f.elem.r#type.elem.is_optional(),
-                        f.elem.r#type.elem.to_type_ref(c.db, false),
+                        f.elem.r#type.elem.to_type_ref(c.ir, false),
                         f.elem.docstring.as_ref().map(|d| render_docstring(d, true)),
                     )
                 })
@@ -199,7 +199,7 @@ impl<'ir> From<&ClassWalker<'ir>> for TypescriptClass<'ir> {
 impl<'ir> From<Walker<'ir, (&'ir String, &'ir FieldType)>> for TypescriptTypeAlias<'ir> {
     fn from(
         Walker {
-            db,
+            ir: db,
             item: (name, target),
         }: Walker<(&'ir String, &'ir FieldType)>,
     ) -> Self {
@@ -221,15 +221,15 @@ impl<'ir> From<ClassWalker<'ir>> for PartialTypescriptClass<'ir> {
                 .static_fields
                 .iter()
                 .map(|f| {
-                    let ir = c.db;
+                    let ir = c.ir;
                     let needed: bool = f.attributes.get("stream.not_null").is_some();
                     let (_, metadata) = ir.distribute_metadata(&f.elem.r#type.elem);
                     let done: bool = metadata.1.done;
                     let (field, optional) = match (done, needed) {
-                        (false, false) => f.elem.r#type.elem.to_partial_type_ref(c.db, false),
-                        (true, false) => (f.elem.r#type.elem.to_type_ref(c.db, true), false),
-                        (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.db, true),
-                        (true, true) => (f.elem.r#type.elem.to_type_ref(c.db, true), false),
+                        (false, false) => f.elem.r#type.elem.to_partial_type_ref(c.ir, false),
+                        (true, false) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
+                        (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.ir, true),
+                        (true, true) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
                     };
                     (
                         Cow::Borrowed(f.elem.name.as_str()),

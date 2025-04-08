@@ -4,6 +4,7 @@ use indexmap::{IndexMap, IndexSet};
 
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::RetryPolicyStrategy;
+use internal_baml_schema_ast::ast::WithIdentifier;
 use internal_llm_client::ClientSpec;
 
 use std::collections::HashSet;
@@ -39,7 +40,7 @@ impl<'a> Walker<'a, &'a FunctionNode> {
         if let Some(c) = self.elem().configs.first() {
             match &c.client {
                 ClientSpec::Named(n) => {
-                    let client: super::ClientWalker<'a> = self.db.find_client(n)?;
+                    let client: super::ClientWalker<'a> = self.ir.find_client(n)?;
                     Ok(client.required_env_vars())
                 }
                 ClientSpec::Shorthand(provider, model) => {
@@ -71,7 +72,7 @@ impl<'a> Walker<'a, &'a FunctionNode> {
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, (&'a repr::Function, &'a FunctionConfig)>> {
         self.elem().configs.iter().map(|c| Walker {
-            db: self.db,
+            ir: self.ir,
             item: (self.elem(), c),
         })
     }
@@ -79,7 +80,7 @@ impl<'a> Walker<'a, &'a FunctionNode> {
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, (&'a FunctionNode, &'a TestCase)>> {
         self.elem().tests().iter().map(|i| Walker {
-            db: self.db,
+            ir: self.ir,
             item: (self.item, i),
         })
     }
@@ -123,7 +124,7 @@ impl<'a> Walker<'a, &'a Enum> {
 
     pub fn walk_values(&'a self) -> impl Iterator<Item = Walker<'a, &'a EnumValue>> {
         self.item.elem.values.iter().map(|v| Walker {
-            db: self.db,
+            ir: self.ir,
             item: &v.0,
         })
     }
@@ -135,7 +136,7 @@ impl<'a> Walker<'a, &'a Enum> {
             .iter()
             .find(|v| v.0.elem.0 == name)
             .map(|v| Walker {
-                db: self.db,
+                ir: self.ir,
                 item: &v.0,
             })
     }
@@ -183,7 +184,7 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a Impl)> {
     #[allow(dead_code)]
     pub fn function(&'a self) -> Walker<'a, &'a FunctionNode> {
         Walker {
-            db: self.db,
+            ir: self.ir,
             item: self.item.0,
         }
     }
@@ -198,8 +199,8 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
         self.item.0.elem.name() == function_name && self.item.1.elem.name == test_name
     }
 
-    pub fn name(&self) -> String {
-        format!("{}::{}", self.item.0.elem.name(), self.item.1.elem.name)
+    pub fn name(&self) -> (&'a str, &'a str) {
+        (&self.item.0.elem.name(), &self.item.1.elem.name)
     }
 
     pub fn args(&self) -> &IndexMap<String, UnresolvedValue<()>> {
@@ -241,7 +242,7 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
 
     pub fn function(&'a self) -> Walker<'a, &'a FunctionNode> {
         Walker {
-            db: self.db,
+            ir: self.ir,
             item: self.item.0,
         }
     }
@@ -270,7 +271,7 @@ impl<'a> Walker<'a, &'a Class> {
 
     pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
         self.item.elem.static_fields.iter().map(|f| Walker {
-            db: self.db,
+            ir: self.ir,
             item: f,
         })
     }
@@ -282,7 +283,7 @@ impl<'a> Walker<'a, &'a Class> {
             .iter()
             .find(|f| f.elem.name == name)
             .map(|f| Walker {
-                db: self.db,
+                ir: self.ir,
                 item: f,
             })
     }

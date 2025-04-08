@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
 use crate::internal::llm_client::LLMResponse;
+use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
 use crate::type_builder::TypeBuilder;
 use crate::RuntimeContextManager;
 use crate::{
@@ -26,6 +27,11 @@ use crate::{
     RuntimeContext, RuntimeInterface,
 };
 use anyhow::{Context, Result};
+use baml_types::tracing::events::{
+    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
+    TraceLevel,
+};
+
 use baml_types::{BamlMap, BamlValue, Constraint, EvaluationContext};
 use internal_baml_core::ir::repr::TypeBuilderEntry;
 use internal_baml_core::{
@@ -295,7 +301,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
     ) -> Result<Option<TypeBuilder>> {
-        let func = self.get_function(function_name, &ctx.create_ctx(None, None)?)?;
+        let func = self.get_function(function_name, &ctx.create_ctx(None, None, None)?)?;
         let test = self.ir().find_test(&func, test_name)?;
 
         if test.type_builder_contents().is_empty() {
@@ -366,9 +372,42 @@ impl RuntimeInterface for InternalBamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: RuntimeContext,
     ) -> Result<crate::FunctionResult> {
-        let func = match self.get_function(&function_name, &ctx) {
-            Ok(func) => func,
-            Err(e) => {
+        let local_span_id = ctx.span_id.clone();
+        let local_function_name = function_name.clone();
+
+        if let Some(span_id) = ctx.span_id {
+            let trace_event = TraceEvent {
+                span_id: FunctionId(span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: function_name.clone(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionStart(FunctionStart {
+                    name: function_name.clone(),
+                    // TODO:
+                    args: vec![],
+                    //  TODO!
+                    options: BamlOptions {
+                        type_builder: None,
+                        client_registry: None,
+                    },
+                }),
+                // TODO: send separately?
+                tags: Default::default(),
+            };
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+        } else {
+            log::warn!(
+                "No span id found for function while emitting logs: {}. Log event may be dropped.",
+                function_name
+            );
+        }
+
+        let future = async {
+            let func = match self.get_function(&function_name, &ctx) {
+                Ok(func) => func,
+                Err(e) => {
                 return Ok(FunctionResult::new(
                     OrchestrationScope::default(),
                     LLMResponse::UserFailure(format!(
@@ -377,50 +416,61 @@ impl RuntimeInterface for InternalBamlRuntime {
                     )),
                     None,
                 ))
-            }
+                }
+            };
+
+            let baml_args = self.ir().check_function_params(
+                &func,
+                params,
+                ArgCoercer {
+                    span_path: None,
+                    allow_implicit_cast_to_string: false,
+                },
+            )?;
+
+            let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
+            let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
+
+            // Now actually execute the code.
+            let (history, _) =
+                orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
+                    renderer.parse(self.ir(), &ctx, s, false)
+                })
+                .await;
+
+            FunctionResult::new_chain(history)
         };
-        let baml_args = self.ir().check_function_params(
-            &func,
-            params,
-            ArgCoercer {
-                span_path: None,
-                allow_implicit_cast_to_string: false,
-            },
-        )?;
-        // let baml_args = match self.ir().check_function_params(
-        //     &func,
-        //     &params,
-        //     ArgCoercer {
-        //         span_path: None,
-        //         allow_implicit_cast_to_string: false,
-        //     },
-        // ) {
-        //     Ok(args) => args,
-        //     Err(e) => {
-        //         return Ok(FunctionResult::new(
-        //             OrchestrationScope::default(),
-        //             LLMResponse::UserFailure(format!(
-        //                 "Failed while validating args for {function_name}: {:?}",
-        //                 e
-        //             )),
-        //             None,
-        //         ))
-        //     }
-        // };
 
-        let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-        let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
+        let result = future.await;
 
-        // Now actually execute the code.
-        let (history, _) =
-            orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
-                renderer.parse(self.ir(), s, false)
-            })
-            .await;
+        let end_time = web_time::SystemTime::now();
+        if let Some(span_id) = ctx.span_id {
+            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+                span_id: FunctionId(span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                span_chain: vec![],
+                timestamp: end_time,
+                callsite: function_name.clone(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionEnd(FunctionEnd {
+                    // TODO: add the result here
+                    result: Ok(baml_types::BamlValue::Null),
+                }),
+                tags: Default::default(),
+            }));
+        } else {
+            log::warn!(
+                "No span id found for function while emitting logs: {}. Log event may be dropped.",
+                function_name
+            );
+        }
 
-        FunctionResult::new_chain(history)
+        result
     }
 
+    // Note that this only returns a FunctionResultStream object,
+    // but does not actually start the stream.
+    // The stream is started when one calls functionResultStream.run()
     fn stream_function_impl(
         &self,
         function_name: String,
@@ -428,6 +478,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         tracer: Arc<BamlTracer>,
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
+        collectors: Vec<Arc<Collector>>,
     ) -> Result<FunctionResultStream> {
         let func = self.get_function(&function_name, &ctx)?;
         let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
@@ -455,6 +506,7 @@ impl RuntimeInterface for InternalBamlRuntime {
             renderer,
             #[cfg(not(target_arch = "wasm32"))]
             tokio_runtime,
+            collectors,
         })
     }
 }

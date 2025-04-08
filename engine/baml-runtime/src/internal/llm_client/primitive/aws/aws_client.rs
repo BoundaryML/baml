@@ -1,26 +1,41 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use aws_config::Region;
 use aws_config::{identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader};
-use aws_credential_types::Credentials;
+use aws_credential_types::{
+    provider::{
+        error::{CredentialsError, CredentialsNotLoaded},
+        future::ProvideCredentials,
+    },
+    Credentials,
+};
+use aws_sdk_bedrockruntime::config::Intercept;
+use aws_sdk_bedrockruntime::Client as BedrockRuntimeClient;
 use aws_sdk_bedrockruntime::{self as bedrock, operation::converse::ConverseOutput};
 
 use anyhow::{Context, Result};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::Blob;
-use baml_types::{BamlMap, BamlMediaContent};
+use baml_types::tracing::events::{
+    ContentId, FunctionId, HTTPBody, HTTPRequest, HTTPResponse, HttpRequestId, TraceData,
+    TraceEvent, TraceLevel,
+};
+use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMediaContent};
 use baml_types::{BamlMedia, BamlMediaType};
 use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::aws_bedrock::ResolvedAwsBedrock;
+use internal_llm_client::aws_bedrock::{self, ResolvedAwsBedrock};
 use internal_llm_client::{
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
 use serde::Deserialize;
-use serde_json::Map;
+use serde_json::{json, Map};
+use uuid::Uuid;
 use web_time::Instant;
 use web_time::SystemTime;
 
@@ -35,8 +50,11 @@ use crate::internal::llm_client::{
     ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     ModelFeatures, ResolveMediaUrls,
 };
+use crate::tracingv2::storage::storage::BAML_TRACER;
+use crate::{json_body, AwsCredProvider, JsonBodyInput, RenderCurlSettings, RuntimeContext};
 
-use crate::{RenderCurlSettings, RuntimeContext};
+#[cfg(target_arch = "wasm32")]
+use super::wasm::WasmAwsCreds;
 
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {
@@ -71,6 +89,154 @@ fn resolve_properties(
     };
 
     Ok(props)
+}
+
+#[derive(Debug)]
+struct CollectorInterceptor {
+    span_id: Option<Uuid>,
+    http_request_id: HttpRequestId,
+}
+
+impl CollectorInterceptor {
+    fn new(span_id: Option<Uuid>, http_request_id: HttpRequestId) -> Self {
+        Self {
+            span_id,
+            http_request_id,
+        }
+    }
+}
+
+pub fn smithy_json_headers(headers: &Headers) -> serde_json::Value {
+    let mut json_headers = serde_json::Map::new();
+    for (key, value) in headers.iter() {
+        json_headers.insert(key.to_string(), json!(value));
+    }
+    serde_json::Value::Object(json_headers)
+}
+
+impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterceptor {
+    fn name(&self) -> &'static str {
+        "CollectorInterceptor"
+    }
+
+    fn read_before_attempt(
+        &self,
+        context: &aws_sdk_bedrockruntime::config::interceptors::BeforeTransmitInterceptorContextRef<
+            '_,
+        >,
+        _runtime_components: &aws_sdk_bedrockruntime::config::RuntimeComponents,
+        _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
+        if let Some(span_id) = self.span_id.clone() {
+            let request = context.request();
+            let headers = smithy_json_headers(request.headers());
+            let body = if let Some(bytes) = request.body().bytes() {
+                json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
+            } else {
+                serde_json::Value::Null
+            };
+
+            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+                span_id: FunctionId(span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: "".to_string(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
+                    id: self.http_request_id.clone(),
+                    url: request.uri().to_string(),
+                    method: request.method().to_string(),
+                    headers,
+                    body: HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
+                })),
+                tags: Default::default(),
+            }));
+        }
+
+        Ok(())
+    }
+
+    fn read_after_attempt(
+        &self,
+        context: &aws_sdk_bedrockruntime::config::interceptors::FinalizerInterceptorContextRef<'_>,
+        _runtime_components: &aws_sdk_bedrockruntime::config::RuntimeComponents,
+        _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
+        if let Some(span_id) = self.span_id.clone() {
+            let trace_level = if let Some(response) = context.response() {
+                if response.status().is_success() {
+                    TraceLevel::Info
+                } else {
+                    TraceLevel::Error
+                }
+            } else {
+                TraceLevel::Error
+            };
+
+            if let Some(response) = context.response() {
+                let headers = smithy_json_headers(response.headers());
+                let body = if let Some(bytes) = response.body().bytes() {
+                    json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
+                } else {
+                    serde_json::Value::Null
+                };
+
+                BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
+                    span_id: FunctionId(span_id.to_string()),
+                    event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                    span_chain: vec![],
+                    timestamp: web_time::SystemTime::now(),
+                    callsite: "".to_string(),
+                    verbosity: trace_level,
+                    content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
+                        request_id: self.http_request_id.clone(),
+                        status: response.status().as_u16(),
+                        headers,
+                        body: HTTPBody::new(
+                            response.body().bytes().unwrap_or_default().to_vec().into(),
+                        ),
+                    })),
+                    tags: Default::default(),
+                }));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// If the user has explicitly provided credentials via options on a client,
+/// we use this provider
+#[derive(Debug)]
+struct ExplicitCredentialsProvider {
+    access_key_id: Option<String>,
+    secret_access_key: Option<ApiKeyWithProvenance>,
+    session_token: Option<String>,
+}
+
+impl aws_credential_types::provider::ProvideCredentials for ExplicitCredentialsProvider {
+    fn provide_credentials<'a>(
+        &'a self,
+    ) -> aws_credential_types::provider::future::ProvideCredentials<'a>
+    where
+        Self: 'a,
+    {
+        ProvideCredentials::ready(match (&self.access_key_id, &self.secret_access_key, &self.session_token) {
+            (None, None, None) => {
+                Err(CredentialsError::unhandled("BAML internal error: ExplicitCredentialsProvider should only be constructed if either access_key_id or secret_access_key are provided"))
+            }
+            (Some(access_key_id), Some(secret_access_key), session_token) => {
+                Ok(Credentials::new(access_key_id, secret_access_key.api_key.expose_secret(), session_token.clone(), None, "baml-explicit-credentials"))
+            }
+            (_, _, None) => {
+                Err(CredentialsError::invalid_configuration("If either access_key_id or secret_access_key are provided, both must be provided."))
+            }
+            (_, _, Some(_)) => {
+                Err(CredentialsError::invalid_configuration("If either access_key_id or secret_access_key are provided, both must be provided. If session_token is provided, all three must be provided."))
+            }
+        })
+    }
 }
 
 impl AwsClient {
@@ -136,75 +302,80 @@ impl AwsClient {
     // Note: This function necessarily exposes secret keys when they are provided, so it should
     // only be called while generating real requests to the provider, not when rendering raw
     // cURL previews.
-    async fn client_anyhow(&self) -> Result<bedrock::Client> {
+    async fn client_anyhow(
+        &self,
+        span_id: Option<Uuid>,
+        http_request_id: &HttpRequestId,
+        aws_cred_provider: AwsCredProvider,
+    ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
-        let mut loader = super::wasm::load_aws_config();
+        let loader = super::wasm::load_aws_config();
+
         #[cfg(not(target_arch = "wasm32"))]
-        let mut loader = aws_config::defaults(BehaviorVersion::latest());
+        let loader = aws_config::defaults(BehaviorVersion::latest());
 
-        // Set profile first if specified
-        if let Some(profile) = self.properties.profile.as_ref() {
-            loader = loader.profile_name(profile);
-        }
-
-        // Set region if specified
-
-        // Set credentials provider
         let mut loader = match (
             self.properties.access_key_id.as_ref(),
             self.properties.secret_access_key.as_ref(),
             self.properties.session_token.as_ref(),
         ) {
             (None, None, None) => {
-                // If no credentials provided, get them all from env vars
-                loader.credentials_provider(
-                    aws_config::default_provider::credentials::DefaultCredentialsChain::builder()
-                        .build()
-                        .await,
-                )
+                #[cfg(target_arch = "wasm32")]
+                {
+                    loader.credentials_provider(WasmAwsCreds {
+                        aws_cred_provider: aws_cred_provider.clone(),
+                        profile: self.properties.profile.clone(),
+                    })
+                }
+
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    let mut builder =
+                        aws_config::default_provider::credentials::DefaultCredentialsChain::builder(
+                        );
+                    if let Some(profile) = self.properties.profile.as_ref() {
+                        builder = builder.profile_name(profile);
+                    }
+                    loader.credentials_provider(builder.build().await)
+                }
             }
-            _ => {
-                if let Some(aws_access_key_id) = self.properties.access_key_id.as_ref() {
-                    if aws_access_key_id.starts_with("$") {
-                        return Err(anyhow::anyhow!(
-                            "AWS access key id expected, please set: env.{}",
-                            &aws_access_key_id[1..]
-                        ));
+            // Env var resolution is pretty nasty, see
+            // https://gloo-global.slack.com/archives/C03KV1PJ6EM/p1743832043661209
+            _ => loader.credentials_provider(ExplicitCredentialsProvider {
+                access_key_id: match &self.properties.access_key_id {
+                    Some(access_key_id) => {
+                        if access_key_id.starts_with("$") {
+                            None
+                        } else {
+                            Some(access_key_id.clone())
+                        }
                     }
-                }
-                if let Some(aws_secret_access_key) = self.properties.secret_access_key.as_ref() {
-                    // Exposing the secret key here is relatively safe. First, we expose it only
-                    // to check if it starts with $. If so, the remainer should be an env
-                    // var name, which is also safe to expose.
-                    if aws_secret_access_key.api_key.expose_secret().starts_with("$") {
-                        return Err(anyhow::anyhow!(
-                            "AWS secret access key expected, please set: env.{}",
-                            &aws_secret_access_key.api_key.expose_secret()[1..]
-                        ));
+                    None => None,
+                },
+                secret_access_key: match &self.properties.secret_access_key {
+                    Some(secret_access_key) => {
+                        if secret_access_key.api_key.expose_secret().starts_with("$") {
+                            None
+                        } else {
+                            Some(secret_access_key.clone())
+                        }
                     }
-                }
-                if let Some(aws_session_token) = self.properties.session_token.as_ref() {
-                    if aws_session_token.starts_with("$") {
-                        return Err(anyhow::anyhow!(
-                            "AWS session token expected, please set: env.{}",
-                            &aws_session_token[1..]
-                        ));
+                    None => None,
+                },
+                session_token: match &self.properties.session_token {
+                    Some(session_token) => {
+                        if session_token.starts_with("$") {
+                            None
+                        } else {
+                            Some(session_token.clone())
+                        }
                     }
-                }
-                loader.credentials_provider(Credentials::new(
-                    self.properties.access_key_id.clone().unwrap_or("".into()),
-                    self.properties
-                        .secret_access_key
-                        .as_ref()
-                        .map_or("", |key| key.api_key.expose_secret())
-                        .to_string(),
-                    self.properties.session_token.clone(),
-                    None,
-                    "baml-runtime",
-                ))
-            }
+                    None => None,
+                },
+            }),
         };
 
+        // Set region if specified
         if let Some(aws_region) = self.properties.region.as_ref() {
             if aws_region.starts_with("$") {
                 return Err(anyhow::anyhow!(
@@ -217,7 +388,11 @@ impl AwsClient {
         }
 
         let config = loader.load().await;
-        Ok(bedrock::Client::new(&config))
+
+        let bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
+            .interceptor(CollectorInterceptor::new(span_id, http_request_id.clone()))
+            .build();
+        Ok(BedrockRuntimeClient::from_conf(bedrock_config))
     }
 
     async fn chat_anyhow<'r>(&self, response: &'r ConverseOutput) -> Result<&'r String> {
@@ -376,6 +551,7 @@ impl WithStreamChat for AwsClient {
         &self,
         ctx: &RuntimeContext,
         chat_messages: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         let client = self.context.name.to_string();
         let model = Some(self.properties.model.clone());
@@ -383,7 +559,14 @@ impl WithStreamChat for AwsClient {
         let request_options = Default::default();
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
-        let aws_client = match self.client_anyhow().await {
+        let aws_client = match self
+            .client_anyhow(
+                ctx.span_id.clone(),
+                &http_request_id,
+                ctx.aws_cred_provider.clone(),
+            )
+            .await
+        {
             Ok(c) => c,
             Err(e) => {
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -666,8 +849,9 @@ impl AwsClient {
 impl WithChat for AwsClient {
     async fn chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         chat_messages: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> LLMResponse {
         let client = self.context.name.to_string();
         let model = Some(self.properties.model.clone());
@@ -675,7 +859,14 @@ impl WithChat for AwsClient {
         let request_options = Default::default();
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
-        let aws_client = match self.client_anyhow().await {
+        let aws_client = match self
+            .client_anyhow(
+                ctx.span_id.clone(),
+                &http_request_id,
+                ctx.aws_cred_provider.clone(),
+            )
+            .await
+        {
             Ok(c) => c,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {
@@ -691,7 +882,7 @@ impl WithChat for AwsClient {
             }
         };
 
-        let request = match self.build_request(_ctx, chat_messages) {
+        let request = match self.build_request(ctx, chat_messages) {
             Ok(r) => r,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {

@@ -42,14 +42,21 @@ impl FunctionResultStream {
     pub fn on_event(
         &mut self,
         env: Env,
-        #[napi(ts_arg_type = "(err: any, param: FunctionResult) => void")] func: JsFunction,
+        #[napi(ts_arg_type = "((err: any, param: FunctionResult) => void) | undefined")]
+        func: Option<JsFunction>,
     ) -> napi::Result<JsUndefined> {
-        let cb = env.create_reference(func)?;
-        let prev = self.callback.take();
-        if let Some(mut old_cb) = prev {
-            old_cb.unref(env)?;
+        if let Some(func) = func {
+            let cb = env.create_reference(func)?;
+            let prev = self.callback.take();
+            if let Some(mut old_cb) = prev {
+                old_cb.unref(env)?;
+            }
+            self.callback = Some(cb);
+        } else {
+            if let Some(mut cb) = self.callback.take() {
+                cb.unref(env)?;
+            }
         }
-        self.callback = Some(cb);
         env.get_undefined()
     }
 

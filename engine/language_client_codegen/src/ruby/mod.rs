@@ -9,7 +9,7 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use ruby_language_features::ToRuby;
 
-use internal_baml_core::ir::{repr::IntermediateRepr, IRHelper};
+use internal_baml_core::ir::{repr::IntermediateRepr, IRHelperExtended};
 
 use crate::dir_writer::FileCollector;
 
@@ -34,6 +34,34 @@ struct InlinedBaml {
     file_map: Vec<(String, String)>,
 }
 
+#[derive(askama::Template)]
+#[template(path = "parser.rb.j2", escape = "none")]
+pub(crate) struct RubyLlmResponseParser {
+    funcs: Vec<RubyFunction>,
+}
+
+impl From<RubyClient> for RubyLlmResponseParser {
+    fn from(client: RubyClient) -> Self {
+        RubyLlmResponseParser {
+            funcs: client.funcs,
+        }
+    }
+}
+
+#[derive(askama::Template)]
+#[template(path = "request.rb.j2", escape = "none")]
+pub(crate) struct RubyHttpRequest {
+    funcs: Vec<RubyFunction>,
+}
+
+impl From<RubyClient> for RubyHttpRequest {
+    fn from(client: RubyClient) -> Self {
+        RubyHttpRequest {
+            funcs: client.funcs,
+        }
+    }
+}
+
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
@@ -46,7 +74,8 @@ pub(crate) fn generate(
     collector.add_template::<generate_types::TypeRegistry>("type-registry.rb", (ir, generator))?;
     collector.add_template::<RubyClient>("client.rb", (ir, generator))?;
     collector.add_template::<InlinedBaml>("inlined.rb", (ir, generator))?;
-
+    collector.add_template::<RubyLlmResponseParser>("parser.rb", (ir, generator))?;
+    collector.add_template::<RubyHttpRequest>("request.rb", (ir, generator))?;
     collector.commit(&generator.output_dir())
 }
 
@@ -63,13 +92,19 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyCl
                     .map(|c| {
                         let (_function, _impl_) = c.item;
                         let return_type = f.elem().output();
-                        let done = ir.distribute_metadata(&return_type).1.1.done;
-                        let state = ir.distribute_metadata(&return_type).1.1.state;
+                        let done = ir.distribute_metadata(&return_type).1 .1.done;
+                        let state = ir.distribute_metadata(&return_type).1 .1.state;
                         let partial_return_type = match (done, state) {
                             (false, false) => return_type.to_partial_type_ref(ir, true),
                             (true, false) => format!("T.nilable({})", return_type.to_type_ref()),
-                            (false, true) => format!("Baml::StreamState[T.nilable({})]", return_type.to_partial_type_ref(ir, true)),
-                            (true, true) => format!("Baml::StreamState[T.nilable({})]", return_type.to_type_ref()),
+                            (false, true) => format!(
+                                "Baml::StreamState[T.nilable({})]",
+                                return_type.to_partial_type_ref(ir, true)
+                            ),
+                            (true, true) => format!(
+                                "Baml::StreamState[T.nilable({})]",
+                                return_type.to_type_ref()
+                            ),
                         };
                         Ok(RubyFunction {
                             name: f.name().to_string(),
@@ -100,5 +135,23 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for InlinedBaml {
         Ok(InlinedBaml {
             file_map: args.file_map()?,
         })
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for RubyLlmResponseParser {
+    type Error = anyhow::Error;
+
+    fn try_from((ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        let client = RubyClient::try_from((ir, args))?;
+        Ok(client.into())
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for RubyHttpRequest {
+    type Error = anyhow::Error;
+
+    fn try_from((ir, args): (&IntermediateRepr, &crate::GeneratorArgs)) -> Result<Self> {
+        let client = RubyClient::try_from((ir, args))?;
+        Ok(client.into())
     }
 }

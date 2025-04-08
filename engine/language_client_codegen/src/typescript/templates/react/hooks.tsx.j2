@@ -1,10 +1,11 @@
 'use client'
 
-import { BamlErrors, toBamlError } from '@boundaryml/baml/errors'
+import type { BamlErrors } from '@boundaryml/baml/errors'
+import { toBamlError } from '@boundaryml/baml/errors'
 import { useCallback, useMemo, useReducer, useTransition } from 'react'
 import * as Actions from './server'
 import * as StreamingActions from './server_streaming'
-import { StreamingServerTypes } from './server_streaming_types'
+import type { StreamingServerTypes } from './server_streaming_types'
 
 /**
  * Type representing a BAML stream response.
@@ -226,7 +227,18 @@ function useBamlAction<FunctionName extends FunctionNames>(
       try {
         let response: Awaited<ReturnType<ServerAction>>
         startTransition(async () => {
-          response = await action(...input)
+          // Transform any BamlImage or BamlAudio inputs to their JSON representation
+          const transformedInput = input.map(arg => {
+            // Check if the argument is an instance of BamlImage or BamlAudio
+            // We check the constructor name since the actual classes might be proxied in browser environments
+            if (arg && typeof arg === 'object' &&
+                (arg.constructor.name === 'BamlImage' || arg.constructor.name === 'BamlAudio')) {
+              return arg.toJSON();
+            }
+            return arg;
+          });
+
+          response = await action(...transformedInput)
 
           if (isStreamingProps(props) && response instanceof ReadableStream) {
             const reader = response.getReader()
@@ -370,12 +382,10 @@ export function use{{ func.name }}(props?: HookInput<'{{ func.name }}', { stream
 export function use{{ func.name }}(
   props: HookInput<'{{ func.name }}', { stream?: boolean }> = {},
 ): HookOutput<'{{ func.name }}', { stream: true }> | HookOutput<'{{ func.name }}', { stream: false }> {
-  if (isNotStreamingProps(props)) {
-    return useBamlAction(Actions.{{ func.name }}, props)
-  }
+  let action = Actions.{{ func.name }};
   if (isStreamingProps(props)) {
-    return useBamlAction(StreamingActions.{{ func.name }}, props)
+    action = StreamingActions.{{ func.name }};
   }
-  throw new Error('Invalid props')
+  return useBamlAction(action, props)
 }
 {%- endfor %}

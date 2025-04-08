@@ -2,9 +2,10 @@ pub mod common;
 use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
-use baml_types::{EvaluationContext, JinjaExpression};
 use baml_types::{BamlValueWithMeta, ResponseCheck, StreamingBehavior};
+use baml_types::{EvaluationContext, JinjaExpression};
 use indexmap::{IndexMap, IndexSet};
+use internal_baml_core::ir::IRHelperExtended;
 use internal_baml_core::{
     ast::Field,
     internal_baml_diagnostics::SourceFile,
@@ -263,7 +264,6 @@ pub fn parsed_value_to_response(
     field_type: &FieldType,
     allow_partials: bool,
 ) -> Result<ResponseBamlValue> {
-
     let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
@@ -292,6 +292,6 @@ pub fn parsed_value_to_response(
     let response_value = baml_value_with_streaming
         .zip_meta(&value_with_response_checks)?
         .zip_meta(&meta_flags)?
-        .map_meta(|((x, y), z)| (z.clone(), y.clone(), x.clone() ));
+        .map_meta(|((x, y), z)| (z.clone(), y.clone(), x.clone()));
     Ok(ResponseBamlValue(response_value))
 }

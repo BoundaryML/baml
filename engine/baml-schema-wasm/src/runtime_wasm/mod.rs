@@ -1,7 +1,9 @@
 pub mod generator;
 pub mod runtime_prompt;
+use crate::aws_cred_bridge::js_fn_to_aws_cred_provider;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use anyhow::Context;
+use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
@@ -11,23 +13,17 @@ use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
-use baml_types::BamlValueWithMeta;
 use baml_types::ResponseCheck;
 use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
 use internal_llm_client::AllowedRoleMetadata;
-use jsonish::deserializer::deserialize_flags::Flag;
-use jsonish::BamlValueWithFlags;
-
-use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
 use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -60,7 +56,7 @@ pub fn on_wasm_init() {
         if #[cfg(debug_assertions)] {
             const LOG_LEVEL: log::Level = log::Level::Debug;
         } else {
-            const LOG_LEVEL: log::Level = log::Level::Warn;
+            const LOG_LEVEL: log::Level = log::Level::Debug;
         }
     };
     // I dont think we need this line anymore -- seems to break logging if you add it.
@@ -511,8 +507,6 @@ impl WasmFunctionResponse {
 }
 
 fn serialize_value_counting_checks(value: &ResponseBamlValue) -> (serde_json::Value, usize) {
-    type J = serde_json::Value;
-
     let checks = value
         .0
         .meta()
@@ -748,9 +742,9 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                         baml_runtime::errors::ExposedError::FinishReasonError {
                             message, ..
                         } => Some(message.clone()),
-                        baml_runtime::errors::ExposedError::ClientHttpError {
-                            message, ..
-                        } => Some(message.clone()),
+                        baml_runtime::errors::ExposedError::ClientHttpError { message, .. } => {
+                            Some(message.clone())
+                        }
                     },
                     None => Some(format!("{e:#}")),
                 }
@@ -1240,6 +1234,89 @@ impl WasmRuntime {
     }
 
     #[wasm_bindgen]
+    pub fn is_valid_class(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_class(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_enum(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_enum(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_type_alias(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_type_alias(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn is_valid_function(&self, symbol: &str) -> bool {
+        self.runtime.internal().ir().find_function(symbol).is_ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_class_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_enum_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
+    pub fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.runtime
+            .internal()
+            .ir()
+            .find_type_alias_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    #[wasm_bindgen]
     pub fn get_function_at_position(
         &self,
         file_name: &str,
@@ -1455,7 +1532,7 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
             async move {
                 let null = JsValue::NULL;
                 let Ok(read) = get_baml_src_cb.call1(&null, &JsValue::from(path.clone())) else {
-                    anyhow::bail!("readFileRef did not return a promise")
+                    anyhow::bail!("readFileRef did not return a promise");
                 };
 
                 let read = JsFuture::from(Promise::unchecked_from_js(read)).await;
@@ -1465,11 +1542,11 @@ fn js_fn_to_baml_src_reader(get_baml_src_cb: js_sys::Function) -> BamlSrcReader 
                     Err(err) => {
                         if let Some(e) = err.dyn_ref::<js_sys::Error>() {
                             if let Some(e_str) = e.message().as_string() {
-                                anyhow::bail!("{}", e_str)
+                                anyhow::bail!("readFileRef failure: {}", e_str);
                             }
                         }
 
-                        return Err(anyhow::anyhow!("{:?}", err).context("readFileRef rejected"));
+                        anyhow::bail!("readFileRef rejected: {:?}", err);
                     }
                 };
 
@@ -1522,7 +1599,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None)
+            .create_ctx(test_type_builder.as_ref(), None, None)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1575,7 +1652,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None)
+            .create_ctx(test_type_builder.as_ref(), None, None)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1619,13 +1696,15 @@ impl WasmFunction {
         &self,
         rt: &mut WasmRuntime,
         test_name: String,
+        env_vars: JsValue,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
+        load_aws_creds_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
-
         let function_name = self.name.clone();
 
+        // Create the closure to handle partial responses:
         let cb = Box::new(move |r| {
             let this = JsValue::NULL;
             let res = WasmFunctionResponse {
@@ -1635,12 +1714,18 @@ impl WasmFunction {
             on_partial_response.call1(&this, &res).unwrap();
         });
 
-        let ctx = rt.create_ctx_manager(
+        // Create your evaluation context, etc.
+        let ctx = rt.create_ctx_manager_with_env(
             BamlValue::String("wasm".to_string()),
+            serde_wasm_bindgen::from_value::<HashMap<String, String>>(env_vars)
+                .map_err(|e| JsValue::from_str(&format!("Failed to parse env_vars: {:?}", e)))?,
             js_fn_to_baml_src_reader(get_baml_src_cb),
+            js_fn_to_aws_cred_provider(load_aws_creds_cb),
         );
+
+        // Now pass collector_arc to your runtime's run_test
         let (test_response, span) = rt
-            .run_test(&function_name, &test_name, &ctx, Some(cb))
+            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
             .await;
 
         log::info!("test_response: {:#?}", test_response);

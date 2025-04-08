@@ -24,6 +24,8 @@ import {
   TextDocuments,
   FormattingOptions,
   TextEdit,
+  ResponseError,
+  ErrorCodes,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
@@ -44,6 +46,7 @@ import { getWordAtPosition } from './lib/ast'
 import BamlProjectManager, { GeneratorDisabledReason, GeneratorStatus, GeneratorType } from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
 import { BamlWasm } from './lib/wasm'
+import { SymbolLocation } from '@gloo-ai/baml-schema-wasm-node'
 
 try {
   // only required on vscode versions 1.89 and below.
@@ -146,7 +149,7 @@ export function startServer(options?: LSOptions): void {
           triggerCharacters: ['@', '"', '.'],
         },
         hoverProvider: true,
-        renameProvider: false,
+        renameProvider: true,
         documentSymbolProvider: true,
         codeLensProvider: {
           resolveProvider: true,
@@ -158,7 +161,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -168,7 +171,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -178,7 +181,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -743,6 +746,72 @@ export function startServer(options?: LSOptions): void {
       return allFunctions
     },
   )
+
+  connection.onRequest('textDocument/rename', (params: RenameParams) => {
+    const doc = getDocument(params.textDocument.uri)
+
+    if (!doc) {
+      return null
+    }
+
+    const project = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+
+    if (!project) {
+      return null
+    }
+
+    const symbol = getWordAtPosition(doc, params.position)
+
+    // TODO: type alias renaming, class field renaming, etc.
+    if (project.runtime().is_valid_function(symbol)) {
+      throw new ResponseError(ErrorCodes.InvalidRequest, `Function renaming is not yet supported: '${symbol}'`)
+    }
+
+    const is_valid_class = project.runtime().is_valid_class(symbol)
+    const is_valid_enum = project.runtime().is_valid_enum(symbol)
+    const is_valid_type_alias = project.runtime().is_valid_type_alias(symbol)
+
+    // Only classes and enums can be renamed for now.
+    if (!is_valid_class && !is_valid_enum && !is_valid_type_alias) {
+      throw new ResponseError(ErrorCodes.InvalidRequest, `Cannot rename symbol '${symbol}'`)
+    }
+
+    const changes: { [uri: string]: TextEdit[] } = {}
+
+    let locations: SymbolLocation[] = []
+
+    if (is_valid_class) {
+      locations = project.runtime().search_for_class_locations(symbol)
+    } else if (is_valid_enum) {
+      locations = project.runtime().search_for_enum_locations(symbol)
+    } else if (is_valid_type_alias) {
+      locations = project.runtime().search_for_type_alias_locations(symbol)
+    }
+
+    for (const location of locations) {
+      if (!changes[location.uri]) {
+        changes[location.uri] = []
+      }
+
+      changes[location.uri].push({
+        range: {
+          start: {
+            line: location.start_line,
+            character: location.start_character,
+          },
+          end: {
+            line: location.end_line,
+            character: location.end_character,
+          },
+        },
+        newText: params.newName,
+      })
+    }
+
+    console.log(changes)
+
+    return { changes }
+  })
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

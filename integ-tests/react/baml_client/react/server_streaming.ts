@@ -21,7 +21,7 @@ import { b } from '../index';
 import type { Check, Checked  } from "../types";
 import type { Image, Audio } from "@boundaryml/baml";
 
-import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomTaskResult,  DataType,  DummyOutput,  DynEnumOne,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
+import type {  AliasedEnum,  AnotherObject,  BigNumbers,  BinaryNode,  Blah,  BlockConstraint,  BlockConstraintForParam,  BookOrder,  Category,  Category2,  Category3,  ClassForNullLiteral,  ClassOptionalOutput,  ClassOptionalOutput2,  ClassToRecAlias,  ClassWithBlockDone,  ClassWithImage,  ClassWithoutDone,  ClientDetails1559,  Color,  ComplexMemoryObject,  CompoundBigNumbers,  ContactInfo,  CustomStory,  CustomTaskResult,  DataType,  Document1559,  DummyOutput,  DynEnumOne,  DynEnumTwo,  DynInputOutput,  DynamicClassOne,  DynamicClassTwo,  DynamicOutput,  DynamicSchema,  Earthling,  Education,  Email,  EmailAddress,  EnumInClass,  EnumOutput,  Event,  FakeImage,  FlightConfirmation,  FooAny,  Forest,  FormatterTest0,  FormatterTest1,  FormatterTest2,  FormatterTest3,  GroceryReceipt,  Haiku,  Hobby,  InnerClass,  InnerClass2,  InputClass,  InputClassNested,  JsonArray,  JsonEntry,  JsonObject,  JsonTemplate,  JsonValue,  LinkedList,  LinkedListAliasNode,  LiteralClassHello,  LiteralClassOne,  LiteralClassTwo,  MalformedConstraints,  MalformedConstraints2,  MapKey,  Martian,  MemoryObject,  MergeAttrs,  NamedArgsSingleClass,  NamedArgsSingleEnum,  NamedArgsSingleEnumList,  Nested,  Nested2,  NestedBlockConstraint,  NestedBlockConstraintForParam,  Node,  NodeWithAliasIndirection,  Note1599,  OptionalListAndMap,  OptionalTest_CategoryType,  OptionalTest_Prop1,  OptionalTest_ReturnType,  OrderInfo,  OrderStatus,  OriginalA,  OriginalB,  Person,  PhoneNumber,  Quantity,  RaysData,  RecAliasOne,  RecAliasThree,  RecAliasTwo,  ReceiptInfo,  ReceiptItem,  Recipe,  RecursiveAliasDependency,  RecursiveListAlias,  RecursiveMapAlias,  Resume,  Schema,  SearchParams,  SemanticContainer,  SimpleTag,  SmallThing,  SomeClassNestedDynamic,  StringToClassEntry,  Tag,  TestClassAlias,  TestClassNested,  TestClassWithEnum,  TestEnum,  TestMemoryOutput,  TestOutputClass,  Tree,  TwoStoriesOneTitle,  UnionTest_ReturnType,  UniverseQuestion,  UniverseQuestionInput,  WithReasoning } from "../types"
 
 import type * as types from "../types"
 
@@ -54,15 +54,15 @@ export const AaaSamOutputFormat = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { LinkedListAliasNode } list - Input parameter.
+ * @param { LinkedListAliasNode } data - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const AliasThatPointsToRecursiveType = async (
-  list: LinkedListAliasNode,
+  data: LinkedListAliasNode,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.AliasThatPointsToRecursiveType(
-    list,
+    data,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -73,12 +73,12 @@ export const AliasThatPointsToRecursiveType = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { Checked<number,"gt_ten"> } money - Input parameter.
+ * @param { number } money - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const AliasWithMultipleAttrs = async (
-  money: Checked<number,"gt_ten">,
+  money: number,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.AliasWithMultipleAttrs(
     money,
@@ -501,6 +501,31 @@ export const DescribeImage4 = async (
 };
 
 /**
+ * Executes the streaming variant of the "DescribeMedia1599" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Image } img - Input parameter.
+ * @param { string } client_sector - Input parameter.
+ * @param { string } client_name - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const DescribeMedia1599 = async (
+  img: Image,
+  client_sector: string,
+  client_name: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.DescribeMedia1599(
+    img,
+    client_sector,
+    client_name,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "DifferentiateUnions" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -623,6 +648,25 @@ export const ExtractContactInfo = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.ExtractContactInfo(
     document,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "ExtractEntities" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } text - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const ExtractEntities = async (
+  text: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.ExtractEntities(
+    text,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -1429,6 +1473,25 @@ export const NullLiteralClassHello = async (
 };
 
 /**
+ * Executes the streaming variant of the "OpenAIWithAnthropicResponseHello" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } s - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const OpenAIWithAnthropicResponseHello = async (
+  s: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.OpenAIWithAnthropicResponseHello(
+    s,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "OptionalTest_Function" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -1681,12 +1744,12 @@ export const RecursiveClassWithAliasIndirection = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { Checked<number,"gt_ten"> } money - Input parameter.
+ * @param { number } money - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const ReturnAliasWithMergedAttributes = async (
-  money: Checked<number,"gt_ten">,
+  money: number,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.ReturnAliasWithMergedAttributes(
     money,
@@ -1905,6 +1968,25 @@ export const StreamingCompoundNumbers = async (
   const stream = b.stream.StreamingCompoundNumbers(
     digits,
     yapping,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "StructureDocument1559" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } document_txt - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const StructureDocument1559 = async (
+  document_txt: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.StructureDocument1559(
+    document_txt,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -2266,6 +2348,25 @@ export const TestCaching = async (
 export const TestFallbackClient = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TestFallbackClient(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestFallbackStrategy" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestFallbackStrategy = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestFallbackStrategy(
+    input,
   );
   return Promise.resolve(stream.toStreamable());
 };
@@ -2746,6 +2847,25 @@ export const TestOllama = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestOllamaHaiku" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOllamaHaiku = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOllamaHaiku(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestOpenAI" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -2759,6 +2879,44 @@ export const TestOpenAI = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TestOpenAI(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestOpenAIDummyClient" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIDummyClient = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIDummyClient(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestOpenAIGPT4oMini" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIGPT4oMini = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIGPT4oMini(
     input,
   );
   return Promise.resolve(stream.toStreamable());
@@ -2930,6 +3088,25 @@ export const TestRetryExponential = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestRoundRobinStrategy" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestRoundRobinStrategy = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestRoundRobinStrategy(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestSingleFallbackClient" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -2941,6 +3118,25 @@ export const TestRetryExponential = async (
 export const TestSingleFallbackClient = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TestSingleFallbackClient(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestThinking" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestThinking = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestThinking(
+    input,
   );
   return Promise.resolve(stream.toStreamable());
 };

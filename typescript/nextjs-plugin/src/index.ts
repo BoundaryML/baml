@@ -45,7 +45,7 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
   return function withBamlConfig<T extends GenericNextConfig>(nextConfig: T = {} as T): T {
     const nextVersion = getNextJsVersion()
     // Default to new config (>= 14) if version can't be determined
-    const majorVersion = nextVersion ? parseInt(nextVersion.split('.')[0], 10) : 14
+    const majorVersion = nextVersion ? Number.parseInt(nextVersion.split('.')[0], 10) : 14
     const useNewConfig = majorVersion >= 14
     const isTurbo = Boolean(process.env.TURBOPACK === '1')
 
@@ -102,7 +102,18 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
 
         if (context.isServer) {
           // Externalize the native module
-          config.externals = [...(Array.isArray(config.externals) ? config.externals : []), '@boundaryml/baml']
+          config.externals = [
+            ...(Array.isArray(config.externals) ? config.externals : []),
+            '@boundaryml/baml',
+            '@boundaryml/baml-darwin-arm64',
+            '@boundaryml/baml-darwin-x64',
+            '@boundaryml/baml-linux-arm64-gmu',
+            '@boundaryml/baml-linux-arm64-musl',
+            '@boundaryml/baml-linux-x64-gnu',
+            '@boundaryml/baml-linux-x64-musl',
+            '@boundaryml/baml-win32-arm64-msvc',
+            '@boundaryml/baml-win32-x64-msvc',
+          ]
         }
 
         // Only add webpack rules if not using Turbo

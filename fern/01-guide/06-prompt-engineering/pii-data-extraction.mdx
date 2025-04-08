@@ -1,0 +1,255 @@
+# Building a PII Data Extraction and Scrubbing System with BAML
+
+In this tutorial, you'll learn how to create a robust PII (Personally Identifiable Information) data extraction and scrubbing system using BAML and GPT-4. By the end, you'll have a working system that can identify, extract, and scrub various types of PII from text documents.
+
+## Prerequisites
+
+- Basic understanding of BAML syntax
+- Access to OpenAI API (you'll need an API key)
+
+## Step 1: Define the Data Schema
+
+First, let's define what our PII data structure should look like. Create a new file called `pii_extractor.baml` and add the following schema:
+
+```baml pii_extractor.baml
+class PIIData {
+  index int
+  dataType string
+  value string
+}
+
+class PIIExtraction {
+  privateData PIIData[]
+  containsSensitivePII bool @description("E.g. SSN")
+}
+```
+
+This schema defines:
+- `PIIData`: A class representing a single piece of PII with its type and value
+- `PIIExtraction`: A container class that holds an array of PII data items and a sensitive data flag
+
+## Step 2: Create the Extraction Function
+
+Next, let's create the function that uses GPT-4 to extract PII. Add this to your `pii_extractor.baml` file:
+
+```baml pii_extractor.baml
+function ExtractPII(document: string) -> PIIExtraction {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Extract all personally identifiable information (PII) from the given document. Look for items like:
+    - Names
+    - Email addresses
+    - Phone numbers
+    - Addresses
+    - Social security numbers
+    - Dates of birth
+    - Any other personal data
+
+    {{ ctx.output_format }}
+
+    {{ _.role("user") }} 
+    
+    {{ document }}
+  "#
+}
+```
+
+Let's break down what this function does:
+- Takes a `document` input as a string
+- Uses the `gpt-4o-mini` model
+- Provides clear guidelines for PII extraction in the prompt
+- Returns a `PIIExtraction` object containing all found PII data
+
+## Step 3: Test the Extractor
+
+To ensure our PII extractor works correctly, let's add some test cases:
+
+```baml pii_extractor.baml
+test BasicPIIExtraction {
+  functions [ExtractPII]
+  args {
+    document #"
+      John Doe was born on 01/02/1980. 
+      His email is john.doe@email.com and phone is 555-123-4567.
+      He lives at 123 Main St, Springfield, IL 62704.
+    "#
+  }
+}
+
+test EmptyDocument {
+  functions [ExtractPII]
+  args {
+    document "This document contains no PII data."
+  }
+}
+```
+
+This is what it looks like in BAML playground after running the test:
+<img src="../../assets/guide/pii-scrubber.png"/>
+
+
+<Tip>
+  You can try playing with the functions and tests online at https://www.promptfiddle.com/Pii-data-O4PmJ
+</Tip>
+
+
+## Step 4: Implementing PII Extraction and Scrubbing
+
+Now you can use the PII extractor to both identify and scrub sensitive information from your documents:
+
+```python pii_scrubber.py
+from baml_client import b
+from baml_client.types import PIIExtraction
+from typing import Dict, Tuple
+
+def scrub_document(text: str) -> Tuple[str, Dict[str, str]]:
+    # Extract PII from the document
+    result = b.ExtractPII(text)
+    
+    # Create a mapping of real values to scrubbed placeholders
+    scrubbed_text = text
+    pii_mapping = {}
+    
+    # Process each PII item and replace with a placeholder
+    for pii_item in result.privateData:
+        pii_type = pii_item.dataType.upper()
+        placeholder = f"[{pii_type}_{pii_item.index}]"
+        
+        # Store the mapping for reference
+        pii_mapping[placeholder] = pii_item.value
+        
+        # Replace the PII with the placeholder
+        scrubbed_text = scrubbed_text.replace(pii_item.value, placeholder)
+    
+    return scrubbed_text, pii_mapping
+
+def restore_document(scrubbed_text: str, pii_mapping: Dict[str, str]) -> str:
+    """Restore the original text using the PII mapping."""
+    restored_text = scrubbed_text
+    for placeholder, original_value in pii_mapping.items():
+        restored_text = restored_text.replace(placeholder, original_value)
+    return restored_text
+
+# Example usage
+document = """
+John Smith works at Tech Corp.
+You can reach him at john.smith@techcorp.com
+or call 555-0123 during business hours.
+His employee ID is TC-12345.
+"""
+
+# Scrub the document
+scrubbed_text, pii_mapping = scrub_document(document)
+
+print("Original Document:")
+print(document)
+print("\nScrubbed Document:")
+print(scrubbed_text)
+print("\nPII Mapping:")
+for placeholder, original in pii_mapping.items():
+    print(f"{placeholder}: {original}")
+
+# If needed, restore the original document
+restored_text = restore_document(scrubbed_text, pii_mapping)
+print("\nRestored Document:")
+print(restored_text)
+```
+
+This implementation provides several key features:
+1. **PII Detection**: Uses BAML's ExtractPII function to identify PII
+2. **Data Scrubbing**: Replaces PII with descriptive placeholders
+3. **Mapping Preservation**: Maintains a mapping of placeholders to original values
+4. **Restoration Capability**: Allows restoration of the original text when needed
+
+Example output:
+``` output.txt
+Original Document:
+
+John Smith works at Tech Corp.
+You can reach him at john.smith@techcorp.com
+or call 555-0123 during business hours.
+His employee ID is TC-12345.
+
+
+Scrubbed Document:
+
+[NAME_1] works at Tech Corp.
+You can reach him at [EMAIL_2]
+or call [PHONE_3] during business hours.
+His employee ID is [EMPLOYEE ID_4].
+
+
+PII Mapping:
+[NAME_1]: John Smith
+[EMAIL_2]: john.smith@techcorp.com
+[PHONE_3]: 555-0123
+[EMPLOYEE ID_4]: TC-12345
+
+Restored Document:
+
+John Smith works at Tech Corp.
+You can reach him at john.smith@techcorp.com
+or call 555-0123 during business hours.
+His employee ID is TC-12345.
+```
+
+## Next Steps
+
+Now that you have a working PII extractor, you can:
+- Add more specific PII types to look for
+- Implement validation for extracted PII (e.g., email format checking)
+- Create a more sophisticated prompt to handle edge cases
+- Add error handling for malformed documents
+- Integrate with your data privacy compliance system
+
+## Enhanced Security: Using Local Models
+
+For organizations handling sensitive data, using cloud-based LLMs like OpenAI's GPT models might not be suitable due to data privacy concerns. 
+BAML supports using local models, which keeps all PII processing within your infrastructure.
+
+In this example, we're going to use a Ollama model. 
+For more details on how to use Ollama with BAML, check out [this page](/ref/llm-client-providers/openai-generic-ollama).
+
+
+1. First, define your local model client in `pii_extractor.baml`:
+
+```baml
+// Please ensure you've got ollama set up with llama:3.1 installed
+//
+// ollama pull llama:3.1
+// ollama run llama:3.1
+client<llm> SecureLocalLLM {
+  provider "openai-generic"
+  options {
+    base_url "http://localhost:11434/v1"
+    model "llama3.1:latest"
+    temperature 0 
+    default_role "user"
+  }
+}
+```
+
+2. Update the ExtractPII function to use your local model:
+
+```baml
+function ExtractPII(document: string) -> PIIExtraction {
+  // use a local model instead of openai
+  client SecureLocalLLM
+  prompt #"
+    Extract all personally identifiable information (PII) from the given document. Look for items like:
+    - Names
+    - Email addresses
+    - Phone numbers
+    - Addresses
+    - Social security numbers
+    - Dates of birth
+    - Any other personal data
+
+    {{ ctx.output_format }}
+
+    {{ _.role("user") }} 
+    
+    {{ document }}
+  "#
+}
+```

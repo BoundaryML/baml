@@ -69,7 +69,7 @@ retry_policy Exponential {
   strategy {
     type exponential_backoff
     delay_ms 300
-    mutliplier 1.5
+    multiplier 1.5
     max_delay_ms 10000
   }
 }
@@ -93,6 +93,8 @@ function ExtractResume(resume: string) -> Resume {
     {{ ctx.output_format }}
   "#
 }
+
+
 
 // Test the function with a sample resume. Open the VSCode playground to run this.
 test vaibhav_resume {

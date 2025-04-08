@@ -1,6 +1,6 @@
 {
   "name": "@boundaryml/baml",
-  "version": "0.76.2",
+  "version": "0.82.0",
   "description": "BAML typescript bindings (package.json)",
   "repository": {
     "type": "git",
@@ -32,7 +32,13 @@
     "./type_builder.d.ts",
     "./type_builder.js",
     "./errors.d.ts",
-    "./errors.js"
+    "./errors.js",
+    "./safe_imports.d.ts",
+    "./safe_imports.js",
+    "./logging.d.ts",
+    "./logging.js",
+    "./browser.d.ts",
+    "./browser.js"
   ],
   "main": "./index.js",
   "types": "./index.d.ts",
@@ -61,7 +67,10 @@
     "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
     "build:napi-release": "pnpm build:napi-debug --release",
     "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
-    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./ --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
+    "build:ts_build": "tsc ./typescript_src/*.ts --outDir ./ --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true && pnpm build:ts_build_local",
+    "build:local": "pnpm build:debug && pnpm napi create-npm-dirs && pnpm artifacts",
+    "build:napi-debug-local": "napi build -o ./artifacts --js ./native.js --dts ./native.d.ts --platform",
+    "build:ts_build_local": "tsc ./typescript_src/*.ts --outDir ./artifacts --module nodenext --module nodenext --allowJs --declaration true --declarationMap true || true",
     "format": "run-p format:biome format:rs format:toml",
     "format:biome": "biome --write .",
     "format:rs": "cargo fmt",
@@ -92,15 +101,10 @@
   "jest": {
     "preset": "ts-jest",
     "testEnvironment": "node",
-    "moduleFileExtensions": [
-      "ts",
-      "js"
-    ],
+    "moduleFileExtensions": ["ts", "js"],
     "transform": {
       "^.+\\.ts$": "ts-jest"
     },
-    "testMatch": [
-      "**/__test__/**/*.test.ts"
-    ]
+    "testMatch": ["**/__test__/**/*.test.ts"]
   }
 }

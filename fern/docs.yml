@@ -9,7 +9,7 @@ instances:
         branch: canary
 
 title: Boundary Documentation
-
+js: ./custom.js
 tabs:
   home:
     display-name: Home
@@ -145,6 +145,9 @@ navigation:
 
       - section: BAML Advanced
         contents:
+          - page: Collector (track tokens)
+            icon: fa-regular fa-wave-pulse
+            path: 01-guide/05-baml-advanced/collector.mdx
           - page: LLM Client Registry
             icon: fa-regular fa-gears
             path: 01-guide/05-baml-advanced/client-registry.mdx
@@ -160,6 +163,9 @@ navigation:
           - page: Checks and Asserts
             icon: fa-regular fa-check-circle
             path: 01-guide/05-baml-advanced/checks-and-asserts.mdx
+          - page: Modular API
+            icon: fa-regular fa-cubes
+            path: 01-guide/05-baml-advanced/modular-api.mdx
       - section: Boundary Cloud
         contents:
           # - section: Functions
@@ -198,6 +204,9 @@ navigation:
           - page: Reducing Hallucinations
             icon: fa-regular fa-person-fairy
             path: 01-guide/06-prompt-engineering/hallucinations.mdx
+          - page: Classification
+            icon: fa-regular fa-tags
+            path: 01-guide/06-prompt-engineering/classification.mdx
           - page: Chat
             icon: fa-regular fa-comments
             path: 01-guide/06-prompt-engineering/chat-history.mdx
@@ -216,6 +225,12 @@ navigation:
           - page: Symbol Tuning
             icon: fa-regular fa-adjust
             path: 01-guide/06-prompt-engineering/symbol-tuning.mdx
+          - page: PII Data Extraction / Scrubbing
+            icon: fa-regular fa-user-cog
+            path: 01-guide/06-prompt-engineering/pii-data-extraction.mdx
+          - page: Action Item Extraction
+            icon: fa-regular fa-list-check
+            path: 01-guide/06-prompt-engineering/action-items.mdx
           # - page: Self-Consistency Prompting
           #   icon: fa-regular fa-sync-alt
           #   path: 01-guide/introduction.mdx
@@ -224,7 +239,7 @@ navigation:
           #   path: 01-guide/introduction.mdx
           - page: Retrieval Augmented Generation
             icon: fa-regular fa-database
-            path: 01-guide/introduction.mdx
+            path: 01-guide/06-prompt-engineering/rag.mdx
       # - section: Python
       #   icon: fa-brands fa-python
       #   contents:
@@ -405,13 +420,30 @@ navigation:
       - section: Generated baml_client
         slug: baml_client
         contents:
+          - page: with_options(..)
+            path: 03-reference/baml_client/with_options.mdx
+          - page: Collector
+            path: 03-reference/baml_client/collector.mdx
+            slug: collector
+          - page: logging / env vars
+            slug: config
+            path: 03-reference/baml_client/config.mdx
+          - page: AsyncClient / SyncClient
+            slug: client
+            path: 03-reference/baml_client/client.mdx
           - page: TypeBuilder
             path: 03-reference/baml_client/typebuilder.mdx
           - page: ClientRegistry
             path: 01-guide/05-baml-advanced/client-registry.mdx
-          - page: BamlImage / BamlAudio
+          - page: Multimodal
             slug: media
             path: 03-reference/baml_client/media.mdx
+          - page: Image
+            slug: image
+            path: 03-reference/baml_client/image.mdx
+          - page: Audio
+            slug: audio
+            path: 03-reference/baml_client/audio.mdx
           - section: Errors
             contents:
               - page: Overview
@@ -448,6 +480,8 @@ navigation:
             path: 03-reference/baml/attributes/dynamic.mdx
       - section: LLM Client Providers
         contents:
+          - page: "Overview"
+            path: 03-reference/baml/client-llm.mdx
           - page: "AWS Bedrock"
             path: 03-reference/baml/clients/providers/aws-bedrock.mdx
           - page: "Anthropic"
@@ -462,25 +496,38 @@ navigation:
             path: 03-reference/baml/clients/providers/azure.mdx
           - page: "openai-generic"
             path: 03-reference/baml/clients/providers/openai-generic.mdx
-          - page: "openai-generic: Azure AI Foundary"
+          - page: "Azure AI Foundary (openai-generic)"
+            slug: azure-ai-foundary
             path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
-          - page: "openai-generic: Groq"
+          - page: "Groq (openai-generic)"
+            slug: groq
             path: 03-reference/baml/clients/providers/groq.mdx
-          - page: "openai-generic: Hugging Face"
+          - page: "Hugging Face (openai-generic)"
+            slug: huggingface
             path: 03-reference/baml/clients/providers/huggingface.mdx
-          - page: "openai-generic: Keywords AI"
+          - page: "Keywords AI (openai-generic)"
+            slug: keywordsai
             path: 03-reference/baml/clients/providers/keywordsai.mdx
-          - page: "openai-generic: LM Studio"
+          - page: "Litellm (openai-generic)"
+            slug: litellm
+            path: 03-reference/baml/clients/providers/litellm.mdx
+          - page: "LM Studio (openai-generic)"
+            slug: lmstudio
             path: 03-reference/baml/clients/providers/lmstudio.mdx
-          - page: "openai-generic: Ollama"
+          - page: "Ollama (openai-generic)"
+            slug: ollama
             path: 03-reference/baml/clients/providers/ollama.mdx
-          - page: "openai-generic: OpenRouter"
+          - page: "OpenRouter (openai-generic)"
+            slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
-          - page: "openai-generic: TogetherAI"
+          - page: "TogetherAI (openai-generic)"
+            slug: together
             path: 03-reference/baml/clients/providers/together.mdx
-          - page: "openai-generic: Unify AI"
+          - page: "Unify AI (openai-generic)"
+            slug: unify
             path: 03-reference/baml/clients/providers/unify.mdx
-          - page: "openai-generic: vLLM"
+          - page: "vLLM (openai-generic)"
+            slug: vllm
             path: 03-reference/baml/clients/providers/vllm.mdx
       - section: LLM Client Strategies
         contents:
@@ -707,8 +754,10 @@ redirects:
     destination: "/ref/llm-client-providers/aws-bedrock"
   - source: "/docs/snippets/clients/providers/azure"
     destination: "/ref/llm-client-providers/open-ai-from-azure"
+  - source: "/ref/llm-client-providers/azure"
+    destination: "/ref/llm-client-providers/open-ai-from-azure"
   - source: "/docs/snippets/clients/providers/gemini"
-    destination: "/ref/llm-client-providers/google-ai-studio"
+    destination: "/ref/llm-client-providers/google-ai-gemini"
   - source: "/docs/snippets/clients/providers/groq"
     destination: "/ref/llm-client-providers/openai-generic-groq"
   - source: "/docs/snippets/clients/providers/huggingface"
@@ -719,6 +768,8 @@ redirects:
     destination: "/ref/llm-client-providers/open-ai"
   - source: "/docs/snippets/clients/providers/openai-generic"
     destination: "/ref/llm-client-providers/openai-generic"
+  - source: "/docs/snippets/clients/providers/google-vertex"
+    destination: "/ref/llm-client-providers/google-vertex"
   - source: "/docs/snippets/clients/providers/openrouter"
     destination: "/ref/llm-client-providers/openai-generic-open-router"
   - source: "/docs/snippets/clients/providers/together"
@@ -809,3 +860,25 @@ redirects:
     destination: "/ref/boundary-extraction-api/extract"
   - source: "/document-extraction-api/overview/docs/api/extraction-examples"
     destination: "/ref/boundary-extraction-api/extract/examples"
+  - source: "/ref/llm-client-providers/openai-generic-azure-ai-foundary"
+    destination: "/ref/llm-client-providers/azure-ai-foundary"
+  - source: "/ref/llm-client-providers/openai-generic-groq"
+    destination: "/ref/llm-client-providers/groq"
+  - source: "/ref/llm-client-providers/openai-generic-hugging-face"
+    destination: "/ref/llm-client-providers/huggingface"
+  - source: "/ref/llm-client-providers/openai-generic-keywords-ai"
+    destination: "/ref/llm-client-providers/keywordsai"
+  - source: "/ref/llm-client-providers/openai-generic-litellm"
+    destination: "/ref/llm-client-providers/litellm"
+  - source: "/ref/llm-client-providers/openai-generic-lm-studio"
+    destination: "/ref/llm-client-providers/lmstudio"
+  - source: "/ref/llm-client-providers/openai-generic-ollama"
+    destination: "/ref/llm-client-providers/ollama"
+  - source: "/ref/llm-client-providers/openai-generic-openrouter"
+    destination: "/ref/llm-client-providers/openrouter"
+  - source: "/ref/llm-client-providers/openai-generic-togetherai"
+    destination: "/ref/llm-client-providers/together"
+  - source: "/ref/llm-client-providers/openai-generic-unify-ai"
+    destination: "/ref/llm-client-providers/unify"
+  - source: "/ref/llm-client-providers/openai-generic-vllm"
+    destination: "/ref/llm-client-providers/vllm"

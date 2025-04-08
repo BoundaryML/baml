@@ -1,0 +1,142 @@
+---
+title: Audio
+description: Learn how to handle audio inputs in BAML functions
+---
+
+Audio values to BAML functions can be created in client libraries. This document explains how to use these functions both at compile time and runtime to handle audio data. For more details, refer to [audio types](/ref/baml/types#audio).
+
+## Usage Examples
+
+<CodeBlocks>
+```python
+from baml_py import Audio
+from baml_client import b
+
+async def test_audio_input():
+    # Create an Audio object from a URL
+    audio = Audio.from_url("https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg")
+    res = await b.TestAudioInput(audio=audio)
+
+    # Create an Audio object from Base64 data
+    audio_b64 = "iVB0xyz..."
+    audio = Audio.from_base64("audio/ogg", audio_b64)
+    res = await b.TestAudioInput(audio=audio)
+```
+
+```typescript
+import { b } from '../baml_client'
+import { Audio } from "@boundaryml/baml"
+
+// Create an Audio object from a URL
+let res = await b.TestAudioInput(
+    Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg')
+)
+
+// Create an Audio object from Base64 data
+const audio_b64 = "iVB0xyz..."
+res = await b.TestAudioInput(
+    Audio.fromBase64('audio/ogg', audio_b64)
+)
+
+// Browser-specific methods
+const fileAudio = await Audio.fromFile(file)
+const blobAudio = await Audio.fromBlob(blob, 'audio/ogg')
+const fetchedAudio = await Audio.fromUrlAsync('https://example.com/audio.ogg')
+```
+
+```tsx
+import { useTestAudioInput } from '../baml_client/react/hooks'
+import { Audio } from "../baml_client/react/media"
+
+export function TestAudioInput() {
+    const { mutate } = useTestAudioInput()
+
+    const handleClick = async () => {
+        const audio = await Audio.fromUrl('https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg')
+        mutate(audio)
+    }
+
+    return (
+      <div>
+          <button onClick={handleClick}>
+              Test Audio Input
+          </button>
+      </div>
+    )
+}
+```
+
+```ruby
+# Ruby implementation is in development.
+```
+</CodeBlocks>
+
+## Static Methods
+
+<ParamField
+  path="fromUrl"
+  type="(url: string, mediaType?: string) => Audio"
+>
+  Creates an Audio object from a URL. Optionally specify the media type, otherwise it will be inferred from the URL.
+</ParamField>
+
+<ParamField
+  path="fromBase64"
+  type="(mediaType: string, base64: string) => Audio"
+>
+  Creates an Audio object using Base64 encoded data along with the given MIME type.
+</ParamField>
+
+<ParamField
+  path="fromFile"
+  type="(file: File) => Promise<Audio>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates an Audio object from a File object. Available in browser environments only.
+</ParamField>
+
+<ParamField
+  path="fromBlob"
+  type="(blob: Blob, mediaType?: string) => Promise<Audio>"
+>
+  <Info>Only available in browser environments. @boundaryml/baml/browser</Info>
+  Creates an Audio object from a Blob object. Available in browser environments only.
+</ParamField>
+
+<ParamField
+  path="fromUrlToBase64"
+  type="(url: string) => Promise<Audio>"
+>
+  <Info>Only available in browser environments.</Info>
+  Creates an Audio object by fetching from a URL. Available in browser environments only.
+</ParamField>
+
+## Instance Methods
+
+<ParamField
+  path="isUrl"
+  type="() => boolean"
+>
+  Check if the audio is stored as a URL.
+</ParamField>
+
+<ParamField
+  path="asUrl"
+  type="() => string"
+>
+  Get the URL of the audio if it's stored as a URL. Throws an Error if the audio is not stored as a URL.
+</ParamField>
+
+<ParamField
+  path="asBase64"
+  type="() => [string, string]"
+>
+  Get the base64 data and media type if the audio is stored as base64. Returns [base64Data, mediaType]. Throws an Error if the audio is not stored as base64.
+</ParamField>
+
+<ParamField
+  path="toJSON"
+  type="() => { url: string } | { base64: string; media_type: string }"
+>
+  Convert the audio to a JSON representation. Returns either a URL object or a base64 object with media type.
+</ParamField>

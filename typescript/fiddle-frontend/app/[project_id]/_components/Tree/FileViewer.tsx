@@ -1,15 +1,15 @@
 // 1: Uncontrolled Tree
 import { useEffect, useRef, useState } from 'react'
 
-import { MoveHandler, RenameHandler, Tree, type TreeApi } from 'react-arborist'
+import { MoveHandler, NodeApi, RenameHandler, Tree, type TreeApi } from 'react-arborist'
 
 import { EditorFile } from '@/app/actions'
-// import { updateFileAtom } from '@baml/playground-common/baml_wasm_web/EventListener'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
 import { PROJECT_ROOT, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
 import Node from './Node'
+import { filesAtom } from '@/shared/baml-project-panel/atoms'
 
 export const data = [
   {
@@ -106,12 +106,12 @@ function createTree(filePaths: string[]): TreeNode[] {
 const FileViewer = () => {
   const { width, height = 200, ref } = useResizeObserver()
   const editorFiles = useAtomValue(currentEditorFilesAtom)
-  // const updateFile = useSetAtom(updateFileAtom)
+  const setFiles = useSetAtom(filesAtom)
   const treeRef = useRef<TreeApi<any> | null>(null)
   const activeFile = useAtomValue(activeFileNameAtom)
   const [emptyDirs, setEmptydirs] = useAtom(emptyDirsAtom)
 
-  const data2 = createTree(editorFiles.map((f) => f.path).concat(emptyDirs))
+  const data = createTree(editorFiles.map((f) => f.path).concat(emptyDirs))
 
   const [term, setTerm] = useState('')
 
@@ -152,7 +152,7 @@ const FileViewer = () => {
           ref={treeRef}
           openByDefault={false}
           // initialOpenState={{ baml_src: true }}
-          data={data2}
+          data={data}
           indent={12}
           initialOpenState={{ baml_src: true }}
           rowHeight={28}
@@ -163,42 +163,123 @@ const FileViewer = () => {
               return
             }
 
-            const renames = dragIds
-              .filter((id) => id.endsWith('.baml') || id.endsWith('.json'))
-              .map((id) => ({
-                from: id,
-                to: `${parentId}/${id.split('/').pop() ?? ''}`,
-              }))
+            const emptyDirsLookup = new Set(emptyDirs)
 
-            // updateFile({
-            //   reason: 'move_files',
-            //   root_path: PROJECT_ROOT,
-            //   files: [],
-            //   renames,
-            // })
+            const emptyDirRenames = new Map<string, string>()
+            const fileRenames: { from: string; to: string }[] = []
+
+            dragNodes.forEach((node) => {
+              const stack: { nodes: NodeApi<any>[]; parents: string[] }[] = [
+                {
+                  nodes: [node],
+                  parents: [],
+                },
+              ]
+
+              while (stack.length > 0) {
+                const { nodes, parents } = stack.pop()!
+
+                for (const node of nodes) {
+                  let dest: string
+
+                  if (parents.length > 0) {
+                    dest = `${parentId}/${parents.join('/')}/${node.id.split('/').pop() ?? ''}`
+                  } else {
+                    dest = `${parentId}/${node.id.split('/').pop() ?? ''}`
+                  }
+
+                  if (node.isLeaf) {
+                    if (dest !== node.id) {
+                      fileRenames.push({ from: node.id, to: dest })
+                    }
+                  } else {
+                    if (emptyDirsLookup.has(node.id) || emptyDirsLookup.has(`${node.id}/`)) {
+                      emptyDirRenames.set(`${node.id}/`, `${dest}/`)
+                    }
+                    stack.push({
+                      nodes: node.children!,
+                      parents: parents.concat(node.id.split('/').pop() ?? ''),
+                    })
+                  }
+                }
+              }
+            })
+
+            console.log('onMove', { fileRenames, emptyDirRenames })
+
+            setFiles((prev) => {
+              const movedFiles = { ...prev }
+
+              fileRenames.forEach((rename) => {
+                movedFiles[rename.to] = movedFiles[rename.from]
+                delete movedFiles[rename.from]
+              })
+
+              return movedFiles
+            })
+
+            setEmptydirs((prev) => {
+              // TODO: See onRename(), there's some issue with trailing slashes, fix this.
+              const movedEmptyDirs = prev.filter((dir) => !emptyDirRenames.has(dir) && !emptyDirRenames.has(`${dir}/`))
+              emptyDirRenames.values().forEach((dir) => movedEmptyDirs.push(dir))
+
+              return movedEmptyDirs
+            })
           }}
           onCreate={({ parentId, parentNode, type }) => {
+            console.log('onCreate', type, parentId, parentNode)
+
             if (type === 'internal') {
               const newDir = `${parentId ?? 'baml_src'}/new/`
               setEmptydirs((prev) => [...prev, newDir])
 
               return { id: newDir, name: 'new_folder' }
             }
-            console.log('onCreate', parentId, parentNode)
 
-            const newFileName = 'new.baml'
-            // updateFile({
-            //   reason: 'create_file',
-            //   root_path: PROJECT_ROOT,
-            //   files: [
-            //     {
-            //       name: `baml_src/${newFileName}`,
-            //       content: '',
-            //     },
-            //   ],
-            // })
+            const newFileName = `${parentId ?? 'baml_src'}/new.baml`
+            setFiles((prev) => ({ ...prev, [newFileName]: '' }))
 
-            return { id: `baml_src/${newFileName}`, name: newFileName }
+            return { id: newFileName, name: newFileName }
+          }}
+          onRename={({ node, id, name }) => {
+            const parentName = node.parent?.id ?? 'baml_src'
+            const newName = `${parentName}/${name}`
+
+            const emptyDirRenames = emptyDirs
+              .filter((dir) => dir.startsWith(id))
+              .map((dir) => ({ from: dir, to: dir.replace(id, newName) }))
+
+            const fileRenames = editorFiles
+              .filter((f) => f.path.startsWith(id))
+              .map((f) => ({ from: f.path, to: f.path.replace(id, newName) }))
+
+            console.log('onRename', { fileRenames, emptyDirRenames })
+
+            if (emptyDirRenames.length > 0) {
+              setEmptydirs((prev) => {
+                const dirs = prev.filter((dir) => !dir.startsWith(id))
+                // TODO: Something's causing the last slash to be removed after
+                // triggering this handler more than once. This fixes it but we
+                // should find where it's removed.
+                emptyDirRenames.forEach((rename) => dirs.push(`${rename.to}/`))
+
+                console.log({ prev, dirs })
+
+                return dirs
+              })
+            }
+
+            if (fileRenames.length > 0) {
+              setFiles((prev) => {
+                const newFiles = { ...prev }
+                fileRenames.forEach((rename) => {
+                  newFiles[rename.to] = newFiles[rename.from]
+                  delete newFiles[rename.from]
+                })
+
+                return newFiles
+              })
+            }
           }}
           height={height}
           searchTerm={term}

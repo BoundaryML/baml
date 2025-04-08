@@ -1,7 +1,11 @@
 use anyhow::Result;
 
+use baml_types::tracing::events::{
+    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
+    TraceLevel,
+};
 use internal_baml_core::ir::repr::IntermediateRepr;
-
+use serde_json::json;
 use std::sync::Arc;
 
 use crate::{
@@ -11,6 +15,7 @@ use crate::{
         prompt_renderer::PromptRenderer,
     },
     tracing::BamlTracer,
+    tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
     FunctionResult, RuntimeContextManager,
 };
@@ -29,6 +34,7 @@ pub struct FunctionResultStream {
     pub(crate) tracer: Arc<BamlTracer>,
     #[cfg(not(target_arch = "wasm32"))]
     pub(crate) tokio_runtime: Arc<tokio::runtime::Runtime>,
+    pub(crate) collectors: Vec<Arc<Collector>>,
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -90,29 +96,58 @@ impl FunctionResultStream {
         let span = self
             .tracer
             .start_span(&self.function_name, ctx, &local_params);
+        if let Some(span) = span.clone() {
+            for collector in self.collectors.iter() {
+                collector.track_function(FunctionId(span.clone().span_id.to_string()));
+            }
+            let trace_event = TraceEvent {
+                span_id: FunctionId(span.span_id.to_string()),
+                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                span_chain: vec![],
+                timestamp: web_time::SystemTime::now(),
+                callsite: self.function_name.clone(),
+                verbosity: TraceLevel::Info,
+                content: TraceData::FunctionStart(FunctionStart {
+                    name: self.function_name.clone(),
+                    // TODO:
+                    args: vec![],
+                    //  TODO!
+                    options: BamlOptions {
+                        type_builder: None,
+                        client_registry: None,
+                    },
+                }),
+                // TODO: send separately?
+                tags: Default::default(),
+            };
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+        }
 
-        let rctx = ctx.create_ctx(tb, cb);
+        let rctx = ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id));
         let res = match rctx {
             Ok(rctx) => {
-                let (history, _) = orchestrate_stream(
-                    local_orchestrator,
-                    self.ir.as_ref(),
-                    &rctx,
-                    &self.renderer,
-                    &baml_types::BamlValue::Map(local_params),
-                    |content| self.renderer.parse(self.ir.as_ref(), content, true),
-                    |content| self.renderer.parse(self.ir.as_ref(), content, false),
-                    on_event,
-                )
-                .await;
+                async {
+                    let (history, _) = orchestrate_stream(
+                        local_orchestrator,
+                        self.ir.as_ref(),
+                        &rctx,
+                        &self.renderer,
+                        &baml_types::BamlValue::Map(local_params),
+                        |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
+                        |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
+                        on_event,
+                    )
+                    .await;
 
-                FunctionResult::new_chain(history)
+                    FunctionResult::new_chain(history)
+                }
+                .await
             }
             Err(e) => Err(e),
         };
 
         let mut target_id = None;
-        if let Some(span) = span {
+        if let Some(span) = span.clone() {
             #[cfg(not(target_arch = "wasm32"))]
             match self.tracer.finish_baml_span(span, ctx, &res) {
                 Ok(id) => target_id = id,
@@ -124,6 +159,49 @@ impl FunctionResultStream {
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
         };
+
+        match &res {
+            Ok(result) => {
+                if let Some(span_id) = &span.map(|s| s.span_id.to_string()) {
+                    let trace_event = TraceEvent {
+                        span_id: FunctionId(span_id.to_string()),
+                        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                        span_chain: vec![],
+                        timestamp: web_time::SystemTime::now(),
+                        callsite: self.function_name.clone(),
+                        verbosity: TraceLevel::Info,
+                        content: TraceData::FunctionEnd(FunctionEnd {
+                            result: Ok(baml_types::BamlValue::Null),
+                        }),
+                        tags: Default::default(),
+                    };
+                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                } else {
+                    log::warn!(
+                        "No span id found for function while emitting logs. Log event may be dropped."
+                    );
+                }
+            }
+            Err(e) => {
+                if let Some(span_id) = span.as_ref().map(|s| s.span_id.to_string()) {
+                    let trace_event = TraceEvent {
+                        span_id: FunctionId(span_id.to_string()),
+                        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
+                        span_chain: vec![],
+                        timestamp: web_time::SystemTime::now(),
+                        callsite: self.function_name.clone(),
+                        verbosity: TraceLevel::Info,
+                        content: TraceData::FunctionEnd(FunctionEnd {
+                            result: Err(anyhow::anyhow!("{}", e)),
+                        }),
+                        tags: Default::default(),
+                    };
+                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+                } else {
+                    log::warn!("No span id found for function while emitting logs. Log event may be dropped.");
+                }
+            }
+        }
 
         (res, target_id)
     }

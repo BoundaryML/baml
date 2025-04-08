@@ -477,11 +477,21 @@ impl crate::BamlMedia {
     }
 }
 
+#[derive(Clone)]
 pub struct ApiKeyWithProvenance {
     /// The key itself.
     pub api_key: SecretString,
     /// The name of the environment variable from which the key was read.
     pub provenance: Option<String>,
+}
+
+impl std::fmt::Debug for ApiKeyWithProvenance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiKeyWithProvenance")
+            .field("api_key", &"<no-repr-available>")
+            .field("provenance", &self.provenance)
+            .finish()
+    }
 }
 
 impl ApiKeyWithProvenance {

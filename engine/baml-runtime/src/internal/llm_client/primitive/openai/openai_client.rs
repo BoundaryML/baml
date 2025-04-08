@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
@@ -22,8 +23,8 @@ use crate::internal::llm_client::primitive::request::{
     make_parsed_request, make_request, RequestBuilder, ResponseType,
 };
 use crate::internal::llm_client::traits::{
-    SseResponseTrait, StreamResponse, ToProviderMessage, ToProviderMessageExt,
-    WithClientProperties, WithStreamChat,
+    CompletionToProviderBody, SseResponseTrait, StreamResponse, ToProviderMessage,
+    ToProviderMessageExt, WithClientProperties, WithStreamChat,
 };
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
@@ -88,7 +89,12 @@ impl WithClient for OpenAIClient {
 impl WithNoCompletion for OpenAIClient {}
 
 impl WithChat for OpenAIClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
         let model_name = self
             .request_options()
             .get("model")
@@ -100,6 +106,8 @@ impl WithChat for OpenAIClient {
             either::Either::Right(prompt),
             false,
             self.properties.client_response_type.clone(),
+            ctx,
+            http_request_id,
         )
         .await
     }
@@ -153,7 +161,7 @@ impl RequestBuilder for OpenAIClient {
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
             either::Either::Left(prompt) => {
-                body_obj.insert("prompt".into(), json!(prompt));
+                body_obj.extend(convert_completion_prompt_to_body(prompt));
             }
             either::Either::Right(messages) => {
                 body_obj.extend(self.chat_to_message(messages)?);
@@ -183,8 +191,9 @@ impl RequestBuilder for OpenAIClient {
 impl WithStreamChat for OpenAIClient {
     async fn stream_chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         let model_name = self
             .request_options()
@@ -196,6 +205,8 @@ impl WithStreamChat for OpenAIClient {
             either::Either::Right(prompt),
             model_name,
             ResponseType::OpenAI,
+            ctx,
+            http_request_id,
         )
         .await
     }
@@ -425,4 +436,22 @@ impl ToProviderMessageExt for OpenAIClient {
 
         Ok(res)
     }
+}
+
+impl CompletionToProviderBody for OpenAIClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
+    }
+}
+
+// converts completion prompt into JSON body for request
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    map.insert("prompt".into(), json!(prompt));
+    map
 }

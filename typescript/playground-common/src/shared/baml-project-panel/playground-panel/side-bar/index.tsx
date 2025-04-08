@@ -49,13 +49,22 @@ const functionsAtom = atom((get) => {
   }))
 })
 
-export const isSidebarOpenAtom = atomWithStorage('isSidebarOpen', vscode.isVscode() ? true : false)
+const functionsAreStaleAtom = atom((get) => {
+  const runtimeState = get(runtimeStateAtom)
+  return runtimeState.stale
+})
 
-export default function CustomSidebar() {
+const isEmbed = typeof window !== 'undefined' && window.location.href.includes('embed')
+
+export const isSidebarOpenAtom = atomWithStorage('isSidebarOpen', isEmbed ? false : vscode.isVscode() ? true : false)
+
+export default function CustomSidebar({ isEmbed = false }: { isEmbed?: boolean }) {
   const functions = useAtomValue(functionsAtom)
+  const rtState = useAtomValue(runtimeStateAtom)
   const [searchTerm, setSearchTerm] = React.useState('')
   const [isOpen, setIsOpen] = useAtom(isSidebarOpenAtom)
   const { setRunningTests } = useRunTests()
+  const functionsAreStale = useAtomValue(functionsAreStaleAtom)
 
   const filteredFunctions = functions.filter(
     (func) =>
@@ -77,8 +86,11 @@ export default function CustomSidebar() {
     return <></>
   }
 
+  // Define a mask that will obscure the sidebare if functions are stale.
+  const maybe_mask = functionsAreStale ? 'pointer-events-none opacity-50' : ''
+
   return (
-    <div className='flex relative'>
+    <div className={cn('flex relative', maybe_mask)}>
       <Button
         onClick={() => setIsOpen(!isOpen)}
         variant='ghost'

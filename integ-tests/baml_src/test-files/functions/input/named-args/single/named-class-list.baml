@@ -1,7 +1,7 @@
 
 
 
-function TestFnNamedArgsSingleStringList(myArg: string[]) -> string{
+function TestFnNamedArgsSingleStringList(myArg: string[]) -> string[] {
   client GPT35
   prompt #"
     Return this value back to me: {{myArg}}

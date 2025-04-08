@@ -1,7 +1,7 @@
 // run these tests with:
 // RUST_LOG=info cargo test test_call_function_unions1 --no-default-features --features "internal" -- --nocapture
 // need to fix the tokio runtime getting closed but at least you can log things.
-// #[cfg(feature = "internal")]
+#[cfg(feature = "internal")]
 mod internal_tests {
     use std::any;
     use std::collections::HashMap;
@@ -628,7 +628,7 @@ test RecursiveAliasCycle {
 
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
-        let run_test_future = runtime.run_test(function_name, test_name, &ctx, Some(|r| {}));
+        let run_test_future = runtime.run_test(function_name, test_name, &ctx, Some(|r| {}), None);
         let (res, span) = runtime.async_runtime.block_on(run_test_future);
 
         Ok(())
@@ -1002,6 +1002,32 @@ test RecursiveAliasCycle {
                     other Other?
                   }
 
+                }
+              }
+            "##,
+        })
+    }
+
+    #[test]
+    fn test_class_property_alias() -> anyhow::Result<()> {
+        run_type_builder_block_test(TypeBuilderBlockTest {
+            function_name: "Fn",
+            test_name: "Test",
+            baml: r##"
+              class PropertyAlias {
+                  property string? | int @alias("hello")
+              }
+
+              function Fn() -> PropertyAlias {
+                  client "openai/gpt-4o"
+                  prompt #"
+                      {{ctx.output_format}}
+                  "#
+              }
+
+              test Test {
+                functions [Fn]
+                args {
                 }
               }
             "##,

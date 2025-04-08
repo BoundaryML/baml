@@ -10,7 +10,7 @@ use crate::{field_type_attributes, type_check_attributes, TypeCheckAttributes};
 use super::ruby_language_features::ToRuby;
 use internal_baml_core::ir::{
     repr::{Docstring, IntermediateRepr},
-    ClassWalker, EnumWalker, FieldType, IRHelper,
+    ClassWalker, EnumWalker, FieldType, IRHelper, IRHelperExtended,
 };
 
 #[derive(askama::Template)]
@@ -137,15 +137,15 @@ impl<'ir> From<ClassWalker<'ir>> for PartialRubyStruct<'ir> {
                 .iter()
                 .map(|f| {
                     let not_null: bool = f.attributes.get("stream.not_null").is_some();
-                    let (_, metadata) = c.db.distribute_metadata(&f.elem.r#type.elem);
+                    let (_, metadata) = c.ir.distribute_metadata(&f.elem.r#type.elem);
                     let done = metadata.1.done;
                     let field_type = f.elem.r#type.elem.clone();
                     let generated_field_type = match (done, not_null) {
                         (false, false) => {
-                            format!("{}", field_type.to_partial_type_ref(c.db, false))
+                            format!("{}", field_type.to_partial_type_ref(c.ir, false))
                         }
                         (true, false) => format!("T.nilable({})", field_type.to_type_ref()),
-                        (false, true) => field_type.to_partial_type_ref(c.db, true),
+                        (false, true) => field_type.to_partial_type_ref(c.ir, true),
                         (true, true) => field_type.to_type_ref(),
                     };
                     (
@@ -180,14 +180,15 @@ impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
     /// The `already_nilable` field indicates whether the caller will wrap
     /// the returned string with `nilable`, and this function does not need
     fn to_partial_type_ref(&self, ir: &IntermediateRepr, already_nilable: bool) -> String {
-        
         let (field_type, metadata) = ir.distribute_metadata(self);
         let inner = match field_type {
-            FieldType::Class(name) => if already_nilable {
-                format!("Baml::PartialTypes::{}", name.clone())
-            } else {
-                format!("T.nilable(Baml::PartialTypes::{})", name.clone())
-            },
+            FieldType::Class(name) => {
+                if already_nilable {
+                    format!("Baml::PartialTypes::{}", name.clone())
+                } else {
+                    format!("T.nilable(Baml::PartialTypes::{})", name.clone())
+                }
+            }
             FieldType::Enum(name) => {
                 if already_nilable {
                     format!("T.nilable(Baml::Types::{})", name.clone())
@@ -222,7 +223,7 @@ impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
                 }
             }
             FieldType::Union(inner) => {
-                let inner_string = 
+                let inner_string =
                 // https://sorbet.org/docs/union-types
                 inner
                     .iter()
@@ -230,12 +231,14 @@ impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
                 ;
-                if already_nilable { format!("T.any({inner_string})") } else {
+                if already_nilable {
+                    format!("T.any({inner_string})")
+                } else {
                     format!("T.nilable(T.any({}))", inner_string)
                 }
-            },
+            }
             FieldType::Tuple(inner) => {
-                let inner_string = 
+                let inner_string =
                 // https://sorbet.org/docs/tuples
                 inner
                     .iter()
@@ -243,8 +246,12 @@ impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
                 ;
-                if already_nilable { format!("[{}]", inner_string )} else { format!("T.nilable([{}])", inner_string)}
-            },
+                if already_nilable {
+                    format!("[{}]", inner_string)
+                } else {
+                    format!("T.nilable([{}])", inner_string)
+                }
+            }
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
@@ -256,7 +263,9 @@ impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
         };
         if metadata.1.state {
             format!("Baml::StreamState[{inner}]")
-        } else { inner }
+        } else {
+            inner
+        }
     }
 }
 

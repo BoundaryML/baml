@@ -1,16 +1,16 @@
 use crate::errors::{BamlError, BamlInvalidArgumentError};
 use crate::parse_py_type::parse_py_type;
-use crate::types::function_results::FunctionResult;
-use crate::types::trace_stats::TraceStats;
-
 use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
+use crate::types::function_results::{pythonize_strict, FunctionResult};
 use crate::types::runtime_ctx_manager::RuntimeContextManager;
+use crate::types::trace_stats::TraceStats;
 use crate::types::type_builder::TypeBuilder;
-use crate::types::ClientRegistry;
+use crate::types::{ClientRegistry, Collector, HTTPRequest};
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_runtime::BamlRuntime as CoreBamlRuntime;
 use pyo3::prelude::{pymethods, PyResult};
-use pyo3::{pyclass, IntoPyObjectExt, PyObject, Python};
+use pyo3::types::{PyAnyMethods, PyList};
+use pyo3::{pyclass, Bound, IntoPyObjectExt, PyObject, PyRef, Python};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -114,7 +114,7 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -123,6 +123,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: &Bound<'_, PyList>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -141,20 +142,35 @@ impl BamlRuntime {
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
 
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| {
+                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
+                collector.inner.clone()
+            })
+            .collect::<Vec<_>>();
+
+        // let collector = collector.map(|c| c.inner.clone());
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let ctx_mng = ctx_mng;
             let (result, _) = baml_runtime
-                .call_function(function_name, &args_map, &ctx_mng, tb.as_ref(), cb.as_ref())
+                .call_function(
+                    function_name,
+                    &args_map,
+                    &ctx_mng,
+                    tb.as_ref(),
+                    cb.as_ref(),
+                    Some(collector_list),
+                )
                 .await;
 
             result
                 .map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
         })
-        .map(|f| f.into())
+        .map(pyo3::Bound::into)
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors))]
     fn call_function_sync(
         &self,
         function_name: String,
@@ -162,6 +178,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: &Bound<'_, PyList>,
     ) -> PyResult<FunctionResult> {
         let Some(args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -178,6 +195,13 @@ impl BamlRuntime {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| {
+                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
+                collector.inner.clone()
+            })
+            .collect::<Vec<_>>();
 
         let (result, _event_id) = Python::with_gil(|py| {
             py.allow_threads(|| {
@@ -187,6 +211,7 @@ impl BamlRuntime {
                     &ctx_mng,
                     tb.as_ref(),
                     cb.as_ref(),
+                    Some(collector_list),
                 )
             })
         });
@@ -196,7 +221,7 @@ impl BamlRuntime {
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -206,6 +231,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: &Bound<'_, PyList>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -218,6 +244,13 @@ impl BamlRuntime {
         log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
 
         let ctx = ctx.inner.clone();
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| {
+                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
+                collector.inner.clone()
+            })
+            .collect::<Vec<_>>();
         let stream = self
             .inner
             .stream_function(
@@ -226,6 +259,7 @@ impl BamlRuntime {
                 &ctx,
                 tb.map(|tb| tb.inner.clone()).as_ref(),
                 cb.map(|cb| cb.inner.clone()).as_ref(),
+                Some(collector_list),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -237,7 +271,7 @@ impl BamlRuntime {
         ))
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors))]
     fn stream_function_sync(
         &self,
         py: Python<'_>,
@@ -247,6 +281,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: &Bound<'_, PyList>,
     ) -> PyResult<SyncFunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -259,6 +294,13 @@ impl BamlRuntime {
         log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
 
         let ctx = ctx.inner.clone();
+        let collector_list = collectors
+            .into_iter()
+            .map(|c| {
+                let collector: PyRef<Collector> = c.extract().expect("Failed to extract collector");
+                collector.inner.clone()
+            })
+            .collect::<Vec<_>>();
         let stream = self
             .inner
             .stream_function(
@@ -267,6 +309,7 @@ impl BamlRuntime {
                 &ctx,
                 tb.map(|tb| tb.inner.clone()).as_ref(),
                 cb.map(|cb| cb.inner.clone()).as_ref(),
+                Some(collector_list),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -276,6 +319,139 @@ impl BamlRuntime {
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
         ))
+    }
+
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, stream))]
+    fn build_request(
+        &self,
+        py: Python<'_>,
+        function_name: String,
+        args: PyObject,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> PyResult<PyObject> {
+        let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args, perhaps you used a non-serializable type?",
+            ));
+        };
+        let Some(args_map) = args.as_map_owned() else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args. Expect kwargs",
+            ));
+        };
+
+        let baml_runtime = self.inner.clone();
+        let ctx_manager = ctx.inner.clone();
+        let type_builder = tb.map(|tb| tb.inner.clone());
+        let client_registry = cb.map(|cb| cb.inner.clone());
+
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            baml_runtime
+                .build_request(
+                    function_name,
+                    &args_map,
+                    &ctx_manager,
+                    type_builder.as_ref(),
+                    client_registry.as_ref(),
+                    stream,
+                )
+                .await
+                .map(HTTPRequest::from)
+                .map_err(BamlError::from_anyhow)
+        })
+        .map(pyo3::Bound::into)
+    }
+
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, stream))]
+    fn build_request_sync(
+        &self,
+        py: Python<'_>,
+        function_name: String,
+        args: PyObject,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> PyResult<HTTPRequest> {
+        let Some(args) = parse_py_type(args, false)? else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args, perhaps you used a non-serializable type?",
+            ));
+        };
+        let Some(args_map) = args.as_map_owned() else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args as a map",
+            ));
+        };
+
+        let context_manager = ctx.inner.clone();
+        let type_builder = tb.map(|tb| tb.inner.clone());
+        let client_registry = cb.map(|cb| cb.inner.clone());
+
+        // TODO: Figure out if this will be async or not (images, media, etc).
+        // If it's not async then skip gil and threads.
+        let result = py.allow_threads(|| {
+            self.inner.build_request_sync(
+                function_name,
+                &args_map,
+                &context_manager,
+                type_builder.as_ref(),
+                client_registry.as_ref(),
+                stream,
+            )
+        });
+
+        result
+            .map(HTTPRequest::from)
+            .map_err(BamlError::from_anyhow)
+    }
+
+    #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb))]
+    fn parse_llm_response(
+        &self,
+        py: Python<'_>,
+        function_name: String,
+        llm_response: String,
+        enum_module: pyo3::Bound<'_, pyo3::types::PyModule>,
+        cls_module: pyo3::Bound<'_, pyo3::types::PyModule>,
+        partial_cls_module: pyo3::Bound<'_, pyo3::types::PyModule>,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> PyResult<PyObject> {
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
+        // Having no intermediary object wrappers allows us to avoid clonning
+        // the parsed value (unlike FunctionResult::cast_to). We pass that
+        // straight into pythonize_strict and return the final python object.
+        // Downside is we require a lot of parameters for this function, but
+        // this is only called in codegen, not part of the public API.
+        let parsed = self
+            .inner
+            .parse_llm_response(
+                function_name,
+                llm_response,
+                allow_partials,
+                &ctx_mng,
+                tb.as_ref(),
+                cb.as_ref(),
+            )
+            .map_err(BamlError::from_anyhow)?;
+
+        pythonize_strict(
+            py,
+            parsed,
+            &enum_module,
+            &cls_module,
+            &partial_cls_module,
+            allow_partials,
+        )
     }
 
     #[pyo3()]

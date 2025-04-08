@@ -80,7 +80,7 @@ function TestAwsInvalidRegion(input: string) -> string {
 function TestAwsInvalidAccessKey(input: string) -> string {
   client AwsBedrockInvalidAccessKey
   prompt #"
-    Write a nice short story about {{ input }}
+    Write a nice short haiku about {{ input }}
   "#
 }
 

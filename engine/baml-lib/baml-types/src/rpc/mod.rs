@@ -1,7 +1,14 @@
+use std::sync::Arc;
+
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::tracing::TraceEventBatch;
+use crate::tracing::events::TraceEvent;
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TraceEventBatch {
+    pub events: Vec<Arc<TraceEvent>>,
+}
 
 // ------------------------------------------------------------------------------------------------
 

@@ -141,3 +141,33 @@ jobs:
         run: |
           cd integ-tests/python
           ./run_tests.sh
+  build-cli:
+    if: github.event_name == 'release'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest 
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Build CLI
+        run: cargo build --release --bin baml-cli --target ${{ matrix.target }}
+        working-directory: engine
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-cli-${{ matrix.target }}
+          path: engine/target/release/baml-cli*

@@ -2,10 +2,10 @@
 resolver = "2"
 members = [
   "baml-lib/*",
+  "baml-rpc",
   "baml-runtime",
   "baml-schema-wasm",
   "bstd",
-  "btrace",
   "cli",
   "language_client_codegen",
   "language_client_python",
@@ -15,6 +15,7 @@ members = [
 ]
 default-members = [
   "baml-lib/*",
+  "baml-rpc",
   "baml-runtime",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
   # Building baml-schema-wasm in combination with everything else triggers feature unification,
@@ -22,7 +23,6 @@ default-members = [
   # also have something to do with resolver=2 and how duplicate dep builds are handled)
   # "baml-schema-wasm",
   "bstd",
-  "btrace",
   "cli",
   "language_client_codegen",
   "language_client_python",
@@ -32,13 +32,12 @@ default-members = [
 
 [workspace.dependencies]
 anyhow = "1.0"
-array-macro = "2"
 askama = "0.12.1"
 baml-cli = { path = "cli" }
 baml-types = { path = "baml-lib/baml-types" }
+baml-log = { path = "baml-lib/baml-log" }
 base64 = "0.22.1"
 bstd = { path = "bstd" }
-btrace = { path = "btrace" }
 bytes = "1.6.0"
 cfg-if = "1.0.0"
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
@@ -56,7 +55,6 @@ jsonish = { path = "baml-lib/jsonish" }
 internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
-internal-baml-schema-ast = { path = "baml-lib/schema-ast" }
 internal-llm-client = { path = "baml-lib/llm-client" }
 log = "0.4.20"
 # TODO: disable imports, etc
@@ -96,6 +94,7 @@ serde_yaml = "0.9.34"
 static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
+thiserror = "2.0.12"
 time = { version = "0.3.36", features = ["formatting"] }
 tracing-core = { version = "0.1.31" }
 pin-project-lite = "0.2.14"
@@ -103,10 +102,13 @@ url = "2.5.2"
 uuid = { version = "1.8.0", features = ["v4", "v7", "serde"] }
 walkdir = "2.5.0"
 web-time = "1.1.0"
-
+tokio = { version = "1", default-features = false, features = [
+  "macros",
+  "time",
+] }
 
 [workspace.package]
-version = "0.76.2"
+version = "0.82.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

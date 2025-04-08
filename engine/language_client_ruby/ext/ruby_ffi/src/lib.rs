@@ -1,10 +1,11 @@
 use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
-use magnus::{class, function, method, prelude::*, Error, RHash, Ruby};
+use magnus::{class, function, method, prelude::*, Error, RArray, RHash, RModule, Ruby};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tracing_subscriber::EnvFilter;
+use types::log_collector::Collector;
+use types::request::HTTPRequest;
 
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
@@ -112,6 +113,7 @@ impl BamlRuntimeFfi {
         ctx: &RuntimeContextManager,
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
+        collector: RArray,
     ) -> Result<FunctionResult> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -123,12 +125,18 @@ impl BamlRuntimeFfi {
             }
         };
 
+        let mut collectors = Vec::new();
+        for i in collector.into_iter() {
+            collectors.push(<&Collector>::try_convert(i)?.inner.clone());
+        }
+
         let retval = match rb_self.t.block_on(rb_self.inner.call_function(
             function_name.clone(),
             &args,
             &ctx.inner,
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+            Some(collectors),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -151,6 +159,7 @@ impl BamlRuntimeFfi {
         ctx: &RuntimeContextManager,
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
+        collector: RArray,
     ) -> Result<FunctionResultStream> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -162,6 +171,11 @@ impl BamlRuntimeFfi {
             }
         };
 
+        let mut collectors = Vec::new();
+        for i in collector.into_iter() {
+            collectors.push(<&Collector>::try_convert(i)?.inner.clone());
+        }
+
         log::debug!("Streaming {function_name} with:\nargs: {args:#?}\nctx ???");
 
         let retval = match rb_self.inner.stream_function(
@@ -170,6 +184,7 @@ impl BamlRuntimeFfi {
             &ctx.inner,
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+            Some(collectors),
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(
@@ -183,57 +198,121 @@ impl BamlRuntimeFfi {
 
         retval
     }
+
+    pub fn build_request(
+        ruby: &Ruby,
+        rb_self: &BamlRuntimeFfi,
+        function_name: String,
+        args: RHash,
+        ctx: &RuntimeContextManager,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
+        stream: bool,
+    ) -> Result<HTTPRequest> {
+        let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
+            Ok(args) => args.into_iter().collect(),
+            Err(e) => {
+                return Err(Error::new(
+                    ruby.exception_syntax_error(),
+                    format!("error while parsing call_function args:\n{}", e),
+                ));
+            }
+        };
+
+        rb_self
+            .inner
+            .build_request_sync(
+                function_name.clone(),
+                &args,
+                &ctx.inner,
+                type_registry.map(|t| &t.inner),
+                client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+                stream,
+            )
+            .map(HTTPRequest::from)
+            .map_err(|e| {
+                Error::new(
+                    ruby.exception_runtime_error(),
+                    format!(
+                        "{:?}",
+                        e.context(format!(
+                            "error while building HTTP request for function {function_name}"
+                        ))
+                    ),
+                )
+            })
+    }
+
+    pub fn parse_llm_response(
+        ruby: &Ruby,
+        rb_self: &BamlRuntimeFfi,
+        function_name: String,
+        llm_response: String,
+        types: RModule,
+        partial_types: RModule,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        type_registry: Option<&types::type_builder::TypeBuilder>,
+        client_registry: Option<&types::client_registry::ClientRegistry>,
+    ) -> Result<magnus::Value> {
+        let parsed = rb_self
+            .inner
+            .parse_llm_response(
+                function_name.clone(),
+                llm_response,
+                allow_partials,
+                &ctx.inner,
+                type_registry.map(|t| &t.inner),
+                client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+            )
+            .map_err(|e| {
+                Error::new(
+                    ruby.exception_runtime_error(),
+                    format!(
+                        "{:?}",
+                        e.context(format!(
+                            "error while parsing LLM response for function {function_name}"
+                        ))
+                    ),
+                )
+            })?;
+
+        ruby_to_json::RubyToJson::serialize_baml(ruby, types, partial_types, allow_partials, parsed)
+            .map_err(|e| {
+                magnus::Error::new(
+                    ruby.exception_type_error(),
+                    format!("failed coercing BAML value to Ruby value: {:?}", e),
+                )
+            })
+    }
 }
 
-fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<()> {
-    baml_cli::run_cli(
+fn invoke_runtime_cli(ruby: &Ruby, argv0: String, argv: Vec<String>) -> Result<u32> {
+    match baml_cli::run_cli(
         std::iter::once(argv0).chain(argv).collect(),
         baml_runtime::RuntimeCliDefaults {
             output_type: baml_types::GeneratorOutputType::RubySorbet,
         },
-    )
-    .map_err(|e| {
-        Error::new(
+    ) {
+        Ok(exit_code) => Ok(exit_code.into()),
+        Err(e) => Err(Error::new(
             ruby.exception_runtime_error(),
             format!(
                 "{:?}",
                 e.context("error while invoking baml-cli".to_string())
             ),
-        )
-    })
+        )),
+    }
 }
 
 #[magnus::init(name = "ruby_ffi")]
 fn init(ruby: &Ruby) -> Result<()> {
-    let use_json = match std::env::var("BAML_LOG_JSON") {
-        Ok(val) => val.trim().eq_ignore_ascii_case("true") || val.trim() == "1",
-        Err(_) => false,
-    };
-
-    if use_json {
-        // JSON formatting
-        tracing_subscriber::fmt()
-            .with_target(false)
-            .with_file(false)
-            .with_line_number(false)
-            .json()
-            .with_env_filter(
-                EnvFilter::try_from_env("BAML_LOG").unwrap_or_else(|_| EnvFilter::new("info")),
-            )
-            .flatten_event(true)
-            .with_current_span(false)
-            .with_span_list(false)
-            .init();
-    } else {
-        // Regular formatting
-        if let Err(e) = env_logger::try_init_from_env(
-            env_logger::Env::new()
-                .filter("BAML_LOG")
-                .write_style("BAML_LOG_STYLE"),
-        ) {
-            eprintln!("Failed to initialize BAML logger: {:#}", e);
-        }
-    }
+    baml_log::init().map_err(|e| {
+        Error::new(
+            ruby.exception_runtime_error(),
+            format!("Failed to initialize BAML logger: {:#}", e),
+        )
+    })?;
 
     let module = ruby.define_module("Baml")?.define_module("Ffi")?;
 
@@ -251,10 +330,15 @@ fn init(ruby: &Ruby) -> Result<()> {
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 5))?;
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 6))?;
     runtime_class.define_method(
         "stream_function",
-        method!(BamlRuntimeFfi::stream_function, 5),
+        method!(BamlRuntimeFfi::stream_function, 6),
+    )?;
+    runtime_class.define_method("build_request", method!(BamlRuntimeFfi::build_request, 6))?;
+    runtime_class.define_method(
+        "parse_llm_response",
+        method!(BamlRuntimeFfi::parse_llm_response, 8),
     )?;
 
     FunctionResult::define_in_ruby(&module)?;
@@ -272,6 +356,9 @@ fn init(ruby: &Ruby) -> Result<()> {
     types::client_registry::ClientRegistry::define_in_ruby(&module)?;
     types::media::Audio::define_in_ruby(&module)?;
     types::media::Image::define_in_ruby(&module)?;
+
+    // Register the new log collector classes
+    types::log_collector::define_all_in_ruby(&module)?;
 
     // everything below this is for our own testing purposes
     module.define_module_function(

@@ -34,15 +34,19 @@ module Baml
     class ClassWithBlockDone < T::Struct; end
     class ClassWithImage < T::Struct; end
     class ClassWithoutDone < T::Struct; end
+    class ClientDetails1559 < T::Struct; end
     class ComplexMemoryObject < T::Struct; end
     class CompoundBigNumbers < T::Struct; end
     class ContactInfo < T::Struct; end
+    class CustomStory < T::Struct; end
     class CustomTaskResult < T::Struct; end
+    class Document1559 < T::Struct; end
     class DummyOutput < T::Struct; end
     class DynInputOutput < T::Struct; end
     class DynamicClassOne < T::Struct; end
     class DynamicClassTwo < T::Struct; end
     class DynamicOutput < T::Struct; end
+    class DynamicSchema < T::Struct; end
     class Earthling < T::Struct; end
     class Education < T::Struct; end
     class Email < T::Struct; end
@@ -57,6 +61,7 @@ module Baml
     class FormatterTest2 < T::Struct; end
     class FormatterTest3 < T::Struct; end
     class GroceryReceipt < T::Struct; end
+    class Haiku < T::Struct; end
     class InnerClass < T::Struct; end
     class InnerClass2 < T::Struct; end
     class InputClass < T::Struct; end
@@ -78,6 +83,7 @@ module Baml
     class NestedBlockConstraintForParam < T::Struct; end
     class Node < T::Struct; end
     class NodeWithAliasIndirection < T::Struct; end
+    class Note1599 < T::Struct; end
     class OptionalListAndMap < T::Struct; end
     class OptionalTest_Prop1 < T::Struct; end
     class OptionalTest_ReturnType < T::Struct; end
@@ -313,6 +319,30 @@ module Baml
         @props = props
       end
     end
+    class ClientDetails1559 < T::Struct
+      include Baml::Sorbet::Struct
+      const :client_name, T.nilable(String)
+      const :client_address, T.nilable(String)
+      const :client_postal_code, T.nilable(String)
+      const :client_city, T.nilable(String)
+      const :client_country, T.nilable(String)
+      const :client_phone, T.nilable(String)
+      const :client_email, T.nilable(String)
+
+      def initialize(props)
+        super(
+          client_name: props[:client_name],
+          client_address: props[:client_address],
+          client_postal_code: props[:client_postal_code],
+          client_city: props[:client_city],
+          client_country: props[:client_country],
+          client_phone: props[:client_phone],
+          client_email: props[:client_email],
+        )
+
+        @props = props
+      end
+    end
     class ComplexMemoryObject < T::Struct
       include Baml::Sorbet::Struct
       const :id, T.nilable(String)
@@ -361,6 +391,22 @@ module Baml
         @props = props
       end
     end
+    class CustomStory < T::Struct
+      include Baml::Sorbet::Struct
+      const :title, T.nilable(String)
+      const :characters, T::Array[T.nilable(String)]
+      const :content, T.nilable(String)
+
+      def initialize(props)
+        super(
+          title: props[:title],
+          characters: props[:characters],
+          content: props[:content],
+        )
+
+        @props = props
+      end
+    end
     class CustomTaskResult < T::Struct
       include Baml::Sorbet::Struct
       const :bookOrder, T.nilable(T.any(T.nilable(Baml::PartialTypes::BookOrder), T.nilable(NilClass)))
@@ -372,6 +418,20 @@ module Baml
           bookOrder: props[:bookOrder],
           flightConfirmation: props[:flightConfirmation],
           groceryReceipt: props[:groceryReceipt],
+        )
+
+        @props = props
+      end
+    end
+    class Document1559 < T::Struct
+      include Baml::Sorbet::Struct
+      const :client_details, T.nilable(Baml::PartialTypes::ClientDetails1559)
+      const :notes, T::Array[T.nilable(Baml::PartialTypes::Note1599)]
+
+      def initialize(props)
+        super(
+          client_details: props[:client_details],
+          notes: props[:notes],
         )
 
         @props = props
@@ -430,6 +490,16 @@ module Baml
       end
     end
     class DynamicOutput < T::Struct
+      include Baml::Sorbet::Struct
+
+      def initialize(props)
+        super(
+        )
+
+        @props = props
+      end
+    end
+    class DynamicSchema < T::Struct
       include Baml::Sorbet::Struct
 
       def initialize(props)
@@ -646,6 +716,22 @@ module Baml
           storeName: props[:storeName],
           items: props[:items],
           totalAmount: props[:totalAmount],
+        )
+
+        @props = props
+      end
+    end
+    class Haiku < T::Struct
+      include Baml::Sorbet::Struct
+      const :line1, T.nilable(String)
+      const :line2, T.nilable(String)
+      const :line3, T.nilable(String)
+
+      def initialize(props)
+        super(
+          line1: props[:line1],
+          line2: props[:line2],
+          line3: props[:line3],
         )
 
         @props = props
@@ -939,6 +1025,22 @@ module Baml
         @props = props
       end
     end
+    class Note1599 < T::Struct
+      include Baml::Sorbet::Struct
+      const :note_title, T.nilable(String)
+      const :note_description, T.nilable(String)
+      const :note_amount, T.nilable(String)
+
+      def initialize(props)
+        super(
+          note_title: props[:note_title],
+          note_description: props[:note_description],
+          note_amount: props[:note_amount],
+        )
+
+        @props = props
+      end
+    end
     class OptionalListAndMap < T::Struct
       include Baml::Sorbet::Struct
       const :p, T::Array[T.nilable(String)]
@@ -1142,8 +1244,8 @@ module Baml
       const :name, T.nilable(String)
       const :email, T.nilable(String)
       const :phone, T.nilable(String)
-      const :experience, T::Array[T.nilable(Baml::PartialTypes::Education)]
-      const :education, T::Array[T.nilable(String)]
+      const :experience, T::Array[T.nilable(String)]
+      const :education, T::Array[T.nilable(Baml::PartialTypes::Education)]
       const :skills, T::Array[T.nilable(String)]
 
       def initialize(props)

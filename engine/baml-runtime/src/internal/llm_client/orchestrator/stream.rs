@@ -1,8 +1,15 @@
+use std::sync::Arc;
+
+use crate::tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER};
 use anyhow::Result;
 use async_std::stream::StreamExt;
-use baml_types::{BamlValue, BamlValueWithMeta};
+use baml_types::{
+    tracing::events::{FunctionId, HttpRequestId},
+    BamlValue, BamlValueWithMeta,
+};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
+use serde_json::json;
 use web_time::Duration;
 
 use crate::{
@@ -57,13 +64,15 @@ where
         };
 
         let (system_start, instant_start) = (web_time::SystemTime::now(), web_time::Instant::now());
-        let stream_res = node.stream(ctx, &prompt).await;
+        let http_request_id = HttpRequestId(uuid::Uuid::new_v4().to_string());
+        let stream_res = node.stream(ctx, &prompt, http_request_id.clone()).await;
         let final_response = match stream_res {
             Ok(response) => response
                 .map(|stream_part| {
                     if let Some(on_event) = on_event.as_ref() {
                         if let LLMResponse::Success(s) = &stream_part {
                             let response_value = partial_parse_fn(&s.content);
+                            // Flags seem to use a ton of memory, so we strip them here.
                             let response_value_without_flags = match response_value {
                                 Ok(baml_value) => Ok(ResponseBamlValue(
                                     baml_value.0.map_meta_owned(|m| (vec![], m.1, m.2)),
@@ -114,21 +123,54 @@ where
                     Some(parse_fn(&s.content))
                 }
             }
-            LLMResponse::LLMFailure(LLMErrorResponse { code, client, message, .. }) => {
+            LLMResponse::LLMFailure(LLMErrorResponse {
+                code,
+                client,
+                message,
+                ..
+            }) => {
                 match code {
                     // This is some internal BAML error, so handle it like any other error
                     crate::internal::llm_client::ErrorCode::Other(2) => None,
-                    _ => Some(Err(anyhow::anyhow!(crate::errors::ExposedError::ClientHttpError {
-                        client_name: client.clone(),
-                        message: message.clone(),
-                        status_code: code.clone(),
-                    }))),
+                    _ => Some(Err(anyhow::anyhow!(
+                        crate::errors::ExposedError::ClientHttpError {
+                            client_name: client.clone(),
+                            message: message.clone(),
+                            status_code: code.clone(),
+                        }
+                    ))),
                 }
             }
             _ => None,
         };
+
+        // parsed_response.map(|r| r.and_then(|v| parsed_value_to_response(v)));
+        let node_name = node.scope.name();
         let sleep_duration = node.error_sleep_duration().cloned();
-        results.push((node.scope, final_response, response_value));
+
+        if let Some(span_id) = ctx.span_id {
+            let trace_event = make_trace_event_for_response(
+                &final_response,
+                &FunctionId(span_id.to_string()),
+                &http_request_id,
+                "OrchestratorNode::stream",
+            );
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+        } else {
+            log::warn!(
+                "No span id found for function while emitting logs. Log event may be dropped."
+            );
+        }
+        // Don't include flags in final resopnse either until we
+        // figure out how to reduce memory usage.
+        let response_value_without_flags = match response_value {
+            Some(Ok(baml_value)) => Some(Ok(ResponseBamlValue(
+                baml_value.0.map_meta_owned(|m| (vec![], m.1, m.2)),
+            ))),
+            Some(Err(e)) => Some(Err(e)),
+            None => None,
+        };
+        results.push((node.scope, final_response, response_value_without_flags));
 
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
@@ -136,7 +178,9 @@ where
             .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
-        } else if let Some(duration) = sleep_duration {
+        }
+
+        if let Some(duration) = sleep_duration {
             total_sleep_duration += duration;
             async_std::task::sleep(duration).await;
         }

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use crate::ir::IntermediateRepr;
 
-use super::{scope_diagnostics::ScopeStack, IRHelper};
+use super::{scope_diagnostics::ScopeStack, IRHelper, IRHelperExtended};
 use crate::ir::jinja_helpers::evaluate_predicate;
 
 #[derive(Default)]

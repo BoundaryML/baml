@@ -1,10 +1,14 @@
-import { toBamlError } from '.'
-import { FunctionResult, FunctionResultStream, RuntimeContextManager } from './native'
+import { toBamlError } from './errors';
+import type {
+  FunctionResult,
+  FunctionResultStream,
+  RuntimeContextManager,
+} from './native';
 
 export class BamlStream<PartialOutputType, FinalOutputType> {
-  private task: Promise<FunctionResult> | null = null
+  private task: Promise<FunctionResult> | null = null;
 
-  private eventQueue: (FunctionResult | null)[] = []
+  private eventQueue: (FunctionResult | null)[] = [];
 
   constructor(
     private ffiStream: FunctionResultStream,
@@ -15,54 +19,57 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
 
   private async driveToCompletion(): Promise<FunctionResult> {
     try {
-      this.ffiStream.onEvent((err: Error | null, data: FunctionResult | null) => {
-        if (err) {
-          return
-        } else {
-          this.eventQueue.push(data)
-        }
-      })
-      const retval = await this.ffiStream.done(this.ctxManager)
+      this.ffiStream.onEvent(
+        (err: Error | null, data: FunctionResult | null) => {
+          if (err) {
+            return;
+          } else {
+            this.eventQueue.push(data);
+          }
+        },
+      );
+      const retval = await this.ffiStream.done(this.ctxManager);
 
-      return retval
+      return retval;
     } finally {
-      this.eventQueue.push(null)
+      this.eventQueue.push(null);
+      this.ffiStream.onEvent(undefined);
     }
   }
 
   private driveToCompletionInBg(): Promise<FunctionResult> {
     if (this.task === null) {
-      this.task = this.driveToCompletion()
+      this.task = this.driveToCompletion();
     }
 
-    return this.task
+    return this.task;
   }
 
   async *[Symbol.asyncIterator](): AsyncIterableIterator<PartialOutputType> {
-    this.driveToCompletionInBg()
+    this.driveToCompletionInBg();
 
     while (true) {
-      const event = this.eventQueue.shift()
+      const event = this.eventQueue.shift();
 
       if (event === undefined) {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-        continue
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        continue;
       }
 
       if (event === null) {
-        break
+        break;
       }
 
       if (event.isOk()) {
-        yield this.partialCoerce(event.parsed(true))
+        yield this.partialCoerce(event.parsed(true));
       }
     }
   }
 
   async getFinalResponse(): Promise<FinalOutputType> {
-    const final = await this.driveToCompletionInBg()
+    const final = await this.driveToCompletionInBg();
 
-    return this.finalCoerce(final.parsed(false))
+    return this.finalCoerce(final.parsed(false));
   }
 
   /**
@@ -74,40 +81,49 @@ export class BamlStream<PartialOutputType, FinalOutputType> {
    * - Error information
    */
   toStreamable(): ReadableStream<Uint8Array> {
-    const stream = this
-    const encoder = new TextEncoder()
+    const stream = this;
+    const encoder = new TextEncoder();
 
     return new ReadableStream({
       async start(controller) {
         try {
           // Stream partials
           for await (const partial of stream) {
-            controller.enqueue(encoder.encode(JSON.stringify({ partial })))
+            controller.enqueue(encoder.encode(JSON.stringify({ partial })));
           }
 
           try {
-            const final = await stream.getFinalResponse()
-            controller.enqueue(encoder.encode(JSON.stringify({ final })))
-            controller.close()
-            return
+            const final = await stream.getFinalResponse();
+            controller.enqueue(encoder.encode(JSON.stringify({ final })));
+            controller.close();
+            return;
           } catch (err: unknown) {
-            const bamlError = toBamlError(err instanceof Error ? err : new Error(String(err)))
-            controller.enqueue(encoder.encode(JSON.stringify({ error: bamlError })))
-            controller.close()
-            return
+            const bamlError = toBamlError(
+              err instanceof Error ? err : new Error(String(err)),
+            );
+            controller.enqueue(
+              encoder.encode(JSON.stringify({ error: bamlError })),
+            );
+            controller.close();
+            return;
           }
         } catch (streamErr: unknown) {
           const errorPayload = {
             type: 'StreamError',
-            message: streamErr instanceof Error ? streamErr.message : 'Error in stream processing',
+            message:
+              streamErr instanceof Error
+                ? streamErr.message
+                : 'Error in stream processing',
             prompt: '',
             raw_output: '',
-          }
+          };
 
-          controller.enqueue(encoder.encode(JSON.stringify({ error: errorPayload })))
-          controller.close()
+          controller.enqueue(
+            encoder.encode(JSON.stringify({ error: errorPayload })),
+          );
+          controller.close();
         }
       },
-    })
+    });
   }
 }

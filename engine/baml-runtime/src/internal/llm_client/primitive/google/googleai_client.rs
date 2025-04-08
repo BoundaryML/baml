@@ -1,14 +1,14 @@
 use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::ResponseType;
 use crate::internal::llm_client::traits::{
-    ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
 };
 use crate::internal::llm_client::ResolveMediaUrls;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
         primitive::{
-            google::types::{FinishReason, GoogleResponse},
+            google::types::GoogleResponse,
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
@@ -21,6 +21,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
@@ -104,8 +105,9 @@ impl WithNoCompletion for GoogleAIClient {}
 impl WithStreamChat for GoogleAIClient {
     async fn stream_chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         let model_name = self.properties.model.clone();
         //incomplete, streaming response object is returned
@@ -114,6 +116,8 @@ impl WithStreamChat for GoogleAIClient {
             either::Either::Right(prompt),
             Some(model_name),
             ResponseType::Google,
+            ctx,
+            http_request_id,
         )
         .await
     }
@@ -134,7 +138,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
@@ -233,7 +237,12 @@ impl RequestBuilder for GoogleAIClient {
 }
 
 impl WithChat for GoogleAIClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
         let model_name = self.properties.model.clone();
         //non-streaming, complete response is returned
         make_parsed_request(
@@ -242,14 +251,18 @@ impl WithChat for GoogleAIClient {
             either::Either::Right(prompt),
             false,
             ResponseType::Google,
+            ctx,
+            http_request_id,
         )
         .await
     }
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
-    let mut map = HashMap::new();
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
         "parts": [{
@@ -363,5 +376,14 @@ fn content_part(model_name: &str) -> usize {
         1
     } else {
         0
+    }
+}
+
+impl CompletionToProviderBody for GoogleAIClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
     }
 }

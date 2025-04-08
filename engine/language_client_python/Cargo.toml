@@ -1,7 +1,7 @@
 [package]
 name = "baml-python-ffi"
 edition = "2021"
-version = "0.1.0"
+version.workspace = true
 authors.workspace = true
 description = "BAML python bindings (Cargo.toml)"
 license = "Apache-2.0"
@@ -21,6 +21,7 @@ unused_variables = "deny"
 anyhow.workspace = true
 baml-cli.workspace = true
 baml-types.workspace = true
+baml-log.workspace = true
 baml-runtime = { path = "../baml-runtime", default-features = false, features = [
   "internal",
 ] }
@@ -31,13 +32,13 @@ indexmap.workspace = true
 libc = "0.2"
 jsonish = { path = "../baml-lib/jsonish" }
 log.workspace = true
-ctrlc = "3.4"
 # Consult https://pyo3.rs/main/migration for migration instructions
 pyo3 = { version = "0.23.3", default-features = false, features = [
   "abi3-py38",
   "extension-module",
   "generate-import-lib",
   "serde",
+  "either",
 ] }
 pyo3-async-runtimes = { version = "0.23", features = [
   "attributes",
@@ -54,6 +55,9 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "valuable",
 ] }
+uuid.workspace = true
+either.workspace = true
+ctrlc = "3.4.5"
 
 [build-dependencies]
 pyo3-build-config = "0.21.2"

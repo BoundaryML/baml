@@ -8,12 +8,16 @@ pub(crate) mod internal;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod cli;
 pub mod client_registry;
-pub mod test_constraints;
 pub mod errors;
 pub mod request;
 mod runtime;
 pub mod runtime_interface;
+pub mod test_constraints;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod test_executor;
+
 pub mod tracing;
+pub mod tracingv2;
 pub mod type_builder;
 mod types;
 
@@ -24,31 +28,52 @@ use std::sync::Arc;
 use anyhow::Context;
 use anyhow::Result;
 
+use baml_types::tracing::events::FunctionId;
+use baml_types::tracing::events::HTTPBody;
+use baml_types::tracing::events::HTTPRequest;
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::BamlMap;
 use baml_types::BamlValue;
 use baml_types::Constraint;
 use cfg_if::cfg_if;
 use client_registry::ClientRegistry;
+use futures::future::join;
+use futures::future::join_all;
 use indexmap::IndexMap;
+use internal::llm_client::llm_provider::LLMProvider;
+use internal::llm_client::orchestrator::OrchestrationScope;
+use internal::llm_client::primitive::json_body;
+use internal::llm_client::primitive::json_headers;
+use internal::llm_client::primitive::JsonBodyInput;
+use internal::llm_client::retry_policy::CallablePolicy;
+use internal::prompt_renderer::PromptRenderer;
 use internal_baml_core::configuration::CloudProject;
 use internal_baml_core::configuration::CodegenGenerator;
 use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
+use internal_baml_core::ir::FunctionWalker;
+use internal_llm_client::AllowedRoleMetadata;
+use internal_llm_client::ClientSpec;
+use jsonish::ResponseBamlValue;
 use on_log_event::LogEventCallbackSync;
 use runtime::InternalBamlRuntime;
+use runtime_interface::InternalClientLookup;
+use serde_json::json;
 use std::sync::OnceLock;
+use tracingv2::storage::storage::Collector;
+use tracingv2::storage::storage::BAML_TRACER;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
-pub use runtime_context::BamlSrcReader;
+pub use runtime_context::{
+    AwsCredProvider, AwsCredProviderImpl, AwsCredResult, BamlSrcReader, RuntimeCallbackError,
+};
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
 use tracing::{BamlTracer, TracingSpan};
 use type_builder::TypeBuilder;
 pub use types::*;
-
-use clap::Parser;
 
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
@@ -64,8 +89,8 @@ pub use internal_baml_core::internal_baml_diagnostics;
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
 pub use internal_baml_core::ir::{scope_diagnostics, FieldType, IRHelper, TypeValue};
 
-use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 use crate::internal::llm_client::LLMResponse;
+use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
@@ -136,6 +161,8 @@ impl BamlRuntime {
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
+        baml_log::set_from_env(&copy)?;
+
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_directory(&path)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
@@ -154,6 +181,7 @@ impl BamlRuntime {
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
+        baml_log::set_from_env(&copy)?;
         Ok(BamlRuntime {
             inner: InternalBamlRuntime::from_file_content(root_path, files)?,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
@@ -173,7 +201,25 @@ impl BamlRuntime {
         language: BamlValue,
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
-        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
+        let ctx =
+            RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader, None);
+        let tags: HashMap<String, BamlValue> = [("baml.language", language)]
+            .into_iter()
+            .map(|(k, v)| (k.to_string(), v))
+            .collect();
+        ctx.upsert_tags(tags);
+        ctx
+    }
+
+    pub fn create_ctx_manager_with_env(
+        &self,
+        language: BamlValue,
+        env_vars: HashMap<String, String>,
+        baml_src_reader: BamlSrcReader,
+        aws_cred_provider: AwsCredProvider,
+    ) -> RuntimeContextManager {
+        let ctx =
+            RuntimeContextManager::new_from_env_vars(env_vars, baml_src_reader, aws_cred_provider);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -184,6 +230,32 @@ impl BamlRuntime {
 }
 
 impl BamlRuntime {
+    pub async fn render_prompt(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+        params: &BamlMap<String, BamlValue>,
+        node_index: Option<usize>,
+    ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedRoleMetadata)> {
+        self.inner
+            .render_prompt(function_name, ctx, params, node_index)
+            .await
+    }
+
+    pub fn llm_provider_from_function(
+        &self,
+        function_name: &str,
+        ctx: &RuntimeContext,
+    ) -> Result<Arc<LLMProvider>> {
+        let renderer = PromptRenderer::from_function(
+            &self.inner.get_function(&function_name, &ctx)?,
+            self.inner.ir(),
+            &ctx,
+        )?;
+
+        self.inner.get_llm_provider(renderer.client_spec(), ctx)
+    }
+
     pub fn get_test_params_and_constraints(
         &self,
         function_name: &str,
@@ -217,6 +289,7 @@ impl BamlRuntime {
         test_name: &str,
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
+        collector: Option<Arc<Collector>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
@@ -228,29 +301,35 @@ impl BamlRuntime {
             .get_test_type_builder(function_name, test_name, ctx)
             .unwrap();
 
+        if let Some(span) = span.clone() {
+            if let Some(collector) = collector {
+                collector.track_function(FunctionId(span.clone().span_id.to_string()));
+            }
+        }
+
         let run_to_response = || async {
-            let rctx = ctx.create_ctx(type_builder.as_ref(), None)?;
+            let rctx =
+                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let (params, constraints) =
                 self.get_test_params_and_constraints(function_name, test_name, &rctx, true)?;
-            log::info!("params: {:#?}", params);
-            let rctx_stream = ctx.create_ctx(type_builder.as_ref(), None)?;
             let mut stream = self.inner.stream_function_impl(
                 function_name.into(),
                 &params,
                 self.tracer.clone(),
-                rctx_stream,
+                rctx,
                 #[cfg(not(target_arch = "wasm32"))]
                 self.async_runtime.clone(),
+                // TODO: collectors here?
+                vec![],
             )?;
-            let (response_res, span_uuid) = stream.run(on_event, ctx, None, None).await;
-            log::info!("response_res: {:#?}", response_res);
+            let (response_res, span_uuid) =
+                stream.run(on_event, ctx, type_builder.as_ref(), None).await;
             let res = response_res?;
             let (_, llm_resp, val) = res
                 .event_chain()
                 .iter()
                 .last()
                 .context("Expected non-empty event chain")?;
-            log::info!("llm_resp: {:#?}", llm_resp);
             let complete_resp = match llm_resp {
                 LLMResponse::Success(complete_llm_response) => Ok(complete_llm_response),
                 LLMResponse::InternalFailure(e) => Err(anyhow::anyhow!("{}", e)),
@@ -267,8 +346,14 @@ impl BamlRuntime {
             } else {
                 match val {
                     Some(Ok(value)) => {
-                        let value_with_constraints = value.0.map_meta(|(_,constraints,_)| constraints.clone());
-                        evaluate_test_constraints(&params, &value_with_constraints, complete_resp, constraints)
+                        let value_with_constraints =
+                            value.0.map_meta(|(_, constraints, _)| constraints.clone());
+                        evaluate_test_constraints(
+                            &params,
+                            &value_with_constraints,
+                            complete_resp,
+                            constraints,
+                        )
                     }
                     _ => TestConstraintsResult::empty(),
                 }
@@ -308,8 +393,9 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let fut = self.call_function(function_name, params, ctx, tb, cb);
+        let fut = self.call_function(function_name, params, ctx, tb, cb, collectors);
         self.async_runtime.block_on(fut)
     }
 
@@ -320,13 +406,23 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
-        let response = match ctx.create_ctx(tb, cb) {
+
+        if let Some(span) = span.clone() {
+            if let Some(collectors) = collectors {
+                for collector in collectors.iter() {
+                    collector.track_function(FunctionId(span.clone().span_id.to_string()));
+                }
+            }
+        }
+
+        let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id)) {
             Ok(rctx) => {
                 self.inner
-                    .call_function_impl(function_name, params, rctx)
+                    .call_function_impl(function_name.clone(), params, rctx)
                     .await
             }
             Err(e) => Err(e),
@@ -355,15 +451,107 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,
             params,
             self.tracer.clone(),
-            ctx.create_ctx(tb, cb)?,
+            ctx.create_ctx(tb, cb, None)?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
+            collectors.unwrap_or_else(|| vec![]),
         )
+    }
+
+    pub async fn build_request(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> Result<HTTPRequest> {
+        let ctx = context_manager.create_ctx(tb, cb, None)?;
+
+        let provider = self.llm_provider_from_function(&function_name, &ctx)?;
+
+        let prompt = self
+            .render_prompt(&function_name, &ctx, &params, None)
+            .await
+            .map(|(prompt, ..)| prompt)?;
+
+        let request = match prompt {
+            RenderedPrompt::Chat(chat) => provider
+                .build_request(either::Either::Right(&chat), true, stream, &ctx, self)
+                .await?
+                .build()?,
+
+            RenderedPrompt::Completion(completion) => provider
+                .build_request(either::Either::Left(&completion), true, stream, &ctx, self)
+                .await?
+                .build()?,
+        };
+
+        // TODO: Too much work to get the requeset body, we're building a serde
+        // map and then serialize it into bytes and then parse it back again
+        // into a map. We can extract the initial map directly if we refactor
+        // the `build_request` method.
+        //
+        // Would also be nice if RequestBuilder had getters so we didn't have to
+        // call .build()? above.
+        Ok(HTTPRequest {
+            id: HttpRequestId(uuid::Uuid::new_v4().to_string()),
+            url: request.url().to_string(),
+            method: request.method().to_string(),
+            headers: json_headers(request.headers()),
+            body: HTTPBody::new(
+                request
+                    .body()
+                    .map(reqwest::Body::as_bytes)
+                    .flatten()
+                    .unwrap_or_default()
+                    .into(),
+            ),
+        })
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn build_request_sync(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        context_manager: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        stream: bool,
+    ) -> Result<HTTPRequest> {
+        let fut = self.build_request(function_name, params, context_manager, tb, cb, stream);
+        self.async_runtime.block_on(fut)
+    }
+
+    // TODO: Should this have an async version? Parse in a different thread and
+    // allow the async runtime to schedule other futures? Do it only if the
+    // input is very large?
+    pub fn parse_llm_response(
+        &self,
+        function_name: String,
+        llm_response: String,
+        allow_partials: bool,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+    ) -> Result<ResponseBamlValue> {
+        let ctx = ctx.create_ctx(tb, cb, None)?;
+
+        let renderer = PromptRenderer::from_function(
+            &self.inner.get_function(&function_name, &ctx)?,
+            self.inner.ir(),
+            &ctx,
+        )?;
+
+        renderer.parse(&self.inner.ir(), &ctx, &llm_response, allow_partials)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -497,6 +685,20 @@ impl BamlRuntime {
     }
 }
 
+impl<'a> InternalClientLookup<'a> for BamlRuntime {
+    fn get_llm_provider(
+        &'a self,
+        client_spec: &ClientSpec,
+        ctx: &RuntimeContext,
+    ) -> Result<Arc<LLMProvider>> {
+        self.inner.get_llm_provider(client_spec, ctx)
+    }
+
+    fn get_retry_policy(&self, policy_name: &str, ctx: &RuntimeContext) -> Result<CallablePolicy> {
+        self.inner.get_retry_policy(policy_name, ctx)
+    }
+}
+
 impl ExperimentalTracingInterface for BamlRuntime {
     fn start_span(
         &self,
@@ -535,6 +737,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         }
     }
 
+    // For non-LLM calls -- used by FFI boundary like with @trace in python
     #[cfg(not(target_arch = "wasm32"))]
     fn finish_span(
         &self,
@@ -583,7 +786,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
-    static VALID_EXTENSIONS: [&str; 2] = ["baml", "json"];
+    static VALID_EXTENSIONS: [&str; 1] = ["baml"];
 
     log::trace!("Reading files from {:#}", dir.to_string_lossy());
 

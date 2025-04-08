@@ -32,6 +32,7 @@ export interface Checked<T,CheckName extends string = string> {
     checks: Record<CheckName, Check>,
 }
 
+
 export interface Check {
     name: string,
     expr: string
@@ -253,6 +254,17 @@ export interface ClassWithoutDone {
   
 }
 
+export interface ClientDetails1559 {
+  client_name?: string | null
+  client_address?: string | null
+  client_postal_code?: string | null
+  client_city?: string | null
+  client_country?: string | null
+  client_phone?: string | null
+  client_email?: string | null
+  
+}
+
 export interface ComplexMemoryObject {
   id: string
   name: string
@@ -274,10 +286,23 @@ export interface ContactInfo {
   
 }
 
+export interface CustomStory {
+  title: string
+  characters: string[]
+  content: string
+  
+}
+
 export interface CustomTaskResult {
   bookOrder?: BookOrder | null | null
   flightConfirmation?: FlightConfirmation | null | null
   groceryReceipt?: GroceryReceipt | null | null
+  
+}
+
+export interface Document1559 {
+  client_details: ClientDetails1559
+  notes: Note1599[]
   
 }
 
@@ -308,6 +333,11 @@ export interface DynamicClassTwo {
 }
 
 export interface DynamicOutput {
+  
+  [key: string]: any;
+}
+
+export interface DynamicSchema {
   
   [key: string]: any;
 }
@@ -401,6 +431,13 @@ export interface GroceryReceipt {
   storeName: string
   items: (string | number | number)[]
   totalAmount: number
+  
+}
+
+export interface Haiku {
+  line1: string
+  line2: string
+  line3: string
   
 }
 
@@ -533,6 +570,13 @@ export interface NodeWithAliasIndirection {
   
 }
 
+export interface Note1599 {
+  note_title: string
+  note_description?: string | null
+  note_amount?: string | null
+  
+}
+
 export interface OptionalListAndMap {
   p?: string[] | null
   q?: Record<string, string> | null
@@ -624,8 +668,8 @@ export interface Resume {
   name: string
   email: string
   phone: string
-  experience: Education[]
-  education: string[]
+  experience: string[]
+  education: Education[]
   skills: string[]
   
 }

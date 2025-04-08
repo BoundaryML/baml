@@ -68,7 +68,7 @@ client<llm> GPT35LegacyProvider {
 client<llm> Ollama {
   provider ollama
   options {
-    model llama2
+    model llama3.1
   }
 }
 
@@ -221,7 +221,7 @@ client<llm> AwsBedrockInvalidProfile {
   provider aws-bedrock
   options {
     model_id "meta.llama3-8b-instruct-v1:0"
-    profile "invalid-profile"
+    profile "boundaryml-dev"
     inference_configuration {
       max_tokens 100
     }
@@ -265,6 +265,20 @@ client<llm> Sonnet {
   }
 }
 
+
+client<llm> SonnetThinking {
+  provider anthropic
+  options {
+    model "claude-3-7-sonnet-20250219"
+    api_key env.ANTHROPIC_API_KEY
+    max_tokens 2048
+    thinking {
+      type "enabled"
+      budget_tokens 1024
+    }
+  }
+}
+
 client<llm> Claude {
   provider anthropic
   options {
@@ -304,8 +318,8 @@ client<llm> Lottery_SimpleSyntax {
   options {
     start 0
     strategy [
-      GPT35
       Claude
+      GPT35
     ]
   }
 }
