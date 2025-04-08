@@ -5,7 +5,9 @@ use crate::validate::validation_pipeline::context::Context;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 
 use internal_baml_parser_database::TypeWalker;
-use internal_baml_schema_ast::ast::{FieldType, TypeExpId, WithIdentifier, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{
+    FieldType, TypeAliasId, TypeExpId, WithIdentifier, WithName, WithSpan,
+};
 
 use super::types::validate_type;
 
@@ -227,14 +229,16 @@ pub(super) fn has_checks_nested(ctx: &Context<'_>, field_type: &FieldType) -> bo
 
 struct NestedChecks<'c> {
     ctx: &'c Context<'c>,
-    visited: HashSet<TypeExpId>,
+    visited_classes: HashSet<TypeExpId>,
+    visited_type_aliases: HashSet<TypeAliasId>,
 }
 
 impl<'c> NestedChecks<'c> {
     fn new(ctx: &'c Context<'c>) -> Self {
         Self {
             ctx,
-            visited: HashSet::new(),
+            visited_classes: HashSet::new(),
+            visited_type_aliases: HashSet::new(),
         }
     }
 
@@ -249,7 +253,7 @@ impl<'c> NestedChecks<'c> {
             FieldType::Symbol(_, id, ..) => match self.ctx.db.find_type(id) {
                 Some(TypeWalker::Class(class_walker)) => {
                     // Stop recursion when dealing with recursive types.
-                    if !self.visited.insert(class_walker.id) {
+                    if !self.visited_classes.insert(class_walker.id) {
                         return false;
                     }
 
@@ -261,6 +265,14 @@ impl<'c> NestedChecks<'c> {
                             .as_ref()
                             .map_or(false, |ft| self.has_checks_nested(ft))
                     })
+                }
+                Some(TypeWalker::TypeAlias(type_alias_walker)) => {
+                    if !self.visited_type_aliases.insert(type_alias_walker.id) {
+                        return false;
+                    }
+
+                    let resolved = type_alias_walker.resolved();
+                    self.has_checks_nested(resolved)
                 }
                 _ => false,
             },

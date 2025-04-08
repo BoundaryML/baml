@@ -1,6 +1,5 @@
 from baml_py.errors import BamlInvalidArgumentError, BamlError, BamlClientError
 import pytest
-import dotenv
 from openai.types.chat import ChatCompletion
 
 from ..baml_client import b
@@ -9,8 +8,6 @@ from baml_py import ClientRegistry, Collector
 import gc
 import sys
 import asyncio
-
-dotenv.load_dotenv()
 
 
 def function_span_count():

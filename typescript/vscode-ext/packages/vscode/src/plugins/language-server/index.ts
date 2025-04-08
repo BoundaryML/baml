@@ -9,7 +9,7 @@ import type { LanguageClientOptions } from 'vscode-languageclient'
 import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import { z } from 'zod'
 import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
-import { WebPanelView } from '../../panels/WebPanelView'
+import { WebviewPanelHost } from '../../panels/WebviewPanelHost'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
@@ -222,7 +222,7 @@ const activateClient = (
       console.log('baml_settings_updated', config)
       bamlConfig.config = config.config
       bamlConfig.cliVersion = config.cliVersion
-      WebPanelView.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
+      WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
     })
 
     client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
@@ -233,7 +233,7 @@ const activateClient = (
         const rootPathUri = URI.file(params.root_path).fsPath
         if (currentFilePath.startsWith(rootPathUri)) {
           console.log('sending add_project message')
-          WebPanelView.currentPanel?.postMessage('add_project', {
+          WebviewPanelHost.currentPanel?.postMessage('add_project', {
             ...params,
             root_path: URI.file(params.root_path).toString(),
           })
@@ -328,7 +328,7 @@ const plugin: BamlVSCodePlugin = {
         },
       ],
       synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
+        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
       },
     }
 

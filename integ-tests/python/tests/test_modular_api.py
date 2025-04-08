@@ -7,13 +7,11 @@ import requests
 from google import genai
 from openai import AsyncOpenAI, OpenAI, AsyncStream, Stream
 from openai.types.chat import ChatCompletion, ChatCompletionChunk
-from dotenv import load_dotenv
 from baml_py import ClientRegistry, HTTPRequest as BamlHttpRequest
 from ..baml_client import b
 from ..baml_client.sync_client import b as sync_b
 from ..baml_client import types, partial_types
 
-load_dotenv()
 
 # Some reusable data across tests.
 
@@ -43,10 +41,10 @@ JOHN_DOE_PARSED_RESUME = types.Resume(
             location="Berkeley, CA",
             degree="Master's",
             major=["Computer Science"],
-            graduation_date=None
+            graduation_date=None,
         )
     ],
-    skills=["Python", "JavaScript", "SQL"]
+    skills=["Python", "JavaScript", "SQL"],
 )
 
 JOHN_DOE_PARSED_RESUME_PARTIAL = partial_types.Resume(
@@ -60,10 +58,10 @@ JOHN_DOE_PARSED_RESUME_PARTIAL = partial_types.Resume(
             location="Berkeley, CA",
             degree="Master's",
             major=["Computer Science"],
-            graduation_date=None
+            graduation_date=None,
         )
     ],
-    skills=["Python", "JavaScript", "SQL"]
+    skills=["Python", "JavaScript", "SQL"],
 )
 
 JANE_SMITH_TEXT_RESUME = """
@@ -88,7 +86,7 @@ JANE_SMITH_PARSED_RESUME = types.Resume(
     phone="(555) 123-4567",
     experience=[
         "Senior Data Scientist at Netflix (2019 - Present)",
-        "Machine Learning Engineer at Amazon (2016 - 2019)"
+        "Machine Learning Engineer at Amazon (2016 - 2019)",
     ],
     education=[
         types.Education(
@@ -96,10 +94,10 @@ JANE_SMITH_PARSED_RESUME = types.Resume(
             location="Stanford, CA",
             degree="Ph.D.",
             major=["Statistics"],
-            graduation_date=None
+            graduation_date=None,
         )
     ],
-    skills=["Python", "R", "TensorFlow", "PyTorch", "SQL"]
+    skills=["Python", "R", "TensorFlow", "PyTorch", "SQL"],
 )
 
 
@@ -110,7 +108,9 @@ async def test_modular_openai_gpt4():
     req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
 
     # Needs cast because of **req.body
-    response = typing.cast(ChatCompletion, await client.chat.completions.create(**req.body.json()))
+    response = typing.cast(
+        ChatCompletion, await client.chat.completions.create(**req.body.json())
+    )
 
     parsed = b.parse.ExtractResume2(response.choices[0].message.content)
 
@@ -126,7 +126,9 @@ async def test_modular_anthropic_claude_3_haiku():
 
     req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {"client_registry": cr})
 
-    response = typing.cast(anthropic.types.Message, await client.messages.create(**req.body.json()))
+    response = typing.cast(
+        anthropic.types.Message, await client.messages.create(**req.body.json())
+    )
 
     parsed = b.parse.ExtractResume2(response.content[0].text)
 
@@ -143,9 +145,11 @@ async def test_modular_google_gemini():
     req = await b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME, {"client_registry": cr})
 
     body = req.body.json()
-    response = await client.aio.models.generate_content(model="gemini-1.5-pro-001", contents=body["contents"], config={
-        "safety_settings": [body["safetySettings"]]
-    })
+    response = await client.aio.models.generate_content(
+        model="gemini-1.5-pro-001",
+        contents=body["contents"],
+        config={"safety_settings": [body["safetySettings"]]},
+    )
 
     parsed = b.parse.ExtractResume2(response.text)
 
@@ -158,7 +162,9 @@ def test_modular_openai_gpt4_sync():
     req = sync_b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME)
 
     # Needs cast because of **req.body
-    response = typing.cast(ChatCompletion, client.chat.completions.create(**req.body.json()))
+    response = typing.cast(
+        ChatCompletion, client.chat.completions.create(**req.body.json())
+    )
 
     parsed = sync_b.parse.ExtractResume2(response.choices[0].message.content)
 
@@ -174,7 +180,7 @@ async def test_modular_openai_gpt4_streaming():
     # Needs cast because of **req.body
     response = typing.cast(
         AsyncStream[ChatCompletionChunk],
-        await client.chat.completions.create(**req.body.json())
+        await client.chat.completions.create(**req.body.json()),
     )
 
     llm_response: list[str] = []
@@ -195,8 +201,7 @@ def test_modular_openai_gpt4_streaming_sync():
 
     # Needs cast because of **req.body
     response = typing.cast(
-        Stream[ChatCompletionChunk],
-        client.chat.completions.create(**req.body.json())
+        Stream[ChatCompletionChunk], client.chat.completions.create(**req.body.json())
     )
 
     llm_response: list[str] = []
@@ -216,18 +221,22 @@ def test_modular_openai_gpt4_manual_http_request():
     # We can also use data=req.body.raw() or data=req.body.text()
     response = requests.post(url=req.url, headers=req.headers, json=req.body.json())
 
-    parsed = sync_b.parse.ExtractResume2(response.json()["choices"][0]["message"]["content"])
+    parsed = sync_b.parse.ExtractResume2(
+        response.json()["choices"][0]["message"]["content"]
+    )
 
     assert parsed == JOHN_DOE_PARSED_RESUME
 
 
 def to_openai_jsonl(req: BamlHttpRequest) -> str:
-    line = json.dumps({
-        "custom_id": req.id,
-        "method": "POST",
-        "url": "/v1/chat/completions",
-        "body": req.body.json(),
-    })
+    line = json.dumps(
+        {
+            "custom_id": req.id,
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": req.body.json(),
+        }
+    )
 
     return f"{line}\n"
 
@@ -238,7 +247,7 @@ async def test_openai_batch_api():
 
     john_req, jane_req = await asyncio.gather(
         b.request.ExtractResume2(JOHN_DOE_TEXT_RESUME),
-        b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME)
+        b.request.ExtractResume2(JANE_SMITH_TEXT_RESUME),
     )
 
     jsonl = to_openai_jsonl(john_req) + to_openai_jsonl(jane_req)
@@ -252,9 +261,7 @@ async def test_openai_batch_api():
         input_file_id=batch_input_file.id,
         endpoint="/v1/chat/completions",
         completion_window="24h",
-        metadata={
-            "description": "BAML Modular API Python Batch Integ Test"
-        },
+        metadata={"description": "BAML Modular API Python Batch Integ Test"},
     )
 
     backoff = 1

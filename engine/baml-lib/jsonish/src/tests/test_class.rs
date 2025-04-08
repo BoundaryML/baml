@@ -347,6 +347,28 @@ test_deserializer!(
     }
 );
 
+const CLASS_SIMPLE: &str = r#"
+class SimpleTest {
+    answer Answer
+}
+  
+class Answer {
+    content float
+}
+"#;
+
+test_deserializer!(
+    test_class_with_whitespace_keys,
+    CLASS_SIMPLE,
+    r#"{" answer ": {" content ": 78.54}}"#,
+    FieldType::Class("SimpleTest".to_string()),
+    {
+        "answer": {
+            "content": 78.54
+        }
+    }
+);
+
 const CLASS_WITH_NESTED_CLASS_LIST: &str = r#"
 class Resume {
     name string

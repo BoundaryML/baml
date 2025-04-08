@@ -1,6 +1,5 @@
 use colored::*;
 use lazy_static::lazy_static;
-use serde::Serialize;
 use std::collections::HashMap;
 use std::env;
 use std::fmt::{self, Display};
@@ -191,7 +190,7 @@ impl ConfigValue for LogLevelConfig {
         "BAML_LOG"
     }
 
-    fn parse_value(value: &str) -> Option<Self> {
+    fn parse_value(_: &str) -> Option<Self> {
         Some(LogLevelConfig)
     }
 
@@ -215,7 +214,7 @@ impl ConfigValue for JsonModeConfig {
         "BAML_LOG_JSON"
     }
 
-    fn parse_value(value: &str) -> Option<Self> {
+    fn parse_value(_: &str) -> Option<Self> {
         Some(JsonModeConfig)
     }
 
@@ -238,7 +237,7 @@ impl ConfigValue for ColorModeConfig {
         "BAML_LOG_COLOR_MODE"
     }
 
-    fn parse_value(value: &str) -> Option<Self> {
+    fn parse_value(_: &str) -> Option<Self> {
         Some(ColorModeConfig)
     }
 
@@ -262,7 +261,7 @@ impl ConfigValue for MaxMessageLengthConfig {
         "BAML_LOG_MAX_MESSAGE_LENGTH"
     }
 
-    fn parse_value(value: &str) -> Option<Self> {
+    fn parse_value(_: &str) -> Option<Self> {
         Some(MaxMessageLengthConfig)
     }
 
@@ -376,24 +375,24 @@ pub enum LogError {
 }
 
 /// JSON-serializable log entry
-#[derive(Serialize)]
-struct LogEntry<'a> {
-    /// Timestamp in ISO 8601 format
-    timestamp: String,
-    /// Log level as a string
-    level: &'a str,
-    /// Log message
-    message: String,
-    /// Optional module path
-    #[serde(skip_serializing_if = "Option::is_none")]
-    module_path: Option<&'a str>,
-    /// Optional file name
-    #[serde(skip_serializing_if = "Option::is_none")]
-    file: Option<&'a str>,
-    /// Optional line number
-    #[serde(skip_serializing_if = "Option::is_none")]
-    line: Option<u32>,
-}
+// #[derive(Serialize)]
+// struct LogEntry<'a> {
+//     /// Timestamp in ISO 8601 format
+//     timestamp: String,
+//     /// Log level as a string
+//     level: &'a str,
+//     /// Log message
+//     message: String,
+//     /// Optional module path
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     module_path: Option<&'a str>,
+//     /// Optional file name
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     file: Option<&'a str>,
+//     /// Optional line number
+//     #[serde(skip_serializing_if = "Option::is_none")]
+//     line: Option<u32>,
+// }
 
 /// Logger instance that can be customized
 pub struct Logger {
@@ -603,9 +602,9 @@ impl Logger {
         now: String,
         level: Level,
         message: &str,
-        module_path: Option<&str>,
-        file: Option<&str>,
-        line: Option<u32>,
+        _module_path: Option<&str>,
+        _file: Option<&str>,
+        _line: Option<u32>,
     ) {
         // Configure color control based on mode
         match self.color_mode {
@@ -628,9 +627,9 @@ impl Logger {
 pub fn log_event_internal<T: Loggable>(
     level: Level,
     payload: &T,
-    module_path: Option<&str>,
-    file: Option<&str>,
-    line: Option<u32>,
+    _module_path: Option<&str>,
+    _file: Option<&str>,
+    _line: Option<u32>,
 ) {
     // Ensure the logger is initialized
     let _ = INIT.call_once(|| {
