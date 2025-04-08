@@ -12,14 +12,15 @@ If you tried streaming in a JSON output from an LLM you'd see something like:
 {"items": [{"name": "Apple", "quantity": 2, "price": 1.50}], "total_cost": 3.00} # Completed
 ```
 
-BAML automatically fixes this partial JSON, and transforms all your types into `Partial` types with all `Optional` fields only during the stream.
+BAML gives you fine-grained control of how it fixes this partial JSON and transforms
+it into a series of semantically valid partial objects.
 
 <Tip>You can check out more examples (including streaming in FastAPI and NextJS) in the [BAML Examples] repo.</Tip>
 
 [call BAML functions]: /docs/calling-baml/calling-functions
 [BAML Examples]: https://github.com/BoundaryML/baml-examples/tree/main
 
-Lets stream the output of this function `function ExtractReceiptInfo(email: string) -> ReceiptInfo` for our example:
+Let's stream the output of this function `function ExtractReceiptInfo(email: string) -> ReceiptInfo` for our example:
 
 <Accordion title="extract-receipt-info.baml">
 
@@ -48,6 +49,14 @@ function ExtractReceiptInfo(email: string) -> ReceiptInfo {
 }
 ```
 </Accordion>
+
+The BAML code generator creates a set of types in the `baml_client` library
+in a module called `partial_types` in `baml_client`. These types are modified
+from your original types to support streaming.
+
+By default, BAML will convert all Class fields into nullable fields, and
+fill those fields with non-null values as much as possible given the tokens
+received so far.
 
 <Tabs>
 
@@ -253,5 +262,235 @@ Streaming is not yet supported via OpenAPI, but it will be coming soon!
 </Tabs>
 
 <Note>
-Number fields are always streamed in only when the LLM completes them. E.g. if the final number is 129.95, you'll only see null or 129.95 instead of partial numbers like 1, 12, 129.9, etc.
+Number fields are always streamed in only when the LLM completes them. E.g. if
+the final number is 129.95, you'll only see null or 129.95 instead of partial
+numbers like 1, 12, 129.9, etc.
 </Note>
+
+## Semantic Streaming
+
+BAML provides powerful attributes to control how your data streams, ensuring that partial values always maintain semantic validity. Here are the three key streaming attributes:
+
+### `@stream.done`
+This attribute ensures a type or field is only streamed when it's completely finished. It's useful when you need atomic, fully-formed values.
+
+For example:
+```baml
+class ReceiptItem {
+  name string
+  quantity int
+  price float
+
+  // The entire ReceiptItem will only stream when complete
+  @@stream.done
+}
+
+// Receipts is a list of ReceiptItems,
+// each internal item will only stream when complete
+type Receipts = ReceiptItem[]
+
+class Person {
+  // Name will only appear when fully complete,
+  // until then it will be null
+  name string @stream.done     
+  // Numbers (floats and ints) will only appear
+  // when fully complete by default
+  age int                     
+  // Bio will stream token by token
+  bio string                  
+}
+```
+
+### `@stream.not_null`
+This attribute ensures a containing object is only streamed when this field has a value. It's particularly useful for discriminator fields or required metadata.
+
+For example:
+```baml
+class Message {
+  // Message won't stream until type is known
+  type "error" | "success" | "info" @stream.not_null
+  // Timestamp will only appear when fully complete
+  // until then it will be null
+  timestamp string @stream.done                       
+  // Content can stream token by token
+  content string                                      
+}
+```
+
+### `@stream.with_state`
+This attribute adds metadata to track if a field has finished streaming. It's perfect for showing loading states in UIs.
+
+For example:
+```baml
+class BlogPost {
+  // The blog post will only stream when title is known
+  title string @stream.done @stream.not_null
+  // The content will stream token by token, and include completion state
+  content string @stream.with_state 
+}
+```
+
+This will generate the following code in the `partial_types` module:
+<Tabs>
+<Tab title="Python">
+```python
+class StreamState(BaseModel, Generic[T]):
+  value: T,
+  state: "incomplete" | "complete"
+
+class BlogPost(BaseModel):
+  title: str
+  content: StreamState[str | None]
+```
+</Tab>
+
+<Tab title="Typescript">
+```typescript
+interface StreamState<T> {
+  value: T,
+  state: "incomplete" | "complete"
+}
+
+interface BlogPost {
+  title: StreamState<string>
+  content: StreamState<string>
+}
+```
+</Tab>
+</Tabs>
+
+### Type Transformation Summary
+
+Here's how these attributes affect your types in generated code:
+
+| BAML Type                         | Generated Type (during streaming)              | Description                                    |
+|----------------------------------|----------------------------|------------------------------------------------|
+| `T`                               | `Partial[T]?`              | Default: Nullable and partial                   |
+| `T @stream.done`                  | `T?`                       | Nullable but always complete when present       |
+| `T @stream.not_null`              | `Partial[T]`               | Always present but may be partial              |
+| `T @stream.done @stream.not_null` | `T`                        | Always present and always complete             |
+| `T @stream.with_state`            | `StreamState[Partial[T]?]` | Includes streaming state metadata              |
+
+<Warning>
+The return type of a function is not affected by streaming attributes!
+</Warning>
+
+## Putting it all together
+
+Let's put all of these concepts together to design an application that
+streams a conversation containing stock recommendations, using semantic
+streaming to ensure that the streamed data obeys our domain's invariants.
+
+```baml
+enum Stock {
+  APPL
+  MSFT
+  GOOG
+  BAML
+}
+
+// Make recommendations atomic - we do not want a recommendation to be
+// modified by streaming additional messages.
+class Recommendation {
+  stock Stock
+  amount float
+  action "buy" | "sell"
+  @@stream.done
+}
+
+class AssistantMessage {
+  message_type "greeting" | "conversation" | "farewell" @stream.not_null
+  message string @stream.with_state @stream.not_null
+}
+
+function Respond(
+  history: (UserMessage | AssistantMessage | Recommendation)[]
+) -> Message | Recommendation { 
+  client DeepseekR1
+  prompt #"
+    Make the message in the conversation, using a conversational
+    message or a stock recommendation, based on this conversation history:
+    {{ history }}.
+
+    {{ ctx.output_format }}
+  "#
+}
+```
+
+<Tabs>
+
+<Tab title="Python">
+The above BAML code will generate the following Python definitions in the
+`partial_types` module. The use of streaming attributes has several effects on
+the generated code:
+
+ - `Recommendation` does not have any partial fields because it was marked
+   `@stream.done`.
+ - The `Message.message` `string` is wrapped in `StreamState`, allowing
+   runtime checking of its completion status. This status could be used
+   to render a spinner as the message streams in.
+ - The `Message.message_type` field may not be `null`, because it was marked
+   as `@stream.not_null`.
+
+```python
+class StreamState(BaseModel, Generic[T]):
+  value: T,
+  state: Literal["Pending", "Incomplete", "Complete"]
+
+class Stock(str, Enum):
+    APPL = "APPL"
+    MSFT = "MSFT"
+    GOOG = "GOOG"
+    BAML = "BAML"
+
+class Recommendation(BaseClass):
+    stock: Stock
+    amount: float
+    action: Literal["buy", "sell"]
+
+class Message(BaseClass):
+  message_type: Literal["gretting","conversation","farewell"]
+  message: StreamState[string]
+```
+</Tab>
+
+<Tab title="Typescript">
+This BAML code will generate the following Typescript definitions in the
+`partial_types` module. The use of streaming attributes has several effects on
+the generated code:
+
+ - `Recommendation` does not have any partial fields because it was marked
+   `@stream.done`.
+ - The `Message.message` `string` is wrapped in `StreamState`, allowing
+   runtime checking of its completion status. This status could be used
+   to render a spinner as the message streams in.
+ - The `Message.message_type` field may not be `null`, because it was marked
+   as `@stream.not_null`.
+
+```typescript
+export interface StreamState<T> {
+  value: T,
+  state: "Pending" | "Incomplete" | "Complete"
+}
+
+export enum Category {
+  APPL = "APPl",
+  MSFT = "MSFT",
+  GOOG = "GOOG",
+  BAML = "BAML",
+}
+
+export interface Recommendation {
+  stock: Stock,
+  amount: float,
+  action: "buy" | "sell"
+}
+
+export interface Message {
+  message_type: "gretting" | "conversation" | "farewell"
+  message: StreamState<string>
+}
+```
+</Tab>
+
+</Tabs>

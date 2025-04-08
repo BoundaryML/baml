@@ -138,7 +138,7 @@ After PR approval and merge:
    ```bash
    # Python Client
    cd engine/language_client_python
-   poetry publish
+   uv publish
 
    # TypeScript Client
    cd engine/language_client_typescript

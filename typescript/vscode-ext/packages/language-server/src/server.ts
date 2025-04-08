@@ -24,6 +24,8 @@ import {
   TextDocuments,
   FormattingOptions,
   TextEdit,
+  ResponseError,
+  ErrorCodes,
 } from 'vscode-languageserver'
 import { URI } from 'vscode-uri'
 
@@ -44,6 +46,7 @@ import { getWordAtPosition } from './lib/ast'
 import BamlProjectManager, { GeneratorDisabledReason, GeneratorStatus, GeneratorType } from './lib/baml_project_manager'
 import type { LSOptions, LSSettings } from './lib/types'
 import { BamlWasm } from './lib/wasm'
+import { SymbolLocation } from '@gloo-ai/baml-schema-wasm-node'
 
 try {
   // only required on vscode versions 1.89 and below.
@@ -146,7 +149,7 @@ export function startServer(options?: LSOptions): void {
           triggerCharacters: ['@', '"', '.'],
         },
         hoverProvider: true,
-        renameProvider: false,
+        renameProvider: true,
         documentSymbolProvider: true,
         codeLensProvider: {
           resolveProvider: true,
@@ -158,7 +161,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -168,7 +171,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -178,7 +181,7 @@ export function startServer(options?: LSOptions): void {
                 {
                   scheme: 'file',
                   pattern: {
-                    glob: '**/*.{baml, json}',
+                    glob: '**/*.baml',
                   },
                 },
               ],
@@ -281,7 +284,7 @@ export function startServer(options?: LSOptions): void {
     return languageExtension
   }
 
-  connection.onDidChangeWatchedFiles(async (params) => {
+  connection.onDidChangeWatchedFiles((params) => {
     // let deleted_files = params.changes.filter((change) =>
     //   change.type == FileChangeType.Deleted
     // ).map((change) => change.uri);
@@ -300,20 +303,27 @@ export function startServer(options?: LSOptions): void {
     if (hasChanges) {
       // TODO: @hellovai we should technically get all possible root paths
       // (someone could delete mutliple baml_src dirs at once)
-      await bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri))
+      bamlProjectManager.reload_project_files(URI.parse(params.changes[0].uri)).catch((e) => {
+        console.error('Error reloading project files: ' + e)
+      })
     }
   })
 
   connection.onDidChangeConfiguration((_change) => {
     getConfig()
-    if (hasConfigurationCapability) {
-      // Reset all cached document settings
-      documentSettings.clear()
-    } else {
-      // globalSettings = <LSSettings>(change.settings.prisma || defaultSettings) // eslint-disable-line @typescript-eslint/no-unsafe-member-access
-    }
-
-    // documents.all().forEach(debouncedValidateTextDocument) // eslint-disable-line @typescript-eslint/no-misused-promises
+      .then(() => {
+        console.log('baml_settings_updated', bamlConfig.config)
+        connection.sendRequest('baml_settings_updated', bamlConfig)
+        if (hasConfigurationCapability) {
+          // Reset all cached document settings
+          documentSettings.clear()
+        } else {
+          // globalSettings = <LSSettings>(change.settings.prisma || defaultSettings) // eslint-disable-line @typescript-eslint/no-unsafe-member-access
+        }
+      })
+      .catch((e) => {
+        console.error('Error getting config: ' + e)
+      })
   })
 
   documents.onDidOpen(async (e) => {
@@ -412,7 +422,9 @@ export function startServer(options?: LSOptions): void {
               restartTSServer()
             }
           },
-          onError: (message: string) => connection.sendNotification('baml/message', { type: 'error', message }),
+          onError: (message: string) => {
+            connection.sendNotification('baml/message', { type: 'error', message })
+          },
         })
       }
     } catch (e) {
@@ -439,8 +451,12 @@ export function startServer(options?: LSOptions): void {
       //accesses project from uri via bamlProjectManager
       const proj = bamlProjectManager.getProjectById(URI.parse(doc.uri))
       if (proj) {
-        //returns the definition of reference within the project
-        return proj.handleDefinitionRequest(doc, params.position)
+        try {
+          //returns the definition of reference within the project
+          return proj.handleDefinitionRequest(doc, params.position)
+        } catch (e) {
+          console.error(`Error occurred while generating definition:\n${e}`)
+        }
       }
     }
     return undefined
@@ -730,6 +746,72 @@ export function startServer(options?: LSOptions): void {
       return allFunctions
     },
   )
+
+  connection.onRequest('textDocument/rename', (params: RenameParams) => {
+    const doc = getDocument(params.textDocument.uri)
+
+    if (!doc) {
+      return null
+    }
+
+    const project = bamlProjectManager.getProjectById(URI.parse(doc.uri))
+
+    if (!project) {
+      return null
+    }
+
+    const symbol = getWordAtPosition(doc, params.position)
+
+    // TODO: type alias renaming, class field renaming, etc.
+    if (project.runtime().is_valid_function(symbol)) {
+      throw new ResponseError(ErrorCodes.InvalidRequest, `Function renaming is not yet supported: '${symbol}'`)
+    }
+
+    const is_valid_class = project.runtime().is_valid_class(symbol)
+    const is_valid_enum = project.runtime().is_valid_enum(symbol)
+    const is_valid_type_alias = project.runtime().is_valid_type_alias(symbol)
+
+    // Only classes and enums can be renamed for now.
+    if (!is_valid_class && !is_valid_enum && !is_valid_type_alias) {
+      throw new ResponseError(ErrorCodes.InvalidRequest, `Cannot rename symbol '${symbol}'`)
+    }
+
+    const changes: { [uri: string]: TextEdit[] } = {}
+
+    let locations: SymbolLocation[] = []
+
+    if (is_valid_class) {
+      locations = project.runtime().search_for_class_locations(symbol)
+    } else if (is_valid_enum) {
+      locations = project.runtime().search_for_enum_locations(symbol)
+    } else if (is_valid_type_alias) {
+      locations = project.runtime().search_for_type_alias_locations(symbol)
+    }
+
+    for (const location of locations) {
+      if (!changes[location.uri]) {
+        changes[location.uri] = []
+      }
+
+      changes[location.uri].push({
+        range: {
+          start: {
+            line: location.start_line,
+            character: location.start_character,
+          },
+          end: {
+            line: location.end_line,
+            character: location.end_character,
+          },
+        },
+        newText: params.newName,
+      })
+    }
+
+    console.log(changes)
+
+    return { changes }
+  })
 
   console.log('Server-side -- listening to connection')
   // Make the text document manager listen on the connection

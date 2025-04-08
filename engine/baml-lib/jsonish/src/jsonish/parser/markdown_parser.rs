@@ -13,7 +13,7 @@ pub enum MarkdownResult {
 }
 
 pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
-    let mut values = vec![];
+    let mut values: Vec<MarkdownResult> = vec![];
 
     let mut remaining = str;
     // Find regex for markdown blocks (```<tag><EOF|newline>)
@@ -80,6 +80,8 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 
 #[cfg(test)]
 mod test {
+    use baml_types::CompletionState;
+
     use super::*;
     use test_log::test;
 
@@ -118,9 +120,13 @@ print("Hello, world!")
                 panic!("Expected AnyOf, got {:#?}", value);
             };
             assert!(value.contains(&Value::Object(
-                [("a".to_string(), Value::Number((1).into()))]
-                    .into_iter()
-                    .collect()
+                [(
+                    "a".to_string(),
+                    Value::Number((1).into(), CompletionState::Complete)
+                )]
+                .into_iter()
+                .collect(),
+                CompletionState::Complete
             )));
         }
         {
@@ -134,7 +140,11 @@ print("Hello, world!")
             let Value::AnyOf(value, _) = value else {
                 panic!("Expected AnyOf, got {:#?}", value);
             };
-            assert!(value.contains(&Value::String("This is a test".to_string())));
+            // dbg!(&value);
+            assert!(value.contains(&Value::String(
+                "This is a test".to_string(),
+                CompletionState::Complete
+            )));
         }
 
         Ok(())

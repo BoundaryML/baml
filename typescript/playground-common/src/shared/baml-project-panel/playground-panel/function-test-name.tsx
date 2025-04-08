@@ -33,7 +33,7 @@ export const FunctionTestName: React.FC<FunctionTestNameProps> = ({ functionName
   })
 
   return (
-    <div className={`flex w-full items-center space-x-1 text-xs ${selected ? '' : 'text-muted-foreground'}`}>
+    <div className={`flex w-full items-center space-x-1 text-xs ${selected ? '' : 'text-foreground/90'}`}>
       <div
         className='flex items-center cursor-pointer hover:text-primary'
         onClick={() => {

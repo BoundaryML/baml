@@ -6,6 +6,10 @@ schema = {
 // Unified Block for Class and Enum
 // ######################################
 type_expression_block    = { identifier ~ identifier ~ named_argument_list? ~ BLOCK_OPEN ~ type_expression_contents ~ BLOCK_CLOSE }
+
+// Dynamic declarations start with the dynamic keyword followed by a normal type expression.
+dynamic_type_expression_block = { identifier ~ type_expression_block }
+
 type_expression_contents = {
     (type_expression | block_attribute | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
@@ -23,9 +27,18 @@ field_type_with_attr = { field_type ~ (NEWLINE? ~ (field_attribute | trailing_co
 value_expression_keyword  = { FUNCTION_KEYWORD | TEST_KEYWORD | CLIENT_KEYWORD | RETRY_POLICY_KEYWORD | GENERATOR_KEYWORD }
 value_expression_block    = { value_expression_keyword ~ identifier ~ named_argument_list? ~ ARROW? ~ field_type_chain? ~ SPACER_TEXT ~ BLOCK_OPEN ~ value_expression_contents ~ BLOCK_CLOSE }
 value_expression_contents = {
-    (value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
+    (type_builder_block | value_expression | comment_block | block_attribute | empty_lines | BLOCK_LEVEL_CATCH_ALL)*
 }
 value_expression          = { identifier ~ expression? ~ (NEWLINE? ~ field_attribute)* ~ trailing_comment? }
+
+// ######################################
+// Type builder
+// ######################################
+
+type_builder_block = {
+    TYPE_BUILDER_KEYWORD ~ BLOCK_OPEN ~ type_builder_contents ~ BLOCK_CLOSE
+}
+type_builder_contents = { (dynamic_type_expression_block | type_expression_block | type_alias | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)* }
 
 // ######################################
 ARROW = { SPACER_TEXT ~ "->" ~ SPACER_TEXT }
@@ -72,8 +85,9 @@ non_union = { array_notation | map | identifier | group | tuple | literal_type }
 parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
 
 path_identifier =  { single_word ~ ("." ~ single_word)+ }
-identifier      =  { path_identifier | single_word }
+identifier      = { path_identifier | namespaced_identifier | single_word }
 single_word     = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+namespaced_identifier = { single_word ~ ("::" ~ single_word)+ }
 
 // ######################################
 // Type Alias
@@ -180,6 +194,7 @@ CATCH_ALL             = { (!NEWLINE ~ ANY)+ ~ NEWLINE? }
 FUNCTION_KEYWORD     = { "function" }
 TEMPLATE_KEYWORD     = { "template_string" | "string_template" }
 TEST_KEYWORD         = { "test" }
+TYPE_BUILDER_KEYWORD = { "type_builder" }
 CLIENT_KEYWORD       = { "client<llm>" | "client" }
 GENERATOR_KEYWORD    = { "generator" }
 RETRY_POLICY_KEYWORD = { "retry_policy" }

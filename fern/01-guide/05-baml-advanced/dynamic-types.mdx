@@ -19,7 +19,7 @@ enum Category {
   VALUE1 // normal static enum values that don't change
   VALUE2
   @@dynamic // this enum can have more values added at runtime
-} 
+}
 
 // The Category enum can now be modified at runtime!
 function DynamicCategorizer(input: string) -> Category {
@@ -27,7 +27,7 @@ function DynamicCategorizer(input: string) -> Category {
   prompt #"
     Given a string, classify it into a category
     {{ input }}
-     
+
     {{ ctx.output_format }}
   "#
 }
@@ -120,7 +120,7 @@ function DynamicUserCreator(user_info: string) -> User {
   prompt #"
     Extract the information from this chunk of text:
     "{{ user_info }}"
-     
+
     {{ ctx.output_format }}
   "#
 }
@@ -167,7 +167,7 @@ def run
   tb = Baml::TypeBuilder.new
   tb.User.add_property('email', tb.string)
   tb.User.add_property('address', tb.string).description("The user's address")
-  
+
   res = Baml.Client.dynamic_user_creator(input: "some user info", baml_options: {tb: tb})
   # Now res can have email and address fields
   puts res
@@ -239,7 +239,7 @@ def run
 
   tb.User.add_property('hobby', hobbies_enum.type.optional)
   tb.User.add_property('address', address_class.type.optional)
-  
+
   res = Baml::Client.dynamic_user_creator(input: "some user info", baml_options: { tb: tb })
   # Now res might have the hobby property, which can be Soccer or Reading
   puts res
@@ -280,67 +280,259 @@ tb.User.add_property("email", tb.string).description("The user's email")
 
 </CodeBlocks>
 
-### Building dynamic types from JSON schema
+### Creating dynamic classes and enums at runtime with BAML
 
-We have a working implementation of this, but are waiting for a concrete use case to merge it.
-Please chime in on [the GitHub issue](https://github.com/BoundaryML/baml/issues/771) if this is
-something you'd like to use.
+The `TypeBuilder` has a higher level API for creating dynamic types at runtime.
+Here's an example:
 
 <CodeBlocks>
 
 ```python Python
-import pydantic
-from baml_client import b
-
-class Person(pydantic.BaseModel):
-    last_name: list[str]
-    height: Optional[float] = pydantic.Field(description="Height in meters")
-
 tb = TypeBuilder()
-tb.unstable_features.add_json_schema(Person.model_json_schema())
+tb.add_baml("""
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
 
-res = await b.ExtractPeople(
-    "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
-    {"tb": tb},
-)
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
+
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    VALUE5
+  }
+""")
 ```
 
 ```typescript TypeScript
-import 'z' from zod
-import 'zodToJsonSchema' from zod-to-json-schema
-import { b } from '../baml_client'
+const tb = new TypeBuilder()
+tb.addBaml(`
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
 
-const personSchema = z.object({
-  animalLiked: z.object({
-    animal: z.string().describe('The animal mentioned, in singular form.'),
-  }),
-  hobbies: z.enum(['chess', 'sports', 'music', 'reading']).array(),
-  height: z.union([z.string(), z.number().int()]).describe('Height in meters'),
-})
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
 
-let tb = new TypeBuilder()
-tb.unstableFeatures.addJsonSchema(zodToJsonSchema(personSchema, 'Person'))
-
-const res = await b.ExtractPeople(
-  "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
-  { tb },
-)
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    VALUE5
+  }
+`)
 ```
 
 ```ruby Ruby
 tb = Baml::TypeBuilder.new
-tb.unstable_features.add_json_schema(...)
+tb.add_baml("
+  // Creates a new class Address that does not exist in the BAML source.
+  class Address {
+    street string
+    city string
+    state string
+  }
 
-res = Baml::Client.extract_people(
-  input: "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
-  baml_options: { tb: tb }
-)
+  // Modifies the existing @@dynamic User class to add the new address property.
+  dynamic class User {
+    address Address
+  }
 
-puts res
+  // Modifies the existing @@dynamic Category enum to add a new variant.
+  dynmic enum Category {
+    VALUE5
+  }
+")
 ```
+
 </CodeBlocks>
 
-### Testing dynamic types in BAML
-This feature is coming soon! Let us know if you're interested in testing it out!
+### Building dynamic types from JSON schema
 
-You can still write tests in Python, TypeScript, Ruby, etc in the meantime.
+JSON Schema is a declarative language for validating JSON data structures, often derived from language-native type definitions such as Python classes, TypeScript interfaces, or Java classes.
+
+BAML supports converting JSON schemas into dynamic BAML types, allowing you to automatically use your existing data models with BAML's LLM functions. This feature enables seamless integration between your application's type system and BAML's structured output capabilities.
+
+We have a working implementation of this feature, but are waiting for concrete use cases to merge it into the main codebase. For a detailed explanation of this functionality, see our [article on dynamic JSON schemas](https://www.boundaryml.com/blog/dynamic-json-schemas). You can also explore the [source code and examples](https://github.com/BoundaryML/baml-examples/tree/main/json-schema-to-baml) to understand how to implement this in your projects.
+
+Please chime in on [the GitHub issue](https://github.com/BoundaryML/baml/issues/771) if this is something you'd like to use.
+
+### Testing dynamic types in BAML
+
+When testing dynamic types there are two different cases:
+1. Injecting properties into dynamic types returned by the tested function.
+2. Injecting values into dynamic types received as arguments by the tested function.
+
+The first case requires using the `type_builder` and `dynamic` blocks in the
+test, whereas the second case only requires specifying the values in the `args`
+block.
+
+#### Testing return types
+
+##### Dynamic classes
+
+Suppose we have a dynamic class `Resume` and we want to add a property that
+stores the user's work experience when we testing a specific function. We can
+do that by specifying the types and properties that we need in the
+`type_builder` block.
+
+
+```baml {4, 14-27}
+class Resume {
+  name string
+  skills string[]
+  @@dynamic // Marked as @@dynamic.
+}
+
+// Function that returns a dynamic class.
+function ExtractResume(from_text: string) -> Resume {
+  // Prompt
+}
+
+test ReturnDynamicClassTest {
+  functions [ExtractResume]
+  type_builder {
+    // Defines a new type available only within this test block.
+    class Experience {
+      title string
+      company string
+      start_date string
+      end_date string
+    }
+
+    // Injects new properties into the `@@dynamic` part of the Resume class.
+    dynamic class Resume {
+      experience Experience[]
+    }
+  }
+  args {
+    from_text #"
+      John Doe
+
+      Experience
+      - Software Engineer, Boundary, Sep 2022 - Sep 2023
+
+      Skills
+      - Python
+      - Java
+    "#
+  }
+}
+```
+
+The rendered prompt for `ExtractResume` will now include the `experience` field
+defined in the `dynamic` block and the LLM will correctly extract the experience
+in the input text.
+
+##### Dynamic enums
+
+Dynamic enums can be included in the `type_builder` block just like classes. The
+only difference is that we inject new variants in the `dynamic` block instead of
+properties.
+
+```baml {7, 17-22}
+enum Category {
+  Refund
+  CancelOrder
+  TechnicalSupport
+  AccountIssue
+  Question
+  @@dynamic // Marked as @@dynamic.
+}
+
+// Function that returns a dynamic enum.
+function ClassifyMessage(message: string) -> Category {
+  // Prompt
+}
+
+test ReturnDynamicEnumTest {
+  functions [ClassifyMessage]
+  type_builder {
+    // Injects new variants into the `@@dynamic` part of the Category enum.
+    dynamic enum Category {
+      Feedback
+    }
+  }
+  args {
+	  message "I think the product is great!"
+  }
+}
+```
+
+The `Feedback` variant will be rendered in the prompt for `ClassifyMessage`
+during the test execution.
+
+#### Testing parameter types
+
+When a dynamic type is used as an input parameter of a function, we can simply
+pass any value in the `args` block of the test and the value will be rendered in
+the prompt.
+
+##### Dynamic classes
+
+```baml {4, 17-24}
+class Resume {
+  name string
+  skills string[]
+  @@dynamic // Marked as @@dynamic.
+}
+
+function WriteResume(resume: Resume) -> string {
+  // Prompt
+}
+
+test DynamicClassAsInputTest {
+  functions [WriteResume]
+  args {
+    resume {
+      name "John Doe"
+      skills ["C++", "Java"]
+      experience [
+        {
+          title "Software Engineer"
+          company "Boundary"
+          start_date "2023-09-01"
+          end_date "2024-09-01"
+        }
+      ]
+    }
+  }
+}
+```
+
+##### Dynamic enums
+
+Enums work the same way, any variant defined in the `args` block will be
+rendered normally.
+
+```baml {7, 17}
+enum Category {
+  Refund
+  CancelOrder
+  TechnicalSupport
+  AccountIssue
+  Question
+  @@dynamic // Marked as @@dynamic.
+}
+
+function WriteCustomerMessage(category: Category) -> string {
+  // Prompt
+}
+
+test DynamicEnumAsInputTest {
+  functions [WriteCustomerMessage]
+  args {
+    category Feedback // The enum is dynamic so it accepts a new variant.
+  }
+}
+```
+
+For more information about dynamic types, see [Type Builder](/ref/baml_client/type-builder).

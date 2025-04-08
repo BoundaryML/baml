@@ -1,16 +1,17 @@
 use anyhow::Result;
 use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::RetryPolicyStrategy;
+use internal_baml_schema_ast::ast::WithIdentifier;
 use internal_llm_client::ClientSpec;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use super::{
-    repr::{self, FunctionConfig, WithRepr},
-    Class, Client, Enum, EnumValue, Field, FunctionNode, IRHelper, Impl, RetryPolicy,
+    repr::{self, FunctionConfig, TypeBuilderEntry, WithRepr},
+    Class, Client, Enum, EnumValue, Field, FieldType, FunctionNode, IRHelper, Impl, RetryPolicy,
     TemplateString, TestCase, TypeAlias, Walker,
 };
 use crate::ir::jinja_helpers::render_expression;
@@ -39,7 +40,7 @@ impl<'a> Walker<'a, &'a FunctionNode> {
         if let Some(c) = self.elem().configs.first() {
             match &c.client {
                 ClientSpec::Named(n) => {
-                    let client: super::ClientWalker<'a> = self.db.find_client(n)?;
+                    let client: super::ClientWalker<'a> = self.ir.find_client(n)?;
                     Ok(client.required_env_vars())
                 }
                 ClientSpec::Shorthand(provider, model) => {
@@ -71,7 +72,7 @@ impl<'a> Walker<'a, &'a FunctionNode> {
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, (&'a repr::Function, &'a FunctionConfig)>> {
         self.elem().configs.iter().map(|c| Walker {
-            db: self.db,
+            ir: self.ir,
             item: (self.elem(), c),
         })
     }
@@ -79,7 +80,7 @@ impl<'a> Walker<'a, &'a FunctionNode> {
         &'a self,
     ) -> impl Iterator<Item = Walker<'a, (&'a FunctionNode, &'a TestCase)>> {
         self.elem().tests().iter().map(|i| Walker {
-            db: self.db,
+            ir: self.ir,
             item: (self.item, i),
         })
     }
@@ -123,7 +124,7 @@ impl<'a> Walker<'a, &'a Enum> {
 
     pub fn walk_values(&'a self) -> impl Iterator<Item = Walker<'a, &'a EnumValue>> {
         self.item.elem.values.iter().map(|v| Walker {
-            db: self.db,
+            ir: self.ir,
             item: &v.0,
         })
     }
@@ -135,7 +136,7 @@ impl<'a> Walker<'a, &'a Enum> {
             .iter()
             .find(|v| v.0.elem.0 == name)
             .map(|v| Walker {
-                db: self.db,
+                ir: self.ir,
                 item: &v.0,
             })
     }
@@ -183,7 +184,7 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a Impl)> {
     #[allow(dead_code)]
     pub fn function(&'a self) -> Walker<'a, &'a FunctionNode> {
         Walker {
-            db: self.db,
+            ir: self.ir,
             item: self.item.0,
         }
     }
@@ -198,8 +199,8 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
         self.item.0.elem.name() == function_name && self.item.1.elem.name == test_name
     }
 
-    pub fn name(&self) -> String {
-        format!("{}::{}", self.item.0.elem.name(), self.item.1.elem.name)
+    pub fn name(&self) -> (&'a str, &'a str) {
+        (&self.item.0.elem.name(), &self.item.1.elem.name)
     }
 
     pub fn args(&self) -> &IndexMap<String, UnresolvedValue<()>> {
@@ -224,9 +225,24 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
             .collect()
     }
 
+    // TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub fn type_builder_contents(&self) -> &[TypeBuilderEntry] {
+        &self.item.1.elem.type_builder.entries
+    }
+
+    // TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub fn type_builder_recursive_aliases(&self) -> &[IndexMap<String, FieldType>] {
+        &self.item.1.elem.type_builder.recursive_aliases
+    }
+
+    // TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub fn type_builder_recursive_classes(&self) -> &[IndexSet<String>] {
+        &self.item.1.elem.type_builder.recursive_classes
+    }
+
     pub fn function(&'a self) -> Walker<'a, &'a FunctionNode> {
         Walker {
-            db: self.db,
+            ir: self.ir,
             item: self.item.0,
         }
     }
@@ -245,9 +261,17 @@ impl<'a> Walker<'a, &'a Class> {
             .transpose()
     }
 
+    pub fn streaming_done(&self) -> bool {
+        self.item.attributes.get("stream.done").is_some()
+    }
+
+    pub fn streaming_state(&self) -> bool {
+        self.item.attributes.get("stream.with_state").is_some()
+    }
+
     pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
         self.item.elem.static_fields.iter().map(|f| Walker {
-            db: self.db,
+            ir: self.ir,
             item: f,
         })
     }
@@ -259,7 +283,7 @@ impl<'a> Walker<'a, &'a Class> {
             .iter()
             .find(|f| f.elem.name == name)
             .map(|f| Walker {
-                db: self.db,
+                ir: self.ir,
                 item: f,
             })
     }
@@ -388,6 +412,18 @@ impl<'a> Walker<'a, &'a Field> {
             .get("description")
             .map(|v| v.resolve_string(ctx))
             .transpose()
+    }
+
+    pub fn streaming_done(&self) -> bool {
+        self.item.attributes.get("stream.done").is_some()
+    }
+
+    pub fn streaming_needed(&self) -> bool {
+        self.item.attributes.get("stream.not_null").is_some()
+    }
+
+    pub fn streaming_state(&self) -> bool {
+        self.item.attributes.get("stream.with_state").is_some()
     }
 
     pub fn span(&self) -> Option<&crate::Span> {

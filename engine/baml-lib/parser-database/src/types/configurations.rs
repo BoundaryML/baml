@@ -198,6 +198,7 @@ fn visit_strategy(
     }
 }
 
+// TODO: Are test cases "configurations"?
 pub(crate) fn visit_test_case<'db>(
     idx: ValExpId,
     config: &'db ValueExprBlock,
@@ -289,6 +290,8 @@ pub(crate) fn visit_test_case<'db>(
                     args,
                     args_field_span: args_field_span.clone(),
                     constraints,
+                    type_builder: config.type_builder.clone(),
+                    type_builder_scoped_db: Default::default(),
                 },
             );
         }

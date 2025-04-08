@@ -2,9 +2,30 @@ use serde::{Deserialize, Serialize};
 
 // https://docs.anthropic.com/claude/reference/messages_post
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct AnthropicMessageContent {
-    pub r#type: String,
-    pub text: String,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AnthropicMessageContent {
+    // type: text
+    Text {
+        text: String,
+    },
+    // // type: tool_use
+    ToolUse {
+        id: Option<String>,
+        input: serde_json::Value,
+        name: String,
+    },
+    // // type: thinking
+    // Thinking {
+    //     signature: Option<String>,
+    //     thinking: String,
+    // },
+    // type: redacted_thinking
+    RedactedThinking {
+        data: String,
+    },
+    // fallback for unknown types
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -20,20 +41,9 @@ pub struct AnthropicMessageResponse {
     pub r#type: String,
     pub content: Vec<AnthropicMessageContent>,
     pub model: String,
-    pub stop_reason: Option<StopReason>, // can be null when streaming
+    pub stop_reason: Option<String>, // can be null when streaming
     pub stop_sequence: Option<StopSequence>,
     pub usage: AnthropicUsage,
-}
-
-#[derive(Clone, Debug, Deserialize, strum_macros::Display, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-#[strum(serialize_all = "snake_case")]
-pub enum StopReason {
-    MaxTokens,
-    StopSequence,
-    EndTurn,
-    #[serde(other)]
-    Unknown,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -98,6 +108,9 @@ pub enum MessageChunk {
     /// Message stop chunk.
     MessageStop,
     Error(AnthropicErrorInner),
+    /// Fallback for unknown types
+    #[serde(other)]
+    Other,
 }
 
 /// The message start chunk.
@@ -122,7 +135,16 @@ pub struct ContentBlockDeltaChunk {
     /// The index.
     pub index: u32,
     /// The text delta content block.
-    pub delta: TextDeltaContentBlock,
+    pub delta: ContentBlockDelta,
+}
+
+#[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ContentBlockDelta {
+    TextDelta { text: String },
+    SignatureDelta { signature: String },
+    ThinkingDelta { thinking: String },
+    Other,
 }
 
 /// The content block stop chunk.
@@ -155,7 +177,7 @@ pub struct TextDeltaContentBlock {
 #[derive(Debug, Deserialize, Clone, PartialEq, Serialize)]
 pub struct StreamStop {
     /// The stop reason of this stream.
-    pub stop_reason: Option<StopReason>,
+    pub stop_reason: Option<String>,
     /// The stop sequence of this stream.
     pub stop_sequence: Option<StopSequence>,
 }
@@ -178,8 +200,7 @@ mod tests {
 
         let chunk = MessageChunk::ContentBlockDelta(ContentBlockDeltaChunk {
             index: 0,
-            delta: TextDeltaContentBlock {
-                _type: ContentType::TextDelta,
+            delta: ContentBlockDelta::TextDelta {
                 text: "Hello".to_string(),
             },
         });

@@ -57,7 +57,7 @@ impl ToRuby for FieldType {
                     .join(", ")
             ),
             FieldType::Optional(inner) => format!("T.nilable({})", inner.to_ruby()),
-            FieldType::Constrained { base, .. } => match field_type_attributes(self) {
+            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(_) => {
                     let base_type_ref = base.to_ruby();
                     format!("Baml::Checked[{base_type_ref}]")

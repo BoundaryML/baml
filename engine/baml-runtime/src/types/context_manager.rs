@@ -7,15 +7,18 @@ use anyhow::{Context, Result};
 use baml_types::BamlValue;
 use std::fmt;
 
-use crate::{client_registry::ClientRegistry, type_builder::TypeBuilder, RuntimeContext, SpanCtx};
+use crate::{
+    client_registry::ClientRegistry, tracing::BamlTracer, type_builder::TypeBuilder,
+    RuntimeContext, SpanCtx,
+};
 
-use super::runtime_context::BamlSrcReader;
-
-type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
+use super::runtime_context::{AwsCredProvider, BamlSrcReader};
+pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
 #[derive(Clone)]
 pub struct RuntimeContextManager {
     baml_src_reader: Arc<BamlSrcReader>,
+    aws_cred_provider: AwsCredProvider,
     context: Arc<Mutex<Vec<BamlContext>>>,
     env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
@@ -34,19 +37,30 @@ impl RuntimeContextManager {
     pub fn deep_clone(&self) -> Self {
         Self {
             baml_src_reader: self.baml_src_reader.clone(),
-
+            aws_cred_provider: self.aws_cred_provider.clone(),
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
             env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
         }
     }
 
+    pub fn span_id(&self) -> Result<uuid::Uuid> {
+        self.context
+            .lock()
+            .unwrap()
+            .last()
+            .map(|(id, ..)| *id)
+            .ok_or_else(|| anyhow::anyhow!("No span id found. This indicates a bug in BAML. Please report this with a stack trace (RUST_BACKTRACE=1)"))
+    }
+
     pub fn new_from_env_vars(
         env_vars: HashMap<String, String>,
         baml_src_reader: BamlSrcReader,
+        aws_cred_provider: AwsCredProvider,
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
+            aws_cred_provider: aws_cred_provider,
             context: Default::default(),
             env_vars,
             global_tags: Default::default(),
@@ -71,6 +85,7 @@ impl RuntimeContextManager {
             .unwrap_or_default()
     }
 
+    // Note, after entering, calling ctx.span_id() will return the span id of the old context still.
     pub fn enter(&self, name: &str) -> uuid::Uuid {
         let last_tags = self.clone_last_tags();
         let span = uuid::Uuid::new_v4();
@@ -105,8 +120,16 @@ impl RuntimeContextManager {
 
     pub fn create_ctx(
         &self,
-        tb: Option<&TypeBuilder>,
-        cb: Option<&ClientRegistry>,
+        type_builder: Option<&TypeBuilder>,
+        client_registry: Option<&ClientRegistry>,
+        // the tracer initializes the new span_id,
+        // and then passes it back in here for a new context. It's kind of circular since tracer uses this class to _create_ the span_id....
+        // Anyway RuntimeCtx is passed everywhere and we need to know what the last span_id that the tracer created was.
+        // tl;dr
+        // 1. Tracer creates a new span id using the current context that's passe dinto call_function()
+        // 2. Tracer passes the span_id back in here for a new context
+        // 3. profit
+        span_id: Option<uuid::Uuid>,
     ) -> Result<RuntimeContext> {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {
@@ -125,40 +148,51 @@ impl RuntimeContextManager {
             ctx.map(|(.., tags)| tags).cloned().unwrap_or_default()
         };
 
-        let (cls, enm) = tb.map(|tb| tb.to_overrides()).unwrap_or_default();
+        let (cls, enm, als, rec_cls, rec_als) = type_builder
+            .map(TypeBuilder::to_overrides)
+            .unwrap_or_default();
 
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),
+            self.aws_cred_provider.clone(),
             self.env_vars.clone(),
             tags,
             Default::default(),
             cls,
             enm,
+            als,
+            rec_cls,
+            rec_als,
+            span_id,
         );
 
-        let client_overrides = match cb {
-            Some(cb) => Some(
-                cb.to_clients(&ctx)
+        ctx.client_overrides = match client_registry {
+            Some(cr) => Some(
+                cr.to_clients(&ctx)
                     .with_context(|| "Failed to create clients from client_registry")?,
             ),
             None => None,
         };
 
-        ctx.client_overrides = client_overrides;
-
         Ok(ctx)
     }
 
+    // for tests only
     pub fn create_ctx_with_default(&self) -> RuntimeContext {
         let ctx = self.context.lock().unwrap();
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
+            self.aws_cred_provider.clone(),
             self.env_vars.clone(),
             ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
             Default::default(),
             Default::default(),
             Default::default(),
+            Default::default(),
+            Default::default(),
+            Default::default(),
+            Some(uuid::Uuid::new_v4()),
         )
     }
 

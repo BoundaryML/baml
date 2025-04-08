@@ -1,15 +1,18 @@
-import { atom } from 'jotai'
+import { Atom, atom } from 'jotai'
 import { requiredEnvVarsAtom, envVarsAtom, runtimeAtom } from '../atoms'
 
-export const runtimeStateAtom = atom((get) => {
-  const { rt } = get(runtimeAtom)
+export const runtimeStateAtom: Atom<{ functions: WasmFunction[]; stale: boolean }> = atom((get) => {
+  const { rt, lastValidRt } = get(runtimeAtom)
   console.log('rt', rt)
   if (rt === undefined) {
-    return { functions: [] }
+    if (lastValidRt === undefined) {
+      return { functions: [], stale: false }
+    } else {
+      return { functions: lastValidRt.list_functions(), stale: true }
+    }
   }
   const functions = rt.list_functions()
-
-  return { functions }
+  return { functions, stale: false }
 })
 
 export const selectedFunctionAtom = atom<string | undefined>(undefined)
@@ -58,7 +61,7 @@ export const testcaseObjectAtom = atomFamily((params: { functionName: string; te
 export const updateCursorAtom = atom(
   null,
   (get, set, cursor: { fileName: string; fileText: string; line: number; column: number }) => {
-    const runtime = get(runtimeAtom).rt
+    const runtime = get(runtimeAtom)?.rt
 
     if (runtime) {
       const fileName = cursor.fileName
@@ -169,7 +172,7 @@ export const areEnvVarsMissingAtom = atom((get) => {
 })
 
 // Related to test status
-import { type WasmFunctionResponse, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
+import { WasmFunction, type WasmFunctionResponse, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { atomFamily, atomWithStorage } from 'jotai/utils'
 import { vscodeLocalStorageStore } from '../Jotai'
 import { vscode } from '../vscode'

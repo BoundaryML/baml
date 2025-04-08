@@ -2,13 +2,10 @@ import uuid
 import json
 import os
 import time
-from typing import List
+from typing import List, Optional
 import pytest
 from assertpy import assert_that
-from dotenv import load_dotenv
 from .base64_test_data import image_b64, audio_b64
-
-load_dotenv()
 import baml_py
 from baml_py import errors
 
@@ -22,7 +19,6 @@ from ..baml_client import partial_types
 from ..baml_client.types import (
     DynInputOutput,
     Hobby,
-    FooAny,
     NamedArgsSingleEnumList,
     NamedArgsSingleClass,
     Nested,
@@ -43,10 +39,12 @@ from ..baml_client.types import (
     LinkedListAliasNode,
     ClassToRecAlias,
     NodeWithAliasIndirection,
-    MergeAttrs,
     OptionalListAndMap,
+    Person,
+    Color,
+    SimpleTag,
 )
-import baml_client.types as types
+
 from ..baml_client.tracing import trace, set_tags, flush, on_log_event
 from ..baml_client.type_builder import TypeBuilder
 from ..baml_client import reset_baml_env_vars
@@ -80,10 +78,11 @@ async def test_env_vars_reset():
         # Not allowed to call reset_baml_env_vars inside a traced function
         await atop_level_async_tracing()
 
-    with pytest.raises(errors.BamlClientHttpError):
+    with pytest.raises(errors.BamlClientHttpError) as excinfo:
         _ = await b.ExtractPeople(
             "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
         )
+    assert excinfo.value.status_code == 401
 
     reset_baml_env_vars(os.environ.copy())
     people = await b.ExtractPeople(
@@ -115,10 +114,13 @@ class TestAllInputs:
         res = await b.TestFnNamedArgsSingleStringList(["a", "b", "c"])
         assert "a" in res and "b" in res and "c" in res
 
+        res = await b.TestFnNamedArgsSingleStringList([])
+        assert res == []
+
     @pytest.mark.asyncio
     async def test_return_literal_union(self):
         res = await b.LiteralUnionsTest("a")
-        assert res == 1 or res == True or res == "string output"
+        assert res == 1 or res is True or res == "string output"
 
     @pytest.mark.asyncio
     async def test_optional_list_and_map(self):
@@ -364,6 +366,41 @@ class TestAllInputs:
         assert res == data
         assert res["json"]["object"]["list"] == [1, 2, 3]
 
+    # TODO. Doesn't work because of Pydantic bug
+    # https://github.com/pydantic/pydantic/issues/2279#issuecomment-1876108310
+    # https://github.com/pydantic/pydantic/issues/11320
+    #
+    # @pytest.mark.asyncio
+    # async def test_json_type_alias_as_class_dependency(self):
+    #     data = {
+    #         "number": 1,
+    #         "string": "test",
+    #         "bool": True,
+    #         "list": [1, 2, 3],
+    #         "object": {"number": 1, "string": "test", "bool": True, "list": [1, 2, 3]},
+    #         "json": {
+    #             "number": 1,
+    #             "string": "test",
+    #             "bool": True,
+    #             "list": [1, 2, 3],
+    #             "object": {
+    #                 "number": 1,
+    #                 "string": "test",
+    #                 "bool": True,
+    #                 "list": [1, 2, 3],
+    #             },
+    #         },
+    #     }
+    #
+    #     res = await b.TakeRecAliasDep(RecursiveAliasDependency(value=data))
+    #     assert res == RecursiveAliasDependency(value=data)
+    #     assert res.value["json"]["object"]["list"] == [1, 2, 3]
+
+    @pytest.mark.asyncio
+    async def test_union_of_recursive_alias_or_class(self):
+        res = await b.ReturnJsonEntry(json.dumps({"a": "A", "b": {"c": "C"}}, indent=4))
+        assert res == {"a": SimpleTag(field="A"), "b": {"c": SimpleTag(field="C")}}
+
 
 class MyCustomClass(NamedArgsSingleClass):
     date: datetime.datetime
@@ -383,7 +420,7 @@ async def accepts_subclass_of_baml_type():
 async def test_should_work_for_all_outputs():
     a = "a"  # dummy
     res = await b.FnOutputBool(a)
-    assert res == True
+    assert res is True
 
     integer = await b.FnOutputInt(a)
     assert integer == 5
@@ -392,12 +429,12 @@ async def test_should_work_for_all_outputs():
     assert literal_integer == 5
 
     literal_bool = await b.FnOutputLiteralBool(a)
-    assert literal_bool == False
+    assert literal_bool is False
 
     literal_string = await b.FnOutputLiteralString(a)
     assert literal_string == "example output"
 
-    list = await b.FnOutputClassList(a)
+    list = await b.FnOutputClassList(a)  # Broken
     assert len(list) > 0
     assert len(list[0].prop1) > 0
 
@@ -445,12 +482,6 @@ async def test_should_work_with_image_list():
 async def test_should_work_with_vertex():
     res = await b.TestVertex("donkey kong")
     assert_that("donkey kong" in res.lower())
-
-
-@pytest.mark.asyncio
-async def test_should_work_with_vertex_adding_system_instructions():
-    res = await b.TestVertexWithSystemInstructions()
-    assert_that(len(res) > 0)
 
 
 @pytest.mark.asyncio
@@ -516,11 +547,13 @@ async def test_gemini_system_prompt():
     print(f"LLM output from Gemini: {geminiRes}")
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
 
+
 @pytest.mark.asyncio
 async def test_gemini_system_prompt_as_chat():
     geminiRes = await b.TestGeminiSystemAsChat(input="Dr. Pepper")
     print(f"LLM output from Gemini: {geminiRes}")
     assert len(geminiRes) > 0, "Expected non-empty result but got empty."
+
 
 @pytest.mark.asyncio
 async def test_gemini_streaming():
@@ -572,7 +605,9 @@ async def test_anthropic_shorthand_streaming():
 
 @pytest.mark.asyncio
 async def test_fallback_to_shorthand():
-    res = await b.TestFallbackToShorthand(input="Mt Rainier is tall")
+    res = await b.stream.TestFallbackToShorthand(
+        input="Mt Rainier is tall"
+    ).get_final_response()
     assert len(res) > 0, "Expected non-empty result but got empty."
 
 
@@ -601,12 +636,12 @@ async def test_streaming():
 
     final = await stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
@@ -646,12 +681,12 @@ def test_streaming_sync():
 
     final = stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
@@ -886,6 +921,21 @@ async def test_dynamic():
 
     for r in tb_res:
         print(r.model_dump())
+
+
+@pytest.mark.asyncio
+async def test_typebuilder_print():
+    tb = TypeBuilder()
+    tb.Person.add_property("candy", tb.string().list())
+    print("Typebuilder print repr: ", tb)
+    expected = """TypeBuilder(
+  Classes: [
+    Person {
+      candy string[]
+    }
+  ]
+)"""
+    assert str(tb) == expected
 
 
 @pytest.mark.asyncio
@@ -1376,7 +1426,7 @@ async def test_descriptions():
 
 @pytest.mark.asyncio
 async def test_caching():
-    story_idea = f"""
+    story_idea = """
 In a futuristic world where dreams are a marketable asset and collective experience, an introverted and socially inept teenager named Alex realizes they have a unique and potent skill to not only observe but also alter the dreams of others. Initially excited by this newfound talent, Alex starts discreetly modifying the dreams of peers and relatives, aiding them in conquering fears, boosting self-esteem, or embarking on fantastical journeys. As Alex's abilities expand, so does their sway. They begin marketing exclusive dream experiences on the underground market, designing complex and captivating dreamscapes for affluent clients. However, the boundary between dream and reality starts to fade for those subjected to Alex's creations. Some clients find it difficult to distinguish between their genuine memories and the fabricated ones inserted by Alex's dream manipulation.
 
 Challenges emerge when a secretive government organization becomes aware of Alex's distinct talents. They propose Alex utilize their gift for "the greater good," suggesting uses in therapy, criminal reform, and even national defense. Concurrently, a covert resistance group contacts Alex, cautioning them about the risks of dream manipulation and the potential for widespread control and exploitation. Trapped between these conflicting forces, Alex must navigate a tangled web of moral dilemmas. They wrestle with issues of free will, the essence of consciousness, and the duty that comes with having influence over people's minds. As the repercussions of their actions ripple outward, impacting the lives of loved ones and strangers alike, Alex is compelled to face the true nature of their power and decide how—or if—it should be wielded.
@@ -1407,9 +1457,9 @@ In conclusion, this story is a reflection on the power of dreams and the respons
     print("Duration no caching: ", duration)
     print("Duration with caching: ", duration2)
 
-    assert (
-        duration2 < duration
-    ), f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    assert duration2 < duration, (
+        f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    )
 
 
 @pytest.mark.asyncio
@@ -1434,7 +1484,7 @@ async def test_arg_exceptions():
             baml_options={"client_registry": cr},
         )
 
-    with pytest.raises(errors.BamlClientHttpError):
+    with pytest.raises(errors.BamlClientHttpError) as excinfo:
         cr = baml_py.ClientRegistry()
         cr.add_llm_client(
             "MyClient", "openai", {"model": "gpt-4o-mini", "api_key": "INVALID_KEY"}
@@ -1444,6 +1494,18 @@ async def test_arg_exceptions():
             input="My name is Harrison. My hair is black and I'm 6 feet tall.",
             baml_options={"client_registry": cr},
         )
+    assert excinfo.value.status_code == 401
+
+    # test missing model
+    with pytest.raises(errors.BamlClientHttpError) as excinfo:
+        cr = baml_py.ClientRegistry()
+        cr.add_llm_client("MyClient", "openai", {"model": "random-model"})
+        cr.set_primary("MyClient")
+        await b.MyFunc(
+            input="My name is Harrison. My hair is black and I'm 6 feet tall.",
+            baml_options={"client_registry": cr},
+        )
+    assert excinfo.value.status_code == 404
 
     with pytest.raises(errors.BamlValidationError):
         await b.DummyOutputFunction("dummy input")
@@ -1465,9 +1527,9 @@ async def test_baml_validation_error_format():
         except errors.BamlValidationError as e:
             print("Error: ", e)
             assert hasattr(e, "prompt"), "Error object should have 'prompt' attribute"
-            assert hasattr(
-                e, "raw_output"
-            ), "Error object should have 'raw_output' attribute"
+            assert hasattr(e, "raw_output"), (
+                "Error object should have 'raw_output' attribute"
+            )
             assert hasattr(e, "message"), "Error object should have 'message' attribute"
             assert 'Say "hello there"' in e.prompt
 
@@ -1481,7 +1543,11 @@ async def test_no_stream_big_integer():
     msgs: List[int | None] = []
     async for msg in stream:
         msgs.append(msg)
+    print("msgs:")
+    print(msgs)
     res = await stream.get_final_response()
+    print("res:")
+    print(res)
     for msg in msgs:
         assert True if msg is None else msg == res
 
@@ -1548,9 +1614,144 @@ async def test_differing_unions():
 
 
 @pytest.mark.asyncio
+async def test_add_baml_existing_class():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        class ExtraPersonInfo {
+            height int
+            weight int
+        }
+
+        dynamic class Person {
+            age int?
+            extra ExtraPersonInfo?
+        }
+    """)
+    res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+        {"tb": tb},
+    )
+    assert res == [
+        Person(
+            name="John Doe",
+            hair_color=Color.YELLOW,
+            age=30,
+            extra={"height": 6, "weight": 180},
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_add_baml_existing_enum():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        dynamic enum Hobby {
+            VideoGames
+            BikeRiding
+        }
+    """)
+    res = await b.ExtractHobby("I play video games", {"tb": tb})
+    assert res == ["VideoGames"]
+
+
+@pytest.mark.asyncio
+async def test_add_baml_both_classes_and_enums():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        class ExtraPersonInfo {
+            height int
+            weight int
+        }
+
+        enum Job {
+            Programmer
+            Architect
+            Musician
+        }
+
+        dynamic enum Hobby {
+            VideoGames
+            BikeRiding
+        }
+
+        dynamic enum Color {
+            BROWN
+        }
+
+        dynamic class Person {
+            age int?
+            extra ExtraPersonInfo?
+            job Job?
+            hobbies Hobby[]
+        }
+    """)
+    res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. My height is 6 feet and I weigh 180 pounds. My hair is brown. I work as a programmer and enjoy bike riding.",
+        {"tb": tb},
+    )
+    assert res == [
+        Person(
+            name="John Doe",
+            hair_color="BROWN",
+            age=30,
+            extra={"height": 6, "weight": 180},
+            job="Programmer",
+            hobbies=["BikeRiding"],
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_add_baml_with_attrs():
+    tb = TypeBuilder()
+    tb.add_baml("""
+        class ExtraPersonInfo {
+            height int @description("In centimeters and rounded to the nearest whole number")
+            weight int @description("In kilograms and rounded to the nearest whole number")
+        }
+
+        dynamic class Person {
+            extra ExtraPersonInfo?
+        }
+    """)
+    res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+        {"tb": tb},
+    )
+    assert res == [
+        Person(
+            name="John Doe",
+            hair_color=Color.YELLOW,
+            extra={"height": 183, "weight": 82},
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_add_baml_error():
+    tb = TypeBuilder()
+    with pytest.raises(errors.BamlError):
+        tb.add_baml("""
+            dynamic Hobby {
+                VideoGames
+                BikeRiding
+            }
+        """)
+
+
+@pytest.mark.asyncio
+async def test_add_baml_parser_error():
+    tb = TypeBuilder()
+    with pytest.raises(errors.BamlError):
+        tb.add_baml("""
+            syntaxerror
+        """)
+
+
+@pytest.mark.asyncio
 async def test_return_failing_assert():
     with pytest.raises(errors.BamlValidationError):
-        msg = await b.ReturnFailingAssert(1)
+        await b.ReturnFailingAssert(1)
 
 
 @pytest.mark.asyncio
@@ -1668,3 +1869,91 @@ async def test_null_literal_class_hello():
     stream = b.stream.NullLiteralClassHello(s="unused")
     async for msg in stream:
         msg.a is None
+
+
+@pytest.mark.asyncio
+async def test_semantic_streaming():
+    stream = b.stream.MakeSemanticContainer()
+
+    # We will use these to store streaming fields and check them
+    # for stability.
+    reference_string: Optional[str] = None
+    reference_int: Optional[int] = None
+
+    async for msg in stream:
+        assert "string_with_twenty_words" in dict(msg)
+        assert "sixteen_digit_number" in dict(msg)
+
+        # Checks for stability of numeric and @stream.done fields.
+        if msg.sixteen_digit_number is not None:
+            if reference_int is None:
+                # Set the reference if it hasn't been set yet.
+                reference_int = msg.sixteen_digit_number
+            else:
+                # If the reference has been set, check that the
+                # current value matches it.
+                assert reference_int == msg.sixteen_digit_number
+        if msg.string_with_twenty_words is not None:
+            if reference_string is None:
+                # Set the reference if it hasn't been set yet.
+                reference_string = msg.string_with_twenty_words
+            else:
+                # If the reference has been set, check that the
+                # current value matches it.
+                assert reference_string == msg.string_with_twenty_words
+
+        # Checks for @stream.with_state.
+        if msg.class_needed is not None:
+            if msg.class_needed.s_20_words.value is not None:
+                if (
+                    len(msg.class_needed.s_20_words.value.split(" ")) < 3
+                    and msg.final_string is None
+                ):
+                    print(msg)
+                    assert msg.class_needed.s_20_words.state == "Incomplete"
+        if msg.final_string is not None:
+            assert msg.class_needed.s_20_words.state == "Complete"
+
+        # Checks for @stream.not_null.
+        for sub in msg.three_small_things:
+            assert sub.i_16_digits is not None
+
+    final = await stream.get_final_response()
+    print(final)
+
+
+@pytest.mark.asyncio
+async def test_client_response_type():
+    cr = baml_py.ClientRegistry()
+    cr.add_llm_client(
+        "temp_client",
+        "openai",
+        {"client_response_type": "anthropic", "model": "gpt-4o"},
+    )
+    cr.set_primary("temp_client")
+    with pytest.raises(errors.BamlClientError):
+        _ = await b.TestOpenAI("test", baml_options={"client_registry": cr})
+
+
+@pytest.mark.asyncio
+async def test_thinking():
+    res = await b.TestThinking(
+        "a world without horses, should be titled 'A World Without Horses'"
+    )
+    assert len(res.title) > 0, "title should be non-empty"
+    assert len(res.content) > 0, "content should be non-empty"
+    assert len(res.characters) > 0, "characters should be non-empty"
+
+
+@pytest.mark.asyncio
+async def test_thinking_streaming():
+    stream = b.stream.TestThinking(
+        "a world without horses, should be titled 'A World Without Horses'"
+    )
+    async for msg in stream:
+        print(msg)
+
+    res = await stream.get_final_response()
+    assert len(res.title) > 0, "title should be non-empty"
+    assert len(res.content) > 0, "content should be non-empty"
+    assert len(res.characters) > 0, "characters should be non-empty"

@@ -6,6 +6,37 @@ describe('OpenAI Provider', () => {
     expect(res.length).toBeGreaterThan(0)
   })
 
+  it('should support openai with default max_tokens', async () => {
+    const res = await b.TestOpenAI('Donkey Kong')
+    expect(res.toLowerCase()).toContain('donkey')
+  })
+
+  it('should support o1 model without max_tokens', async () => {
+    const res = await b.TestOpenAIO1NoMaxTokens('Donkey Kong')
+    expect(res.toLowerCase()).toContain('donkey')
+  })
+
+  it('should fail when setting max_tokens for o1 model', async () => {
+    await expect(async () => {
+      await b.TestOpenAIO1WithMaxTokens('Donkey Kong')
+    }).rejects.toThrow(/max_tokens.*not supported/)
+  })
+
+  it('should support non-o1 model with explicit max_tokens', async () => {
+    const res = await b.TestOpenAIWithMaxTokens('Donkey Kong')
+    expect(res.toLowerCase()).toContain('donkey')
+  })
+
+  it('should support o1 model with explicit max_completion_tokens', async () => {
+    const res = await b.TestOpenAIO1WithMaxCompletionTokens('Donkey Kong')
+    expect(res.toLowerCase()).toContain('donkey')
+  })
+
+  it('should support openai with null max_tokens', async () => {
+    const res = await b.TestOpenAIWithNullMaxTokens('Donkey Kong')
+    expect(res.toLowerCase()).toContain('donkey')
+  })
+
   describe('Streaming', () => {
     it('should support streaming in OpenAI', async () => {
       const stream = b.stream.PromptTestStreaming('Mt Rainier is tall')

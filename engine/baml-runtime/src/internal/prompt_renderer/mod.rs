@@ -1,21 +1,29 @@
 mod render_output_format;
+pub(crate) mod scoped_ir;
 use internal_llm_client::ClientSpec;
-use jsonish::BamlValueWithFlags;
+use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use render_output_format::render_output_format;
 
 use anyhow::Result;
-use baml_types::{BamlValue, FieldType};
+use baml_types::{BamlValue, FieldType, StreamingBehavior};
 use internal_baml_core::{
     error_unsupported,
-    ir::{repr::IntermediateRepr, FunctionWalker, IRHelper},
+    ir::{
+        repr::IntermediateRepr, FunctionWalker, IRHelper, IRHelperExtended,
+        IRSemanticStreamingHelper,
+    },
 };
 use internal_baml_jinja::{
     types::OutputFormatContent, RenderContext, RenderContext_Client, RenderedPrompt,
     TemplateStringMacro,
 };
+use scoped_ir::ScopedIr;
 
-use crate::RuntimeContext;
+use crate::{runtime_context::RuntimeClassOverride, RuntimeContext};
 
+use super::llm_client::parsed_value_to_response;
+
+#[derive(Debug)]
 pub struct PromptRenderer {
     function_name: String,
     client_spec: ClientSpec,
@@ -49,13 +57,22 @@ impl PromptRenderer {
         &self.client_spec
     }
 
-    pub fn parse(&self, raw_string: &str, allow_partials: bool) -> Result<BamlValueWithFlags> {
-        jsonish::from_str(
+    pub fn parse(
+        &self,
+        ir: &IntermediateRepr,
+        ctx: &RuntimeContext,
+        raw_string: &str,
+        allow_partials: bool,
+    ) -> Result<ResponseBamlValue> {
+        let parsed = jsonish::from_str(
             &self.output_defs,
             &self.output_type,
             raw_string,
             allow_partials,
-        )
+        )?;
+        let scoped_ir = ScopedIr::new(ir, ctx);
+        let res = parsed_value_to_response(&scoped_ir, parsed, &self.output_type, allow_partials);
+        res
     }
 
     pub fn render_prompt(

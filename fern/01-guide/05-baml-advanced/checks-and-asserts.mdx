@@ -232,7 +232,7 @@ class Citation {
 	  {{ this|length > 0 }}
   )
   line_number string @assert(
-    has_line_number
+    has_line_number,
     {{ this|length >= 0 }}
   )
 }

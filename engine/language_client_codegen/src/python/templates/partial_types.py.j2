@@ -2,7 +2,8 @@
 import baml_py
 from enum import Enum
 from pydantic import BaseModel, ConfigDict
-from typing import Dict, List, Optional, Union, Literal
+from typing_extensions import TypeAlias
+from typing import Dict, Generic, List, Optional, TypeVar, Union, Literal
 
 from . import types
 from .types import Checked, Check
@@ -14,6 +15,11 @@ from .types import Checked, Check
 #
 ###############################################################################
 
+T = TypeVar('T')
+class StreamState(BaseModel, Generic[T]):
+    value: T
+    state: Literal["Pending", "Incomplete", "Complete"]
+
 {# Partial classes (used for streaming) -#}
 {% for cls in partial_classes %}
 class {{cls.name}}(BaseModel):
@@ -24,11 +30,16 @@ class {{cls.name}}(BaseModel):
     model_config = ConfigDict(extra='allow')
     {%- endif %}
     {%- if cls.fields.is_empty() && !cls.dynamic %}pass{% endif %}
-    
+
     {%- for (name, partial_type, m_docstring) in cls.fields %}
     {{name}}: {{partial_type}}
     {%- if let Some(docstring) = m_docstring %}
     {{ docstring }}
     {%- endif %}
     {%- endfor %}
+{% endfor %}
+
+{#- Type Aliases -#}
+{% for alias in structural_recursive_alias_cycles %}
+{{alias.name}}: TypeAlias = {{alias.target}}
 {% endfor %}

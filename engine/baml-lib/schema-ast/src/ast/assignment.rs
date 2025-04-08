@@ -2,10 +2,7 @@
 //!
 //! As of right now the only supported "assignments" are type aliases.
 
-use super::{
-    traits::WithAttributes, Attribute, BlockArgs, Comment, Field, FieldType, Identifier, Span,
-    WithDocumentation, WithIdentifier, WithSpan,
-};
+use super::{FieldType, Identifier, Span, WithIdentifier, WithSpan};
 
 /// Assignment expression. `left = right`.
 #[derive(Debug, Clone)]

@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
         with:
-          version: 9.0.6
+          version: 9.12.0
           run_install: false
       - uses: actions/setup-node@v4
         with:
@@ -80,6 +80,21 @@ jobs:
         working-directory: integ-tests/typescript
       - name: Ensure No Changes
         run: git diff --exit-code
+      - name: Test Node Generator (1 of 3)
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes (1 of 3)
+        run: git diff --exit-code
+      - name: Test Node Generator (2 of 3)
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes (2 of 3)
+        run: git diff --exit-code
+      - name: Test Node Generator (3 of 3)
+        run: pnpm generate
+        working-directory: integ-tests/typescript
+      - name: Ensure No Changes (3 of 3)
+        run: git diff --exit-code
   build:
     runs-on: ubuntu-latest
     steps:
@@ -115,6 +130,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
+      - uses: astral-sh/setup-uv@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -124,5 +140,34 @@ jobs:
       - name: run python tests
         run: |
           cd integ-tests/python
-          poetry install
           ./run_tests.sh
+  build-cli:
+    if: github.event_name == 'release'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest 
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+      - name: Build CLI
+        run: cargo build --release --bin baml-cli --target ${{ matrix.target }}
+        working-directory: engine
+      - name: Upload CLI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-cli-${{ matrix.target }}
+          path: engine/target/release/baml-cli*

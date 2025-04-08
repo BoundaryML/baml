@@ -42,6 +42,7 @@ export const CodeMirrorViewer = ({
   generatedFiles,
   shouldScrollDown,
   isReadOnly,
+  hideLineNumbers,
   onContentChange,
   onAutocompleteTrigger,
 }: {
@@ -50,6 +51,7 @@ export const CodeMirrorViewer = ({
   generatedFiles?: GeneratedFile[]
   shouldScrollDown: boolean
   isReadOnly?: boolean
+  hideLineNumbers?: boolean
   onContentChange: (content: string) => void
   onAutocompleteTrigger?: (content: string) => Promise<string>
 }) => {
@@ -282,6 +284,10 @@ export const CodeMirrorViewer = ({
           ref={ref}
           key={lang}
           id={lang}
+          basicSetup={{
+            lineNumbers: !hideLineNumbers,
+            foldGutter: hideLineNumbers ? false : true,
+          }}
           onStatistics={(data) => {
             const pos = data.selectionAsSingle.from
             const line = data.line.number

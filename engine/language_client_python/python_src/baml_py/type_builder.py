@@ -6,14 +6,48 @@ from .baml_py import (
     ClassPropertyBuilder as _ClassPropertyBuilder,
     EnumValueBuilder,
     TypeBuilder as _TypeBuilder,
+    BamlRuntime,
 )
 
 
 class TypeBuilder:
-    def __init__(self, classes: typing.Set[str], enums: typing.Set[str]):
+    def __init__(self, classes: typing.Set[str], enums: typing.Set[str], runtime: BamlRuntime):
         self.__classes = classes
         self.__enums = enums
         self.__tb = _TypeBuilder()
+        self.__runtime = runtime
+
+    def __str__(self) -> str:
+        """
+        returns a comprehensive string representation of the typebuilder.
+
+        this method provides a detailed view of the entire type hierarchy,
+        using the rust implementation to ensure compatibility.
+
+        Format:
+            TypeBuilder(
+                Classes: [
+                    ClassName {
+                        property_name type (alias='custom_name', desc='property description'),
+                        another_property type (desc='another description'),
+                        simple_property type
+                    },
+                    EmptyClass { }
+                ],
+                Enums: [
+                    EnumName {
+                        VALUE (alias='custom_value', desc='value description'),
+                        ANOTHER_VALUE (alias='custom'),
+                        SIMPLE_VALUE
+                    },
+                    EmptyEnum { }
+                ]
+            )
+
+        returns:
+            str: the formatted string representation of the typebuilder
+        """
+        return str(self._tb)
 
     @property
     def _tb(self) -> _TypeBuilder:
@@ -21,13 +55,13 @@ class TypeBuilder:
 
     def string(self):
         return self._tb.string()
-    
+
     def literal_string(self, value: str):
         return self._tb.literal_string(value)
-    
+
     def literal_int(self, value: int):
         return self._tb.literal_int(value)
-    
+
     def literal_bool(self, value: bool):
         return self._tb.literal_bool(value)
 
@@ -67,6 +101,9 @@ class TypeBuilder:
             raise ValueError(f"Enum with name {name} already exists.")
         self.__enums.add(name)
         return NewEnumBuilder(self._tb, name)
+
+    def add_baml(self, baml: str):
+        return self._tb.add_baml(baml, self.__runtime)
 
 
 class NewClassBuilder:

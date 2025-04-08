@@ -6,8 +6,9 @@ use std::{
 
 use crate::JinjaExpression;
 use indexmap::{IndexMap, IndexSet};
+use secrecy::{ExposeSecret, SecretString};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Resolvable<Id, Meta> {
     // Enums go into here.
     String(Id, Meta),
@@ -168,6 +169,27 @@ impl StringOr {
             (Self::EnvVar(s), Self::EnvVar(o)) => s == o,
         }
     }
+
+    pub fn resolve(&self, ctx: &impl GetEnvVar) -> Result<String> {
+        match self {
+            Self::EnvVar(name) => ctx.get_env_var(name),
+            Self::Value(value) => Ok(value.to_string()),
+            Self::JinjaExpression(_) => todo!("Jinja expressions cannot yet be resolved"),
+        }
+    }
+
+    pub fn resolve_api_key(&self, ctx: &impl GetEnvVar) -> Result<ApiKeyWithProvenance> {
+        let api_key = SecretString::from(self.resolve(ctx)?);
+        let provenance = match self {
+            Self::EnvVar(env_var) => Some(env_var.to_string()),
+            Self::Value(_) => None,
+            Self::JinjaExpression(_) => None,
+        };
+        Ok(ApiKeyWithProvenance {
+            api_key,
+            provenance,
+        })
+    }
 }
 
 impl std::fmt::Display for StringOr {
@@ -253,16 +275,6 @@ impl<'db> Default for EvaluationContext<'db> {
         Self {
             env_vars: None,
             fill_missing_env_vars: true,
-        }
-    }
-}
-
-impl StringOr {
-    pub fn resolve(&self, ctx: &impl GetEnvVar) -> Result<String> {
-        match self {
-            Self::EnvVar(name) => ctx.get_env_var(name),
-            Self::Value(value) => Ok(value.to_string()),
-            Self::JinjaExpression(_) => todo!("Jinja expressions cannot yet be resolved"),
         }
     }
 }
@@ -462,5 +474,39 @@ impl crate::BamlMedia {
             ((), Resolvable::String(StringOr::Value(value), ())),
         );
         Ok(Resolvable::Map(index_map, ()))
+    }
+}
+
+#[derive(Clone)]
+pub struct ApiKeyWithProvenance {
+    /// The key itself.
+    pub api_key: SecretString,
+    /// The name of the environment variable from which the key was read.
+    pub provenance: Option<String>,
+}
+
+impl std::fmt::Debug for ApiKeyWithProvenance {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ApiKeyWithProvenance")
+            .field("api_key", &"<no-repr-available>")
+            .field("provenance", &self.provenance)
+            .finish()
+    }
+}
+
+impl ApiKeyWithProvenance {
+    /// Print the api_key if exposing the secret is allowed.
+    /// Otherwise, render the provenance as an environment variable
+    /// if we have one, falling back to a default string.
+    pub fn render(&self, expose_secret: bool) -> String {
+        if expose_secret {
+            self.api_key.expose_secret().to_string()
+        } else {
+            self.provenance
+                .as_ref()
+                .map_or("<SECRET_HIDDEN>".to_string(), |env_var| {
+                    format!("${}", env_var)
+                })
+        }
     }
 }

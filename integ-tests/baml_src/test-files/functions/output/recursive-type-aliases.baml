@@ -6,13 +6,13 @@ class LinkedListAliasNode {
 // Simple alias that points to recursive type.
 type LinkedListAlias = LinkedListAliasNode
 
-function AliasThatPointsToRecursiveType(list: LinkedListAlias) -> LinkedListAlias {
+function AliasThatPointsToRecursiveType(data: LinkedListAlias) -> LinkedListAlias {
     client "openai/gpt-4o"
     prompt r#"
       Return the given linked list back:
-      
-      {{ list }}
-      
+
+      {{ data }}
+
       {{ ctx.output_format }}
     "#
 }
@@ -26,9 +26,9 @@ function ClassThatPointsToRecursiveClassThroughAlias(cls: ClassToRecAlias) -> Cl
     client "openai/gpt-4o"
     prompt r#"
       Return the given object back:
-      
+
       {{ cls }}
-      
+
       {{ ctx.output_format }}
     "#
 }
@@ -46,9 +46,29 @@ function RecursiveClassWithAliasIndirection(cls: NodeWithAliasIndirection) -> No
     client "openai/gpt-4o"
     prompt r#"
       Return the given object back:
-      
+
       {{ cls }}
-      
+
       {{ ctx.output_format }}
     "#
+}
+
+type JsonEntry = SimpleTag | JsonTemplate
+
+type JsonTemplate = map<string, JsonEntry>
+
+class SimpleTag {
+  field string
+}
+
+function ReturnJsonEntry(s: string) -> JsonTemplate {
+  client GPT4o
+  prompt #"
+    {{ _.role("user") }}
+
+    Extract info from this string:
+    {{ s }}
+
+    {{ ctx.output_format }}
+  "#
 }

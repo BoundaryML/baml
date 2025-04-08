@@ -57,7 +57,7 @@ function MergeAliasAttributes(money: int) -> MergeAttrs {
     "#
 }
 
-function ReturnAliasWithMergedAttributes(money: Amount) -> Amount {
+function ReturnAliasWithMergedAttributes(money: int) -> Amount {
     client "openai/gpt-4o"
     prompt r#"
       Return the given integer without additional context:
@@ -68,7 +68,7 @@ function ReturnAliasWithMergedAttributes(money: Amount) -> Amount {
     "#
 }
 
-function AliasWithMultipleAttrs(money: MultipleAttrs) -> MultipleAttrs {
+function AliasWithMultipleAttrs(money: int) -> MultipleAttrs {
     client "openai/gpt-4o"
     prompt r#"
       Return the given integer without additional context:
@@ -125,6 +125,21 @@ type JsonObject = map<string, JsonValue>
 type JsonArray = JsonValue[]
 
 function JsonTypeAliasCycle(input: JsonValue) -> JsonValue {
+    client "openai/gpt-4o"
+    prompt r#"
+      Return the given input back:
+
+      {{ input }}
+
+      {{ ctx.output_format }}
+    "#
+}
+
+class RecursiveAliasDependency {
+  value JsonValue
+}
+
+function TakeRecAliasDep(input: RecursiveAliasDependency) -> RecursiveAliasDependency {
     client "openai/gpt-4o"
     prompt r#"
       Return the given input back:

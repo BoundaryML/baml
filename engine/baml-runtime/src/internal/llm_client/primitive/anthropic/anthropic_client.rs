@@ -1,11 +1,15 @@
 use crate::internal::llm_client::{
-    traits::{ToProviderMessage, ToProviderMessageExt, WithClientProperties},
+    primitive::request::ResponseType,
+    traits::{
+        CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    },
     ResolveMediaUrls,
 };
+use secrecy::ExposeSecret;
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
+use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -21,7 +25,7 @@ use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
         primitive::{
-            anthropic::types::{AnthropicMessageResponse, StopReason},
+            anthropic::types::AnthropicMessageResponse,
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
@@ -109,152 +113,28 @@ impl WithClient for AnthropicClient {
 
 impl WithNoCompletion for AnthropicClient {}
 
-// Manages processing response chunks from streaming response, and converting it into a structured response format
-impl SseResponseTrait for AnthropicClient {
-    fn response_stream(
-        &self,
-        resp: reqwest::Response,
-        prompt: &[RenderedChatMessage],
-        system_start: web_time::SystemTime,
-        instant_start: web_time::Instant,
-    ) -> StreamResponse {
-        let prompt = prompt.to_vec();
-        let client_name = self.context.name.clone();
-        let params = self.properties.properties.clone();
-
-        Ok(Box::pin(
-            resp.bytes_stream()
-                .inspect(|event| log::trace!("anthropic event bytes: {:#?}", event))
-                .eventsource()
-                .map(|event| -> Result<MessageChunk> { Ok(serde_json::from_str(&event?.data)?) })
-                .inspect(|event| log::trace!("anthropic eventsource: {:#?}", event))
-                .scan(
-                    Ok(LLMCompleteResponse {
-                        client: client_name.clone(),
-                        prompt: RenderedPrompt::Chat(prompt.clone()),
-                        content: "".to_string(),
-                        start_time: system_start,
-                        latency: instant_start.elapsed(),
-                        model: "".to_string(),
-                        request_options: params.clone(),
-                        metadata: LLMCompleteResponseMetadata {
-                            baml_is_complete: false,
-                            finish_reason: None,
-                            prompt_tokens: None,
-                            output_tokens: None,
-                            total_tokens: None,
-                        },
-                    }),
-                    move |accumulated: &mut Result<LLMCompleteResponse>, event| {
-                        let Ok(ref mut inner) = accumulated else {
-                            return std::future::ready(None);
-                        };
-                        let event = match event {
-                            Ok(event) => event,
-                            Err(e) => {
-                                return std::future::ready(Some(LLMResponse::LLMFailure(
-                                    LLMErrorResponse {
-                                        client: client_name.clone(),
-                                        model: if inner.model.is_empty() {
-                                            None
-                                        } else {
-                                            Some(inner.model.clone())
-                                        },
-                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
-                                            prompt.clone(),
-                                        ),
-                                        request_options: params.clone(),
-                                        start_time: system_start,
-                                        latency: instant_start.elapsed(),
-                                        message: format!("Failed to parse event: {:#?}", e),
-                                        code: ErrorCode::UnsupportedResponse(2),
-                                    },
-                                )));
-                            }
-                        };
-                        match event {
-                            MessageChunk::MessageStart(chunk) => {
-                                let body = chunk.message;
-                                inner.model = body.model;
-                                let inner = &mut inner.metadata;
-                                inner.baml_is_complete = matches!(
-                                    body.stop_reason,
-                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn)
-                                );
-                                inner.finish_reason =
-                                    body.stop_reason.as_ref().map(ToString::to_string);
-                                inner.prompt_tokens = Some(body.usage.input_tokens);
-                                inner.output_tokens = Some(body.usage.output_tokens);
-                                inner.total_tokens =
-                                    Some(body.usage.input_tokens + body.usage.output_tokens);
-                            }
-                            MessageChunk::ContentBlockDelta(event) => {
-                                inner.content += &event.delta.text;
-                            }
-                            MessageChunk::ContentBlockStart(_) => (),
-                            MessageChunk::ContentBlockStop(_) => (),
-                            MessageChunk::Ping => (),
-                            MessageChunk::MessageDelta(body) => {
-                                let inner = &mut inner.metadata;
-
-                                inner.baml_is_complete = matches!(
-                                    body.delta.stop_reason,
-                                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn)
-                                );
-                                inner.finish_reason = body
-                                    .delta
-                                    .stop_reason
-                                    .as_ref()
-                                    .map(|r| serde_json::to_string(r).unwrap_or("".into()));
-                                inner.output_tokens = Some(body.usage.output_tokens);
-                                inner.total_tokens = Some(
-                                    inner.prompt_tokens.unwrap_or(0) + body.usage.output_tokens,
-                                );
-                            }
-                            MessageChunk::MessageStop => (),
-                            MessageChunk::Error(err) => {
-                                return std::future::ready(Some(LLMResponse::LLMFailure(
-                                    LLMErrorResponse {
-                                        client: client_name.clone(),
-                                        model: if inner.model.is_empty() {
-                                            None
-                                        } else {
-                                            Some(inner.model.clone())
-                                        },
-                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
-                                            prompt.to_vec(),
-                                        ),
-                                        request_options: params.clone(),
-                                        start_time: system_start,
-                                        latency: instant_start.elapsed(),
-                                        message: err.message,
-                                        code: ErrorCode::Other(2),
-                                    },
-                                )));
-                            }
-                        };
-
-                        inner.latency = instant_start.elapsed();
-                        std::future::ready(Some(LLMResponse::Success(inner.clone())))
-                    },
-                ),
-        ))
-    }
-}
-
 // handles streamign chat interactions, when sending prompt to API and processing response stream
 impl WithStreamChat for AnthropicClient {
     async fn stream_chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
-        let (response, system_now, instant_now) =
-            match make_request(self, either::Either::Right(prompt), true).await {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
-        self.response_stream(response, prompt, system_now, instant_now)
+        let model_name = self
+            .request_options()
+            .get("model")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        crate::internal::llm_client::primitive::stream_request::make_stream_request(
+            self,
+            either::Either::Right(prompt),
+            model_name,
+            ResponseType::Anthropic,
+            ctx,
+            http_request_id,
+        )
+        .await
     }
 }
 
@@ -274,7 +154,7 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -297,7 +177,7 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
@@ -322,6 +202,7 @@ impl RequestBuilder for AnthropicClient {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let destination_url = if allow_proxy {
             self.properties
@@ -341,7 +222,8 @@ impl RequestBuilder for AnthropicClient {
         for (key, value) in &self.properties.headers {
             req = req.header(key, value);
         }
-        req = req.header("x-api-key", self.properties.api_key.clone());
+        let api_key = self.properties.api_key.render(expose_secrets);
+        req = req.header("x-api-key", api_key);
 
         if allow_proxy {
             req = req.header("baml-original-url", self.properties.base_url.as_str());
@@ -357,6 +239,8 @@ impl RequestBuilder for AnthropicClient {
             }
         }
 
+        log::trace!("request body: {:?}", body_obj);
+
         if stream {
             body_obj.insert("stream".into(), true.into());
         }
@@ -370,56 +254,27 @@ impl RequestBuilder for AnthropicClient {
 }
 
 impl WithChat for AnthropicClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
-        let (response, system_now, instant_now) = match make_parsed_request::<
-            AnthropicMessageResponse,
-        >(
-            self, either::Either::Right(prompt), false
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
+        let model_name = self
+            .request_options()
+            .get("model")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        make_parsed_request(
+            self,
+            model_name,
+            either::Either::Right(prompt),
+            false,
+            ResponseType::Anthropic,
+            ctx,
+            http_request_id,
         )
         .await
-        {
-            Ok(v) => v,
-            Err(e) => return e,
-        };
-
-        if response.content.len() != 1 {
-            return LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
-                start_time: system_now,
-                request_options: self.properties.properties.clone(),
-                latency: instant_now.elapsed(),
-                message: format!(
-                    "Expected exactly one content block, got {}",
-                    response.content.len()
-                ),
-                code: ErrorCode::Other(200),
-            });
-        }
-
-        LLMResponse::Success(LLMCompleteResponse {
-            client: self.context.name.to_string(),
-            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
-            content: response.content[0].text.clone(),
-            start_time: system_now,
-            latency: instant_now.elapsed(),
-            request_options: self.properties.properties.clone(),
-            model: response.model,
-            metadata: LLMCompleteResponseMetadata {
-                baml_is_complete: matches!(
-                    response.stop_reason,
-                    Some(StopReason::StopSequence) | Some(StopReason::EndTurn)
-                ),
-                finish_reason: response
-                    .stop_reason
-                    .as_ref()
-                    .map(|r| serde_json::to_string(r).unwrap_or("".into())),
-                prompt_tokens: Some(response.usage.input_tokens),
-                output_tokens: Some(response.usage.output_tokens),
-                total_tokens: Some(response.usage.input_tokens + response.usage.output_tokens),
-            },
-        })
     }
 }
 
@@ -453,10 +308,12 @@ impl ToProviderMessage for AnthropicClient {
                     "BAML internal error (Anthropic): file should have been resolved to base64"
                 )
             }
-            BamlMediaContent::Url(_) => {
-                anyhow::bail!(
-                    "BAML internal error (Anthropic): media URL should have been resolved to base64"
-                )
+            BamlMediaContent::Url(url) => {
+                content.insert("type".into(), media.media_type.to_string().into());
+                let mut source = serde_json::Map::new();
+                source.insert("type".into(), "url".into());
+                source.insert("url".into(), url.url.clone().into());
+                content.insert("source".into(), source.into());
             }
         }
         Ok(content)
@@ -515,8 +372,19 @@ impl ToProviderMessageExt for AnthropicClient {
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
-    let mut map = HashMap::new();
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
     map
+}
+
+impl CompletionToProviderBody for AnthropicClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
+    }
 }

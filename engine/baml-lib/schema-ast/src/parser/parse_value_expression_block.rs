@@ -5,6 +5,7 @@ use super::{
     parse_field::parse_value_expr,
     parse_identifier::parse_identifier,
     parse_named_args_list::{parse_function_arg, parse_named_argument_list},
+    parse_type_builder_block::parse_type_builder_block,
     Rule,
 };
 
@@ -21,6 +22,7 @@ pub(crate) fn parse_value_expression_block(
     let mut attributes: Vec<Attribute> = Vec::new();
     let mut input = None;
     let mut output = None;
+    let mut type_builder = None;
     let mut fields: Vec<Field<Expression>> = vec![];
     let mut sub_type: Option<ValueExprBlockType> = None;
     let mut has_arrow = false;
@@ -35,9 +37,7 @@ pub(crate) fn parse_value_expression_block(
                 "generator" => sub_type = Some(ValueExprBlockType::Generator),
                 _ => panic!("Unexpected value expression keyword: {}", current.as_str()),
             },
-            Rule::ARROW => {
-                has_arrow = true;
-            }
+            Rule::ARROW => has_arrow = true,
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::named_argument_list => match parse_named_argument_list(current, diagnostics) {
                 Ok(arg) => input = Some(arg),
@@ -87,6 +87,19 @@ pub(crate) fn parse_value_expression_block(
                             pending_field_comment = None;
                         }
 
+                        Rule::type_builder_block => {
+                            let block = parse_type_builder_block(item, diagnostics)?;
+
+                            match type_builder {
+                                None => type_builder = Some(block),
+
+                                Some(_) => diagnostics.push_error(DatamodelError::new_validation_error(
+                                    "Definition of multiple `type_builder` blocks in the same parent block",
+                                    block.span
+                                )),
+                            }
+                        }
+
                         Rule::comment_block => pending_field_comment = Some(item),
                         Rule::block_attribute => {
                             let span = item.as_span();
@@ -127,59 +140,74 @@ pub(crate) fn parse_value_expression_block(
         }
     }
 
-    let response = match name {
-        Some(name) => {
-            let msg = if has_arrow {
-                match (input.is_some(), output.is_some()) {
-                    (true, true) => {
-                        return Ok(ValueExprBlock {
-                            name,
-                            input,
-                            output,
-                            attributes,
-                            fields,
-                            documentation: doc_comment.and_then(parse_comment_block),
-                            span: diagnostics.span(pair_span),
-                            block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
-                        });
-                    }
-                    (true, false) => "No return type specified.",
-                    (false, true) => "No input parameters specified.",
-                    _ => "Invalid syntax: missing input parameters and return type.",
-                }
-            } else {
-                return Ok(ValueExprBlock {
-                    name,
-                    input,
-                    output,
-                    attributes,
-                    fields,
-                    documentation: doc_comment.and_then(parse_comment_block),
-                    span: diagnostics.span(pair_span),
-                    block_type: sub_type.unwrap_or(ValueExprBlockType::Function), // Unwrap or provide a default
-                });
-            };
-
-            (msg, Some(name.name().to_string()))
-        }
-        None => ("Invalid syntax: missing name.", None),
+    // Block has no name. Functions, test, clients and generators have names.
+    let Some(name) = name else {
+        return Err(value_expr_block_syntax_error(
+            "Invalid syntax: missing name.",
+            None,
+            diagnostics.span(pair_span),
+        ));
     };
 
-    Err(DatamodelError::new_model_validation_error(
-        format!(
-            r##"{} Valid function syntax is
+    // Only test blocks can have `type_builder` blocks in them. This is not a
+    // "syntax" error so we won't fail yet.
+    if let Some(ref t) = type_builder {
+        if sub_type != Some(ValueExprBlockType::Test) {
+            diagnostics.push_error(DatamodelError::new_validation_error(
+                "Only tests may have a type_builder block.",
+                t.span.to_owned(),
+            ));
+        }
+    };
+
+    // No arrow means it's not a function. If it's a function then check params
+    // and return type. If any of the conditions are met then we're ok.
+    if !has_arrow || (input.is_some() && output.is_some()) {
+        return Ok(ValueExprBlock {
+            name,
+            input,
+            output,
+            attributes,
+            fields,
+            documentation: doc_comment.and_then(parse_comment_block),
+            span: diagnostics.span(pair_span),
+            type_builder,
+            block_type: sub_type.unwrap_or(ValueExprBlockType::Function),
+        });
+    }
+
+    // If we reach this code, we're dealing with a malformed function.
+    let message = match (input, output) {
+        (Some(_), None) => "No return type specified.",
+        (None, Some(_)) => "No input parameters specified.",
+        _ => "Invalid syntax: missing input parameters and return type.",
+    };
+
+    Err(value_expr_block_syntax_error(
+        message,
+        Some(name.name()),
+        diagnostics.span(pair_span),
+    ))
+}
+
+fn value_expr_block_syntax_error(message: &str, name: Option<&str>, span: Span) -> DatamodelError {
+    let function_name = name.unwrap_or("MyFunction");
+
+    // TODO: Different block types (test, client, generator).
+    let correct_syntax = format!(
+        r##"{message} Valid function syntax is
 ```
-function {}(param1: String, param2: String) -> ReturnType {{
+function {function_name}(param1: String, param2: String) -> ReturnType {{
     client SomeClient
     prompt #"..."#
 }}
-```"##,
-            response.0,
-            response.1.as_deref().unwrap_or("MyFunction")
-        )
-        .as_str(),
+```"##
+    );
+
+    DatamodelError::new_model_validation_error(
+        &correct_syntax,
         "value expression",
-        response.1.as_deref().unwrap_or("<unknown>"),
-        diagnostics.span(pair_span),
-    ))
+        name.unwrap_or("<unknown>"),
+        span,
+    )
 }

@@ -15,6 +15,24 @@ module Baml
   #   end
   # end
 
+  module StreamState
+    class StreamState < T::Struct
+      extend T::Sig
+
+      extend T::Generic
+
+      Value = type_member
+
+      const :value, Value
+      const :state, Symbol
+
+      def initialize(props)
+        super(value: props[:value], state: props[:state])
+      end
+
+    end
+  end
+
   class BamlStream
     extend T::Sig
     extend T::Generic
@@ -47,7 +65,7 @@ module Baml
       # collection: https://ruby-doc.org/3.1.6/Enumerable.html#module-Enumerable-label-Usage
       if @final_response == nil
         @final_response = @ffi_stream.done(@ctx_manager) do |event|
-          block.call event.parsed_using_types(Baml::PartialTypes)
+          block.call event.parsed_using_types(Baml::Types, Baml::PartialTypes, true)
         end
       end
 
@@ -64,7 +82,8 @@ module Baml
         @final_response = @ffi_stream.done(@ctx_manager)
       end
 
-      @final_response.parsed_using_types(Baml::Types)
+      @final_response.parsed_using_types(Baml::Types, Baml::PartialTypes, false)
     end
   end
+
 end

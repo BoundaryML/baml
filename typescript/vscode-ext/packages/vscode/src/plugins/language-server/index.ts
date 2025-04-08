@@ -9,37 +9,22 @@ import type { LanguageClientOptions } from 'vscode-languageclient'
 import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
 import { z } from 'zod'
 import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
-import { WebPanelView } from '../../panels/WebPanelView'
+import { WebviewPanelHost } from '../../panels/WebviewPanelHost'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
 import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 import { getCurrentOpenedFile } from '../../helpers/get-open-file'
+import { bamlConfig, getConfig } from './bamlConfig'
 
+export { bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line
 
-const BamlConfig = z.optional(
-  z.object({
-    path: z.string().optional(),
-    enablePlaygroundProxy: z.boolean().default(true),
-    trace: z.optional(
-      z.object({
-        server: z.string(),
-      }),
-    ),
-  }),
-)
-type BamlConfig = z.infer<typeof BamlConfig>
 let client: LanguageClient
 let serverModule: string
 let telemetry: TelemetryReporter
 const intervalTimers: NodeJS.Timeout[] = []
-
-export const bamlConfig: { config: BamlConfig | null; cliVersion: string | null } = {
-  config: null,
-  cliVersion: null,
-}
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
@@ -135,21 +120,6 @@ const sleep = (time: number) => {
       resolve(true)
     }, time)
   })
-}
-
-const getConfig = async () => {
-  try {
-    console.log('getting config')
-    const configResponse = workspace.getConfiguration('baml')
-    console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
-    bamlConfig.config = BamlConfig.parse(configResponse)
-  } catch (e: any) {
-    if (e instanceof Error) {
-      console.log('Error getting config' + e.message + ' ' + e.stack)
-    } else {
-      console.log('Error getting config' + e)
-    }
-  }
 }
 
 const activateClient = (
@@ -248,6 +218,13 @@ const activateClient = (
       }
     })
 
+    client.onRequest('baml_settings_updated', (config: typeof bamlConfig) => {
+      console.log('baml_settings_updated', config)
+      bamlConfig.config = config.config
+      bamlConfig.cliVersion = config.cliVersion
+      WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
+    })
+
     client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
       // Only send message if current file is part of this root path
       const activeEditor = vscode.window.activeTextEditor
@@ -256,7 +233,7 @@ const activateClient = (
         const rootPathUri = URI.file(params.root_path).fsPath
         if (currentFilePath.startsWith(rootPathUri)) {
           console.log('sending add_project message')
-          WebPanelView.currentPanel?.postMessage('add_project', {
+          WebviewPanelHost.currentPanel?.postMessage('add_project', {
             ...params,
             root_path: URI.file(params.root_path).toString(),
           })
@@ -351,7 +328,7 @@ const plugin: BamlVSCodePlugin = {
         },
       ],
       synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.{baml,json}'),
+        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
       },
     }
 

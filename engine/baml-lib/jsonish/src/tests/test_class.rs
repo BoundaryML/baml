@@ -347,6 +347,28 @@ test_deserializer!(
     }
 );
 
+const CLASS_SIMPLE: &str = r#"
+class SimpleTest {
+    answer Answer
+}
+  
+class Answer {
+    content float
+}
+"#;
+
+test_deserializer!(
+    test_class_with_whitespace_keys,
+    CLASS_SIMPLE,
+    r#"{" answer ": {" content ": 78.54}}"#,
+    FieldType::Class("SimpleTest".to_string()),
+    {
+        "answer": {
+            "content": 78.54
+        }
+    }
+);
+
 const CLASS_WITH_NESTED_CLASS_LIST: &str = r#"
 class Resume {
     name string
@@ -1084,80 +1106,11 @@ class Bar {
 "#;
 
 test_partial_deserializer!(
-  test_object_streaming_ints,
-  OBJECT_STREAM_TEST,
-  r#"{"a": 11, "b": 22"#,
-  FieldType::Class("Foo".to_string()),
-  {"a": 11, "b": null, "c": null}
-);
-
-test_partial_deserializer!(
-  test_object_streaming_ints_newlines,
-  OBJECT_STREAM_TEST,
-  "{\n\"a\":11,\n\"b\": 22",
-  FieldType::Class("Foo".to_string()),
-  {"a": 11, "b": null, "c": null}
-);
-
-test_partial_deserializer!(
   test_object_finished_ints,
   OBJECT_STREAM_TEST,
   r#"{"a": 1234,"b": 1234, "c": 1234}"#,
   FieldType::Class("Foo".to_string()),
   {"a": 1234, "b": 1234, "c": 1234}
-);
-
-test_partial_deserializer!(
-  test_nested_object_streaming,
-  OBJECT_STREAM_TEST,
-  r#"{"a": 1234, "foo": { "c": 33, "a": 11"#,
-  FieldType::Class("Bar".to_string()),
-  {"a": 1234, "foo": { "a": null, "b": null, "c": 33}}
-);
-
-const BIG_OBJECT_STREAM_TEST: &str = r#"
-class BigNumbers {
-  a int
-  b float
-}
-
-class CompoundBigNumbers {
-  big BigNumbers
-  big_nums BigNumbers[]
-  another BigNumbers
-}
-"#;
-
-test_partial_deserializer!(
-  test_big_object_empty,
-  BIG_OBJECT_STREAM_TEST,
-  "{",
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": null, "big_nums": [], "another": null}
-);
-
-test_partial_deserializer!(
-  test_big_object_start_big,
-  BIG_OBJECT_STREAM_TEST,
-  r#"{"big": {"a": 11, "b": 12"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": {"a": 11, "b": null}, "big_nums": [], "another": null}
-);
-
-test_partial_deserializer!(
-  test_big_object_start_big_into_list,
-  BIG_OBJECT_STREAM_TEST,
-  r#"json```{"big": {"a": 11, "b": 12}, "big_nums": [{"a": 22, "b": 33"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": {"a": 11, "b": 12.0}, "big_nums": [{"a": 22, "b": null}], "another": null}
-);
-
-test_partial_deserializer!(
-  test_big_object_start_big_into_list2,
-  BIG_OBJECT_STREAM_TEST,
-  r#"json```{"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": 0.1"#,
-  FieldType::Class("CompoundBigNumbers".to_string()),
-  {"big": {"a": 11, "b": 12.2}, "big_nums": [{"a": 22, "b": 33.0}, {"a": 1, "b": 2.2}], "another": {"a": 45, "b": null}}
 );
 
 test_deserializer!(
@@ -1484,5 +1437,168 @@ test_deserializer!(
         "rec_two": null
       }
     },
+  }
+);
+
+const OPTIONAL_LIST_AND_MAP: &str = r#"
+class OptionalListAndMap {
+  p string[]?
+  q map<string, string>?
+}
+"#;
+
+test_partial_deserializer_streaming!(
+  test_optional_list,
+  OPTIONAL_LIST_AND_MAP,
+  r#"
+            ```json
+            {
+              "p": ["test"],
+              "q": {
+                "test": "ok"
+              }
+            }
+            ```
+  "#,
+  FieldType::class("OptionalListAndMap"),
+  {"p": ["test"], "q": { "test": "ok" }}
+);
+
+const INTEG_TEST_FAILURE_STR: &str = r#"
+[
+  {
+    "prop1": "In the realm of artificial intelligence, advancements have been remarkable. Between neural networks and cutting-edge algorithms, the landscape of machine learning has evolved dramatically. From the development of self-driving cars to sophisticated chatbots that can engage in human-like conversations, AI technology has become an integral aspect of modern life. Researchers are continually pushing the boundaries of what is possible, exploring deep learning techniques that enable machines to learn from extensive datasets. The application of AI spans various industries including healthcare, where predictive analytics aids in diagnostics, to finance, where algorithms manage investment portfolios. As AI continues to adapt and grow, ethical considerations surrounding data privacy and decision-making processes become increasingly important. Ongoing debates question the implications of relying on AI and machine learning for critical functions in society. Moreover, governments and organizations alike are grappling with the challenges of regulation and oversight in this fast-paced field. The future of AI seems bright, but it also poses inquiries into trust, accountability, and the long-term effects on the job market. As we look ahead, the collaboration between humans and machines could redefine productivity and creativity, paving the way for innovative solutions to complex problems that society faces.",
+    "prop2": 1
+  }
+]
+"#;
+
+const INTEG_TEST_FAILURE_SCHEMA: &str = r#"
+class TestOutputClass {
+  prop1 string @description("A long string with about 200 words")
+  prop2 int
+}
+"#;
+
+test_partial_deserializer_streaming!(
+    test_integ_test_failure,
+    INTEG_TEST_FAILURE_SCHEMA,
+    INTEG_TEST_FAILURE_STR,
+    FieldType::Class("TestOutputClass".to_string()),
+    { "prop1": "In the realm of artificial intelligence, advancements have been remarkable. Between neural networks and cutting-edge algorithms, the landscape of machine learning has evolved dramatically. From the development of self-driving cars to sophisticated chatbots that can engage in human-like conversations, AI technology has become an integral aspect of modern life. Researchers are continually pushing the boundaries of what is possible, exploring deep learning techniques that enable machines to learn from extensive datasets. The application of AI spans various industries including healthcare, where predictive analytics aids in diagnostics, to finance, where algorithms manage investment portfolios. As AI continues to adapt and grow, ethical considerations surrounding data privacy and decision-making processes become increasingly important. Ongoing debates question the implications of relying on AI and machine learning for critical functions in society. Moreover, governments and organizations alike are grappling with the challenges of regulation and oversight in this fast-paced field. The future of AI seems bright, but it also poses inquiries into trust, accountability, and the long-term effects on the job market. As we look ahead, the collaboration between humans and machines could redefine productivity and creativity, paving the way for innovative solutions to complex problems that society faces.",
+      "prop2": 1
+    }
+);
+
+
+test_deserializer!(
+  test_string_in_object_with_unescaped_quotes,
+  r#"class Foo {
+      rec_one string
+      rec_two string
+      also_rec_one string
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: "and then i said \"hi\", and also \"bye\"", rec_two: "and then i said "hi", and also "bye"", "also_rec_one": ok },
+
+    Anything else I can help with?
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": "and then i said \"hi\", and also \"bye\"",
+    "rec_two": "and then i said \"hi\", and also \"bye\"",
+    "also_rec_one": "ok"
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_string_in_object_with_unescaped_quotes_2,
+  r#"class Foo {
+      rec_one string
+      rec_two string
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: "and then i said \"hi\"
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": "and then i said \"hi\"\n  ",
+    "rec_two": null
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_string_in_object_with_unescaped_quotes_3,
+  r#"class Foo {
+      rec_one string
+      rec_two string
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: "and then i said "hi", and also "bye""
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": "and then i said \"hi\", and also \"bye\"",
+    "rec_two": null
+  }
+);
+
+test_deserializer!(
+  test_array_in_object,
+  r#"class Foo {
+      rec_one string[]
+      rec_two string[]
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: ["first with "quotes", and also "more"", "second"], rec_two: ["third", "fourth"] },
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": vec!["first with \"quotes\", and also \"more\"", "second"],
+    "rec_two": vec!["third", "fourth"]
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_partial_array_in_object,
+  r#"class Foo {
+      rec_one string[]
+      rec_two string[]
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: ["first", "second"
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": vec!["first", "second"],
+    "rec_two": []
+  }
+);
+
+test_partial_deserializer_streaming!(
+  test_array_with_unescaped_quotes,
+  r#"class Foo {
+      rec_one string[]
+      rec_two string[]
+  }
+  "#,
+  r#"
+    The answer is
+    { rec_one: ["and then i said "hi", "and also "bye"]
+  "#,
+  FieldType::Class("Foo".to_string()),
+  {
+    "rec_one": vec!["and then i said \"hi\", \"and also \"bye"],
+    "rec_two": []
   }
 );

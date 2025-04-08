@@ -1,13 +1,14 @@
 use crate::client_registry::ClientProperty;
+use crate::internal::llm_client::primitive::request::ResponseType;
 use crate::internal::llm_client::traits::{
-    ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
 };
 use crate::internal::llm_client::ResolveMediaUrls;
 use crate::RuntimeContext;
 use crate::{
     internal::llm_client::{
         primitive::{
-            google::types::{FinishReason, GoogleResponse},
+            google::types::GoogleResponse,
             request::{make_parsed_request, make_request, RequestBuilder},
         },
         traits::{
@@ -20,6 +21,7 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
@@ -30,6 +32,7 @@ use internal_llm_client::google_ai::ResolvedGoogleAI;
 use internal_llm_client::{
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
+use secrecy::ExposeSecret;
 use serde_json::json;
 use std::collections::HashMap;
 
@@ -98,110 +101,25 @@ impl WithClient for GoogleAIClient {
 
 impl WithNoCompletion for GoogleAIClient {}
 
-impl SseResponseTrait for GoogleAIClient {
-    fn response_stream(
-        &self,
-        resp: reqwest::Response,
-        prompt: &[RenderedChatMessage],
-        system_start: web_time::SystemTime,
-        instant_start: web_time::Instant,
-    ) -> StreamResponse {
-        let prompt = prompt.to_vec();
-        let client_name = self.context.name.clone();
-        let model_id = self.properties.model.clone();
-        let params = self.properties.properties.clone();
-        Ok(Box::pin(
-            resp.bytes_stream()
-                .eventsource()
-                .inspect(|event| log::trace!("Received event: {:?}", event))
-                .take_while(|event| {
-                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "data: \n"))
-                })
-                .map(|event| -> Result<GoogleResponse> {
-                    Ok(serde_json::from_str::<GoogleResponse>(&event?.data)?)
-                })
-                .scan(
-                    Ok(LLMCompleteResponse {
-                        client: client_name.clone(),
-                        prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                        content: "".to_string(),
-                        start_time: system_start,
-                        latency: instant_start.elapsed(),
-                        model: model_id.clone(),
-                        request_options: params.clone(),
-                        metadata: LLMCompleteResponseMetadata {
-                            baml_is_complete: false,
-                            finish_reason: None,
-                            prompt_tokens: None,
-                            output_tokens: None,
-                            total_tokens: None,
-                        },
-                    }),
-                    move |accumulated: &mut Result<LLMCompleteResponse>, event| {
-                        let Ok(ref mut inner) = accumulated else {
-                            // halt the stream: the last stream event failed to parse
-                            return std::future::ready(None);
-                        };
-                        let event = match event {
-                            Ok(event) => event,
-                            Err(e) => {
-                                return std::future::ready(Some(LLMResponse::LLMFailure(
-                                    LLMErrorResponse {
-                                        client: client_name.clone(),
-                                        model: if inner.model.is_empty() {
-                                            None
-                                        } else {
-                                            Some(inner.model.clone())
-                                        },
-                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
-                                            prompt.clone(),
-                                        ),
-                                        start_time: system_start,
-                                        request_options: params.clone(),
-                                        latency: instant_start.elapsed(),
-                                        message: format!("Failed to parse event: {:#?}", e),
-                                        code: ErrorCode::UnsupportedResponse(2),
-                                    },
-                                )));
-                            }
-                        };
-
-                        if let Some(choice) = event.candidates.get(0) {
-                            let part_index = content_part(&model_id);
-                            if let Some(content) = choice
-                                .content
-                                .as_ref()
-                                .and_then(|c| c.parts.get(part_index))
-                            {
-                                inner.content += &content.text;
-                            }
-                            if let Some(FinishReason::Stop) = choice.finish_reason.as_ref() {
-                                inner.metadata.baml_is_complete = true;
-                                inner.metadata.finish_reason = Some(FinishReason::Stop.to_string());
-                            }
-                        }
-                        inner.latency = instant_start.elapsed();
-
-                        std::future::ready(Some(LLMResponse::Success(inner.clone())))
-                    },
-                ),
-        ))
-    }
-}
 // makes the request to the google client, on success it triggers the response_stream function to handle continuous rendering with the response object
 impl WithStreamChat for GoogleAIClient {
     async fn stream_chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
+        let model_name = self.properties.model.clone();
         //incomplete, streaming response object is returned
-        let (response, system_now, instant_now) =
-            match make_request(self, either::Either::Right(prompt), true).await {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
-        self.response_stream(response, prompt, system_now, instant_now)
+        crate::internal::llm_client::primitive::stream_request::make_stream_request(
+            self,
+            either::Either::Right(prompt),
+            Some(model_name),
+            ResponseType::Google,
+            ctx,
+            http_request_id,
+        )
+        .await
     }
 }
 
@@ -220,7 +138,7 @@ impl GoogleAIClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_media_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
@@ -268,6 +186,7 @@ impl RequestBuilder for GoogleAIClient {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let mut should_stream = "generateContent";
         if stream {
@@ -293,7 +212,10 @@ impl RequestBuilder for GoogleAIClient {
             req = req.header(key, value);
         }
 
-        req = req.header("x-goog-api-key", self.properties.api_key.clone());
+        req = req.header(
+            "x-goog-api-key",
+            self.properties.api_key.render(expose_secrets),
+        );
 
         let mut body = json!(self.properties.properties);
         let body_obj = body.as_object_mut().unwrap();
@@ -315,74 +237,32 @@ impl RequestBuilder for GoogleAIClient {
 }
 
 impl WithChat for GoogleAIClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
+        let model_name = self.properties.model.clone();
         //non-streaming, complete response is returned
-        let (response, system_now, instant_now) =
-            match make_parsed_request::<GoogleResponse>(self, either::Either::Right(prompt), false)
-                .await
-            {
-                Ok(v) => v,
-                Err(e) => return e,
-            };
-
-        if response.candidates.len() != 1 {
-            return LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
-                start_time: system_now,
-                request_options: self.properties.properties.clone(),
-                latency: instant_now.elapsed(),
-                message: format!(
-                    "Expected exactly one content block, got {}",
-                    response.candidates.len()
-                ),
-                code: ErrorCode::Other(200),
-            });
-        }
-
-        let Some(content) = response.candidates[0].content.as_ref() else {
-            return LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
-                start_time: system_now,
-                request_options: self.properties.properties.clone(),
-                latency: instant_now.elapsed(),
-                message: "No content returned".to_string(),
-                code: ErrorCode::Other(200),
-            });
-        };
-
-        let part_index = content_part(&self.properties.model);
-        LLMResponse::Success(LLMCompleteResponse {
-            client: self.context.name.to_string(),
-            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
-            content: content.parts[part_index].text.clone(),
-            start_time: system_now,
-            latency: instant_now.elapsed(),
-            request_options: self.properties.properties.clone(),
-            model: self.properties.model.clone(),
-            metadata: LLMCompleteResponseMetadata {
-                baml_is_complete: matches!(
-                    response.candidates[0].finish_reason,
-                    Some(FinishReason::Stop)
-                ),
-                finish_reason: response.candidates[0]
-                    .finish_reason
-                    .as_ref()
-                    .map(|r| serde_json::to_string(r).unwrap_or("".into())),
-                prompt_tokens: response.usage_metadata.prompt_token_count,
-                output_tokens: response.usage_metadata.candidates_token_count,
-                total_tokens: response.usage_metadata.total_token_count,
-            },
-        })
+        make_parsed_request(
+            self,
+            Some(model_name),
+            either::Either::Right(prompt),
+            false,
+            ResponseType::Google,
+            ctx,
+            http_request_id,
+        )
+        .await
     }
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(prompt: &String) -> HashMap<String, serde_json::Value> {
-    let mut map = HashMap::new();
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
         "parts": [{
@@ -496,5 +376,14 @@ fn content_part(model_name: &str) -> usize {
         1
     } else {
         0
+    }
+}
+
+impl CompletionToProviderBody for GoogleAIClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
     }
 }

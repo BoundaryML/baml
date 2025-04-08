@@ -151,13 +151,18 @@ impl<'db> Context<'db> {
                     attr.name.name(),
                     attr.span.clone(),
                 ));
-                assert!(self.attributes.unused_attributes.remove(&idx));
+                if !self.attributes.unused_attributes.remove(&idx) {
+                    return false; // Attribute was already processed.
+                }
             }
 
             return false; // stop validation in this case
         }
 
-        assert!(self.attributes.unused_attributes.remove(&first_idx));
+        // Only try to remove if it's still in the unused_attributes set
+        if !self.attributes.unused_attributes.remove(&first_idx) {
+            return false; // Attribute was already processed
+        }
         drop(attrs);
         self.set_attribute(first_idx, first)
     }
@@ -196,7 +201,7 @@ impl<'db> Context<'db> {
     /// This must be called at the end of arguments validation. It will report errors for each argument that was not used by the validators. The Drop impl will helpfully panic
     /// otherwise.
     pub(crate) fn validate_visited_arguments(&mut self) {
-        let attr = if let Some(attrid) = self.attributes.attribute {
+        let attr: &Attribute = if let Some(attrid) = self.attributes.attribute {
             &self.ast[attrid]
         } else {
             panic!("State error: missing attribute in validate_visited_arguments.")

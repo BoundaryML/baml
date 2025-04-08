@@ -34,6 +34,12 @@ pub enum BamlError {
         message: String,
         finish_reason: Option<String>,
     },
+    #[serde(rename_all = "snake_case")]
+    ClientHttpError {
+        client_name: String,
+        message: String,
+        status_code: u16,
+    },
     /// This is the only variant not documented at the aforementioned link:
     /// this is the catch-all for unclassified errors.
     #[serde(rename_all = "snake_case")]
@@ -63,6 +69,15 @@ impl BamlError {
                     raw_output: raw_output.to_string(),
                     message: message.to_string(),
                     finish_reason: finish_reason.clone(),
+                },
+                ExposedError::ClientHttpError {
+                    client_name,
+                    message,
+                    status_code,
+                } => Self::ClientHttpError {
+                    client_name: client_name.to_string(),
+                    message: message.to_string(),
+                    status_code: status_code.to_u16(),
                 },
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
@@ -114,6 +129,7 @@ impl IntoResponse for BamlError {
                 BamlError::FinishReasonError { .. } => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
                 BamlError::ValidationFailure { .. } => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
                 BamlError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
+                BamlError::ClientHttpError { status_code, .. } => StatusCode::from_u16(*status_code).unwrap_or(StatusCode::BAD_GATEWAY),
             },
             Json(match serde_json::to_value(&self) {
                 Ok(serde_json::Value::Object(mut v)) => {

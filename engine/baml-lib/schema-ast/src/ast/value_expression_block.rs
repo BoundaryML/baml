@@ -1,4 +1,5 @@
 use super::argument::ArgumentId;
+use super::type_builder_block::TypeBuilderBlock;
 use super::{
     traits::WithAttributes, Attribute, Comment, Expression, Field, FieldType, Identifier, Span,
     WithDocumentation, WithIdentifier, WithSpan,
@@ -154,6 +155,17 @@ pub struct ValueExprBlock {
     /// The location of this block in the text representation.
     pub(crate) span: Span,
     pub fields: Vec<Field<Expression>>,
+
+    /// Type builder block.
+    ///
+    /// ```ignore
+    /// test Example {
+    ///     type_builder {
+    ///         // Contents
+    ///     }
+    /// }
+    /// ```
+    pub type_builder: Option<TypeBuilderBlock>,
 
     pub block_type: ValueExprBlockType,
 }

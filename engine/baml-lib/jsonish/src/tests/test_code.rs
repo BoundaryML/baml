@@ -121,9 +121,30 @@ test_deserializer!(
     FieldType::class("Test"),
     {
       "type": "code",
-      "code": "\n\"Hello, world!\"\n"
+      "code": "\"Hello, world!\""
     }
 );
+
+
+test_deserializer!(
+  triple_quotes_contains_only_quoted_string_dedent,
+  BAML_FILE,
+  r#"
+  {
+    "code": """
+        def main():
+          print("Hello, world!")
+    """,
+    "type": "code",
+  }
+  "#,
+  FieldType::class("Test"),
+  {
+    "type": "code",
+    "code": "def main():\n  print(\"Hello, world!\")"
+  }
+);
+
 
 // test_deserializer!(
 //     triple_quotes_nested,

@@ -1,0 +1,373 @@
+---
+title: Retrieval-Augmented Generation (RAG)
+---
+
+RAG is a commonly used technique used to improve the quality of LLM-generated responses by
+grounding the model on external sources of knowledge. In this example, we'll use
+BAML to manage the prompts for a RAG pipeline.
+
+### Creating BAML functions
+
+The most common way to implement RAG is to use a vector store that contains embeddings of
+the data. First, let's define our BAML model for RAG.
+
+#### BAML Code
+
+```baml rag.baml
+class Response {
+  question string
+  answer string
+}
+
+function RAG(question: string, context: string) -> Response {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Answer the question in full sentences using the provided context.
+    Do not make up an answer. If the information is not provided in the context, say so clearly.
+    
+    QUESTION: {{ question }}
+    RELEVANT CONTEXT: {{ context }}
+
+    {{ ctx.output_format }}
+
+    RESPONSE:
+  "#
+}
+
+test TestOne {
+  functions [RAG]
+  args {
+    question "When was SpaceX founded?"
+    context #"
+      SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.
+    "#
+  }
+}
+
+test TestTwo {
+  functions [RAG]
+  args {
+    question "Where is Fiji located?"
+    context #"
+      Fiji is a country in the South Pacific known for its rugged landscapes, palm-lined beaches, and coral reefs with clear lagoons.
+    "#
+  }
+}
+
+test TestThree {
+  functions [RAG]
+  args {
+    question "What is the primary product of BoundaryML?"
+    context #"
+      BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs.
+    "#
+  }
+}
+
+test TestMissingContext{
+  functions [RAG]
+  args {
+    question "Who founded SpaceX?"
+    context #"
+      BoundaryML is the company that makes BAML, the best way to get structured with LLMs.
+    "#
+  }
+}
+```
+
+Note how in the `TestMissingContext` test, the model correctly says that it doesn't know the answer
+because it's not provided in the context. The model doesn't make up an answer, because of the way
+we've written the prompt.
+
+You can generate the BAML client code for this prompt by running `baml-cli generate`.
+
+### Creating a VectorStore
+
+Next, let's create our own minimal vector store and retriever using `scikit-learn`.
+
+#### Python Code
+
+```py rag.py
+# Install scikit-learn and use its TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
+class VectorStore:
+    """
+    Adapted from https://github.com/MadcowD/ell/blob/main/examples/rag/rag.py
+    """
+    def __init__(self, vectorizer, tfidf_matrix, documents):
+        self.vectorizer = vectorizer
+        self.tfidf_matrix = tfidf_matrix
+        self.documents = documents
+
+    @classmethod
+    def from_documents(cls, documents: list[str]) -> "VectorStore":
+        vectorizer = TfidfVectorizer()
+        tfidf_matrix = vectorizer.fit_transform(documents)
+        return cls(vectorizer, tfidf_matrix, documents)
+
+    def retrieve_with_scores(self, query: str, k: int = 2) -> list[dict]:
+        query_vector = self.vectorizer.transform([query])
+        similarities = cosine_similarity(query_vector, self.tfidf_matrix).flatten()
+        top_k_indices = np.argsort(similarities)[-k:][::-1]
+        return [
+            {"document": self.documents[i], "relevance": float(similarities[i])}
+            for i in top_k_indices
+        ]
+
+    def retrieve_context(self, query: str, k: int = 2) -> str:
+        documents = self.retrieve_with_scores(query, k)
+        return "\n".join([item["document"] for item in documents])
+```
+
+We can then build our RAG application in Python by calling the BAML client.
+
+```py rag.py
+from baml_client import b
+
+# class VectorStore:
+# ...
+
+if __name__ == "__main__":
+    documents = [
+        "SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.",
+        "Fiji is a country in the South Pacific known for its rugged landscapes, palm-lined beaches, and coral reefs with clear lagoons.",
+        "Dunkirk is a 2017 war film depicting the Dunkirk evacuation of World War II, featuring intense aerial combat scenes with Spitfire aircraft.",
+        "BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs."
+    ]
+
+    vector_store = VectorStore.from_documents(documents)
+
+    questions = [
+        "What is BAML?",
+        "Which aircraft was featured in Dunkirk?",
+        "When was SpaceX founded?",
+        "Where is Fiji located?",
+        "What is the capital of Fiji?"
+    ]
+
+    for question in questions:
+        context = vector_store.retrieve_context(question)
+        response = b.RAG(question, context)
+        print(response)
+        print("-" * 10)
+```
+
+When you run the Python script, you should see output like the following:
+
+```
+question='What is BAML?' answer='BAML is a product made by BoundaryML, and it is described as the best way to get structured outputs with LLMs.'
+----------
+question='Which aircraft was featured in Dunkirk?' answer='The aircraft featured in Dunkirk were Spitfire aircraft.'
+----------
+question='When was SpaceX founded?' answer='SpaceX was founded in 2002.'
+----------
+question='Where is Fiji located?' answer='Fiji is located in the South Pacific.'
+----------
+question='What is the capital of Fiji?' answer='The information about the capital of Fiji is not provided in the context.'
+----------
+```
+
+Once again, in the last question, the model correctly says that it doesn't know the answer because
+it's not provided in the context.
+
+That's it! You can now attempt such a RAG workflow with a vector database on a larger dataset.
+All you have to do is point BAML to the retriever class you've implemented.
+
+### Creating Citations with LLM
+
+In this advanced section, we'll explore how to enhance our RAG implementation to include citations for the generated responses. This is particularly useful when you need to track the source of information in the generated responses.
+
+First, let's extend our BAML model to support citations. We'll create a new response type and function that explicitly handles citations:
+
+```baml rag.baml
+class ResponseWithCitations {
+  question string
+  answer string
+  citations string[]
+}
+
+function RAGWithCitations(question: string, context: string) -> ResponseWithCitations {
+  client "openai/gpt-4o-mini"
+  prompt #"
+    Answer the question in full sentences using the provided context. 
+    If the statement contains information from the context, put the exact cited quotes in complete sentences in the citations array.
+    Do not make up an answer. If the information is not provided in the context, say so clearly.
+    
+    QUESTION: {{ question }}
+    RELEVANT CONTEXT: {{ context }}
+    {{ ctx.output_format }}
+    RESPONSE:
+  "#
+}
+```
+
+Let's add a test to verify our citation functionality:
+
+```baml rag.baml
+test TestCitations {
+  functions [RAGWithCitations]
+  args {
+    question "What can you tell me about SpaceX and its founder?"
+    context #"
+      SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.
+      The company has developed several launch vehicles and spacecraft.
+      Einstein was born on March 14, 1879. 
+    "#
+  }
+}
+```
+
+This test will demonstrate how the model:
+1. Provides relevant information about SpaceX and its founder
+2. Includes the exact source quotes in the citations array
+3. Only uses information that's actually present in the context
+
+To use this enhanced RAG implementation in our Python code, we simply need to update our loop to use the new `RAGWithCitations` function:
+
+```py rag.py
+for question in questions:
+    context = vector_store.retrieve_context(question)
+    response = b.RAGWithCitations(question, context)
+    print(response)
+    print("-" * 10)
+```
+
+When you run this modified code, you'll see responses that include both answers and their supporting citations. For example:
+
+```
+question='What is BAML?' answer='BAML is a product made by BoundaryML that provides the best way to get structured outputs with LLMs.' citations=['BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs.']
+----------
+question='Which aircraft was featured in Dunkirk?' answer='The aircraft featured in Dunkirk were Spitfire aircraft.' citations=['Dunkirk is a 2017 war film depicting the Dunkirk evacuation of World War II, featuring intense aerial combat scenes with Spitfire aircraft.']
+----------
+question='When was SpaceX founded?' answer='SpaceX was founded in 2002.' citations=['SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.']
+----------
+question='Where is Fiji located?' answer='Fiji is located in the South Pacific.' citations=['Fiji is a country in the South Pacific.']
+----------
+question='What is the capital of Fiji?' answer='The capital of Fiji is not provided in the context.' citations=[]
+----------
+```
+
+Notice how each piece of information in the answer is backed by a specific citation from the source context. This makes the responses more transparent and verifiable, which is especially important in applications where the source of information matters.
+
+### Using Pinecone as Vector Database
+
+Instead of using our custom vector store, we can use Pinecone, a production-ready vector database. Here's how to implement the same RAG pipeline using Pinecone:
+
+First, install the required packages:
+
+```bash
+pip install pinecone
+```
+
+Now, let's modify our Python code to use Pinecone:
+
+```py rag_pinecone.py
+import pinecone as pc
+from sentence_transformers import SentenceTransformer
+from pinecone import ServerlessSpec
+from baml_client import b
+
+# Initialize Pinecone
+pc = Pinecone(api_key="YOUR_API_KEY")
+
+class PineconeStore:
+    def __init__(self, index_name: str):
+        self.index_name = index_name
+        self.encoder = SentenceTransformer('all-MiniLM-L6-v2')
+        
+        # Create index if it doesn't exist
+        if index_name not in pc.list_indexes().names():
+            pc.create_index(
+                name=index_name,
+                dimension=self.encoder.get_sentence_embedding_dimension(),
+                metric='cosine',
+                spec=ServerlessSpec(
+                    cloud='aws',
+                    region='us-east-1'
+                )
+            )
+        self.index = pc.Index(index_name)
+
+    def add_documents(self, documents: list[str], ids: list[str] = None):
+        if ids is None:
+            ids = [str(i) for i in range(len(documents))]
+        
+        # Create embeddings
+        embeddings = self.encoder.encode(documents)
+        
+        # Create vector records
+        vectors = [(id, emb.tolist(), {"text": doc}) 
+                  for id, emb, doc in zip(ids, embeddings, documents)]
+        
+        # Upsert to Pinecone
+        self.index.upsert(vectors=vectors)
+
+    def retrieve_context(self, query: str, k: int = 2) -> str:
+        # Create query embedding
+        query_embedding = self.encoder.encode(query).tolist()
+        
+        # Query Pinecone
+        results = self.index.query(
+            vector=query_embedding,
+            top_k=k,
+            include_metadata=True
+        )
+        
+        # Extract and join the document texts
+        contexts = [match.metadata["text"] for match in results.matches]
+        return "\n".join(contexts)
+
+if __name__ == "__main__":
+    # Initialize Pinecone store
+    vector_store = PineconeStore("baml-rag-demo")
+    
+    # Sample documents (same as before)
+    documents = [
+        "SpaceX is an American spacecraft manufacturer and space transportation company founded by Elon Musk in 2002.",
+        "Fiji is a country in the South Pacific known for its rugged landscapes, palm-lined beaches, and coral reefs with clear lagoons.",
+        "Dunkirk is a 2017 war film depicting the Dunkirk evacuation of World War II, featuring intense aerial combat scenes with Spitfire aircraft.",
+        "BoundaryML is the company that makes BAML, the best way to get structured outputs with LLMs."
+    ]
+    
+    # Add documents to Pinecone
+    vector_store.add_documents(documents)
+    
+    # Test questions (same as before)
+    questions = [
+        "What is BAML?",
+        "Which aircraft was featured in Dunkirk?",
+        "When was SpaceX founded?",
+        "Where is Fiji located?",
+        "What is the capital of Fiji?"
+    ]
+
+    # Query using the same BAML functions
+    for question in questions:
+        context = vector_store.retrieve_context(question)
+        response = b.RAGWithCitations(question, context)
+        print(response)
+        print("-" * 10)
+```
+
+The key differences when using Pinecone are:
+
+1. Documents are stored in Pinecone's serverless infrastructure on AWS instead of in memory
+2. We can persist our vector database across sessions
+
+Here is a snapshot of the entriies in our Pinecone database console:
+<img src="../../assets/guide/pinecone-rag-example.png" width="600px" height="auto" />
+
+Note that you'll need to:
+1. [Create a Pinecone account](https://www.pinecone.io/)
+2. Get your API key from the Pinecone console
+3. Replace `YOUR_API_KEY` with your actual Pinecone credentials
+4. Make sure you have access to the serverless offering in your Pinecone account
+
+The BAML functions (`RAG` and `RAGWithCitations`) remain exactly the same, demonstrating how BAML cleanly separates the prompt engineering from the implementation details of your vector database.
+
+When you run this code, you'll get the same type of responses as before, but now you're using a production-ready serverless vector database that can scale automatically based on your usage.
+
+

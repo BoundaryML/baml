@@ -1,0 +1,39 @@
+'use server'
+
+import { b } from '../index';
+import type { Check, Checked  } from "../types";
+import type { Image, Audio } from "@boundaryml/baml";
+
+import type { {% for t in types %} {{ t }}{% if !loop.last %}, {% endif %}{% endfor %} } from "../types"
+
+import type * as types from "../types"
+
+/**
+ * Regular BAML server actions that return direct responses.
+ */
+{%- for func in funcs %}
+
+/**
+ * Executes the "{{ func.name }}" BAML action.
+ *
+ * This server action calls the underlying BAML function "{{ func.name }}"
+ * with the specified parameters.
+ *
+{%- for (name, optional, type) in func.args %}
+ * @param { {{ type }} } {{ name }}{% if optional %} (optional){% endif %} - Input parameter.
+{%- endfor %}
+ *
+ * @returns {Promise<{{ func.return_type }}>} A promise that resolves with the result of the action.
+ */
+export const {{ func.name }} = async (
+  {%- for (name, optional, type) in func.args %}
+  {{ name }}{% if optional %}?{% endif %}: {{ type }},
+  {%- endfor %}
+): Promise<{{ func.return_type }}> => {
+  return b.{{ func.name }}(
+    {%- for (name, _, _) in func.args %}
+    {{ name }},
+    {%- endfor %}
+  );
+};
+{%- endfor %}

@@ -17,6 +17,7 @@ cfg_if::cfg_if!(
 
 use internal_baml_core::{
     internal_baml_diagnostics::{Diagnostics, SourceFile},
+    internal_baml_parser_database::ParserDatabase,
     ir::repr::IntermediateRepr,
     validate,
 };
@@ -26,6 +27,7 @@ use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::Calla
 
 pub struct InternalBamlRuntime {
     pub(crate) ir: Arc<IntermediateRepr>,
+    pub(crate) db: ParserDatabase,
     diagnostics: Diagnostics,
     clients: DashMap<String, Arc<LLMProvider>>,
     retry_policies: DashMap<String, CallablePolicy>,
@@ -51,6 +53,7 @@ impl InternalBamlRuntime {
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
         Ok(InternalBamlRuntime {
             ir: Arc::new(ir),
+            db: schema.db,
             diagnostics: schema.diagnostics,
             clients: Default::default(),
             retry_policies: Default::default(),
@@ -73,6 +76,7 @@ impl InternalBamlRuntime {
 
         Ok(Self {
             ir: Arc::new(ir),
+            db: schema.db,
             diagnostics: schema.diagnostics,
             clients: Default::default(),
             retry_policies: Default::default(),

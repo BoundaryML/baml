@@ -67,10 +67,11 @@ pub enum TypeWalker<'db> {
 impl<'db> crate::ParserDatabase {
     /// Find an enum by name.
     pub fn find_enum(&'db self, idn: &Identifier) -> Option<EnumWalker<'db>> {
-        self.find_type(idn).and_then(|either| match either {
-            TypeWalker::Enum(enm) => Some(enm),
-            _ => None,
-        })
+        self.find_type(idn)
+            .and_then(|type_walker| match type_walker {
+                TypeWalker::Enum(enm) => Some(enm),
+                _ => None,
+            })
     }
 
     fn find_top_by_str(&'db self, name: &str) -> Option<&'db TopId> {
@@ -176,29 +177,25 @@ impl<'db> crate::ParserDatabase {
         let mut names: Vec<String> = self.walk_classes().map(|c| c.name().to_string()).collect();
         names.extend(self.walk_enums().map(|e| e.name().to_string()));
         // Add primitive types
-        names.extend(
-            vec!["string", "int", "float", "bool", "true", "false"]
-                .into_iter()
-                .map(String::from),
-        );
+        names.extend(["string", "int", "float", "bool", "true", "false"].map(String::from));
         names
     }
 
-    /// Get all the types that are valid in the schema. (including primitives)
+    /// Get all the valid functions in the schema.
     pub fn valid_function_names(&self) -> Vec<String> {
         self.walk_functions()
             .map(|c| c.name().to_string())
             .collect::<Vec<String>>()
     }
 
-    /// Get all the types that are valid in the schema. (including primitives)
+    /// Get all the valid retry policies in the schema.
     pub fn valid_retry_policy_names(&self) -> Vec<String> {
         self.walk_retry_policies()
             .map(|c| c.name().to_string())
             .collect()
     }
 
-    /// Get all the types that are valid in the schema. (including primitives)
+    /// Get all the valid client names in the schema.
     pub fn valid_client_names(&self) -> Vec<String> {
         self.walk_clients().map(|c| c.name().to_string()).collect()
     }
@@ -236,7 +233,7 @@ impl<'db> crate::ParserDatabase {
             })
     }
 
-    /// Walk all template strings in the schema.
+    /// Walk all templates strings in the schema.
     pub fn walk_templates(&self) -> impl Iterator<Item = TemplateStringWalker<'_>> {
         self.ast()
             .iter_tops()
@@ -247,7 +244,7 @@ impl<'db> crate::ParserDatabase {
             })
     }
 
-    /// Walk all classes in the schema.
+    /// Walk all functions in the schema.
     pub fn walk_functions(&self) -> impl Iterator<Item = FunctionWalker<'_>> {
         self.ast()
             .iter_tops()
@@ -258,7 +255,7 @@ impl<'db> crate::ParserDatabase {
             })
     }
 
-    /// Walk all classes in the schema.
+    /// Walk all clients in the schema.
     pub fn walk_clients(&self) -> impl Iterator<Item = ClientWalker<'_>> {
         self.ast()
             .iter_tops()
@@ -269,7 +266,7 @@ impl<'db> crate::ParserDatabase {
             })
     }
 
-    /// Walk all classes in the schema.
+    /// Walk all retry policies in the schema.
     pub fn walk_retry_policies(&self) -> impl Iterator<Item = ConfigurationWalker<'_>> {
         self.ast()
             .iter_tops()
@@ -280,7 +277,7 @@ impl<'db> crate::ParserDatabase {
             })
     }
 
-    /// Walk all classes in the schema.
+    /// Walk all test cases in the schema.
     pub fn walk_test_cases(&self) -> impl Iterator<Item = ConfigurationWalker<'_>> {
         self.ast()
             .iter_tops()

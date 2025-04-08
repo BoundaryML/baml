@@ -43,12 +43,15 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
   const { theme } = useTheme()
 
   if (!response) {
-    return
+    return null
   }
 
   let parsedResponseObj
   try {
-    parsedResponseObj = JSON.parse(response ?? '{}')
+    parsedResponseObj = JSON.parse(response)
+    if (parsedResponseObj === null || typeof parsedResponseObj !== 'object') {
+      return <RenderPromptPart text={response} />
+    }
   } catch (e) {
     parsedResponseObj = response
   }
@@ -62,7 +65,7 @@ const ParsedResponseRender = ({ response }: { response: string | undefined }) =>
       <ScrollArea className='pr-2 w-full text-xs' type='always'>
         <JsonView
           className='p-1 w-full rounded-md'
-          value={parsedResponseObj}
+          value={parsedResponseObj || {}}
           collapsed={false}
           enableClipboard={true}
           displayDataTypes={false}

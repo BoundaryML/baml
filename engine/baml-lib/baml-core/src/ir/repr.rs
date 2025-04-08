@@ -1,9 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use anyhow::{anyhow, Result};
 use baml_types::{
-    Constraint, ConstraintLevel, FieldType, JinjaExpression, StringOr, UnresolvedValue,
+    Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable, StreamingBehavior,
+    UnresolvedValue,
 };
+use either::Either;
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_parser_database::{
     walkers::{
@@ -13,7 +15,10 @@ use internal_baml_parser_database::{
     Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy, TypeWalker,
 };
 
-use internal_baml_schema_ast::ast::{self, FieldArity, SubType, ValExpId, WithName, WithSpan};
+use internal_baml_schema_ast::ast::{
+    self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
+    WithSpan,
+};
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
@@ -47,9 +52,9 @@ pub struct IntermediateRepr {
 
 /// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
 #[derive(Clone, Copy)]
-pub struct Walker<'db, I> {
-    /// The parser database being traversed.
-    pub db: &'db IntermediateRepr,
+pub struct Walker<'ir, I> {
+    /// The IR being traversed.
+    pub ir: &'ir IntermediateRepr,
     /// The identifier of the focused element.
     pub item: I,
 }
@@ -112,17 +117,17 @@ impl IntermediateRepr {
     }
 
     pub fn walk_enums(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Enum>>> {
-        self.enums.iter().map(|e| Walker { db: self, item: e })
+        self.enums.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_classes(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Class>>> {
-        self.classes.iter().map(|e| Walker { db: self, item: e })
+        self.classes.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_type_aliases(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TypeAlias>>> {
         self.type_aliases
             .iter()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     // TODO: Exact size Iterator + Node<>?
@@ -130,7 +135,7 @@ impl IntermediateRepr {
         self.structural_recursive_alias_cycles
             .iter()
             .flatten()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     pub fn function_names(&self) -> impl ExactSizeIterator<Item = &str> {
@@ -138,7 +143,7 @@ impl IntermediateRepr {
     }
 
     pub fn walk_functions(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Function>>> {
-        self.functions.iter().map(|e| Walker { db: self, item: e })
+        self.functions.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_tests(
@@ -146,14 +151,14 @@ impl IntermediateRepr {
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
         self.functions.iter().flat_map(move |f| {
             f.elem.tests().iter().map(move |t| Walker {
-                db: self,
+                ir: self,
                 item: (f, t),
             })
         })
     }
 
     pub fn walk_clients(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Client>>> {
-        self.clients.iter().map(|e| Walker { db: self, item: e })
+        self.clients.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_template_strings(
@@ -161,7 +166,7 @@ impl IntermediateRepr {
     ) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TemplateString>>> {
         self.template_strings
             .iter()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     #[allow(dead_code)]
@@ -170,13 +175,16 @@ impl IntermediateRepr {
     ) -> impl ExactSizeIterator<Item = Walker<'_, &Node<RetryPolicy>>> {
         self.retry_policies
             .iter()
-            .map(|e| Walker { db: self, item: e })
+            .map(|e| Walker { ir: self, item: e })
     }
 
     pub fn from_parser_database(
         db: &ParserDatabase,
         configuration: Configuration,
     ) -> Result<IntermediateRepr> {
+        // TODO: We're iterating over the AST tops once for every property in
+        // the IR. Easy performance optimization here by iterating only one time
+        // and distributing the tops to the appropriate IR properties.
         let mut repr = IntermediateRepr {
             enums: db
                 .walk_enums()
@@ -241,6 +249,84 @@ impl IntermediateRepr {
 
         Ok(repr)
     }
+
+    /// TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub fn type_builder_entries_from_scoped_db(
+        scoped_db: &ParserDatabase,
+        global_db: &ParserDatabase,
+    ) -> Result<(
+        Vec<Node<Class>>,
+        Vec<Node<Enum>>,
+        Vec<Node<TypeAlias>>,
+        Vec<IndexSet<String>>,
+        Vec<IndexMap<String, FieldType>>,
+    )> {
+        let classes = scoped_db
+            .walk_classes()
+            .filter(|c| {
+                scoped_db.ast()[c.id].is_dynamic_type_def
+                    || global_db.find_type_by_str(c.name()).is_none()
+            })
+            .map(|c| c.node(scoped_db))
+            .collect::<Result<Vec<Node<Class>>>>()?;
+
+        let enums = scoped_db
+            .walk_enums()
+            .filter(|e| {
+                scoped_db.ast()[e.id].is_dynamic_type_def
+                    || global_db.find_type_by_str(e.name()).is_none()
+            })
+            .map(|e| e.node(scoped_db))
+            .collect::<Result<Vec<Node<Enum>>>>()?;
+
+        let type_aliases = scoped_db
+            .walk_type_aliases()
+            .filter(|a| global_db.find_type_by_str(a.name()).is_none())
+            .map(|a| a.node(scoped_db))
+            .collect::<Result<Vec<Node<TypeAlias>>>>()?;
+
+        let recursive_classes = scoped_db
+            .finite_recursive_cycles()
+            .iter()
+            .map(|ids| {
+                ids.iter()
+                    .map(|id| {
+                        let name = scoped_db.ast()[*id].name();
+                        if name.starts_with(ast::DYNAMIC_TYPE_NAME_PREFIX) {
+                            name.strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
+                                .unwrap()
+                                .to_string()
+                        } else {
+                            name.to_string()
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+
+        let mut recursive_aliases = vec![];
+        for cycle in scoped_db.recursive_alias_cycles() {
+            let mut component = IndexMap::new();
+            for id in cycle {
+                let alias = &scoped_db.ast()[*id];
+                // Those are global cycles, skip.
+                if global_db.find_type_by_str(alias.name()).is_some() {
+                    continue;
+                }
+                // Cycles defined in the scoped test type builder block.
+                component.insert(alias.name().to_string(), alias.value.repr(scoped_db)?);
+            }
+            recursive_aliases.push(component);
+        }
+
+        Ok((
+            classes,
+            enums,
+            type_aliases,
+            recursive_classes,
+            recursive_aliases,
+        ))
+    }
 }
 
 // TODO:
@@ -271,13 +357,83 @@ pub struct NodeAttributes {
 
     pub constraints: Vec<Constraint>,
 
-    // Spans
+    /// Total span of the Node.
+    ///
+    /// ```ignore
+    /// <SPAN_START> class Example {
+    ///     a string
+    ///     b int
+    /// } <SPAN_END>
+    /// ```
+    ///
+    /// TODO: Create an `ir::Span` struct and use it to store all the spans
+    /// we've defined here. Something like:
+    ///
+    /// ```ignore
+    /// struct Span {
+    ///     total: ast::Span,
+    ///     identifier: ast::Span,
+    ///     symbols: HashMap<String, ast::Span>,
+    /// }
+    /// ```
     pub span: Option<ast::Span>,
+
+    /// Span of the identifier only.
+    ///
+    /// ```ignore
+    /// class <SPAN_START> Example <SPAN_END> {
+    ///     a string
+    ///     b int
+    /// }
+    /// ```
+    ///
+    /// In the case of fields this is the field name span.
+    ///
+    /// ```ignore
+    /// class Example {
+    ///     <SPAN_START> a <SPAN_END> string
+    ///     b int
+    /// }
+    /// ```
+    pub identifier_span: Option<ast::Span>,
+
+    /// Other important spans for renaming or similar features.
+    ///
+    /// For example, imagine we have a union:
+    ///
+    /// ```ignore
+    /// class Example {
+    ///     union int | OtherClass | string | OtherClass // Yes it can appear multiple times
+    /// }
+    /// ```
+    ///
+    /// And we want to rename the `OtherClass` type. We can't do that unless we
+    /// know the exact span of the symbol in the union.
+    ///
+    /// We could store this in [`FieldType::WithMetadata`] but currently that
+    /// variant only stores data attached to the field by the user (contraints,
+    /// streaming behavior), and it would also require every single
+    /// [`FieldType`] in the IR to be [`FieldType::WithMetadata`] which might
+    /// break some code or match statements elsewhere.
+    pub symbol_spans: HashMap<String, Vec<ast::Span>>,
 }
 
 impl NodeAttributes {
     pub fn get(&self, key: &str) -> Option<&UnresolvedValue<()>> {
         self.meta.get(key)
+    }
+
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
+            match maybe_value {
+                Some(Resolvable::Bool(true, _)) => true,
+                _ => false,
+            }
+        }
+        StreamingBehavior {
+            done: is_some_true(self.get("stream.done")),
+            state: is_some_true(self.get("stream.with_state")),
+        }
     }
 }
 
@@ -287,6 +443,8 @@ impl Default for NodeAttributes {
             meta: IndexMap::new(),
             constraints: Vec::new(),
             span: None,
+            identifier_span: None,
+            symbol_spans: HashMap::new(),
         }
     }
 }
@@ -295,45 +453,85 @@ fn to_ir_attributes(
     db: &ParserDatabase,
     maybe_ast_attributes: Option<&Attributes>,
 ) -> (IndexMap<String, UnresolvedValue<()>>, Vec<Constraint>) {
-    let null_result = (IndexMap::new(), Vec::new());
-    maybe_ast_attributes.map_or(null_result, |attributes| {
-        let Attributes {
-            description,
-            alias,
-            dynamic_type,
-            skip,
-            constraints,
-        } = attributes;
+    let Some(attributes) = maybe_ast_attributes else {
+        return (IndexMap::new(), Vec::new());
+    };
 
-        let description = description
-            .as_ref()
-            .map(|d| ("description".to_string(), d.without_meta()));
+    let Attributes {
+        description,
+        alias,
+        dynamic_type,
+        skip,
+        constraints,
+        streaming_done,
+        streaming_needed,
+        streaming_state,
+    } = attributes;
 
-        let alias = alias
-            .as_ref()
-            .map(|v| ("alias".to_string(), v.without_meta()));
+    let description = description
+        .as_ref()
+        .map(|d| ("description".to_string(), d.without_meta()));
 
-        let dynamic_type = dynamic_type.as_ref().and_then(|v| {
-            if *v {
-                Some(("dynamic_type".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
-        let skip = skip.as_ref().and_then(|v| {
-            if *v {
-                Some(("skip".to_string(), UnresolvedValue::Bool(true, ())))
-            } else {
-                None
-            }
-        });
+    let alias = alias
+        .as_ref()
+        .map(|v| ("alias".to_string(), v.without_meta()));
 
-        let meta = vec![description, alias, dynamic_type, skip]
-            .into_iter()
-            .flatten()
-            .collect();
-        (meta, constraints.clone())
-    })
+    let dynamic_type = dynamic_type.as_ref().and_then(|v| {
+        if *v {
+            Some(("dynamic_type".to_string(), UnresolvedValue::Bool(true, ())))
+        } else {
+            None
+        }
+    });
+    let skip = skip.as_ref().and_then(|v| {
+        if *v {
+            Some(("skip".to_string(), UnresolvedValue::Bool(true, ())))
+        } else {
+            None
+        }
+    });
+    let streaming_done = streaming_done.as_ref().and_then(|v| {
+        if *v {
+            Some(("stream.done".to_string(), UnresolvedValue::Bool(true, ())))
+        } else {
+            None
+        }
+    });
+    let streaming_needed = streaming_needed.as_ref().and_then(|v| {
+        if *v {
+            Some((
+                "stream.not_null".to_string(),
+                UnresolvedValue::Bool(true, ()),
+            ))
+        } else {
+            None
+        }
+    });
+    let streaming_state = streaming_state.as_ref().and_then(|v| {
+        if *v {
+            Some((
+                "stream.with_state".to_string(),
+                UnresolvedValue::Bool(true, ()),
+            ))
+        } else {
+            None
+        }
+    });
+
+    let meta = vec![
+        description,
+        alias,
+        dynamic_type,
+        skip,
+        streaming_done,
+        streaming_needed,
+        streaming_state,
+    ]
+    .into_iter()
+    .filter_map(|s| s)
+    .collect();
+
+    (meta, constraints.clone())
 }
 
 /// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc
@@ -347,11 +545,7 @@ pub struct Node<T> {
 pub trait WithRepr<T> {
     /// Represents block or field attributes - @@ for enums and classes, @ for enum values and class fields
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
-        NodeAttributes {
-            meta: IndexMap::new(),
-            constraints: Vec::new(),
-            span: None,
-        }
+        NodeAttributes::default()
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<T>;
@@ -407,18 +601,73 @@ impl WithRepr<FieldType> for ast::FieldType {
                 })
             })
             .collect::<Vec<Constraint>>();
+        let mut meta = IndexMap::new();
+        if self
+            .attributes()
+            .iter()
+            .find(|Attribute { name, .. }| name.name() == "stream.done")
+            .is_some()
+        {
+            let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
+            meta.insert("stream.done".to_string(), val);
+        }
+        if self
+            .attributes()
+            .iter()
+            .find(|Attribute { name, .. }| name.name() == "stream.with_state")
+            .is_some()
+        {
+            let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
+            meta.insert("stream.with_state".to_string(), val);
+        }
+
+        let mut symbol_spans = HashMap::new();
+
+        let mut stack = vec![self];
+        while let Some(item) = stack.pop() {
+            match item {
+                // Base case, store span.
+                ast::FieldType::Symbol(_, idn, ..) => {
+                    if !symbol_spans.contains_key(idn.name()) {
+                        symbol_spans.insert(idn.name().to_string(), vec![idn.span().clone()]);
+                    } else {
+                        symbol_spans
+                            .get_mut(idn.name())
+                            .unwrap()
+                            .push(idn.span().clone());
+                    }
+                }
+                // Recurse.
+                ast::FieldType::List(_, ft, ..) => stack.push(ft),
+                ast::FieldType::Map(_, kv, ..) => {
+                    let (k, v) = &**kv;
+                    stack.push(k);
+                    stack.push(v);
+                }
+                ast::FieldType::Union(_, items, ..) | ast::FieldType::Tuple(_, items, ..) => {
+                    stack.extend(items.iter());
+                }
+                // No identifiers here.
+                ast::FieldType::Primitive(..) | ast::FieldType::Literal(..) => {}
+            }
+        }
+
         let attributes = NodeAttributes {
-            meta: IndexMap::new(),
+            meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: None,
+            symbol_spans,
         };
 
         attributes
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<FieldType> {
-        let constraints = WithRepr::attributes(self, db).constraints;
-        let has_constraints = !constraints.is_empty();
+        let attributes = WithRepr::attributes(self, db);
+        let has_constraints = !attributes.constraints.is_empty();
+        let streaming_behavior = attributes.streaming_behavior();
+        let has_special_streaming_behavior = streaming_behavior != StreamingBehavior::default();
         let base = match self {
             ast::FieldType::Primitive(arity, typeval, ..) => {
                 let repr = FieldType::Primitive(*typeval);
@@ -442,9 +691,10 @@ impl WithRepr<FieldType> for ast::FieldType {
                         let base_class = FieldType::Class(class_walker.name().to_string());
                         match class_walker.get_constraints(SubType::Class) {
                             Some(constraints) if !constraints.is_empty() => {
-                                FieldType::Constrained {
+                                FieldType::WithMetadata {
                                     base: Box::new(base_class),
                                     constraints,
+                                    streaming_behavior: streaming_behavior.clone(),
                                 }
                             }
                             _ => base_class,
@@ -454,9 +704,10 @@ impl WithRepr<FieldType> for ast::FieldType {
                         let base_type = FieldType::Enum(enum_walker.name().to_string());
                         match enum_walker.get_constraints(SubType::Enum) {
                             Some(constraints) if !constraints.is_empty() => {
-                                FieldType::Constrained {
+                                FieldType::WithMetadata {
                                     base: Box::new(base_type),
                                     constraints,
+                                    streaming_behavior: streaming_behavior.clone(),
                                 }
                             }
                             _ => base_type,
@@ -515,10 +766,12 @@ impl WithRepr<FieldType> for ast::FieldType {
             ),
         };
 
-        let with_constraints = if has_constraints {
-            FieldType::Constrained {
+        let use_metadata = has_constraints || has_special_streaming_behavior;
+        let with_constraints = if use_metadata {
+            FieldType::WithMetadata {
                 base: Box::new(base.clone()),
-                constraints,
+                constraints: attributes.constraints,
+                streaming_behavior,
             }
         } else {
             base
@@ -526,30 +779,6 @@ impl WithRepr<FieldType> for ast::FieldType {
         Ok(with_constraints)
     }
 }
-
-// #[derive(serde::Serialize, Debug)]
-// pub enum Identifier {
-//     /// Starts with env.*
-//     ENV(String),
-//     /// The path to a Local Identifer + the local identifer. Separated by '.'
-//     #[allow(dead_code)]
-//     Ref(Vec<String>),
-//     /// A string without spaces or '.' Always starts with a letter. May contain numbers
-//     Local(String),
-//     /// Special types (always lowercase).
-//     Primitive(baml_types::TypeValue),
-// }
-
-// impl Identifier {
-//     pub fn name(&self) -> String {
-//         match self {
-//             Identifier::ENV(k) => k.clone(),
-//             Identifier::Ref(r) => r.join("."),
-//             Identifier::Local(l) => l.clone(),
-//             Identifier::Primitive(p) => p.to_string(),
-//         }
-//     }
-// }
 
 type TemplateStringId = String;
 
@@ -566,6 +795,8 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
             meta: Default::default(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: None,
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -611,6 +842,8 @@ impl WithRepr<EnumValue> for EnumValueWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
@@ -628,6 +861,8 @@ impl WithRepr<Enum> for EnumWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
@@ -635,7 +870,15 @@ impl WithRepr<Enum> for EnumWalker<'_> {
 
     fn repr(&self, db: &ParserDatabase) -> Result<Enum> {
         Ok(Enum {
-            name: self.name().to_string(),
+            // TODO: #1343 Temporary solution until we implement scoping in the AST.
+            name: if self.ast_type_block().is_dynamic_type_def {
+                self.name()
+                    .strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
+                    .unwrap()
+                    .to_string()
+            } else {
+                self.name().to_string()
+            },
             values: self
                 .values()
                 .map(|w| {
@@ -665,25 +908,25 @@ impl WithRepr<Field> for FieldWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.ast_field().identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
     }
 
     fn repr(&self, db: &ParserDatabase) -> Result<Field> {
+        let ast_field_type = self.ast_field().expr.as_ref().ok_or(anyhow!(
+            "Internal error occurred while resolving repr of field {:?}",
+            self.name(),
+        ))?;
+        let field_type_attributes = WithRepr::attributes(ast_field_type, db);
+        let field_type = ast_field_type.repr(db)?;
         Ok(Field {
             name: self.name().to_string(),
             r#type: Node {
-                elem: self
-                    .ast_field()
-                    .expr
-                    .clone()
-                    .ok_or(anyhow!(
-                        "Internal error occurred while resolving repr of field {:?}",
-                        self.name(),
-                    ))?
-                    .repr(db)?,
-                attributes: self.attributes(db),
+                elem: field_type,
+                attributes: field_type_attributes,
             },
             docstring: self.get_documentation().map(Docstring),
         })
@@ -716,6 +959,8 @@ impl WithRepr<Class> for ClassWalker<'_> {
             meta,
             constraints,
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         };
 
         attributes
@@ -723,7 +968,15 @@ impl WithRepr<Class> for ClassWalker<'_> {
 
     fn repr(&self, db: &ParserDatabase) -> Result<Class> {
         Ok(Class {
-            name: self.name().to_string(),
+            // TODO: #1343 Temporary solution until we implement scoping in the AST.
+            name: if self.ast_type_block().is_dynamic_type_def {
+                self.name()
+                    .strip_prefix(ast::DYNAMIC_TYPE_NAME_PREFIX)
+                    .unwrap()
+                    .to_string()
+            } else {
+                self.name().to_string()
+            },
             static_fields: self
                 .static_fields()
                 .map(|e| e.node(db))
@@ -761,6 +1014,7 @@ impl WithRepr<TypeAlias> for TypeAliasWalker<'_> {
     fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
         NodeAttributes {
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
             ..Default::default() // TODO: Rest of attributes.
         }
     }
@@ -921,11 +1175,26 @@ fn process_field(
 }
 
 impl WithRepr<Function> for FunctionWalker<'_> {
-    fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
+    fn attributes(&self, db: &ParserDatabase) -> NodeAttributes {
+        let mut symbol_spans = HashMap::new();
+
+        for arg in self.walk_input_args().chain(self.walk_output_args()) {
+            let node_attrs = WithRepr::attributes(arg.field_type(), db);
+            for (symbol, mut spans) in node_attrs.symbol_spans {
+                if !symbol_spans.contains_key(&symbol) {
+                    symbol_spans.insert(symbol, spans);
+                } else {
+                    symbol_spans.get_mut(&symbol).unwrap().append(&mut spans);
+                }
+            }
+        }
+
         NodeAttributes {
             meta: Default::default(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans,
         }
     }
 
@@ -983,6 +1252,8 @@ impl WithRepr<Client> for ClientWalker<'_> {
             meta: IndexMap::new(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -1019,6 +1290,8 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
             meta: IndexMap::new(),
             constraints: Vec::new(),
             span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -1038,6 +1311,22 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
     }
 }
 
+// TODO: #1343 Temporary solution until we implement scoping in the AST.
+#[derive(Debug)]
+pub enum TypeBuilderEntry {
+    Enum(Node<Enum>),
+    Class(Node<Class>),
+    TypeAlias(Node<TypeAlias>),
+}
+
+// TODO: #1343 Temporary solution until we implement scoping in the AST.
+#[derive(Debug)]
+pub struct TestTypeBuilder {
+    pub entries: Vec<TypeBuilderEntry>,
+    pub recursive_classes: Vec<IndexSet<String>>,
+    pub recursive_aliases: Vec<IndexMap<String, FieldType>>,
+}
+
 #[derive(serde::Serialize, Debug)]
 pub struct TestCaseFunction(String);
 
@@ -1053,6 +1342,7 @@ pub struct TestCase {
     pub functions: Vec<Node<TestCaseFunction>>,
     pub args: IndexMap<String, UnresolvedValue<()>>,
     pub constraints: Vec<Constraint>,
+    pub type_builder: TestTypeBuilder,
 }
 
 impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
@@ -1069,7 +1359,9 @@ impl WithRepr<TestCaseFunction> for (&ConfigurationWalker<'_>, usize) {
         NodeAttributes {
             meta: IndexMap::new(),
             constraints,
-            span: Some(span),
+            span: Some(span.clone()),
+            identifier_span: Some(span),
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -1091,8 +1383,10 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             .collect();
         NodeAttributes {
             meta: IndexMap::new(),
-            span: Some(self.span().clone()),
             constraints,
+            span: Some(self.span().clone()),
+            identifier_span: Some(self.identifier().span().clone()),
+            symbol_spans: HashMap::new(),
         }
     }
 
@@ -1100,6 +1394,26 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
         let functions = (0..self.test_case().functions.len())
             .map(|i| (self, i).node(db))
             .collect::<Result<Vec<_>>>()?;
+
+        // TODO: #1343 Temporary solution until we implement scoping in the AST.
+        let (classes, enums, type_aliases, recursive_classes, recursive_aliases) =
+            IntermediateRepr::type_builder_entries_from_scoped_db(
+                &self.test_case().type_builder_scoped_db,
+                db,
+            )?;
+
+        let mut type_builder_entries = Vec::new();
+
+        for e in enums {
+            type_builder_entries.push(TypeBuilderEntry::Enum(e));
+        }
+        for c in classes {
+            type_builder_entries.push(TypeBuilderEntry::Class(c));
+        }
+        for a in type_aliases {
+            type_builder_entries.push(TypeBuilderEntry::TypeAlias(a));
+        }
+
         Ok(TestCase {
             name: self.name().to_string(),
             args: self
@@ -1115,9 +1429,15 @@ impl WithRepr<TestCase> for ConfigurationWalker<'_> {
             .constraints
             .into_iter()
             .collect::<Vec<_>>(),
+            type_builder: TestTypeBuilder {
+                entries: type_builder_entries,
+                recursive_aliases,
+                recursive_classes,
+            },
         })
     }
 }
+
 #[derive(Debug, Clone, Serialize)]
 pub enum Prompt {
     // The prompt stirng, and a list of input replacer keys (raw key w/ magic string, and key to replace with)
@@ -1178,6 +1498,20 @@ pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
         validated_schema.configuration,
     )?;
     Ok(ir)
+}
+
+/// Pull out `StreamingBehavior` from `NodeAttributes`.
+fn streaming_behavior_from_attributes(attributes: &NodeAttributes) -> StreamingBehavior {
+    fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
+        match maybe_value {
+            Some(Resolvable::Bool(true, _)) => true,
+            _ => false,
+        }
+    }
+    StreamingBehavior {
+        done: is_some_true(attributes.get("stream.done")),
+        state: is_some_true(attributes.get("stream.with_state")),
+    }
 }
 
 #[cfg(test)]
@@ -1278,11 +1612,61 @@ mod tests {
     }
 
     #[test]
+    fn test_streaming_attributes() {
+        let ir = make_test_ir(
+            r##"
+            class Foo {
+              foo_int int @stream.not_null
+              foo_bool bool @stream.with_state
+              foo_list int[] @stream.done
+            }
+
+            class Bar {
+              name string @stream.done
+              message string
+              @@stream.done
+            }
+        "##,
+        )
+        .unwrap();
+        let foo = ir.find_class("Foo").unwrap();
+        assert!(!foo.streaming_done());
+        match foo.walk_fields().collect::<Vec<_>>().as_slice() {
+            [field1, field2, field3] => {
+                let type1 = &field1.item.elem.r#type;
+                assert!(field1.streaming_needed());
+                assert!(type1.attributes.get("stream.not_null").is_none());
+                let type2 = &field2.item.elem.r#type;
+                assert!(!field2.streaming_state());
+                assert!(type2.attributes.get("stream.with_state").is_some());
+                let type3 = &field3.item.elem.r#type;
+                assert!(!field3.streaming_done());
+                assert!(type3.attributes.get("stream.done").is_some());
+            }
+            _ => panic!("Expected exactly 3 fields"),
+        }
+        let bar = ir.find_class("Bar").unwrap();
+        assert!(bar.streaming_done());
+        match bar.walk_fields().collect::<Vec<_>>().as_slice() {
+            [field1, field2] => {
+                assert!(!field1.streaming_done());
+                assert!(field1
+                    .item
+                    .elem
+                    .r#type
+                    .attributes
+                    .get("stream.done")
+                    .is_some());
+            }
+            _ => panic!("Expected exactly 2 fields"),
+        }
+    }
+
     fn test_resolve_type_alias() {
         let ir = make_test_ir(
             r##"
-            type One = int 
-            type Two = One 
+            type One = int
+            type Two = One
             type Three = Two
 
             class Test {
@@ -1316,7 +1700,10 @@ mod tests {
         let class = ir.find_class("Test").unwrap();
         let alias = class.find_field("field").unwrap();
 
-        let FieldType::Constrained { base, constraints } = alias.r#type() else {
+        let FieldType::WithMetadata {
+            base, constraints, ..
+        } = alias.r#type()
+        else {
             panic!(
                 "expected resolved constrained type, found {:?}",
                 alias.r#type()

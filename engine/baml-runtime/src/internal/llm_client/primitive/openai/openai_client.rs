@@ -2,11 +2,13 @@ use std::collections::HashMap;
 
 use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
+use baml_types::tracing::events::HttpRequestId;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::openai::ResolvedOpenAI;
 use internal_llm_client::{AllowedRoleMetadata, FinishReasonFilter};
+use secrecy::ExposeSecret;
 use serde_json::json;
 
 use crate::internal::llm_client::{
@@ -18,11 +20,11 @@ use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta};
 
 use crate::client_registry::ClientProperty;
 use crate::internal::llm_client::primitive::request::{
-    make_parsed_request, make_request, RequestBuilder,
+    make_parsed_request, make_request, RequestBuilder, ResponseType,
 };
 use crate::internal::llm_client::traits::{
-    SseResponseTrait, StreamResponse, ToProviderMessage, ToProviderMessageExt,
-    WithClientProperties, WithStreamChat,
+    CompletionToProviderBody, SseResponseTrait, StreamResponse, ToProviderMessage,
+    ToProviderMessageExt, WithClientProperties, WithStreamChat,
 };
 use crate::internal::llm_client::{
     traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
@@ -85,136 +87,29 @@ impl WithClient for OpenAIClient {
 }
 
 impl WithNoCompletion for OpenAIClient {}
-// TODO: Enable completion with support for completion streams
-// impl WithCompletion for OpenAIClient {
-//     fn completion_options(
-//         &self,
-//         ctx: &RuntimeContext,
-//     ) -> Result<internal_baml_jinja::CompletionOptions> {
-//         return Ok(internal_baml_jinja::CompletionOptions::new("\n".into()));
-//     }
-
-//     async fn completion(&self, ctx: &RuntimeContext, prompt: &String) -> LLMResponse {
-//         let (response, system_start, instant_start) =
-//             match make_parsed_request::<CompletionResponse>(
-//                 self,
-//                 either::Either::Left(prompt),
-//                 false,
-//             )
-//             .await
-//             {
-//                 Ok(v) => v,
-//                 Err(e) => return e,
-//             };
-
-//         if response.choices.len() != 1 {
-//             return LLMResponse::LLMFailure(LLMErrorResponse {
-//                 client: self.context.name.to_string(),
-//                 model: None,
-//                 prompt: internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
-//                 start_time: system_start,
-//                 latency: instant_start.elapsed(),
-//                 request_options: self.properties.properties.clone(),
-//                 message: format!(
-//                     "Expected exactly one choices block, got {}",
-//                     response.choices.len()
-//                 ),
-//                 code: ErrorCode::Other(200),
-//             });
-//         }
-
-//         let usage = response.usage.as_ref();
-
-//         LLMResponse::Success(LLMCompleteResponse {
-//             client: self.context.name.to_string(),
-//             prompt: internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
-//             content: response.choices[0].text.clone(),
-//             start_time: system_start,
-//             latency: instant_start.elapsed(),
-//             model: response.model,
-//             request_options: self.properties.properties.clone(),
-//             metadata: LLMCompleteResponseMetadata {
-//                 baml_is_complete: match response.choices.get(0) {
-//                     Some(c) => match c.finish_reason {
-//                         Some(FinishReason::Stop) => true,
-//                         _ => false,
-//                     },
-//                     None => false,
-//                 },
-//                 finish_reason: match response.choices.get(0) {
-//                     Some(c) => match c.finish_reason {
-//                         Some(FinishReason::Stop) => Some(FinishReason::Stop.to_string()),
-//                         _ => None,
-//                     },
-//                     None => None,
-//                 },
-//                 prompt_tokens: usage.map(|u| u.prompt_tokens),
-//                 output_tokens: usage.map(|u| u.completion_tokens),
-//                 total_tokens: usage.map(|u| u.total_tokens),
-//             },
-//         })
-//     }
-// }
 
 impl WithChat for OpenAIClient {
-    async fn chat(&self, _ctx: &RuntimeContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
-        let (response, system_start, instant_start) =
-            match make_parsed_request::<ChatCompletionResponse>(
-                self,
-                either::Either::Right(prompt),
-                false,
-            )
-            .await
-            {
-                Ok(v) => v,
-                Err(e) => return e,
-            };
-
-        if response.choices.len() != 1 {
-            return LLMResponse::LLMFailure(LLMErrorResponse {
-                client: self.context.name.to_string(),
-                model: None,
-                prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
-                start_time: system_start,
-                latency: instant_start.elapsed(),
-                request_options: self.properties.properties.clone(),
-                message: format!(
-                    "Expected exactly one choices block, got {}",
-                    response.choices.len()
-                ),
-                code: ErrorCode::Other(200),
-            });
-        }
-
-        let usage = response.usage.as_ref();
-
-        LLMResponse::Success(LLMCompleteResponse {
-            client: self.context.name.to_string(),
-            prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
-            content: response.choices[0]
-                .message
-                .content
-                .as_ref()
-                .map_or("", |s| s.as_str())
-                .to_string(),
-            start_time: system_start,
-            latency: instant_start.elapsed(),
-            model: response.model,
-            request_options: self.properties.properties.clone(),
-            metadata: LLMCompleteResponseMetadata {
-                baml_is_complete: match response.choices.get(0) {
-                    Some(c) => c.finish_reason.as_ref().is_some_and(|f| f == "stop"),
-                    None => false,
-                },
-                finish_reason: match response.choices.get(0) {
-                    Some(c) => c.finish_reason.clone(),
-                    None => None,
-                },
-                prompt_tokens: usage.map(|u| u.prompt_tokens),
-                output_tokens: usage.map(|u| u.completion_tokens),
-                total_tokens: usage.map(|u| u.total_tokens),
-            },
-        })
+    async fn chat(
+        &self,
+        ctx: &RuntimeContext,
+        prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
+    ) -> LLMResponse {
+        let model_name = self
+            .request_options()
+            .get("model")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        make_parsed_request(
+            self,
+            model_name,
+            either::Either::Right(prompt),
+            false,
+            self.properties.client_response_type.clone(),
+            ctx,
+            http_request_id,
+        )
+        .await
     }
 }
 
@@ -228,6 +123,7 @@ impl RequestBuilder for OpenAIClient {
         prompt: either::Either<&String, &[RenderedChatMessage]>,
         allow_proxy: bool,
         stream: bool,
+        expose_secrets: bool,
     ) -> Result<reqwest::RequestBuilder> {
         let destination_url = if allow_proxy {
             self.properties
@@ -252,7 +148,7 @@ impl RequestBuilder for OpenAIClient {
             req = req.header(key, value);
         }
         if let Some(key) = &self.properties.api_key {
-            req = req.bearer_auth(key);
+            req = req.bearer_auth(key.render(expose_secrets));
         }
 
         // Don't attach BAML creds to localhost requests, i.e. ollama
@@ -265,7 +161,7 @@ impl RequestBuilder for OpenAIClient {
         let body_obj = body.as_object_mut().unwrap();
         match prompt {
             either::Either::Left(prompt) => {
-                body_obj.insert("prompt".into(), json!(prompt));
+                body_obj.extend(convert_completion_prompt_to_body(prompt));
             }
             either::Either::Right(messages) => {
                 body_obj.extend(self.chat_to_message(messages)?);
@@ -292,108 +188,27 @@ impl RequestBuilder for OpenAIClient {
     }
 }
 
-impl SseResponseTrait for OpenAIClient {
-    fn response_stream(
-        &self,
-        resp: reqwest::Response,
-        prompt: &[RenderedChatMessage],
-        system_start: web_time::SystemTime,
-        instant_start: web_time::Instant,
-    ) -> StreamResponse {
-        let prompt = prompt.to_vec();
-        let client_name = self.context.name.clone();
-        let params = self.properties.properties.clone();
-        Ok(Box::pin(
-            resp.bytes_stream()
-                .eventsource()
-                .take_while(|event| {
-                    std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
-                })
-                .map(|event| -> Result<ChatCompletionResponseDelta> {
-                    Ok(serde_json::from_str::<ChatCompletionResponseDelta>(
-                        &event?.data,
-                    )?)
-                })
-                .inspect(|event| log::trace!("{:#?}", event))
-                .scan(
-                    Ok(LLMCompleteResponse {
-                        client: client_name.clone(),
-                        prompt: internal_baml_jinja::RenderedPrompt::Chat(prompt.clone()),
-                        content: "".to_string(),
-                        start_time: system_start,
-                        latency: instant_start.elapsed(),
-                        model: "".to_string(),
-                        request_options: params.clone(),
-                        metadata: LLMCompleteResponseMetadata {
-                            baml_is_complete: false,
-                            finish_reason: None,
-                            prompt_tokens: None,
-                            output_tokens: None,
-                            total_tokens: None,
-                        },
-                    }),
-                    move |accumulated: &mut Result<LLMCompleteResponse>, event| {
-                        let Ok(ref mut inner) = accumulated else {
-                            // halt the stream: the last stream event failed to parse
-                            return std::future::ready(None);
-                        };
-                        let event = match event {
-                            Ok(event) => event,
-                            Err(e) => {
-                                return std::future::ready(Some(LLMResponse::LLMFailure(
-                                    LLMErrorResponse {
-                                        client: client_name.clone(),
-                                        model: if inner.model.is_empty() {
-                                            None
-                                        } else {
-                                            Some(inner.model.clone())
-                                        },
-                                        prompt: internal_baml_jinja::RenderedPrompt::Chat(
-                                            prompt.clone(),
-                                        ),
-                                        start_time: system_start,
-                                        request_options: params.clone(),
-                                        latency: instant_start.elapsed(),
-                                        message: format!("Failed to parse event: {:#?}", e),
-                                        code: ErrorCode::UnsupportedResponse(2),
-                                    },
-                                )));
-                            }
-                        };
-                        if let Some(choice) = event.choices.first() {
-                            if let Some(content) = choice.delta.content.as_ref() {
-                                inner.content += content.as_str();
-                            }
-                            inner.model = event.model;
-                            inner.metadata.finish_reason = choice.finish_reason.clone();
-                            inner.metadata.baml_is_complete = choice.finish_reason.as_ref().is_some_and(|s| s == "stop");
-                        }
-                        inner.latency = instant_start.elapsed();
-                        if let Some(usage) = event.usage.as_ref() {
-                            inner.metadata.prompt_tokens = Some(usage.prompt_tokens);
-                            inner.metadata.output_tokens = Some(usage.completion_tokens);
-                            inner.metadata.total_tokens = Some(usage.total_tokens);
-                        }
-
-                        std::future::ready(Some(LLMResponse::Success(inner.clone())))
-                    },
-                ),
-        ))
-    }
-}
-
 impl WithStreamChat for OpenAIClient {
     async fn stream_chat(
         &self,
-        _ctx: &RuntimeContext,
+        ctx: &RuntimeContext,
         prompt: &[RenderedChatMessage],
+        http_request_id: HttpRequestId,
     ) -> StreamResponse {
-        let (resp, system_start, instant_start) =
-            match make_request(self, either::Either::Right(prompt), true).await {
-                Ok(v) => v,
-                Err(e) => return Err(e),
-            };
-        self.response_stream(resp, prompt, system_start, instant_start)
+        let model_name = self
+            .request_options()
+            .get("model")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        crate::internal::llm_client::primitive::stream_request::make_stream_request(
+            self,
+            either::Either::Right(prompt),
+            model_name,
+            ResponseType::OpenAI,
+            ctx,
+            http_request_id,
+        )
+        .await
     }
 }
 
@@ -621,4 +436,22 @@ impl ToProviderMessageExt for OpenAIClient {
 
         Ok(res)
     }
+}
+
+impl CompletionToProviderBody for OpenAIClient {
+    fn completion_to_provider_body(
+        &self,
+        prompt: &String,
+    ) -> serde_json::Map<String, serde_json::Value> {
+        convert_completion_prompt_to_body(prompt)
+    }
+}
+
+// converts completion prompt into JSON body for request
+fn convert_completion_prompt_to_body(
+    prompt: &String,
+) -> serde_json::Map<String, serde_json::Value> {
+    let mut map = serde_json::Map::new();
+    map.insert("prompt".into(), json!(prompt));
+    map
 }

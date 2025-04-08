@@ -1,0 +1,10 @@
+[project]
+name = "baml-tools"
+version = "0.1.0"
+description = "BAML development tools"
+authors = []
+requires-python = ">=3.12"
+
+# These are here to provide vscode autocomplete suggestions for bump-version.py
+# Keep them in sync with the inline dependencies
+dependencies = ["bump2version", "rich", "termcolor", "typer"]

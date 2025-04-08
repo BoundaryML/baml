@@ -11,60 +11,60 @@ This directory contains integration tests for the BAML Python client. These test
 ## Prerequisites
 
 - Python 3.8 or higher
-- Poetry package manager
+- `uv` installed
 - BAML CLI installed
 - Infisical CLI installed
 - Rust toolchain (for building the Python client)
 
 ## Setup
 
-1. Install Poetry dependencies:
+1. Install Python deps
 ```bash
-poetry install
+uv sync
 ```
 
 2. Build and install the Python client:
 ```bash
 # Note: env -u CONDA_PREFIX is needed if you're using Conda to avoid conflicts
-env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../engine/language_client_python/Cargo.toml
+uv run maturin develop --uv --manifest-path ../../engine/language_client_python/Cargo.toml
 ```
 
 3. Generate the BAML client code:
 ```bash
-poetry run baml-cli generate --from ../baml_src
+uv run baml-cli generate --from ../baml_src
 ```
 
 ## Running Tests
 
 ### Run all tests
 ```bash
-infisical run --env=test -- poetry run pytest
+infisical run --env=test -- uv run pytest
 ```
 
 ### Run specific tests
 ```bash
 # Run tests in a specific file
-infisical run --env=test -- poetry run pytest tests/test_functions.py
+infisical run --env=test -- uv run pytest tests/test_functions.py
 
 # Run a specific test
-infisical run --env=test -- poetry run pytest tests/test_functions.py -k "test_name"
+infisical run --env=test -- uv run pytest tests/test_functions.py -k "test_name"
 ```
 
 ### Environment Variables
 - Tests can be run with environment variables using `infisical` (default)
 ```bash
-infisical run --env=test -- poetry run pytest
+infisical run --env=test -- uv run pytest
 ```
 
 - Alternatively, you can use a .env file:
 ```bash
-poetry run pytest
+uv run pytest
 ```
 
 ### CI Environment
 For CI environments, use:
 ```bash
-infisical run --env=test -- poetry run pytest --no-cov
+infisical run --env=test -- uv run pytest --no-cov
 ```
 
 ## Project Structure
@@ -74,7 +74,7 @@ infisical run --env=test -- poetry run pytest --no-cov
 - `app/` - Example application code
 - `docker-tests/` - Docker-based integration tests
 - `pyproject.toml` - Python project configuration
-- `poetry.lock` - Locked dependencies
+- `uv.lock` - Locked dependencies
 
 ## Debugging Tests
 
@@ -117,11 +117,11 @@ infisical run --env=test -- poetry run pytest --no-cov
 - Add `print()` statements in your tests
 - Use the `-s` flag to show print statements:
 ```bash
-infisical run --env=test -- poetry run pytest -s
+infisical run --env=test -- uv run pytest -s
 ```
 - Set the environment variable `BAML_LOG=trace` for detailed BAML client logs:
 ```bash
-BAML_LOG=trace infisical run --env=test -- poetry run pytest
+BAML_LOG=trace infisical run --env=test -- uv run pytest
 ```
 
 ## Troubleshooting
@@ -138,11 +138,11 @@ BAML_LOG=trace infisical run --env=test -- poetry run pytest
      ```bash
      # Clean and rebuild
      rm -rf target/
-     env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../engine/language_client_python/Cargo.toml
+     uv run maturin develop --uv --manifest-path ../../engine/language_client_python/Cargo.toml
      ```
-   - For Poetry issues:
+   - For Python deps issues:
      ```bash
-     poetry install --sync
+     uv sync
      ```
 
 3. **Test Timeouts**
@@ -159,7 +159,7 @@ BAML_LOG=trace infisical run --env=test -- poetry run pytest
    - Try regenerating the client:
      ```bash
      rm -rf baml_client
-     poetry run baml-cli generate --from ../baml_src
+     uv run baml-cli generate --from ../baml_src
      ```
 
 5. **Conda Environment Conflicts**
@@ -169,11 +169,11 @@ BAML_LOG=trace infisical run --env=test -- poetry run pytest
 ### Getting Help
 - Use pytest's verbose mode for more details:
   ```bash
-  infisical run --env=test -- poetry run pytest -v
+  infisical run --env=test -- uv run pytest -v
   ```
 - Enable print statement output:
   ```bash
-  infisical run --env=test -- poetry run pytest -s
+  infisical run --env=test -- uv run pytest -s
   ```
 - Check the pytest output for error tracebacks and assertion details
 
@@ -186,7 +186,7 @@ First, add your test definitions in the BAML source files (see [BAML Source READ
 
 ### 2. Generate Python Client
 ```bash
-poetry run baml-cli generate --from ../baml_src
+uv run baml-cli generate --from ../baml_src
 ```
 This will create new Python client code in `baml_client/`.
 
@@ -215,13 +215,13 @@ class TestAnthropic:
 ### 4. Run Your Tests
 ```bash
 # Run all tests
-infisical run --env=test -- poetry run pytest
+infisical run --env=test -- uv run pytest
 
 # Run specific test file
-infisical run --env=test -- poetry run pytest tests/test_anthropic.py
+infisical run --env=test -- uv run pytest tests/test_anthropic.py
 
 # Run specific test
-infisical run --env=test -- poetry run pytest tests/test_anthropic.py -k "test_basic_completion"
+infisical run --env=test -- uv run pytest tests/test_anthropic.py -k "test_basic_completion"
 ```
 
 ### Test File Organization

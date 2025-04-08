@@ -18,6 +18,22 @@ client<llm> MyClient {
 }
 ```
 
+A non-exhaustive list of providers you can use with `openai-generic`:
+
+| Inference Provider | Docs |
+| -------------- | -------------- |
+| Azure AI Foundary | [Azure AI Foundary](/ref/llm-client-providers/azure-ai-foundary) |
+| Groq | [Groq](/ref/llm-client-providers/groq) |
+| Hugging Face | [Hugging Face](/ref/llm-client-providers/huggingface) |
+| Keywords AI | [Keywords AI](/ref/llm-client-providers/keywordsai) |
+| Litellm | [Litellm](/ref/llm-client-providers/litellm) |
+| LM Studio | [LM Studio](/ref/llm-client-providers/lmstudio) |
+| Ollama | [Ollama](/ref/llm-client-providers/ollama) |
+| OpenRouter | [OpenRouter](/ref/llm-client-providers/openrouter) |
+| TogetherAI | [TogetherAI](/ref/llm-client-providers/together) |
+| Unify AI | [Unify AI](/ref/llm-client-providers/unify) |
+| vLLM | [vLLM](/ref/llm-client-providers/vllm) |
+
 
 ## BAML-specific request `options`
 These unique parameters (aka `options`)  modify the API request sent to the provider.
@@ -27,7 +43,7 @@ You can use this to modify the `headers` and `base_url` for example.
 
 <ParamField path="base_url" type="string">
   The base URL for the API.
-  
+
   **Default: `https://api.openai.com/v1`**
 </ParamField>
 
@@ -66,8 +82,29 @@ client<llm> MyClient {
 
 <Markdown src="/snippets/finish-reason.mdx" />
 
+<Markdown src="/snippets/client-response-type.mdx" />
+
 ## Provider request parameters
 These are other parameters that are passed through to the provider, without modification by BAML. For example if the request has a `temperature` field, you can define it in the client here so every call has that set.
+
+<Warning>
+  For reasoning models (like `o1` or `o1-mini`), you must use `max_completion_tokens` instead of `max_tokens`.
+  Please set `max_tokens` to `null` in order to get this to work.
+
+  See the [OpenAI API documentation](https://platform.openai.com/docs/api-reference/chat/create#chat-create-max_completion_tokens) and [OpenAI Reasoning Docs](https://platform.openai.com/docs/guides/reasoning#controlling-costs) for more details about token handling.
+
+  Example:
+
+  ```baml BAML
+  client<llm> OpenAIo1 {
+    provider "openai-generic"
+    options {
+      model "o1-mini"
+      max_tokens null
+    }
+  }
+  ```
+</Warning>
 
 Consult the specific provider's documentation for more information.
 

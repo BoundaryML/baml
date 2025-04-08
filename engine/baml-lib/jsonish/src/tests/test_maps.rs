@@ -1,4 +1,5 @@
 use crate::BamlValueWithFlags;
+use baml_types::LiteralValue;
 
 use super::*;
 
@@ -126,8 +127,8 @@ fn test_union_of_class_and_map() {
     let llm_output = r#"{"a": 1, "b": "hello"}"#;
     let expected = json!({"a": "1", "b": "hello"});
 
-    let ir = load_test_ir(file_content);
-    let target = render_output_format(&ir, &target_type, &Default::default()).unwrap();
+    let ir = crate::helpers::load_test_ir(file_content);
+    let target = crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
     let result = from_str(&target, &target_type, llm_output, false);
 
@@ -158,15 +159,14 @@ fn test_union_of_map_and_class() {
     let llm_output = r#"{"a": 1, "b": "hello"}"#;
     let expected = json!({"a": "1", "b": "hello"});
 
-    let ir = load_test_ir(file_content);
-    let target = render_output_format(&ir, &target_type, &Default::default()).unwrap();
+    let ir = crate::helpers::load_test_ir(file_content);
+    let target = crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
     let result = from_str(&target, &target_type, llm_output, false);
 
     assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
     let value = result.unwrap();
-    dbg!(&value);
     assert!(matches!(value, BamlValueWithFlags::Class(_, _, _)));
 
     log::trace!("Score: {}", value.score());
@@ -176,3 +176,40 @@ fn test_union_of_map_and_class() {
 
     assert_json_diff::assert_json_eq!(json_value, expected);
 }
+
+test_deserializer!(
+  test_map_with_enum_keys,
+  r#"
+  enum Key {
+    A
+    B
+  }
+  "#,
+  r#"{"A": "one", "B": "two"}"#,
+  FieldType::map(FieldType::Enum("Key".to_string()), FieldType::string()),
+  {"A": "one", "B": "two"}
+);
+
+test_partial_deserializer_streaming!(
+  test_map_with_enum_keys_streaming,
+  r#"
+  enum Key {
+    A
+    B
+  }
+  "#,
+  r#"{"A": "one", "B": "two"}"#,
+  FieldType::map(FieldType::Enum("Key".to_string()), FieldType::string()),
+  {"A": "one", "B": "two"}
+);
+
+test_partial_deserializer_streaming!(
+  test_map_with_literal_keys_streaming,
+  "",
+  r#"{"A": "one", "B": "two"}"#,
+  FieldType::map(FieldType::Union(vec![
+    FieldType::Literal(LiteralValue::String("A".to_string())),
+    FieldType::Literal(LiteralValue::String("B".to_string())),
+  ]), FieldType::string()),
+  {"A": "one", "B": "two"}
+);

@@ -2,6 +2,7 @@
   "name": "baml-client",
   "displayName": "Baml - Insider - Client",
   "description": "This is the Insider Build of the Baml VS Code extension (only use it if you are also using the dev version of the CLI).",
+  "packageManager": "pnpm@9.12.0",
   "version": "1.1.0",
   "publisher": "Gloo",
   "repository": "https://github.com/BoundaryML/baml",
@@ -18,6 +19,7 @@
   ],
   "main": "./out/extension.js",
   "scripts": {
+    "server:build": "mkdir -p server && cd ../../../../engine && cargo build --bin baml-cli --release && cp target/release/baml-cli ../typescript/vscode-ext/packages/vscode/server/",
     "vscode:prepublish": "pnpm run esbuild-base --minify",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=out/extension.js --external:vscode --format=cjs --platform=node ",
     "esbuild-build": "pnpm run esbuild-base --sourcemap",
@@ -28,10 +30,14 @@
     "clean": "rimraf out"
   },
   "dependencies": {
+    "@aws-sdk/credential-providers": "^3.750.0",
     "@baml/common": "workspace:*",
+    "@smithy/types": "^4.1.0",
     "@types/semver": "^7.5.6",
     "axios": "^1.6.8",
+    "comlink": "^4.4.2",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "env-paths": "2.2.1",
     "express": "^4.21.1",
     "http-proxy": "^1.18.1",

@@ -16,4 +16,5 @@ pub use trace_stats::{InnerTraceStats, TraceStats};
 pub struct RenderCurlSettings {
     pub stream: bool,
     pub as_shell_commands: bool,
+    pub expose_secrets: bool,
 }

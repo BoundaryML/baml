@@ -14,6 +14,7 @@ export interface TabularViewConfig {
   showInputs: boolean
   showModel: boolean
   responseViewType: ResponseViewType
+  showDuration: boolean
 }
 
 export const testPanelViewTypeAtom = atomWithStorage<TestPanelViewType>('testPanelViewType', TestPanelViewType.TABULAR)
@@ -21,4 +22,5 @@ export const tabularViewConfigAtom = atomWithStorage<TabularViewConfig>('tabular
   showInputs: true,
   showModel: false,
   responseViewType: 'parsed',
+  showDuration: false,
 })

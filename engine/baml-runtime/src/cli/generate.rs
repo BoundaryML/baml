@@ -20,7 +20,7 @@ impl GenerateArgs {
         let result = self.generate_clients(defaults);
 
         if let Err(e) = result {
-            log::error!("Error generating clients: {:?}", e);
+            baml_log::error!("Error generating clients: {:?}", e);
             return Err(e);
         }
 
@@ -61,6 +61,9 @@ impl GenerateArgs {
                     // this has no meaning
                     GeneratorDefaultClientMode::Sync
                 }
+                internal_baml_core::configuration::GeneratorOutputType::TypescriptReact => {
+                    GeneratorDefaultClientMode::Async
+                }
             };
             // Normally `baml_client` is added via the generator, but since we're not running the generator, we need to add it manually.
             let output_dir_relative_to_baml_src = PathBuf::from("..");
@@ -77,6 +80,7 @@ impl GenerateArgs {
                         default_client_mode,
                         // TODO: this should be set if user is asking for openapi
                         vec![],
+                        None,
                     )
                     .context("Failed while resolving .baml paths in baml_src/")?,
                 )
@@ -85,11 +89,11 @@ impl GenerateArgs {
                     output_dir_relative_to_baml_src.display()
                 ))?;
 
-            log::info!(
+            baml_log::info!(
                 "Generated 1 baml_client: {}",
                 generate_output.output_dir_full.display()
             );
-            log::info!(
+            baml_log::info!(
                 r#"
 You can automatically generate a client by adding the following to any one of your BAML files:
 generator my_client {{
@@ -103,11 +107,11 @@ generator my_client {{
             );
         } else {
             match generated.len() {
-                1 => log::info!(
+                1 => baml_log::info!(
                     "Generated 1 baml_client: {}",
                     generated[0].output_dir_full.display()
                 ),
-                n => log::info!(
+                n => baml_log::info!(
                     "Generated {n} baml_clients: {}",
                     generated
                         .iter()

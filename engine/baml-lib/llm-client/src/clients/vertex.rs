@@ -9,11 +9,12 @@ use anyhow::Result;
 use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use either::Either;
 use indexmap::IndexMap;
+use secrecy::SecretString;
 use serde::Deserialize;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum UnresolvedGcpAuthStrategy<Meta> {
     /// This can be resolved as either FilePath or JsonString
     CredentialsString(StringOr),
@@ -30,7 +31,7 @@ pub struct ServiceAccount {
     pub token_uri: String,
     pub project_id: String,
     pub client_email: String,
-    pub private_key: String,
+    pub private_key: SecretString,
 }
 
 pub enum ResolvedGcpAuthStrategy {
@@ -145,7 +146,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedVertex<Meta> {
     // Either base_url or location
     base_url_or_location: Either<UnresolvedUrl, StringOr>,

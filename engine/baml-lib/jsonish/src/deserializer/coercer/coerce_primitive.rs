@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::BamlMediaType;
+use baml_types::{BamlMediaType, CompletionState};
 use internal_baml_core::ir::{FieldType, TypeValue};
 
 use crate::deserializer::{
@@ -69,7 +69,13 @@ fn coerce_string(
     };
 
     match value {
-        crate::jsonish::Value::String(s) => Ok(BamlValueWithFlags::String(s.to_string().into())),
+        crate::jsonish::Value::String(s, completion_state) => {
+            let mut baml_value = BamlValueWithFlags::String(s.to_string().into());
+            if completion_state == &CompletionState::Incomplete {
+                baml_value.add_flag(Flag::Incomplete);
+            }
+            Ok(baml_value)
+        },
         crate::jsonish::Value::Null => Err(ctx.error_unexpected_null(target)),
         v => Ok(BamlValueWithFlags::String(
             (v.to_string(), Flag::JsonToString(v.clone())).into(),
@@ -86,8 +92,8 @@ pub(super) fn coerce_int(
         return Err(ctx.error_unexpected_null(target));
     };
 
-    match value {
-        crate::jsonish::Value::Number(n) => {
+    let mut result = match value {
+        crate::jsonish::Value::Number(n, _) => {
             if let Some(n) = n.as_i64() {
                 Ok(BamlValueWithFlags::Int(n.into()))
             } else if let Some(n) = n.as_u64() {
@@ -97,10 +103,10 @@ pub(super) fn coerce_int(
                     ((n.round() as i64), Flag::FloatToInt(n)).into(),
                 ))
             } else {
-                Err(ctx.error_unexpected_type(target, value))
+                Err(ctx.error_unexpected_type(target, &value))
             }
         }
-        crate::jsonish::Value::String(s) => {
+        crate::jsonish::Value::String(s, _) => {
             let s = s.trim();
             // Trim trailing commas
             let s = s.trim_end_matches(',');
@@ -121,16 +127,24 @@ pub(super) fn coerce_int(
                     ((frac.round() as i64), Flag::FloatToInt(frac)).into(),
                 ))
             } else {
-                Err(ctx.error_unexpected_type(target, value))
+                Err(ctx.error_unexpected_type(target, &value))
             }
         }
-        crate::jsonish::Value::Array(items) => {
+        crate::jsonish::Value::Array(items, _) => {
             coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {
                 coerce_int(ctx, target, Some(value))
             })
         }
-        _ => Err(ctx.error_unexpected_type(target, value)),
+        _ => Err(ctx.error_unexpected_type(target, &value)),
+    };
+    match value.completion_state() {
+        CompletionState::Complete => {},
+        CompletionState::Incomplete => {
+            result.iter_mut().for_each(|v| v.add_flag(Flag::Incomplete));
+        },
+        CompletionState::Pending => unreachable!("jsonish::Value may never be in a Pending state."),
     }
+    result
 }
 
 fn float_from_maybe_fraction(value: &str) -> Option<f64> {
@@ -174,8 +188,8 @@ fn coerce_float(
         return Err(ctx.error_unexpected_null(target));
     };
 
-    match value {
-        crate::jsonish::Value::Number(n) => {
+    let mut result = match value {
+        crate::jsonish::Value::Number(n, _) => {
             if let Some(n) = n.as_f64() {
                 Ok(BamlValueWithFlags::Float(n.into()))
             } else if let Some(n) = n.as_i64() {
@@ -183,10 +197,10 @@ fn coerce_float(
             } else if let Some(n) = n.as_u64() {
                 Ok(BamlValueWithFlags::Float((n as f64).into()))
             } else {
-                Err(ctx.error_unexpected_type(target, value))
+                Err(ctx.error_unexpected_type(target, &value))
             }
         }
-        crate::jsonish::Value::String(s) => {
+        crate::jsonish::Value::String(s, _) => {
             let s = s.trim();
             // Trim trailing commas
             let s = s.trim_end_matches(',');
@@ -208,16 +222,24 @@ fn coerce_float(
                 baml_value.add_flag(Flag::StringToFloat(s.to_string()));
                 Ok(baml_value)
             } else {
-                Err(ctx.error_unexpected_type(target, value))
+                Err(ctx.error_unexpected_type(target, &value))
             }
         }
-        crate::jsonish::Value::Array(items) => {
+        crate::jsonish::Value::Array(items, _) => {
             coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {
                 coerce_float(ctx, target, Some(value))
             })
         }
-        _ => Err(ctx.error_unexpected_type(target, value)),
+        _ => Err(ctx.error_unexpected_type(target, &value)),
+    };
+    match value.completion_state() {
+        CompletionState::Complete => {},
+        CompletionState::Incomplete => {
+            result.iter_mut().for_each(|v| v.add_flag(Flag::Incomplete));
+        },
+        CompletionState::Pending => unreachable!("jsonish::Value may never be in pending state"),
     }
+    result
 }
 
 pub(super) fn coerce_bool(
@@ -229,9 +251,9 @@ pub(super) fn coerce_bool(
         return Err(ctx.error_unexpected_null(target));
     };
 
-    match value {
+    let mut result = match value {
         crate::jsonish::Value::Boolean(b) => Ok(BamlValueWithFlags::Bool((*b).into())),
-        crate::jsonish::Value::String(s) => match s.to_lowercase().as_str() {
+        crate::jsonish::Value::String(s, _) => match s.to_lowercase().as_str() {
             "true" => Ok(BamlValueWithFlags::Bool(
                 (true, Flag::StringToBool(s.clone())).into(),
             )),
@@ -258,19 +280,27 @@ pub(super) fn coerce_bool(
                         "false" => Ok(BamlValueWithFlags::Bool(
                             (false, Flag::StringToBool(val.value().clone())).into(),
                         )),
-                        _ => Err(ctx.error_unexpected_type(target, value)),
+                        _ => Err(ctx.error_unexpected_type(target, &value)),
                     },
-                    Err(_) => Err(ctx.error_unexpected_type(target, value)),
+                    Err(_) => Err(ctx.error_unexpected_type(target, &value)),
                 }
             }
         },
-        crate::jsonish::Value::Array(items) => {
+        crate::jsonish::Value::Array(items, _) => {
             coerce_array_to_singular(ctx, target, &items.iter().collect::<Vec<_>>(), &|value| {
                 coerce_bool(ctx, target, Some(value))
             })
         }
-        _ => Err(ctx.error_unexpected_type(target, value)),
+        _ => Err(ctx.error_unexpected_type(target, &value)),
+    };
+    match value.completion_state() {
+        CompletionState::Complete => {},
+        CompletionState::Incomplete => {
+            result.iter_mut().for_each(|v| v.add_flag(Flag::Incomplete));
+        },
+        CompletionState::Pending => unreachable!("jsonish::Value may never be in pending state."),
     }
+    result
 }
 
 #[cfg(test)]

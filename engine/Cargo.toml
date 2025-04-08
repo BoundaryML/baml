@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "baml-lib/*",
+  "baml-rpc",
   "baml-runtime",
   "baml-schema-wasm",
   "bstd",
@@ -10,9 +11,11 @@ members = [
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
+  "sandbox",
 ]
 default-members = [
   "baml-lib/*",
+  "baml-rpc",
   "baml-runtime",
   # Disabled by default: --features no_wasm and --features wasm are mutually exclusive
   # Building baml-schema-wasm in combination with everything else triggers feature unification,
@@ -29,9 +32,10 @@ default-members = [
 
 [workspace.dependencies]
 anyhow = "1.0"
-array-macro = "2"
 askama = "0.12.1"
 baml-cli = { path = "cli" }
+baml-types = { path = "baml-lib/baml-types" }
+baml-log = { path = "baml-lib/baml-log" }
 base64 = "0.22.1"
 bstd = { path = "bstd" }
 bytes = "1.6.0"
@@ -47,6 +51,11 @@ http = "1.1.0"
 http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.5"
+jsonish = { path = "baml-lib/jsonish" }
+internal-baml-codegen = { path = "language_client_codegen" }
+internal-baml-core = { path = "baml-lib/baml-core" }
+internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
+internal-llm-client = { path = "baml-lib/llm-client" }
 log = "0.4.20"
 # TODO: disable imports, etc
 minijinja = { version = "1.0.16", default-features = false, features = [
@@ -67,36 +76,39 @@ minijinja = { version = "1.0.16", default-features = false, features = [
   # loader
   #
 ] }
+once_cell = "1"
 pretty_assertions = "1.4.1"
 rand = "0.8.5"
 regex = "1.10.4"
 reqwest = { version = "0.12.12", features = [
   "json",
-  "native-tls-vendored",
   "native-tls-alpn",
+  "native-tls-vendored",
   "stream",
 ] }
 scopeguard = "1.2.0"
+secrecy = { version = "0.10.3", features = ["serde"] }
 serde_json = { version = "1", features = ["float_roundtrip", "preserve_order"] }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
 serde_yaml = "0.9.34"
 static_assertions = "1.1.0"
 strum = { version = "0.26.2", features = ["derive"] }
 strum_macros = "0.26.2"
+thiserror = "2.0.12"
 time = { version = "0.3.36", features = ["formatting"] }
+tracing-core = { version = "0.1.31" }
 pin-project-lite = "0.2.14"
 url = "2.5.2"
+uuid = { version = "1.8.0", features = ["v4", "v7", "serde"] }
 walkdir = "2.5.0"
 web-time = "1.1.0"
-
-baml-types = { path = "baml-lib/baml-types" }
-internal-baml-codegen = { path = "language_client_codegen" }
-internal-baml-core = { path = "baml-lib/baml-core" }
-internal-baml-jinja = { path = "baml-lib/jinja" }
-internal-baml-schema-ast = { path = "baml-lib/schema-ast" }
+tokio = { version = "1", default-features = false, features = [
+  "macros",
+  "time",
+] }
 
 [workspace.package]
-version = "0.73.4"
+version = "0.82.0"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

@@ -35,6 +35,18 @@ describe('Dynamic Type Tests', () => {
       expect(res.length).toBeGreaterThan(0)
       expect(res[0]['animalLiked']).toEqual('GIRAFFE')
     })
+
+    it('should work with dynamic literals', async () => {
+      let tb = new TypeBuilder()
+      const animals = tb.union(['giraffe', 'elephant', 'lion'].map((animal) => tb.literalString(animal.toUpperCase())))
+      tb.Person.addProperty('animalLiked', animals)
+      const res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        { tb },
+      )
+      expect(res.length).toBeGreaterThan(0)
+      expect(res[0]['animalLiked']).toEqual('GIRAFFE')
+    })
   })
 
   describe('Complex Dynamic Types', () => {
@@ -74,6 +86,105 @@ describe('Dynamic Type Tests', () => {
       res = await b.MyFunc("My name is Harrison. My hair is black and I'm 1.8 meters tall.", { tb })
 
       expect(res.height['meters']).toEqual(1.8)
+    })
+  })
+
+  describe('Add Baml', () => {
+    it('should add to existing class', async () => {
+      let tb = new TypeBuilder()
+      tb.addBaml(`
+        class ExtraPersonInfo {
+            height int
+            weight int
+        }
+
+        dynamic class Person {
+            age int?
+            extra ExtraPersonInfo?
+        }
+      `)
+      let res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+        { tb },
+      )
+      expect(res).toEqual([{name: "John Doe", age: 30, extra: {height: 6, weight: 180}, hair_color: "YELLOW"}])
+    })
+
+    it('should add to existing enum', async () => {
+      let tb = new TypeBuilder()
+      tb.addBaml(`
+        dynamic enum Hobby {
+          VideoGames
+          BikeRiding
+        }
+      `)
+      let res = await b.ExtractHobby("I play video games", { tb })
+      expect(res).toEqual(["VideoGames"])
+    })
+
+    it('should add both class and enum', async () => {
+      let tb = new TypeBuilder()
+      tb.addBaml(`
+        class ExtraPersonInfo {
+            height int @description("in feet")
+            weight int @description("in pounds")
+        }
+
+        enum Job {
+            Programmer
+            Architect
+            Musician
+        }
+
+        dynamic enum Hobby {
+            VideoGames
+            BikeRiding
+        }
+
+        dynamic enum Color {
+            BROWN
+        }
+
+        dynamic class Person {
+            age int?
+            extra ExtraPersonInfo?
+            job Job?
+            hobbies Hobby[]
+        }
+      `)
+      let res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. My height is 6 feet and I weigh 180 pounds. My hair is brown. I work as a programmer and enjoy bike riding.",
+        { tb },
+      )
+      expect(res).toEqual([
+        {
+          name: "John Doe",
+          age: 30,
+          hair_color: "BROWN",
+          job: "Programmer",
+          hobbies: ["BikeRiding"],
+          extra: {height: 6, weight: 180},
+        }
+      ])
+    })
+
+    it('should add baml with attrs', async () => {
+      let tb = new TypeBuilder()
+      tb.addBaml(`
+        class ExtraPersonInfo {
+            height int @description("In centimeters and rounded to the nearest whole number")
+            weight int @description("In kilograms and rounded to the nearest whole number")
+        }
+
+        dynamic class Person {
+            extra ExtraPersonInfo?
+        }
+      `)
+      let res = await b.ExtractPeople(
+        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+        { tb },
+      )
+      expect(res).toEqual([{name: "John Doe", extra: {height: 183, weight: 82}, hair_color: "YELLOW"}])
     })
   })
 })

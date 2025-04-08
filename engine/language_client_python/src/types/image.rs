@@ -11,9 +11,10 @@ crate::lang_wrapper!(BamlImagePy, baml_types::BamlMedia);
 #[pymethods]
 impl BamlImagePy {
     #[staticmethod]
-    fn from_url(url: String) -> Self {
+    #[pyo3(signature = (url, media_type = None))]
+    fn from_url(url: String, media_type: Option<String>) -> Self {
         BamlImagePy {
-            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Image, url, None),
+            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Image, url, media_type),
         }
     }
 
@@ -98,7 +99,7 @@ impl BamlImagePy {
 
     pub fn baml_serialize(&self, py: Python<'_>) -> PyResult<PyObject> {
         let s: UserFacingBamlMedia = (&self.inner).try_into().map_err(BamlError::from_anyhow)?;
-        let s = serde_json::to_value(&s).map_err(|e| BamlError::from_anyhow(e.into()))?;
+        let s = serde_json::to_value(&s).map_err(BamlError::from_anyhow)?;
         Ok(pythonize(py, &s)?.into())
     }
 

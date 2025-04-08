@@ -1,9 +1,20 @@
-import { Image } from "@boundaryml/baml"
+import type { Image, Audio } from "@boundaryml/baml"
+
+/**
+ * Recursively partial type that can be null.
+ *
+ * @deprecated Use types from the `partial_types` namespace instead, which provides type-safe partial implementations
+ * @template T The type to make recursively partial.
+ */
+export type RecursivePartialNull<T> = T extends object
+    ? { [P in keyof T]?: RecursivePartialNull<T[P]> }
+    : T | null;
 
 export interface Checked<T,CheckName extends string = string> {
     value: T,
     checks: Record<CheckName, Check>,
 }
+
 
 export interface Check {
     name: string,
@@ -55,5 +66,5 @@ export interface {{cls.name}} {
 
 {#- Type Aliases -#}
 {% for alias in structural_recursive_alias_cycles %}
-type {{alias.name}} = {{alias.target}}
+export type {{alias.name}} = {{alias.target}}
 {% endfor %}

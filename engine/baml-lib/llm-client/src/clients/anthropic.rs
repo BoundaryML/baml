@@ -1,14 +1,17 @@
 use std::collections::HashSet;
 
-use crate::{AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection};
+use crate::{
+    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
+    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+};
 use anyhow::Result;
 
-use baml_types::{EvaluationContext, StringOr, UnresolvedValue};
+use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedAnthropic<Meta> {
     base_url: UnresolvedUrl,
     api_key: StringOr,
@@ -45,7 +48,7 @@ impl<Meta> UnresolvedAnthropic<Meta> {
 
 pub struct ResolvedAnthropic {
     pub base_url: String,
-    pub api_key: String,
+    pub api_key: ApiKeyWithProvenance,
     role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
@@ -58,23 +61,28 @@ pub struct ResolvedAnthropic {
 impl ResolvedAnthropic {
     pub fn allowed_roles(&self) -> Vec<String> {
         self.role_selection.allowed_or_else(|| {
-            vec!["system".to_string(), "user".to_string(), "assistant".to_string()]
+            vec![
+                "system".to_string(),
+                "user".to_string(),
+                "assistant".to_string(),
+            ]
         })
     }
 
     pub fn default_role(&self) -> String {
-        self.role_selection
-            .default_or_else(|| {
-                let allowed_roles = self.allowed_roles();
-                if allowed_roles.contains(&"user".to_string()) {
-                    "user".to_string()
-                } else {
-                    allowed_roles.first().cloned().unwrap_or_else(|| "user".to_string())
-                }
-            })
+        self.role_selection.default_or_else(|| {
+            let allowed_roles = self.allowed_roles();
+            if allowed_roles.contains(&"user".to_string()) {
+                "user".to_string()
+            } else {
+                allowed_roles
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| "user".to_string())
+            }
+        })
     }
 }
-
 
 impl<Meta: Clone> UnresolvedAnthropic<Meta> {
     pub fn required_env_vars(&self) -> HashSet<String> {
@@ -124,7 +132,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
 
         Ok(ResolvedAnthropic {
             base_url,
-            api_key: self.api_key.resolve(ctx)?,
+            api_key: self.api_key.resolve_api_key(ctx)?,
             role_selection: self.role_selection.resolve(ctx)?,
             allowed_metadata: self.allowed_metadata.resolve(ctx)?,
             supported_request_modes: self.supported_request_modes.clone(),

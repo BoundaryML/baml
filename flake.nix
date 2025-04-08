@@ -60,7 +60,8 @@
         toolchain = with fenix.packages.${system}; combine [
           minimal.cargo
           minimal.rustc
-          latest.rust-std
+          minimal.rust-std
+          targets.wasm32-unknown-unknown.latest.rust-std
         ];
 
         version = (builtins.fromTOML (builtins.readFile ./engine/Cargo.toml)).workspace.package.version;
@@ -76,6 +77,28 @@
           inherit (fenix.packages.${system}.latest) rust-std;
         };
 
+        buildInputs = (with pkgs; [
+          git
+          openssl
+          pkg-config
+          lld_19
+          pythonEnv
+          ruby
+          maturin
+          nodePackages.pnpm
+          nodePackages.nodejs
+          toolchain
+          uv
+          wasm-pack
+        ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
+        nativeBuildInputs = [
+          pkgs.openssl
+          pkgs.pkg-config
+          pkgs.ruby
+          pythonEnv
+          pkgs.maturin
+        ];
+
       in
         {
           packages.default = rustPlatform.buildRustPackage {
@@ -89,9 +112,9 @@
             };
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/headers "
+              "" # Rely on default includes provided by stdenv.cc + libclang
             else
-              "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.glibc.dev}/include";
+              "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.llvmPackages_19.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
 
             cargoLock = { lockFile = ./engine/Cargo.lock; outputHashes = {
               "pyo3-asyncio-0.21.0" = "sha256-5ZLzWkxp3e2u0B4+/JJTwO9SYKhtmBpMBiyIsTCW5Zw=";
@@ -109,23 +132,7 @@
               runHook postCheck
             '';
 
-            buildInputs = (with pkgs; [
-              openssl
-              pkg-config
-              lld_19
-              pythonEnv
-              ruby
-              maturin
-              nodePackages.pnpm
-              nodePackages.nodejs
-            ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
-            nativeBuildInputs = [
-              pkgs.openssl
-              pkgs.pkg-config
-              pkgs.ruby
-              pythonEnv
-              pkgs.maturin
-            ];
+            inherit buildInputs;
             PYTHON_SYS_EXECUTABLE="${pythonEnv}/bin/python3";
             LD_LIBRARY_PATH="${pythonEnv}/lib";
             PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
@@ -133,9 +140,13 @@
 
           };
           devShell = pkgs.mkShell rec {
-            buildInputs = [toolchain];
+            inherit buildInputs;
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
+            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
+              "" # Rely on default includes provided by stdenv.cc + libclang
+            else
+              "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.llvmPackages_19.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
           };
         }
     );

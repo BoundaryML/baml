@@ -1,0 +1,53 @@
+name: sandbox
+
+on:
+  push:
+    branches:
+      - sam/baml-test
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: bash output
+        run: |
+          # Start a log group.
+          echo "::group::Colored Log Group"
+
+          # Output text in various colors.
+          echo -e "::group::\033[31mThis is red text\033[0m"
+          echo -e "\033[32mThis is green text\033[0m"
+          echo "::endgroup::"
+          echo -e "\033[34mThis is blue text\033[0m"
+
+          # End the log group.
+          echo "::endgroup::"
+
+          echo -e "::group::\033[31mThis is red text\033[0m"
+          echo -e "\033[32mThis is green text\033[0m"
+          sleep 120
+          echo "::endgroup::"
+
+          # New log groups with pass/fail emojis
+          echo -e "::group::\033[32m✅ This is a pass message\033[0m"
+          echo "::endgroup::"
+
+          echo -e "::group::\033[31m❌ This is a fail message\033[0m"
+          echo "::endgroup::"
+
+          echo -e "::group::\033[32m✅ Another pass message\033[0m"
+          echo "::endgroup::"
+
+          echo -e "::group::\033[32m✅ Yet Another pass message\033[0m"
+          echo "sleep 120 start"
+          sleep 120
+          echo "sleep 120 done"
+          echo "::endgroup::"
+
+          # Output some colored text outside the group as well.
+          echo "Ungrouped colored output:"
+          echo -e "\033[35mThis is magenta text\033[0m"

@@ -24,7 +24,7 @@ use crate::{
 use serde::Serialize;
 use serde::Serializer;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct RoundRobinStrategy {
     pub name: String,
     pub(super) retry_policy: Option<String>,

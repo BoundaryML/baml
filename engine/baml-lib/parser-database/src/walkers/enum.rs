@@ -7,15 +7,11 @@ pub type EnumWalker<'db> = Walker<'db, ast::TypeExpId>;
 pub type EnumValueWalker<'db> = Walker<'db, (ast::TypeExpId, ast::FieldId)>;
 
 impl<'db> EnumWalker<'db> {
-    /// The name of the enum.
-
     /// The values of the enum.
     pub fn values(self) -> impl ExactSizeIterator<Item = EnumValueWalker<'db>> {
         self.ast_type_block()
             .iter_fields()
-            .map(move |(valid_id, _)| self.walk((self.id, valid_id)))
-            .collect::<Vec<_>>()
-            .into_iter()
+            .map(move |(field_id, _)| self.walk((self.id, field_id)))
     }
 
     /// Find a value by name.

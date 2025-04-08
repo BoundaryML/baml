@@ -2,11 +2,15 @@ use internal_baml_schema_ast::ast::{self, WithIdentifier, WithSpan};
 
 use crate::types::{RetryPolicy, TestCase};
 
-/// A `class` declaration in the Prisma schema.
+/// Subset of [`ast::ValueExprBlock`] that represents a configuration.
+///
+/// Only retry policies are configurations, test cases are not really
+/// "configurations" but we'll keep the old [`ConfigurationWalker`] name for
+/// now.
 pub type ConfigurationWalker<'db> = super::Walker<'db, (ast::ValExpId, &'static str)>;
 
 impl ConfigurationWalker<'_> {
-    /// Get the AST node for this class.
+    /// Get the AST node for this [`ast::ValExpId`] (usually used for classes).
     pub fn ast_node(&self) -> &ast::ValueExprBlock {
         &self.db.ast[self.id.0]
     }

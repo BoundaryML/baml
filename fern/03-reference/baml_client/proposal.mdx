@@ -1,0 +1,91 @@
+---
+title: Client Features Proposal
+---
+
+# BAML Client Features Proposal
+
+This document outlines proposed enhancements to the BAML client library that aim to improve observability, debugging, and configuration management. These features are currently in the proposal stage and may evolve based on community feedback.
+
+## Overview
+
+We're proposing three major features to enhance the BAML client experience:
+
+1. **Function IDs** - Unique identifiers for tracking individual function calls
+2. **Enhanced Logging** - Comprehensive logging system for debugging and monitoring
+3. **Client Configuration** - Flexible configuration management through `with_options`
+
+## Motivation
+
+### Current Challenges
+
+1. **Limited Observability**: Currently, tracking individual function calls, especially in parallel operations or streaming scenarios, is difficult.
+2. **Debugging Complexity**: Without detailed logs of LLM interactions, debugging issues is time-consuming.
+3. **Configuration Management**: Setting up consistent configurations across multiple function calls requires boilerplate code.
+
+### Goals
+
+1. **Improved Traceability**: Enable tracking of individual function calls through unique IDs
+2. **Better Debugging**: Provide comprehensive logging of all LLM interactions
+3. **Simplified Configuration**: Allow setting default options that apply across multiple calls
+4. **Performance Monitoring**: Track usage metrics and timing information
+
+## Proposed Features
+
+### 1. Function IDs (`id`)
+
+Function IDs provide a way to uniquely identify and track individual function calls:
+
+- Unique identifier for each function call
+- Works with both regular and streaming calls
+- Integrates with logging system
+- Essential for parallel operations
+
+### 2. Enhanced Logging (`logger`)
+
+A comprehensive logging system that captures:
+
+- Raw requests and responses
+- Usage metrics (tokens, costs)
+- Timing information
+- Streaming chunks
+- Fallback and retry attempts
+
+### 3. Client Configuration (`with_options`)
+
+A flexible configuration system that allows:
+
+- Setting default options for multiple calls
+- Managing client registries
+- Configuring logging
+- Setting up type builders
+- Per-call option overrides
+
+## Implementation Status
+
+These features are currently in proposal stage and not yet available in any language. We're seeking community feedback on:
+
+1. API design and ergonomics
+2. Additional features or requirements
+3. Language-specific considerations
+4. Performance implications
+
+## Next Steps
+
+1. Gather community feedback
+2. Finalize API design
+3. Implement in supported languages
+4. Create comprehensive documentation
+5. Release beta version for testing
+
+## Related Topics
+
+- [Client Registry](./client-registry)
+- [TypeBuilder](./typebuilder)
+
+## Feedback
+
+Please join our Discord to provide feedback on these proposed features. Your input will help shape the final implementation.
+
+<Info>
+These features are designed to work together seamlessly while remaining optional. You can adopt them incrementally as needed.
+</Info> 

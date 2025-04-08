@@ -1,0 +1,381 @@
+---
+title: AsyncClient / SyncClient
+---
+
+BAML generates both a sync client and an async client. They offer the exact
+same public API but methods are either synchronous or asynchronous.
+
+## BAML Functions
+
+The generated client exposes all the functions that you've defined your BAML
+files as methods. Suppose we have this file named `baml_src/literature.baml`:
+
+```baml title="baml_src/literature.baml"
+function TellMeAStory() -> string {
+    client "openai/gpt-4o"
+    prompt #"
+      Tell me a story
+    "#
+}
+
+function WriteAPoemAbout(input: string) -> string {
+    client "openai/gpt-4o"
+    prompt #"
+      Write a poem about {{ input }}
+    "#
+}
+```
+
+After running `baml-cli generate` you can directly call these functions from
+your code. Here's an example using the async client:
+
+<CodeBlocks>
+```python
+from baml_client.async_client import b
+
+async def example():
+    # Call your BAML functions.
+    story = await b.TellMeAStory()
+    poem = await b.WriteAPoemAbout("Roses")
+```
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    // Call your BAML functions.
+    const story = await b.TellMeAStory()
+    const poem = await b.WriteAPoemAbout("Roses")
+}
+```
+
+```ruby
+# Ruby doesn't have an async client.
+require 'baml_client/client'
+
+def example
+  # Call your BAML functions.
+  story = b.TellMeAStory()
+  poem = b.WriteAPoemAbout("Roses")
+end
+```
+</CodeBlocks>
+
+The sync client is exactly the same but it doesn't need an async runtime,
+instead it just blocks.
+
+<CodeBlocks>
+```python
+from baml_client.sync_client import b
+
+def example():
+    # Call your BAML functions.
+    story = b.TellMeAStory()
+    poem = b.WriteAPoemAbout("Roses")
+```
+
+```typescript
+import { b } from '../baml_client/sync_client'
+
+function example() {
+    // Call your BAML functions.
+    const story = b.TellMeAStory()
+    const poem = b.WriteAPoemAbout("Roses")
+}
+```
+
+```ruby
+require 'baml_client/client'
+
+b = Baml.Client
+
+def example
+  # Call your BAML functions.
+  story = b.TellMeAStory()
+  poem = b.WriteAPoemAbout("Roses")
+end
+```
+</CodeBlocks>
+
+## Call Patterns
+
+The client object exposes some references to other objects that call your
+functions in a different manner.
+
+### `.stream`
+
+The `.stream` object is used to stream the response from a function.
+
+<CodeBlocks>
+```python
+from baml_client.async_client import b
+
+async def example():
+    stream = b.stream.TellMeAStory()
+
+    async for partial in stream:
+        print(partial)
+
+    print(await stream.get_final_response())
+```
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const stream = b.stream.TellMeAStory()
+
+    for await (const partial of stream) {
+        console.log(partial)
+    }
+
+    console.log(await stream.getFinalResponse())
+}
+```
+
+```ruby
+require 'baml_client/client'
+
+b = Baml.Client
+
+def example
+  stream = b.stream.TellMeAStory
+
+  stream.each do |partial|
+    puts partial
+  end
+
+  puts stream.get_final_response
+end
+```
+</CodeBlocks>
+
+### `.request`
+
+<Info>
+  This feature was added in: v0.79.0
+</Info>
+
+The `.request` object returns the raw HTTP request but it **does not** send it.
+However, the async client still returns an awaitable object because we might
+need to resolve media types like images and convert them to base64 or the
+required format in order to send them to the LLM.
+
+<CodeBlocks>
+```python
+from baml_client.async_client import b
+
+async def example():
+    request = await b.request.TellMeAStory()
+    print(request.url)
+    print(request.headers)
+    print(request.body.json())
+```
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const request = await b.request.TellMeAStory()
+    console.log(request.url)
+    console.log(request.headers)
+    console.log(request.body.json())
+}
+```
+
+```ruby
+require 'baml_client/client'
+
+b = Baml.Client
+
+def example
+  request = b.request.TellMeAStory
+  puts request.url
+  puts request.headers
+  puts request.body.json
+end
+```
+</CodeBlocks>
+
+### `.stream_request`
+
+<Info>
+  This feature was added in: v0.79.0
+</Info>
+
+Same as [`.request`](#request) but sets the streaming options to `true`.
+
+<CodeBlocks>
+```python
+from baml_client.async_client import b
+
+async def example():
+    request = await b.stream_request.TellMeAStory()
+    print(request.url)
+    print(request.headers)
+    print(request.body.json())
+```
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const request = await b.stream_request.TellMeAStory()
+    console.log(request.url)
+    console.log(request.headers)
+    console.log(request.body.json())
+}
+```
+
+```ruby
+require 'baml_client/client'
+
+b = Baml.Client
+
+def example
+  request = b.stream_request.TellMeAStory
+  puts request.url
+  puts request.headers
+  puts request.body.json
+end
+```
+</CodeBlocks>
+
+### `.parse`
+
+<Info>
+  This feature was added in: v0.79.0
+</Info>
+
+The `.parse` object is used to parse the response returned by the LLM after
+the function call. Can be used in combination with [`.request`](#request).
+
+<CodeBlocks>
+```python
+import requests
+# requests is not async so for simplicity we'll use the sync client.
+from baml_client.sync_client import b
+
+def example():
+    # Get the HTTP request.
+    request = b.request.TellMeAStory()
+
+    # Send the HTTP request.
+    response = requests.post(request.url, headers=request.headers, json=request.body.json())
+
+    # Parse the LLM response.
+    parsed = b.parse.TellMeAStory(response.json()["choices"][0]["message"]["content"])
+
+    # Fully parsed response.
+    print(parsed)
+```
+
+```typescript
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    // Get the HTTP request.
+    const request = await b.request.TellMeAStory()
+
+    // Send the HTTP request.
+    const response = await fetch(request.url, {
+        method: request.method,
+        headers: request.headers,
+        body: JSON.stringify(request.body.json())
+    })
+
+    // Parse the HTTP body.
+    const body = await response.json() as any
+
+    // Parse the LLM response.
+    const parsed = await b.parse.TellMeAStory(body.choices[0].message.content)
+
+    // Fully parsed response.
+    console.log(parsed)
+}
+```
+
+```ruby
+require 'net/http'
+require 'uri'
+require 'json'
+
+require_relative 'baml_client'
+
+b = Baml.Client
+
+def run
+  # Get the HTTP request object.
+  baml_req = b.request.TellMeAStory()
+
+  # Construct the Ruby HTTP client.
+  uri = URI.parse(baml_req.url)
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl = uri.scheme == 'https'
+
+  # Construct the Ruby HTTP request.
+  req = Net::HTTP::Post.new(uri.path)
+  req.initialize_http_header(baml_req.headers)
+  req.body = baml_req.body.json.to_json
+
+  # Send the HTTP request.
+  response = http.request(req)
+
+  # Parse the LLM response.
+  parsed = b.parse.TellMeAStory(
+    llm_response: JSON.parse(response.body)["choices"][0]["message"]["content"]
+  )
+
+  # Fully parsed Resume type.
+  puts parsed
+end
+```
+</CodeBlocks>
+
+### `.parse_stream`
+
+<Info>
+  This feature was added in: v0.79.0
+</Info>
+
+Same as [`.parse`](#parse) but for streaming responses. Can be used in
+combination with [`.stream_request`](#stream_request).
+
+<CodeBlocks>
+```python
+from openai import AsyncOpenAI
+from baml_client.async_client import b
+
+async def example():
+  client = AsyncOpenAI()
+
+  request = await b.stream_request.TellMeAStory()
+  stream = await client.chat.completions.create(**request.body.json())
+
+  llm_response: list[str] = []
+  async for chunk in stream:
+    if len(chunk.choices) > 0 and chunk.choices[0].delta.content is not None:
+      llm_response.append(chunk.choices[0].delta.content)
+      print(b.parse_stream.TellMeAStory("".join(llm_response)))
+```
+
+```typescript
+import OpenAI from 'openai'
+import { b } from '../baml_client/async_client'
+
+async function example() {
+    const client = new OpenAI()
+
+    const request = await b.stream_request.TellMeAStory()
+    const stream = await client.chat.completions.create(**request.body.json())
+
+    let llmResponse: string[] = []
+    for await (const chunk of stream) {
+        if (chunk.choices.length > 0 && chunk.choices[0].delta.content) {
+            llmResponse.push(chunk.choices[0].delta.content)
+            console.log(b.parse_stream.TellMeAStory(llmResponse.join('')))
+        }
+    }
+}
+```
+</CodeBlocks>

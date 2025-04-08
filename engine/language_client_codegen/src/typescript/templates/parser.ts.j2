@@ -1,0 +1,57 @@
+import type { BamlRuntime, BamlCtxManager, ClientRegistry, Image, Audio, Collector } from "@boundaryml/baml"
+import { toBamlError } from "@boundaryml/baml"
+import type { Checked, Check } from "./types"
+import type { partial_types } from "./partial_types"
+import type * as types from "./types"
+import type {
+  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
+} from "./types"
+import type TypeBuilder from "./type_builder"
+
+export class LlmResponseParser {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for fn in funcs %}
+  {{ fn.name }}(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): {{fn.return_type}} {
+    try {
+      return this.runtime.parseLlmResponse(
+        "{{fn.name}}",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as {{fn.return_type}}
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}
+
+export class LlmStreamParser {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for fn in funcs %}
+  {{ fn.name }}(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): {{fn.partial_return_type}} {
+    try {
+      return this.runtime.parseLlmResponse(
+        "{{fn.name}}",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as {{fn.partial_return_type}}
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}

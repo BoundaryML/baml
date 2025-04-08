@@ -40,7 +40,7 @@ impl Harness {
     pub fn run_cli<S: AsRef<str>>(&self, args: S) -> Result<Command> {
         let args = args.as_ref();
 
-        let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME"))?;
+        let mut cmd = Command::cargo_bin("baml-cli")?;
 
         cmd.args(args.split_ascii_whitespace());
         cmd.current_dir(&self.test_dir);

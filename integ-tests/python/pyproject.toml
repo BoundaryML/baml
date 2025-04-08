@@ -1,30 +1,33 @@
-[tool.poetry]
+[project]
 name = "python-integ-tests"
 version = "0.1.0"
 description = ""
-authors = ["None"]
+authors = [{ name = "None" }]
+requires-python = "~=3.9"
 readme = "README.md"
-packages = [{ include = "app" }]
+dependencies = [
+    "assertpy",
+    "flask-httpauth>=4.8.0",
+    "flask>=3.0.3",
+    "maturin",
+    "openai>=1.63.2",
+    "psutil",
+    "pydantic>=2.10.6",
+    "pytest",
+    "pytest-asyncio",
+    "python-dotenv",
+    "requests",
+    "ruff",
+    "anthropic (>=0.49.0,<0.50.0)",
+    "google-genai (>=1.5.0,<2.0.0)",
+]
 
-[tool.poetry.dependencies]
-python = "^3.8"
-# Use client in production
-# baml-py = "^0.14.1"
-ruff = "^0.3.3"
-maturin = "^1.5.1"
+[dependency-groups]
+dev = ["types-assertpy"]
 
-# After poetry install run this:
-# env -u CONDA_PREFIX poetry run maturin develop --manifest-path ../../clients/python-ffi/Cargo.toml
-pytest-asyncio = "^0.23.7"
-pytest = "^8.2.1"
-pydantic = "^2.7.1"
-python-dotenv = "^1.0.1"
-assertpy = "^1.1"
-requests = "^2.32.3"
+[tool.uv]
+package = true
+dev-dependencies = ["ruff>=0.9.10"]
 
-[tool.poetry.group.dev.dependencies]
-types-assertpy = "^1.1.0.20240712"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.setuptools.packages.find]
+include = ["app*", "baml_client*"]

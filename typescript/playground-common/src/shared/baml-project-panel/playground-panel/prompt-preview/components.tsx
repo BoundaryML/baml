@@ -1,10 +1,11 @@
 import { Check, Copy, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useState } from 'react'
+import { cn } from '@/lib/utils'
 
-export const Loader: React.FC<{ message?: string }> = ({ message }) => {
+export const Loader: React.FC<{ message?: string; className?: string }> = ({ message, className }) => {
   return (
-    <div className='flex gap-2 justify-center items-center text-gray-500'>
+    <div className={cn('flex gap-2 justify-center items-center text-gray-500', className)}>
       <Loader2 className='animate-spin' />
       {message}
     </div>

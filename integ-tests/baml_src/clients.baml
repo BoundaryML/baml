@@ -68,7 +68,7 @@ client<llm> GPT35LegacyProvider {
 client<llm> Ollama {
   provider ollama
   options {
-    model llama2
+    model llama3.1
   }
 }
 
@@ -79,6 +79,63 @@ client<llm> GPT35Azure {
     deployment_id "gpt-35-turbo-default"
     // base_url "https://west-us-azure-baml.openai.azure.com/openai/deployments/gpt-35-turbo-default"
     api_version "2024-02-01"
+    api_key env.AZURE_OPENAI_API_KEY
+  }
+}
+
+// Azure O1 client without max_tokens (should not add default)
+client<llm> AzureO1 {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml"
+    deployment_id "o1-mini"
+    api_version "2024-08-01-preview"
+    api_key env.AZURE_OPENAI_API_KEY
+    max_tokens null
+  }
+}
+
+// Azure O1 client with explicit max_tokens (should keep user value)
+client<llm> AzureO1WithMaxTokens {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml"
+    deployment_id "o1-mini"
+    api_version "2024-08-01-preview"
+    api_key env.AZURE_OPENAI_API_KEY
+    max_tokens 1000
+  }
+}
+
+client<llm> AzureO1WithMaxCompletionTokens {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml"
+    deployment_id "o1-mini"
+    api_version "2024-08-01-preview"
+    api_key env.AZURE_OPENAI_API_KEY
+    max_completion_tokens 1000
+  }
+}
+
+// Azure GPT-35 client with explicit max_tokens (should keep user value)
+client<llm> GPT35AzureWithMaxTokens {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml"
+    deployment_id "gpt-35-turbo-default"
+    api_version "2024-02-01"
+    api_key env.AZURE_OPENAI_API_KEY
+    max_tokens 1000
+  }
+}
+
+// Azure client with invalid resource name (for testing failures)
+client<llm> GPT35AzureFailed {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml-incorrect-suffix"
+    deployment_id "gpt-35-turbo-default"
     api_key env.AZURE_OPENAI_API_KEY
   }
 }
@@ -118,8 +175,10 @@ client<llm> AwsBedrock {
   provider aws-bedrock
   options {
     inference_configuration {
-      max_tokens 100
+      max_tokens 2048
     }
+    // max_tokens 100000
+    // max_completion_tokens 100000
     // model "anthropic.claude-3-5-sonnet-20240620-v1:0"
     // model_id "anthropic.claude-3-haiku-20240307-v1:0"
     model "meta.llama3-8b-instruct-v1:0"
@@ -162,7 +221,7 @@ client<llm> AwsBedrockInvalidProfile {
   provider aws-bedrock
   options {
     model_id "meta.llama3-8b-instruct-v1:0"
-    profile "invalid-profile"
+    profile "boundaryml-dev"
     inference_configuration {
       max_tokens 100
     }
@@ -206,6 +265,20 @@ client<llm> Sonnet {
   }
 }
 
+
+client<llm> SonnetThinking {
+  provider anthropic
+  options {
+    model "claude-3-7-sonnet-20250219"
+    api_key env.ANTHROPIC_API_KEY
+    max_tokens 2048
+    thinking {
+      type "enabled"
+      budget_tokens 1024
+    }
+  }
+}
+
 client<llm> Claude {
   provider anthropic
   options {
@@ -245,8 +318,8 @@ client<llm> Lottery_SimpleSyntax {
   options {
     start 0
     strategy [
-      GPT35
       Claude
+      GPT35
     ]
   }
 }
@@ -257,5 +330,68 @@ client<llm> TogetherAi {
     base_url "https://api.together.ai/v1"
     api_key env.TOGETHER_API_KEY
     model "meta-llama/Llama-3-70b-chat-hf"
+  }
+}
+
+// OpenAI O1 client without max_tokens (should not add default)
+client<llm> OpenAIO1 {
+  provider openai
+  options {
+    model "o1-mini"
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+// OpenAI O1 client with explicit max_tokens (should fail)
+client<llm> OpenAIO1WithMaxTokens {
+  provider openai
+  options {
+    model "o1-mini"
+    api_key env.OPENAI_API_KEY
+    max_tokens 1000
+  }
+}
+
+// OpenAI O1 client with explicit max_completion_tokens
+client<llm> OpenAIO1WithMaxCompletionTokens {
+  provider openai
+  options {
+    model "o1-mini"
+    api_key env.OPENAI_API_KEY
+    max_completion_tokens 1000
+  }
+}
+
+// OpenAI GPT-4 client with explicit max_tokens
+client<llm> GPT4WithMaxTokens {
+  provider openai
+  options {
+    model "gpt-4"
+    api_key env.OPENAI_API_KEY
+    max_tokens 1000
+  }
+}
+
+// Azure O3 client without max_tokens (should not add default)
+client<llm> AzureO3 {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml"
+    deployment_id "o3-mini"
+    api_version "2024-08-01-preview"
+    api_key env.AZURE_OPENAI_API_KEY
+    max_tokens null
+  }
+}
+
+// Azure O3 client with explicit max_completion_tokens
+client<llm> AzureO3WithMaxCompletionTokens {
+  provider azure-openai
+  options {
+    resource_name "west-us-azure-baml"
+    deployment_id "o3-mini"
+    api_version "2024-08-01-preview"
+    api_key env.AZURE_OPENAI_API_KEY
+    max_completion_tokens 1000
   }
 }

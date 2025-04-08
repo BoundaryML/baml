@@ -1,5 +1,5 @@
 use baml_runtime::{
-    errors::ExposedError, internal::llm_client::LLMResponse, scope_diagnostics::ScopeStack,
+    errors::ExposedError, internal::llm_client::{ErrorCode, LLMResponse}, scope_diagnostics::ScopeStack,
 };
 
 // napi::Error::new(napi::Status::GenericFailure, e.to_string()))
@@ -31,6 +31,11 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 message,
                 finish_reason.as_ref().map(|f| f.as_str()),
             ),
+            ExposedError::ClientHttpError {
+                client_name,
+                message,
+                status_code,
+            } => throw_baml_client_http_error(client_name, message, status_code),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
         invalid_argument_error(&format!("{}", er))
@@ -55,10 +60,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
                 | baml_runtime::internal::llm_client::ErrorCode::ServerError
                 | baml_runtime::internal::llm_client::ErrorCode::ServiceUnavailable
                 | baml_runtime::internal::llm_client::ErrorCode::UnsupportedResponse(_) => {
-                    napi::Error::new(
-                        napi::Status::GenericFailure,
-                        format!("BamlError: BamlClientError: BamlClientHttpError: {}", err),
-                    )
+                    throw_baml_client_http_error(failed.client.as_str(), failed.message.as_str(), &failed.code)
                 }
             },
             LLMResponse::UserFailure(msg) => napi::Error::new(
@@ -81,7 +83,7 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
     }
 }
 
-pub fn throw_baml_validation_error(prompt: &str, raw_output: &str, message: &str) -> napi::Error {
+fn throw_baml_validation_error(prompt: &str, raw_output: &str, message: &str) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlValidationError",
         "prompt": prompt,
@@ -91,13 +93,23 @@ pub fn throw_baml_validation_error(prompt: &str, raw_output: &str, message: &str
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }
 
-pub fn throw_baml_client_finish_reason_error(prompt: &str, raw_output: &str, message: &str, finish_reason: Option<&str>) -> napi::Error {
+fn throw_baml_client_finish_reason_error(prompt: &str, raw_output: &str, message: &str, finish_reason: Option<&str>) -> napi::Error {
     let error_json = serde_json::json!({
         "type": "BamlClientFinishReasonError",
         "prompt": prompt,
         "raw_output": raw_output,
-        "message": format!("BamlClientFinishReasonError: {}", message),
+        "message": format!("BamlError: BamlClientError: BamlClientFinishReasonError: {}", message),
         "finish_reason": finish_reason,
+    });
+    napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
+}
+
+fn throw_baml_client_http_error(client_name: &str, message: &str, status_code: &ErrorCode) -> napi::Error {
+    let error_json = serde_json::json!({
+        "type": "BamlClientHttpError",
+        "client_name": client_name,
+        "message": format!("BamlError: BamlClientError: BamlClientHttpError: {}", message),
+        "status_code": status_code.to_u16(),
     });
     napi::Error::new(napi::Status::GenericFailure, error_json.to_string())
 }

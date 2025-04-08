@@ -3,7 +3,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use baml_types::BamlMap;
+use baml_types::{BamlMap, CompletionState};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Fixes {
@@ -14,42 +14,47 @@ pub enum Fixes {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value {
     // Primitive Types
-    String(String),
-    Number(serde_json::Number),
+    String(String, CompletionState),
+    Number(serde_json::Number, CompletionState),
     Boolean(bool),
     Null,
 
     // Complex Types
-    Object(Vec<(String, Value)>),
-    Array(Vec<Value>),
+    // Note: Greg - should keys carry completion state?
+    // During parsing, if we hare an incomplete key, does the parser
+    // complete it and set its value to null? Or drop it?
+    // If the parser drops it, we don't need to carry CompletionState.
+    Object(Vec<(String, Value)>, CompletionState),
+    Array(Vec<Value>, CompletionState),
 
     // Fixed types
-    Markdown(String, Box<Value>),
+    Markdown(String, Box<Value>, CompletionState),
     FixedJson(Box<Value>, Vec<Fixes>),
     AnyOf(Vec<Value>, String),
 }
 
 impl Hash for Value {
+    // Hashing a Value ignores CompletationState.
     fn hash<H: Hasher>(&self, state: &mut H) {
         std::mem::discriminant(self).hash(state);
 
         match self {
-            Value::String(s) => s.hash(state),
-            Value::Number(n) => n.to_string().hash(state),
+            Value::String(s, _) => s.hash(state),
+            Value::Number(n, _) => n.to_string().hash(state),
             Value::Boolean(b) => b.hash(state),
             Value::Null => "null".hash(state),
-            Value::Object(o) => {
+            Value::Object(o, _) => {
                 for (k, v) in o {
                     k.hash(state);
                     v.hash(state);
                 }
             }
-            Value::Array(a) => {
+            Value::Array(a, _) => {
                 for v in a {
                     v.hash(state);
                 }
             }
-            Value::Markdown(s, v) => {
+            Value::Markdown(s, v, _) => {
                 s.hash(state);
                 v.hash(state);
             }
@@ -63,14 +68,15 @@ impl Hash for Value {
     }
 }
 
+
 impl Value {
     pub fn r#type(&self) -> String {
         match self {
-            Value::String(_) => "String".to_string(),
-            Value::Number(_) => "Number".to_string(),
+            Value::String(_, _) => "String".to_string(),
+            Value::Number(_, _) => "Number".to_string(),
             Value::Boolean(_) => "Boolean".to_string(),
             Value::Null => "Null".to_string(),
-            Value::Object(k) => {
+            Value::Object(k, _) => {
                 let mut s = "Object{".to_string();
                 for (key, value) in k.iter() {
                     s.push_str(&format!("{}: {}, ", key, value.r#type()));
@@ -78,7 +84,7 @@ impl Value {
                 s.push('}');
                 s
             }
-            Value::Array(i) => {
+            Value::Array(i, _) => {
                 let mut s = "Array[".to_string();
                 let items = i
                     .iter()
@@ -91,7 +97,7 @@ impl Value {
                 s.push(']');
                 s
             }
-            Value::Markdown(tag, item) => {
+            Value::Markdown(tag, item, _) => {
                 format!("Markdown:{} - {}", tag, item.r#type())
             }
             Value::FixedJson(inner, fixes) => {
@@ -108,16 +114,62 @@ impl Value {
             }
         }
     }
+
+    pub fn completion_state(&self) -> &CompletionState {
+        match self {
+            Value::String(_, s) => s,
+            Value::Number(_, s) => s,
+            Value::Boolean(_) => &CompletionState::Complete,
+            Value::Null => &CompletionState::Complete,
+            Value::Object(_, s) => s,
+            Value::Array(_, s) => s,
+            Value::Markdown(_, _, s) => s,
+            Value::FixedJson(_, _) => &CompletionState::Complete,
+            Value::AnyOf(choices, _) => {
+                if choices
+                    .iter()
+                    .any(|c| c.completion_state() == &CompletionState::Incomplete)
+                {
+                    &CompletionState::Incomplete
+                } else {
+                    &CompletionState::Complete
+                }
+            }
+        }
+    }
+
+    pub fn complete_deeply(&mut self) {
+        match self {
+            Value::String(_, s) => *s = CompletionState::Complete,
+            Value::Number(_, s) => *s = CompletionState::Complete,
+            Value::Boolean(_) => {}
+            Value::Null => {}
+            Value::Object(kv_pairs, s) => {
+                *s = CompletionState::Complete;
+                kv_pairs.iter_mut().for_each(|(_, v)| v.complete_deeply());
+            }
+            Value::Array(elems, s) => {
+                *s = CompletionState::Complete;
+                elems.iter_mut().for_each(|v| v.complete_deeply());
+            }
+            Value::Markdown(_, _, s) => *s = CompletionState::Complete,
+            Value::FixedJson(val, fixes) => {
+                val.complete_deeply();
+            },
+            Value::AnyOf(choices, _) => choices.iter_mut().for_each(|v| v.complete_deeply()),
+        }
+    }
+
 }
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Value::String(s) => write!(f, "{}", s),
-            Value::Number(n) => write!(f, "{}", n),
+            Value::String(s, _) => write!(f, "{}", s),
+            Value::Number(n, _) => write!(f, "{}", n),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Null => write!(f, "null"),
-            Value::Object(o) => {
+            Value::Object(o, _) => {
                 write!(f, "{{")?;
                 for (i, (k, v)) in o.iter().enumerate() {
                     if i > 0 {
@@ -127,7 +179,7 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
-            Value::Array(a) => {
+            Value::Array(a, _) => {
                 write!(f, "[")?;
                 for (i, v) in a.iter().enumerate() {
                     if i > 0 {
@@ -137,7 +189,7 @@ impl std::fmt::Display for Value {
                 }
                 write!(f, "]")
             }
-            Value::Markdown(s, v) => write!(f, "{}\n{}", s, v),
+            Value::Markdown(s, v, _) => write!(f, "{}\n{}", s, v),
             Value::FixedJson(v, _) => write!(f, "{}", v),
             Value::AnyOf(items, s) => {
                 write!(f, "AnyOf[{},", s)?;
@@ -150,6 +202,19 @@ impl std::fmt::Display for Value {
     }
 }
 
+// The serde implementation is used as one of our parsing options.
+// We deserialize into a "complete" value, and this property is
+// true for nested values, because serde will call the same `deserialize`
+// method on children of a serde container.
+//
+// Numbers should be considered Incomplete if they are encountered
+// at the top level. Therefore the non-recursive callsite of `deserialize`
+// is responsible for setting completion state to Incomplete for top-level
+// strings and numbers.
+//
+// Lists, strings and objects at the top level are necessarily complete, because
+// serde will not parse an array, string or an object unless the closing
+// delimiter is present.
 impl<'de> serde::Deserialize<'de> for Value {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -157,8 +222,8 @@ impl<'de> serde::Deserialize<'de> for Value {
     {
         let value = serde_json::Value::deserialize(deserializer)?;
         match value {
-            serde_json::Value::String(s) => Ok(Value::String(s)),
-            serde_json::Value::Number(n) => Ok(Value::Number(n)),
+            serde_json::Value::String(s) => Ok(Value::String(s, CompletionState::Complete)),
+            serde_json::Value::Number(n) => Ok(Value::Number(n, CompletionState::Complete)),
             serde_json::Value::Bool(b) => Ok(Value::Boolean(b)),
             serde_json::Value::Null => Ok(Value::Null),
             serde_json::Value::Object(o) => {
@@ -168,7 +233,7 @@ impl<'de> serde::Deserialize<'de> for Value {
                         serde_json::from_value(v).map_err(serde::de::Error::custom)?;
                     map.push((k, parsed_value));
                 }
-                Ok(Value::Object(map))
+                Ok(Value::Object(map, CompletionState::Complete))
             }
             serde_json::Value::Array(a) => {
                 let mut vec = Vec::new();
@@ -177,7 +242,7 @@ impl<'de> serde::Deserialize<'de> for Value {
                         serde_json::from_value(v).map_err(serde::de::Error::custom)?;
                     vec.push(parsed_value);
                 }
-                Ok(Value::Array(vec))
+                Ok(Value::Array(vec, CompletionState::Complete))
             }
         }
     }

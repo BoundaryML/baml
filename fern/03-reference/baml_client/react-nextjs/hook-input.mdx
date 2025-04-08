@@ -1,0 +1,104 @@
+---
+title: Hook Input Type Reference
+description: Technical reference for the BAML React hook input type
+---
+
+The `HookInput` type defines the configuration options for BAML React hooks.
+
+<CodeBlocks>
+```typescript title="Example Usage"
+function Component() {
+  const hook = useTestAws({
+    stream: true, // optional, defaults to true
+    onStreamData: (text) => console.log("Streaming:", text),
+    onFinalData: (text) => console.log("Complete:", text),
+    onData: (text) => console.log("Any update:", text),
+    onError: (error) => console.error("Error:", error)
+  })
+
+  return <div>{hook.data}</div>
+}
+```
+
+```typescript title="Example Types"
+// Streaming configuration
+const streamingInput: HookInput<'TestAws', { stream: true }> = {
+  stream: true,
+  onStreamData: (text) => console.log("Streaming:", text),
+  onFinalData: (text) => console.log("Final:", text),
+  onData: (text) => console.log("Any update:", text),
+  onError: (error) => console.error(error),
+}
+
+// Non-streaming configuration
+const nonStreamingInput: HookInput<'TestAws', { stream: false }> = {
+  stream: false,
+  onFinalData: (text) => console.log("Result:", text),
+  onData: (text) => console.log("Result:", text),
+  onError: (error) => console.error(error)
+}
+```
+
+```typescript title="Type Definition"
+type HookInput<FunctionName, Options extends { stream?: boolean } = { stream?: true }> = {
+  stream?: Options['stream']
+  onStreamData?: Options['stream'] extends false ? never : (response?: StreamDataType<FunctionName>) => void
+  onFinalData?: (response?: FinalDataType<FunctionName>) => void
+  onData?: (response?: StreamDataType<FunctionName> | FinalDataType<FunctionName>) => void
+  onError?: (error: BamlErrors) => void
+}
+```
+</CodeBlocks>
+
+## Type Parameters
+
+<ParamField
+  path="FunctionName"
+  type="generic"
+>
+  The name of the BAML function being called. Used to infer the correct types for responses.
+</ParamField>
+
+<ParamField
+  path="Options"
+  type="{ stream?: boolean }"
+>
+  Configuration object that determines streaming behavior. Defaults to `{ stream?: true }`.
+</ParamField>
+
+## Properties
+
+<ParamField
+  path="stream"
+  type="boolean | undefined"
+>
+  Flag to enable or disable streaming mode. When true, enables streaming responses.
+</ParamField>
+
+<ParamField
+  path="onStreamData"
+  type="(response?: StreamDataType<FunctionName>) => void"
+>
+  Callback function for streaming responses. Only available when `Options['stream']` is true.
+</ParamField>
+
+<ParamField
+  path="onFinalData"
+  type="(response?: FinalDataType<FunctionName>) => void"
+>
+  Callback function for the final response.
+</ParamField>
+
+<ParamField
+  path="onData"
+  type="(response?: StreamDataType<FunctionName> | FinalDataType<FunctionName>) => void"
+>
+  Unified callback function that receives both streaming and final responses. For non-streaming hooks, only receives final responses.
+</ParamField>
+
+<ParamField
+  path="onError"
+  type="(error: BamlErrors) => void"
+>
+  Callback function for error handling. See [Error Types](../errors/overview).
+</ParamField>

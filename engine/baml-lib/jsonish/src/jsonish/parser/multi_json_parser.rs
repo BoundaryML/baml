@@ -38,7 +38,9 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                         json_str,
                         options.next_from_mode(super::ParsingMode::AllJsonObjects),
                     ) {
-                        Ok(json) => json_objects.push(json),
+                        Ok(json) => {
+                            json_objects.push(json)
+                        },
                         Err(e) => {
                             // Ignore errors
                             log::error!("Failed to parse JSON object: {:?}", e);
@@ -59,7 +61,11 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                     json_str,
                     options.next_from_mode(super::ParsingMode::AllJsonObjects),
                 ) {
-                    Ok(json) => json_objects.push(json),
+                    Ok(json) => {
+                        complete_stack_head(&mut json_objects);
+                        json_objects.push(json)
+
+                    },
                     Err(e) => {
                         // Ignore errors
                         log::error!("Failed to parse JSON object: {:?}", e);
@@ -78,8 +84,17 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
     }
 }
 
+fn complete_stack_head(stack: &mut Vec<Value>) {
+    match stack.last_mut() {
+        Some(v) => { v.complete_deeply(); },
+        None => {},
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use baml_types::CompletionState;
+
     use super::*;
     use test_log::test;
 
@@ -112,9 +127,13 @@ print("Hello, world!")
                 panic!("Expected AnyOf, got {:#?}", value);
             };
             assert!(value.contains(&Value::Object(
-                [("a".to_string(), Value::Number((1).into()))]
-                    .into_iter()
-                    .collect()
+                [(
+                    "a".to_string(),
+                    Value::Number((1).into(), CompletionState::Complete)
+                )]
+                .into_iter()
+                .collect(),
+                CompletionState::Complete
             )));
         }
         {
@@ -122,9 +141,13 @@ print("Hello, world!")
             let Value::AnyOf(value, _) = value else {
                 panic!("Expected AnyOf, got {:#?}", value);
             };
-            assert!(value.contains(&Value::Array(vec![Value::String(
-                "This is a test".to_string()
-            )])));
+            assert!(value.contains(&Value::Array(
+                vec![Value::String(
+                    "This is a test".to_string(),
+                    CompletionState::Complete
+                )],
+                CompletionState::Complete
+            )));
         }
 
         Ok(())

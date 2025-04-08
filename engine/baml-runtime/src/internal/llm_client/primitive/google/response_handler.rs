@@ -1,0 +1,301 @@
+use anyhow::Result;
+
+use super::types::GoogleResponse;
+use crate::internal::llm_client::{
+    primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
+    LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+};
+use anyhow::Context;
+use serde::Deserialize;
+use serde_json::Value;
+
+fn to_prompt(
+    prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
+) -> internal_baml_jinja::RenderedPrompt {
+    match prompt {
+        either::Left(prompt) => internal_baml_jinja::RenderedPrompt::Completion(prompt.clone()),
+        either::Right(prompt) => internal_baml_jinja::RenderedPrompt::Chat(prompt.to_vec()),
+    }
+}
+
+pub fn parse_google_response<C: WithClient + RequestBuilder>(
+    client: &C,
+    prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
+    response_body: serde_json::Value,
+    system_now: web_time::SystemTime,
+    instant_now: web_time::Instant,
+    model_name: Option<String>,
+) -> LLMResponse {
+    let response = match GoogleResponse::deserialize(&response_body)
+        .context(format!(
+            "Failed to parse into a response accepted by {}: {}",
+            std::any::type_name::<GoogleResponse>(),
+            response_body
+        ))
+        .map_err(|e| LLMErrorResponse {
+            client: client.context().name.to_string(),
+            model: model_name.clone(),
+            prompt: to_prompt(prompt),
+            start_time: system_now,
+            request_options: client.request_options().clone(),
+            latency: instant_now.elapsed(),
+            message: format!("{:?}", e),
+            code: ErrorCode::Other(2),
+        }) {
+        Ok(response) => response,
+        Err(e) => return LLMResponse::LLMFailure(e),
+    };
+
+    if response.candidates.len() != 1 {
+        return LLMResponse::LLMFailure(LLMErrorResponse {
+            client: client.context().name.to_string(),
+            model: None,
+            prompt: to_prompt(prompt),
+            start_time: system_now,
+            request_options: client.request_options().clone(),
+            latency: instant_now.elapsed(),
+            message: format!(
+                "Expected exactly one content block, got {}",
+                response.candidates.len()
+            ),
+            code: ErrorCode::Other(200),
+        });
+    }
+
+    let candidate = &response.candidates[0];
+
+    let Some(content) = candidate.content.as_ref() else {
+        return LLMResponse::LLMFailure(LLMErrorResponse {
+            client: client.context().name.to_string(),
+            model: None,
+            prompt: to_prompt(prompt),
+            start_time: system_now,
+            request_options: client.request_options().clone(),
+            latency: instant_now.elapsed(),
+            message: "No content returned".to_string(),
+            code: ErrorCode::Other(200),
+        });
+    };
+
+    let model_name = model_name.unwrap_or("<unknown>".to_string());
+    let part_index = content_part(&model_name);
+    LLMResponse::Success(LLMCompleteResponse {
+        client: client.context().name.to_string(),
+        prompt: to_prompt(prompt),
+        content: content.parts[part_index].text.clone(),
+        start_time: system_now,
+        latency: instant_now.elapsed(),
+        request_options: client.request_options().clone(),
+        model: model_name,
+        metadata: LLMCompleteResponseMetadata {
+            baml_is_complete: candidate
+                .finish_reason
+                .as_ref()
+                .map(|r| r == "STOP")
+                .unwrap_or(false),
+            finish_reason: candidate.finish_reason.clone(),
+            prompt_tokens: response.usage_metadata.prompt_token_count,
+            output_tokens: response.usage_metadata.candidates_token_count,
+            total_tokens: response.usage_metadata.total_token_count,
+        },
+    })
+}
+
+fn content_part(model_name: &str) -> usize {
+    if model_name.contains("gemini-2.0-flash-thinking-exp-1219") {
+        1
+    } else {
+        0
+    }
+}
+
+pub fn scan_google_response_stream(
+    client_name: &str,
+    request_options: &baml_types::BamlMap<String, serde_json::Value>,
+    prompt: &internal_baml_jinja::RenderedPrompt,
+    system_now: &web_time::SystemTime,
+    instant_now: &web_time::Instant,
+    model_name: &Option<String>,
+    accumulated: &mut Result<LLMCompleteResponse>,
+    event_body: serde_json::Value,
+) -> Result<(), LLMErrorResponse> {
+    let inner = match accumulated {
+        Ok(accumulated) => accumulated,
+        // We'll just keep the first error and return it
+        Err(e) => return Ok(()),
+    };
+
+    let event = match GoogleResponse::deserialize(&event_body)
+        .context(format!(
+            "Failed to parse into a response accepted by {}: {}",
+            std::any::type_name::<GoogleResponse>(),
+            event_body
+        ))
+        .map_err(|e| LLMErrorResponse {
+            client: client_name.to_string(),
+            model: model_name.clone(),
+            prompt: prompt.clone(),
+            start_time: system_now.clone(),
+            request_options: request_options.clone(),
+            latency: instant_now.elapsed(),
+            message: format!("{:?}", e),
+            code: ErrorCode::Other(2),
+        }) {
+        Ok(response) => response,
+        Err(e) => return Err(e),
+    };
+    if let Some(choice) = event.candidates.get(0) {
+        let part_index = content_part(
+            model_name
+                .as_ref()
+                .map(|s| s.as_str())
+                .unwrap_or("<unknown>"),
+        );
+        if let Some(content) = choice
+            .content
+            .as_ref()
+            .and_then(|c| c.parts.get(part_index))
+        {
+            inner.content += &content.text;
+        }
+        inner.metadata.finish_reason = choice.finish_reason.as_ref().map(|r| r.to_string());
+        if choice
+            .finish_reason
+            .as_ref()
+            .map(|r| r == "STOP")
+            .unwrap_or(false)
+        {
+            inner.metadata.baml_is_complete = true;
+        }
+    }
+
+    inner.latency = instant_now.elapsed();
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::internal::llm_client::primitive::{
+        google::types::{Candidate, Content, Part, UsageMetaData},
+        tests::MockClient,
+    };
+
+    use super::*;
+    use pretty_assertions::assert_eq;
+    use web_time::Duration;
+
+    const RESPONSE: &str = r#"
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "```json\n{\n  name: {\n    first: null,\n    last: null\n  },\n  email: null,\n  experience: []\n}\n```\n"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "avgLogprobs": -0.0090854397186866179
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 166,
+    "candidatesTokenCount": 39,
+    "totalTokenCount": 205,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 166
+      }
+    ],
+    "candidatesTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 39
+      }
+    ]
+  },
+  "modelVersion": "gemini-1.5-flash"
+}
+        "#;
+
+    #[test]
+    fn test_json_deserialization() {
+        let response: GoogleResponse = serde_json::from_str(RESPONSE).unwrap();
+        let expected = GoogleResponse {
+            candidates: vec![Candidate {
+                index: None,
+                content: Some(Content {
+                    parts: vec![Part {
+                        text: "```json\n{\n  name: {\n    first: null,\n    last: null\n  },\n  email: null,\n  experience: []\n}\n```\n".to_string(),
+                        inline_data: None,
+                        file_data: None,
+                        function_call: None,
+                        function_response: None,
+                        video_metadata: None,
+                    }],
+                    role: Some("model".to_string()),
+                }),
+                finish_reason: Some("STOP".to_string()),
+                safety_ratings: None,
+                grounding_metadata: None,
+                finish_message: None,
+            }],
+            prompt_feedback: None,
+            usage_metadata: UsageMetaData {
+                prompt_token_count: Some(166),
+                candidates_token_count: Some(39),
+                total_token_count: Some(205),
+            },
+        };
+
+        let response_json = serde_json::to_string(&response).unwrap();
+        let expected_json = serde_json::to_string(&expected).unwrap();
+        assert_eq!(response_json, expected_json);
+    }
+
+    #[test]
+    fn test_parse_google_response() {
+        let client = MockClient::new();
+        let prompt = vec![];
+        let response_body = serde_json::from_str(RESPONSE.trim()).unwrap();
+        let system_now = web_time::SystemTime::now();
+        let instant_now = web_time::Instant::now();
+        let model_name = Some("gemini-1.5-flash".to_string());
+
+        let result = parse_google_response(
+            &client,
+            either::Right(prompt.as_slice()),
+            response_body,
+            system_now,
+            instant_now,
+            model_name,
+        );
+
+        let expected = LLMCompleteResponse {
+            client: "mock".to_string(),
+            prompt: internal_baml_jinja::RenderedPrompt::Chat(vec![]),
+            content: "```json\n{\n  name: {\n    first: null,\n    last: null\n  },\n  email: null,\n  experience: []\n}\n```\n".to_string(),
+            start_time: system_now,
+            latency: Duration::ZERO,
+            model: "gemini-1.5-flash".to_string(),
+            request_options: client.request_options().clone(),
+            metadata: LLMCompleteResponseMetadata {
+                baml_is_complete: true,
+                finish_reason: Some("STOP".to_string()),
+                prompt_tokens: Some(166),
+                output_tokens: Some(39),
+                total_tokens: Some(205),
+            },
+        };
+
+        if let LLMResponse::Success(mut actual_result) = result {
+            actual_result.latency = Duration::ZERO;
+            assert_eq!(actual_result, expected);
+        } else {
+            panic!("Expected LLMResponse::Success, got {:?}", result);
+        }
+    }
+}

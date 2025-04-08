@@ -17,7 +17,7 @@
       ],
       "env": {
         "VSCODE_DEBUG_MODE": "true"
-      }
+      },
     },
     {
       "type": "node",
@@ -26,7 +26,9 @@
       "port": 6009,
       "restart": true,
       "timeout": 10000,
-      "outFiles": ["${workspaceFolder}/vscode-ext/packages/language-server/dist/**/*.js"]
+      "outFiles": [
+        "${workspaceFolder}/vscode-ext/packages/language-server/dist/**/*.js"
+      ]
     },
     {
       "name": "Run Language Server Tests",
@@ -48,7 +50,9 @@
       "runtimeExecutable": null,
       "runtimeArgs": [],
       "env": {},
-      "outFiles": ["${workspaceRoot}/vscode-ext/packages/language-server/dist/src/__test__/**/*.js"],
+      "outFiles": [
+        "${workspaceRoot}/vscode-ext/packages/language-server/dist/src/__test__/**/*.js"
+      ],
       "preLaunchTask": "npm: watch"
     },
     {
@@ -61,13 +65,18 @@
         "--extensionTestsPath=${workspaceFolder}/vscode-ext/packages/vscode/dist/src/__test__/index",
         "${workspaceFolder}/vscode-ext/packages/vscode/fixtures"
       ],
-      "outFiles": ["${workspaceFolder}/vscode-ext/packages/vscode/dist/src/__test__/**/*.js"]
+      "outFiles": [
+        "${workspaceFolder}/vscode-ext/packages/vscode/dist/src/__test__/**/*.js"
+      ]
     }
   ],
   "compounds": [
     {
       "name": "VS Code + Language Server",
-      "configurations": ["Launch VS Code extension", "Attach to Server"]
+      "configurations": [
+        "Launch VS Code extension",
+        "Attach to Server"
+      ]
     }
   ]
 }

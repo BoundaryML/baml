@@ -113,10 +113,32 @@ impl TypeBuilder {
         .into())
     }
 
+    pub fn add_baml(
+        ruby: &magnus::Ruby,
+        rb_self: &TypeBuilder,
+        baml: String,
+        runtime: &crate::BamlRuntimeFfi,
+    ) -> Result<()> {
+        rb_self
+            .inner
+            .add_baml(&baml, &runtime.inner)
+            .map_err(|e| magnus::Error::new(ruby.exception_runtime_error(), e.to_string()))
+    }
+
+    // this implements ruby's friendly to_s method for converting objects to strings
+    // when someone calls .to_s on a typebuilder in ruby, this method gets called
+    // under the hood, it uses rust's display trait to format everything nicely
+    // by using the same display logic across languages, we keep things consistent
+    // this helps make debugging and logging work the same way everywhere :D
+    pub fn to_s(&self) -> String {
+        self.inner.to_string()
+    }
+
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
         let cls = module.define_class("TypeBuilder", class::object())?;
 
         cls.define_singleton_method("new", function!(TypeBuilder::new, 0))?;
+        cls.define_method("to_s", method!(TypeBuilder::to_s, 0))?;
         cls.define_method("enum", method!(TypeBuilder::r#enum, 1))?;
         // "class" is used by Kernel: https://ruby-doc.org/core-3.0.2/Kernel.html#method-i-class
         cls.define_method("class_", method!(TypeBuilder::class, 1))?;
@@ -132,6 +154,7 @@ impl TypeBuilder {
         cls.define_method("literal_string", method!(TypeBuilder::literal_string, 1))?;
         cls.define_method("literal_int", method!(TypeBuilder::literal_int, 1))?;
         cls.define_method("literal_bool", method!(TypeBuilder::literal_bool, 1))?;
+        cls.define_method("add_baml", method!(TypeBuilder::add_baml, 2))?;
 
         Ok(())
     }

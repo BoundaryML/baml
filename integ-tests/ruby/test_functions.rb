@@ -100,7 +100,7 @@ describe "ruby<->baml integration tests" do
     #   value: 1,
     #   next: nil,
     # )
-    
+
     res = b.ClassThatPointsToRecursiveClassThroughAlias(
         cls: Baml::Types::ClassToRecAlias.new(
             list: Baml::Types::LinkedListAliasNode.new(
@@ -110,7 +110,7 @@ describe "ruby<->baml integration tests" do
         )
     )
 
-    res = b.RecursiveClassWithAliasIndirection.new(
+    res = b.RecursiveClassWithAliasIndirection(
         cls: Baml::Types::NodeWithAliasIndirection.new(
             value: 1,
             next: Baml::Types::NodeWithAliasIndirection.new(
@@ -150,7 +150,7 @@ describe "ruby<->baml integration tests" do
 
     literal_integer = b.FnOutputLiteralInt(input: "a")
     assert_equal literal_integer, 5
-    
+
     literal_bool = b.FnOutputLiteralBool(input: "a")
     assert_equal literal_bool, false
 
@@ -257,14 +257,17 @@ describe "ruby<->baml integration tests" do
   it "allows streaming of nested" do
     stream = b.stream.FnOutputClassNested(input: "a")
     msgs = []
+    puts "TEST"
     stream.each do |msg|
+      print("INNER")
       msgs << msg
     end
     final = stream.get_final_response
 
-    puts final
+    puts msgs.last.to_json
+    puts final.to_json
     assert msgs.size > 0, "Expected at least one streamed response but got none."
-    assert msgs.last == final, "Expected last stream message to match final response."
+    assert msgs.last.to_json == final.to_json, "Expected last stream message to match final response."
   end
 
   it "tests dynamic" do
@@ -307,7 +310,7 @@ describe "ruby<->baml integration tests" do
 
     output = b.MyFunc(
       input: "My name is Harrison. My hair is black and I'm 6 feet tall.",
-      baml_options: {tb: t} 
+      baml_options: {tb: t}
     )
     puts output.inspect
     assert_equal("black", output.hair_color)
@@ -329,7 +332,7 @@ describe "ruby<->baml integration tests" do
 
     output = b.MyFunc(
       input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-      baml_options: {tb: t} 
+      baml_options: {tb: t}
     )
     puts output.inspect
     assert_equal(
@@ -349,7 +352,7 @@ describe "ruby<->baml integration tests" do
 
     stream = b.stream.MyFunc(
       input: "My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-      baml_options: {tb: t} 
+      baml_options: {tb: t}
     )
     msgs = []
     stream.each do |msg|
@@ -362,6 +365,106 @@ describe "ruby<->baml integration tests" do
     puts output.inspect
     assert_equal(
       '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}',
+      output.to_json
+    )
+  end
+
+  it "tests add baml existing class" do
+    tb = Baml::TypeBuilder.new
+    tb.add_baml("
+      class ExtraPersonInfo {
+          height int
+          weight int
+      }
+
+      dynamic class Person {
+          age int?
+          extra ExtraPersonInfo?
+      }
+    ")
+    output = b.ExtractPeople(
+      text: "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+      baml_options: {tb: tb},
+    )
+    assert_equal(
+      '[{"name":"John Doe","hair_color":"YELLOW","age":30,"extra":{"height":6,"weight":180}}]',
+      output.to_json
+    )
+  end
+
+  it "tests add baml existing enum" do
+    tb = Baml::TypeBuilder.new
+    tb.add_baml("
+        dynamic enum Hobby {
+            VideoGames
+            BikeRiding
+        }
+    ")
+    output = b.ExtractHobby(text: "I play videogames", baml_options: {tb: tb})
+    assert_equal(
+      '["VideoGames"]',
+      output.to_json
+    )
+  end
+
+  it "tests add baml both class and enum" do
+    tb = Baml::TypeBuilder.new
+    tb.add_baml("
+      class ExtraPersonInfo {
+          height int
+          weight int
+      }
+
+      enum Job {
+          Programmer
+          Architect
+          Musician
+      }
+
+      dynamic enum Hobby {
+          VideoGames
+          BikeRiding
+      }
+
+      dynamic enum Color {
+          BROWN
+      }
+
+      dynamic class Person {
+          age int?
+          extra ExtraPersonInfo?
+          job Job?
+          hobbies Hobby[]
+      }
+    ")
+    output = b.ExtractPeople(
+      text: "My name is John Doe. I'm 30 years old. My height is 6 feet and I weigh 180 pounds. My hair is brown. I work as a programmer and enjoy bike riding.",
+      baml_options: {tb: tb},
+    )
+    assert_equal(
+      '[{"name":"John Doe","hair_color":"BROWN","age":30,"extra":{"height":6,"weight":180},"job":"Programmer","hobbies":["BikeRiding"]}]',
+      output.to_json
+    )
+  end
+
+  it "tests add baml with attrs" do
+    tb = Baml::TypeBuilder.new
+    tb.add_baml('
+      class ExtraPersonInfo {
+          height int @description("In centimeters and rounded to the nearest whole number")
+          weight int @description("In kilograms and rounded to the nearest whole number")
+      }
+
+      dynamic class Person {
+          extra ExtraPersonInfo?
+      }
+    ')
+    output = b.ExtractPeople(
+      text: "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
+      baml_options: {tb: tb},
+    )
+    assert_equal(
+      '[{"name":"John Doe","hair_color":"YELLOW","extra":{"height":183,"weight":82}}]',
       output.to_json
     )
   end
@@ -408,6 +511,63 @@ describe "ruby<->baml integration tests" do
     assert_raises Exception do
       res = b.UseNestedBlockConstraint(inp: nested_block_constraint)
     end
+  end
+
+  it "uses semantic_container" do
+    stream = b.stream.MakeSemanticContainer()
+    stream.each do |msg|
+      puts msg.to_json
+    end
+  end
+
+  it "uses semantic_streaming" do
+    stream = b.stream.MakeSemanticContainer()
+
+    reference_string = nil
+    reference_int = nil
+
+    msgs = []
+    puts "HELLO'"
+
+    stream.each do |msg|
+      puts "THERE"
+      puts msg.to_json
+
+      msgs << msg
+
+       # Check value stability.
+      if !msg.sixteen_digit_number.nil?
+        if reference_int.nil?
+          reference_int = msg.sixteen_digit_number
+        else
+          assert_equal reference_int, msg.sixteen_digit_number
+        end
+      end
+      if !msg.string_with_twenty_words.nil?
+        if reference_string.nil?
+          reference_string = msg.string_with_twenty_words
+        else
+          assert_equal reference_string, msg.string_with_twenty_words
+        end
+      end
+
+      # Check for @stream.with_state.
+      if !msg.class_needed.nil?
+        if !msg.class_needed.s_20_words.value.nil?
+          if len(msg.class_needed.s_20_words.value.split(" ")) < 3 && msg.final_string.nil?
+            puts(msg)
+            assert msg.class_needed.s_20_words.state == "Incomplete"
+          end
+        end
+      end
+      if !msg.final_string.nil?
+        assert msg.class_needed.s_20_words.state == "Complete"
+      end
+    end
+
+    puts "TRY FINAL"
+    final = stream.get_final_response
+    puts final.to_json
   end
 
 end

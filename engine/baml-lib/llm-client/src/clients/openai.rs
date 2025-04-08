@@ -1,17 +1,16 @@
 use std::collections::HashSet;
 
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType, UnresolvedRolesSelection
 };
 use anyhow::Result;
 
-use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
+use baml_types::{ApiKeyWithProvenance, GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct UnresolvedOpenAI<Meta> {
     base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,
     api_key: Option<StringOr>,
@@ -22,6 +21,7 @@ pub struct UnresolvedOpenAI<Meta> {
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     query_params: IndexMap<String, StringOr>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
+    client_response_type: Option<UnresolvedResponseType>,
 }
 
 impl<Meta> UnresolvedOpenAI<Meta> {
@@ -48,13 +48,14 @@ impl<Meta> UnresolvedOpenAI<Meta> {
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
+            client_response_type: self.client_response_type.clone(),
         }
     }
 }
 
 pub struct ResolvedOpenAI {
     pub base_url: String,
-    pub api_key: Option<String>,
+    pub api_key: Option<ApiKeyWithProvenance>,
     role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
@@ -63,6 +64,7 @@ pub struct ResolvedOpenAI {
     pub query_params: IndexMap<String, String>,
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
+    pub client_response_type: ResponseType,
 }
 
 impl ResolvedOpenAI {
@@ -166,7 +168,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         let api_key = self
             .api_key
             .as_ref()
-            .map(|key| key.resolve(ctx))
+            .map(|key| key.resolve_api_key(ctx))
             .transpose()?;
 
         let role_selection = self.role_selection.resolve(ctx)?;
@@ -184,15 +186,23 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                 .map(|(k, (_, v))| Ok((k.clone(), v.resolve_serde::<serde_json::Value>(ctx)?)))
                 .collect::<Result<IndexMap<_, _>>>()?;
 
-            // TODO(vbv): Only do this for azure
+            // Set default max_tokens for Azure OpenAI if:
+            // 1. It's an Azure client
+            // 2. max_completion_tokens is not set
+            // 3. max_tokens is not present
             if matches!(
                 provider,
                 crate::ClientProvider::OpenAI(crate::OpenAIClientProviderVariant::Azure)
             ) {
-                properties
-                    .entry("max_tokens".into())
-                    .or_insert(serde_json::json!(4096));
+                if !properties.contains_key("max_completion_tokens")
+                    && !properties.contains_key("max_tokens")
+                {
+                    properties.insert("max_tokens".into(), serde_json::json!(4096));
+                } else if properties.get("max_tokens").map_or(false, |v| v.is_null()) {
+                    properties.shift_remove("max_tokens");
+                }
             }
+
             properties
         };
 
@@ -213,6 +223,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             query_params,
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
+            client_response_type: self.client_response_type.as_ref().map_or(Ok(ResponseType::OpenAI), |v| v.resolve(ctx))?,
         })
     }
 
@@ -281,10 +292,17 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             .map(|v| v.clone())
             .unwrap_or_else(|| StringOr::EnvVar("AZURE_OPENAI_API_KEY".to_string()));
 
-        let mut query_params = IndexMap::new();
-        if let Some((_, v, _)) = properties.ensure_string("api_version", false) {
-            query_params.insert("api-version".to_string(), v.clone());
-        }
+        let query_params = match properties.ensure_query_params() {
+            Some(query_params) => query_params,
+            None => {
+                // you can override the query params by providing a query_params field in the client spec
+                let mut query_params = IndexMap::new();
+                if let Some((_, v, _)) = properties.ensure_string("api_version", false) {
+                    query_params.insert("api-version".to_string(), v.clone());
+                }
+                query_params
+            }
+        };
 
         let mut instance = Self::create_common(properties, base_url, None)?;
         instance.query_params = query_params;
@@ -334,6 +352,8 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
         let supported_request_modes = properties.ensure_supported_request_modes();
         let headers = properties.ensure_headers().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
+        let query_params = properties.ensure_query_params().unwrap_or_default();
+        let client_response_type = properties.ensure_client_response_type();
         let (properties, errors) = properties.finalize();
 
         if !errors.is_empty() {
@@ -348,8 +368,9 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             supported_request_modes,
             headers,
             properties,
-            query_params: IndexMap::new(),
+            query_params,
             finish_reason_filter,
+            client_response_type,
         })
     }
 }

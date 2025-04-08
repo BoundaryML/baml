@@ -44,6 +44,9 @@ export const BAMLLanguage = LRLanguage.define({
         TestDecl: t.keyword,
         'TestDecl/IdentifierDecl': t.typeName,
 
+        TypeBuilderDecl: t.keyword,
+        TypeBuilderKeyword: t.keyword,
+
         EnumDecl: t.keyword,
         'EnumDecl/IdentifierDecl': t.typeName,
         'EnumDecl/EnumValueDecl/IdentifierDecl': t.propertyName,
@@ -53,6 +56,9 @@ export const BAMLLanguage = LRLanguage.define({
 
         TypeAliasDecl: t.keyword,
         'TypeAliasDecl/IdentifierDecl': t.typeName,
+
+        DynamicDecl: t.keyword,
+        'DynamicDecl/IdentifierDecl': t.typeName,
 
         ClientDecl: t.keyword,
         'ClientDecl/IdentifierDecl': t.typeName,

@@ -69,6 +69,9 @@ impl WithScore for Flag {
             Flag::NoFields(_) => 1,
             // No scores for contraints
             Flag::ConstraintResults(_) => 0,
+            // No scores for incompleteness.
+            Flag::Incomplete => 0,
+            Flag::Pending => 0,
         }
     }
 }
@@ -82,5 +85,11 @@ impl<T> WithScore for ValueWithFlags<T> {
 impl WithScore for DeserializerConditions {
     fn score(&self) -> i32 {
         self.flags.iter().map(WithScore::score).sum()
+    }
+}
+
+impl WithScore for Vec<Flag> {
+    fn score(&self) -> i32 {
+        self.iter().map(WithScore::score).sum()
     }
 }

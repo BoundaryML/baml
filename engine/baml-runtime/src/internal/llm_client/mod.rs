@@ -9,13 +9,20 @@ pub mod retry_policy;
 mod strategy;
 pub mod traits;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
-use baml_types::{BamlMap, BamlValueWithMeta, JinjaExpression, ResponseCheck};
-use internal_baml_core::ir::ClientWalker;
+use baml_types::{BamlMap, BamlValueWithMeta, FieldType, JinjaExpression, ResponseCheck};
+use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker, IRHelper, IRHelperExtended};
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::AllowedRoleMetadata;
-use jsonish::BamlValueWithFlags;
+pub use jsonish::ResponseBamlValue;
+use jsonish::{
+    deserializer::{
+        deserialize_flags::{constraint_results, DeserializerConditions, Flag},
+        semantic_streaming::validate_streaming_state,
+    },
+    BamlValueWithFlags,
+};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 
@@ -24,24 +31,43 @@ use reqwest::StatusCode;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
-pub type ResponseBamlValue = BamlValueWithMeta<Vec<ResponseCheck>>;
-
 /// Validate a parsed value, checking asserts and checks.
-pub fn parsed_value_to_response(baml_value: &BamlValueWithFlags) -> ResponseBamlValue {
+pub fn parsed_value_to_response(
+    ir: &impl IRHelperExtended,
+    baml_value: BamlValueWithFlags,
+    field_type: &FieldType,
+    allow_partials: bool,
+) -> Result<ResponseBamlValue> {
+    let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
-    baml_value_with_meta.map_meta(|cs| {
-        cs.iter()
-            .map(|(label, expr, result)| {
-                let status = (if *result { "succeeded" } else { "failed" }).to_string();
-                ResponseCheck {
-                    name: label.clone(),
-                    expression: expr.0.clone(),
-                    status,
-                }
-            })
-            .collect()
-    })
+
+    let value_with_response_checks: BamlValueWithMeta<Vec<ResponseCheck>> = baml_value_with_meta
+        .map_meta(|cs| {
+            cs.iter()
+                .map(|(label, expr, result)| {
+                    let status = (if *result { "succeeded" } else { "failed" }).to_string();
+                    ResponseCheck {
+                        name: label.clone(),
+                        expression: expr.0.clone(),
+                        status,
+                    }
+                })
+                .collect()
+        });
+
+    let baml_value_with_streaming =
+        validate_streaming_state(ir, &baml_value, field_type, allow_partials)
+            .map_err(|s| anyhow::anyhow!("{s:?}"))?;
+
+    // Combine the baml_value, its types, the parser flags, and the streaming state
+    // into a final value.
+    // Node that we set the StreamState to `None` unless `allow_partials`.
+    let response_value = baml_value_with_streaming
+        .zip_meta(&value_with_response_checks)?
+        .zip_meta(&meta_flags)?
+        .map_meta(|((x, y), z)| (z.clone(), y.clone(), x.clone()));
+    Ok(ResponseBamlValue(response_value))
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -61,10 +87,11 @@ pub enum ResolveMediaUrls {
 
     // aws: supports b64 w mime
     // anthropic: supports b64 w mime
-    // google: supports b64 w mime
+    // google: supports b64 w mime, url if its a google file uri (gs://)
     // openai: supports URLs w/o mime (b64 data URLs also work here)
     // vertex: supports URLs w/ mime, b64 w/ mime
     Always,
+    IfMatchesGoogleFileUri,
     EnsureMime,
     Never,
 }
@@ -85,7 +112,7 @@ pub struct RetryLLMResponse {
     pub failed: Vec<LLMResponse>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum LLMResponse {
     /// BAML was able to successfully make the HTTP request and got a 2xx
     /// response from the model provider
@@ -104,7 +131,7 @@ pub enum LLMResponse {
 impl Error for LLMResponse {}
 
 impl crate::tracing::Visualize for LLMResponse {
-    fn visualize(&self, max_chunk_size: usize) -> String {
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String {
         match self {
             Self::Success(response) => response.visualize(max_chunk_size),
             Self::LLMFailure(failure) => failure.visualize(max_chunk_size),
@@ -149,7 +176,7 @@ impl LLMResponse {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct LLMErrorResponse {
     pub client: String,
     pub model: Option<String>,
@@ -164,7 +191,7 @@ pub struct LLMErrorResponse {
     pub code: ErrorCode,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, PartialEq)]
 pub enum ErrorCode {
     InvalidAuthentication, // 401
     NotSupported,          // 403
@@ -229,7 +256,7 @@ impl ErrorCode {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct LLMCompleteResponse {
     pub client: String,
     pub model: String,
@@ -242,7 +269,7 @@ pub struct LLMCompleteResponse {
     pub metadata: LLMCompleteResponseMetadata,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct LLMCompleteResponseMetadata {
     pub baml_is_complete: bool,
     pub finish_reason: Option<String>,
@@ -284,7 +311,7 @@ impl std::fmt::Display for LLMCompleteResponse {
 
 // This is the one that gets logged by BAML_LOG, for baml_events log.
 impl crate::tracing::Visualize for LLMCompleteResponse {
-    fn visualize(&self, max_chunk_size: usize) -> String {
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String {
         let s = [
             format!(
                 "{}",
@@ -308,7 +335,8 @@ impl crate::tracing::Visualize for LLMCompleteResponse {
             format!("{}", "---PROMPT---".blue()),
             format!(
                 "{}",
-                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size).dimmed()
+                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size.clone())
+                    .dimmed()
             ),
             format!("{}", "---LLM REPLY---".blue()),
             format!(
@@ -321,7 +349,7 @@ impl crate::tracing::Visualize for LLMCompleteResponse {
 }
 
 impl crate::tracing::Visualize for LLMErrorResponse {
-    fn visualize(&self, max_chunk_size: usize) -> String {
+    fn visualize(&self, max_chunk_size: impl Into<baml_log::MaxMessageLength> + Clone) -> String {
         let mut s = vec![
             format!(
                 "{}",
@@ -336,7 +364,8 @@ impl crate::tracing::Visualize for LLMErrorResponse {
             format!("{}", "---PROMPT---".blue()),
             format!(
                 "{}",
-                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size).dimmed()
+                crate::tracing::truncate_string(&self.prompt.to_string(), max_chunk_size.clone())
+                    .dimmed()
             ),
             format!("{}", "---REQUEST OPTIONS---".blue()),
         ];
@@ -344,14 +373,148 @@ impl crate::tracing::Visualize for LLMErrorResponse {
             s.push(format!(
                 "{}: {}",
                 k,
-                crate::tracing::truncate_string(&v.to_string(), max_chunk_size)
+                crate::tracing::truncate_string(&v.to_string(), max_chunk_size.clone())
             ));
         }
         s.push(format!("{}", format!("---ERROR ({})---", self.code).red()));
         s.push(format!(
             "{}",
-            crate::tracing::truncate_string(&self.message, max_chunk_size).red()
+            crate::tracing::truncate_string(&self.message, max_chunk_size.clone()).red()
         ));
         s.join("\n")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_types::{BamlValueWithMeta, FieldType};
+    use internal_baml_core::ir::repr::{make_test_ir, IntermediateRepr};
+    use jsonish::{
+        deserializer::{deserialize_flags::DeserializerConditions, types::ValueWithFlags},
+        BamlValueWithFlags,
+    };
+
+    fn mk_ir() -> IntermediateRepr {
+        make_test_ir(
+            r##"
+        class Foo {
+          i int
+          s string @stream.done
+        }
+        "##,
+        )
+        .expect("Source is valid")
+    }
+
+    #[test]
+    fn to_response() {
+        let ir = mk_ir();
+        let val = BamlValueWithFlags::Class(
+            "Foo".to_string(),
+            DeserializerConditions {
+                flags: vec![Flag::Incomplete],
+            },
+            vec![
+                (
+                    "i".to_string(),
+                    BamlValueWithFlags::Int(ValueWithFlags {
+                        value: 1,
+                        flags: DeserializerConditions { flags: Vec::new() },
+                    }),
+                ),
+                (
+                    "s".to_string(),
+                    BamlValueWithFlags::String(ValueWithFlags {
+                        value: "H".to_string(),
+                        flags: DeserializerConditions {
+                            flags: vec![Flag::Incomplete],
+                        },
+                    }),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let response = parsed_value_to_response(&ir, val, &FieldType::class("Foo"), true);
+        assert!(response.is_ok());
+    }
+
+    fn mk_null() -> BamlValueWithFlags {
+        BamlValueWithFlags::Null(DeserializerConditions::default())
+    }
+
+    fn mk_string(s: &str) -> BamlValueWithFlags {
+        BamlValueWithFlags::String(ValueWithFlags {
+            value: s.to_string(),
+            flags: DeserializerConditions::default(),
+        })
+    }
+    fn mk_float(s: f64) -> BamlValueWithFlags {
+        BamlValueWithFlags::Float(ValueWithFlags {
+            value: s,
+            flags: DeserializerConditions::default(),
+        })
+    }
+
+    #[test]
+    fn stable_keys2() {
+        let ir = make_test_ir(
+            r##"
+        class Address {
+          street string
+          state string
+        }
+        class Name {
+          first string
+          last string?
+        }
+        class Info {
+          name Name
+          address Address?
+          hair_color string
+          height float
+        }
+        "##,
+        )
+        .unwrap();
+
+        let value = BamlValueWithFlags::Class(
+            "Info".to_string(),
+            DeserializerConditions::default(),
+            vec![
+                (
+                    "name".to_string(),
+                    BamlValueWithFlags::Class(
+                        "Name".to_string(),
+                        DeserializerConditions::default(),
+                        vec![
+                            ("first".to_string(), mk_string("Greg")),
+                            ("last".to_string(), mk_string("Hale")),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                ),
+                ("address".to_string(), mk_null()),
+                ("hair_color".to_string(), mk_string("Grey")),
+                ("height".to_string(), mk_float(1.75)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let field_type = FieldType::class("Info");
+
+        let res = parsed_value_to_response(&ir, value, &field_type, true).unwrap();
+
+        let json = serde_json::to_value(res.serialize_final()).unwrap();
+
+        match &json {
+            serde_json::Value::Object(items) => {
+                let (k, _) = items.iter().next().unwrap();
+                assert_eq!(k, "name")
+            }
+            _ => panic!("Expected json object"),
+        }
     }
 }

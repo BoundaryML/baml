@@ -15,8 +15,10 @@ import {
   onLogEvent,
   AliasedEnum,
   MapKey,
+  ClassWithDone,
+  ClassWithBlockDone,
 } from '../baml_client'
-import { RecursivePartialNull } from '../baml_client/async_client'
+import  partial_types from '../baml_client/partial_types';
 import { b as b_sync } from '../baml_client/sync_client'
 import { config } from 'dotenv'
 import { BamlLogEvent, BamlRuntime } from '@boundaryml/baml/native'
@@ -25,23 +27,9 @@ import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, resetBaml
 import exp from 'constants'
 config()
 
+jest.setTimeout(15_000)
+
 describe('Integ tests', () => {
-  test('should handle invalid AWS region gracefully', async () => {
-    const response = b.TestAwsInvalidRegion('Write a nice short story about Dr. Pepper')
-
-    await expect(response).rejects.toMatchObject({
-      code: 'GenericFailure',
-    })
-  })
-
-  test('should handle invalid AWS access keygracefully', async () => {
-    const response = b.TestAwsInvalidAccessKey('Write a nice short story about Dr. Pepper')
-
-    await expect(response).rejects.toMatchObject({
-      code: 'GenericFailure',
-    })
-  })
-
   test.skip('should handle invalid AWS profile gracefully', async () => {
     const response = b.TestAwsInvalidProfile('Write a nice short story about Dr. Pepper')
 
@@ -56,271 +44,6 @@ describe('Integ tests', () => {
     await expect(response).rejects.toMatchObject({
       code: 'GenericFailure',
     })
-  })
-
-  describe('should work for all inputs', () => {
-    it('single bool', async () => {
-      const res = await b.TestFnNamedArgsSingleBool(true)
-      expect(res).toEqual('true')
-    })
-
-    it('single string list', async () => {
-      const res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
-      expect(res).toContain('a')
-      expect(res).toContain('b')
-      expect(res).toContain('c')
-    })
-
-    it('return literal union', async () => {
-      const res = await b.LiteralUnionsTest('a')
-      expect(res == 1 || res == true || res == 'string output').toBeTruthy()
-    })
-
-    it('optional list and map', async () => {
-      let res = await b.AllowedOptionals({ p: null, q: null })
-      expect(res).toEqual({ p: null, q: null })
-
-      res = await b.AllowedOptionals({ p: ['test'], q: { test: 'ok' } })
-      expect(res).toEqual({ p: ['test'], q: { test: 'ok' } })
-    })
-
-    it('single class', async () => {
-      console.log('calling with class')
-      const res = await b.TestFnNamedArgsSingleClass({
-        key: 'key',
-        key_two: true,
-        key_three: 52,
-      })
-      console.log('got response', res)
-      expect(res).toContain('52')
-    })
-
-    it('multiple classes', async () => {
-      const res = await b.TestMulticlassNamedArgs(
-        {
-          key: 'key',
-          key_two: true,
-          key_three: 52,
-        },
-        {
-          key: 'key',
-          key_two: true,
-          key_three: 64,
-        },
-      )
-      expect(res).toContain('52')
-      expect(res).toContain('64')
-    })
-
-    it('single enum list', async () => {
-      const res = await b.TestFnNamedArgsSingleEnumList([NamedArgsSingleEnumList.TWO])
-      expect(res).toContain('TWO')
-    })
-
-    it('single float', async () => {
-      const res = await b.TestFnNamedArgsSingleFloat(3.12)
-      expect(res).toContain('3.12')
-    })
-
-    it('single int', async () => {
-      const res = await b.TestFnNamedArgsSingleInt(3566)
-      expect(res).toContain('3566')
-    })
-
-    it('single literal int', async () => {
-      const res = await b.TestNamedArgsLiteralInt(1)
-      expect(res).toContain('1')
-    })
-
-    it('single literal bool', async () => {
-      const res = await b.TestNamedArgsLiteralBool(true)
-      expect(res).toContain('true')
-    })
-
-    it('single literal string', async () => {
-      const res = await b.TestNamedArgsLiteralString('My String')
-      expect(res).toContain('My String')
-    })
-
-    it('single class with literal prop', async () => {
-      const res = await b.FnLiteralClassInputOutput({ prop: 'hello' })
-      expect(res).toEqual({ prop: 'hello' })
-    })
-
-    it('single class with literal union prop', async () => {
-      const res = await b.FnLiteralUnionClassInputOutput({ prop: 'one' })
-      expect(res).toEqual({ prop: 'one' })
-    })
-
-    it('single optional string', async () => {
-      // TODO fix the fact it's required.
-      const res = await b.FnNamedArgsSingleStringOptional()
-    })
-
-    it('single map string to string', async () => {
-      const res = await b.TestFnNamedArgsSingleMapStringToString({ lorem: 'ipsum', dolor: 'sit' })
-      expect(res).toHaveProperty('lorem', 'ipsum')
-    })
-
-    it('single map string to class', async () => {
-      const res = await b.TestFnNamedArgsSingleMapStringToClass({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
-      expect(res).toHaveProperty('lorem', { word: 'ipsum' })
-    })
-
-    it('single map string to map', async () => {
-      const res = await b.TestFnNamedArgsSingleMapStringToMap({ lorem: { word: 'ipsum' }, dolor: { word: 'sit' } })
-      expect(res).toHaveProperty('lorem', { word: 'ipsum' })
-    })
-
-    it('enum key in map', async () => {
-      const res = await b.InOutEnumMapKey({ [MapKey.A]: 'A' }, { [MapKey.B]: 'B' })
-      expect(res).toHaveProperty(MapKey.A, 'A')
-      expect(res).toHaveProperty(MapKey.B, 'B')
-    })
-
-    it('literal string union key in map', async () => {
-      const res = await b.InOutLiteralStringUnionMapKey({ one: '1' }, { two: '2' })
-      expect(res).toHaveProperty('one', '1')
-      expect(res).toHaveProperty('two', '2')
-    })
-
-    it('single literal string key in map', async () => {
-      const res = await b.InOutSingleLiteralStringMapKey({ key: '1' })
-      expect(res).toHaveProperty('key', '1')
-    })
-
-    it('primitive union alias', async () => {
-      const res = await b.PrimitiveAlias('test')
-      expect(res).toEqual('test')
-    })
-
-    it('map alias', async () => {
-      const res = await b.MapAlias({ A: ['B', 'C'], B: [], C: [] })
-      expect(res).toEqual({ A: ['B', 'C'], B: [], C: [] })
-    })
-
-    it('alias union', async () => {
-      let res = await b.NestedAlias('test')
-      expect(res).toEqual('test')
-
-      res = await b.NestedAlias({ A: ['B', 'C'], B: [], C: [] })
-      expect(res).toEqual({ A: ['B', 'C'], B: [], C: [] })
-    })
-
-    it('alias pointing to recursive class', async () => {
-      const res = await b.AliasThatPointsToRecursiveType({ value: 1, next: null })
-      expect(res).toEqual({ value: 1, next: null })
-    })
-
-    it('class pointing to alias that points to recursive class', async () => {
-      const res = await b.ClassThatPointsToRecursiveClassThroughAlias({ list: { value: 1, next: null } })
-      expect(res).toEqual({ list: { value: 1, next: null } })
-    })
-
-    it('recursive class with alias indirection', async () => {
-      const res = await b.RecursiveClassWithAliasIndirection({ value: 1, next: { value: 2, next: null } })
-      expect(res).toEqual({ value: 1, next: { value: 2, next: null } })
-    })
-
-    it('merge alias attributes', async () => {
-      const res = await b.MergeAliasAttributes(123)
-      expect(res.amount.value).toEqual(123)
-      expect(res.amount.checks['gt_ten'].status).toEqual('succeeded')
-    })
-
-    // Inputs with checks are not supported yet
-    // it('return alias with merged attrs', async () => {
-    //   const res = await b.ReturnAliasWithMergedAttributes({
-    //     value: 123,
-    //     checks: {
-    //       gt_ten: {
-    //         name: 'gt_ten',
-    //         expr: 'value > 10',
-    //         status: 'succeeded',
-    //       },
-    //     },
-    //   })
-    //   expect(res.value).toEqual(123)
-    //   expect(res.checks['gt_ten'].status).toEqual('succeeded')
-    // })
-
-    // TODO: checks as inputs are not supported yet
-    // it('alias with multiple attrs', async () => {
-    //   const res = await b.AliasWithMultipleAttrs(123)
-    //   expect(res.value).toEqual(123)
-    //   expect(res.checks['gt_ten'].status).toEqual('succeeded')
-    // })
-
-    it('simple recursive map alias', async () => {
-      const res = await b.SimpleRecursiveMapAlias({ one: { two: { three: {} } } })
-      expect(res).toEqual({ one: { two: { three: {} } } })
-    })
-
-    it('simple recursive map alias', async () => {
-      const res = await b.SimpleRecursiveListAlias([[], [], [[]]])
-      expect(res).toEqual([[], [], [[]]])
-    })
-
-    it('recursive alias cycles', async () => {
-      const res = await b.RecursiveAliasCycle([[], [], [[]]])
-      expect(res).toEqual([[], [], [[]]])
-    })
-
-    it('json type alias cycle', async () => {
-      const data = {
-        number: 1,
-        string: 'test',
-        bool: true,
-        list: [1, 2, 3],
-        object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
-        json: {
-          number: 1,
-          string: 'test',
-          bool: true,
-          list: [1, 2, 3],
-          object: { number: 1, string: 'test', bool: true, list: [1, 2, 3] },
-        },
-      }
-      const res = await b.JsonTypeAliasCycle(data)
-      expect(res).toEqual(data)
-      expect(res.json.object.list).toEqual([1, 2, 3])
-    })
-  })
-
-  it('should work for all outputs', async () => {
-    const a = 'a' // dummy
-    let bool = await b.FnOutputBool(a)
-    expect(bool).toEqual(true)
-
-    let int = await b.FnOutputInt(a)
-    expect(int).toEqual(5)
-
-    let literal_integer = await b.FnOutputLiteralInt(a)
-    expect(literal_integer).toEqual(5)
-
-    let literal_bool = await b.FnOutputLiteralBool(a)
-    expect(literal_bool).toEqual(false)
-
-    let literal_string = await b.FnOutputLiteralString(a)
-    expect(literal_string).toEqual('example output')
-
-    const list = await b.FnOutputClassList(a)
-    expect(list.length).toBeGreaterThan(0)
-    assert(list[0].prop1.length > 0)
-
-    const classWEnum = await b.FnOutputClassWithEnum(a)
-    expect(['ONE', 'TWO']).toContain(classWEnum.prop2)
-
-    const classs = await b.FnOutputClass(a)
-    expect(classs.prop1).not.toBeNull()
-    // Actually select 540
-    expect(classs.prop2).toEqual(540)
-
-    // enum list output
-    const enumList = await b.FnEnumListOutput(a)
-    expect(enumList.length).toBe(2)
-
-    const myEnum = await b.FnEnumOutput(a)
   })
 
   it('works with retries1', async () => {
@@ -447,7 +170,7 @@ describe('Integ tests', () => {
     expect(res.length).toBeGreaterThan(0)
   })
 
-  it('should support OpenAI shorthand streaming', async () => {
+  it.only('should support OpenAI shorthand streaming', async () => {
     const res = await b.stream.TestOpenAIShorthand('Dr. Pepper').getFinalResponse()
     expect(res.length).toBeGreaterThan(0)
   })
@@ -646,18 +369,6 @@ describe('Integ tests', () => {
     expect(res[0]['animalLiked']).toEqual('GIRAFFE')
   })
 
-  it('should work with dynamic literals', async () => {
-    let tb = new TypeBuilder()
-    const animals = tb.union(['giraffe', 'elephant', 'lion'].map((animal) => tb.literalString(animal.toUpperCase())))
-    tb.Person.addProperty('animalLiked', animals)
-    const res = await b.ExtractPeople(
-      "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
-      { tb },
-    )
-    expect(res.length).toBeGreaterThan(0)
-    expect(res[0]['animalLiked']).toEqual('GIRAFFE')
-  })
-
   it('should work with dynamic types class', async () => {
     let tb = new TypeBuilder()
     const animalClass = tb.addClass('Animal')
@@ -762,7 +473,7 @@ describe('Integ tests', () => {
 
   it('should work with nested classes', async () => {
     let stream = b.stream.FnOutputClassNested('hi!')
-    let msgs: RecursivePartialNull<TestClassNested[]> = []
+    let msgs: partial_types.TestClassNested[] = []
     for await (const msg of stream) {
       console.log('msg', msg)
       msgs.push(msg)
@@ -1062,3 +773,12 @@ describe('Integ tests', () => {
     flush()
   })
 })
+
+  it('should support semantic streaming', async () => {
+    const stream = b.stream.MakeClassWithDone()
+    const msgs: ClassWithDone[] = []
+    for await (const msg of stream) {
+      msgs.push(msg ?? '')
+    }
+    const final = await stream.getFinalResponse()
+  }, 20_000)

@@ -3,6 +3,8 @@
 use std::iter::Peekable;
 
 use anyhow::Result;
+use baml_types::CompletionState;
+use crate::jsonish::Value;
 
 /* Try and see if there is a json object somewhere in the string
  * Could be a "[...] some text" or "{...} some text" or even a:
@@ -11,7 +13,7 @@ use anyhow::Result;
  * ```
  * block.
  */
-fn find_in_json_markdown(str: &str, options: &JSONishOptions) -> Result<serde_json::Value> {
+fn find_in_json_markdown(str: &str, options: &JSONishOptions) -> Result<Value> {
     let mut values = vec![];
 
     let mut remaining = str;
@@ -46,11 +48,11 @@ fn find_in_json_markdown(str: &str, options: &JSONishOptions) -> Result<serde_js
     match values.len() {
         0 => Err(anyhow::anyhow!("No JSON object found")),
         1 => Ok(values[0].clone()),
-        _ => Ok(serde_json::Value::Array(values)),
+        _ => Ok(Value::Array(values, CompletionState::Complete)),
     }
 }
 
-fn find_all_json_objects(input: &str, options: &JSONishOptions) -> Result<serde_json::Value> {
+fn find_all_json_objects(input: &str, options: &JSONishOptions) -> Result<Value> {
     let mut stack = Vec::new();
     let mut json_str_start = None;
     let mut json_objects = Vec::new();
@@ -93,69 +95,69 @@ fn find_all_json_objects(input: &str, options: &JSONishOptions) -> Result<serde_
     match json_objects.len() {
         0 => Err(anyhow::anyhow!("No JSON objects found")),
         1 => Ok(json_objects[0].clone()),
-        _ => Ok(json_objects.into()),
+        _ => Ok(Value::Array(json_objects, CompletionState::Incomplete)),
     }
 }
 
 #[derive(Debug)]
 enum JsonCollection {
     // Key, Value
-    Object(Vec<String>, Vec<serde_json::Value>),
-    Array(Vec<serde_json::Value>),
-    QuotedString(String),
-    SingleQuotedString(String),
+    Object(Vec<String>, Vec<Value>, CompletionState),
+    Array(Vec<Value>, CompletionState),
+    QuotedString(String, CompletionState),
+    SingleQuotedString(String, CompletionState),
     // Handles numbers, booleans, null, and unquoted strings
-    UnquotedString(String),
+    UnquotedString(String, CompletionState),
     // Starting with // or #
-    TrailingComment(String),
+    TrailingComment(String, CompletionState),
     // Content between /* and */
-    BlockComment(String),
+    BlockComment(String, CompletionState),
 }
 
 impl JsonCollection {
     fn name(&self) -> &'static str {
         match self {
-            JsonCollection::Object(_, _) => "Object",
-            JsonCollection::Array(_) => "Array",
-            JsonCollection::QuotedString(_) => "String",
-            JsonCollection::SingleQuotedString(_) => "String",
-            JsonCollection::UnquotedString(_) => "UnquotedString",
-            JsonCollection::TrailingComment(_) => "Comment",
-            JsonCollection::BlockComment(_) => "Comment",
+            JsonCollection::Object(_, _, _) => "Object",
+            JsonCollection::Array(_, _) => "Array",
+            JsonCollection::QuotedString(_, _) => "String",
+            JsonCollection::SingleQuotedString(_, _) => "String",
+            JsonCollection::UnquotedString(_, _) => "UnquotedString",
+            JsonCollection::TrailingComment(_, _) => "Comment",
+            JsonCollection::BlockComment(_, _) => "Comment",
         }
     }
 }
 
-impl From<JsonCollection> for Option<serde_json::Value> {
-    fn from(collection: JsonCollection) -> Option<serde_json::Value> {
+impl From<JsonCollection> for Option<Value> {
+    fn from(collection: JsonCollection) -> Option<Value> {
         Some(match collection {
-            JsonCollection::TrailingComment(_) | JsonCollection::BlockComment(_) => return None,
-            JsonCollection::Object(keys, values) => {
-                let mut object = serde_json::Map::new();
+            JsonCollection::TrailingComment(_, _) | JsonCollection::BlockComment(_, _) => return None,
+            JsonCollection::Object(keys, values, object_completion) => {
+                let mut object = Vec::new();
                 for (key, value) in keys.into_iter().zip(values.into_iter()) {
-                    object.insert(key, value);
+                    object.push((key, value));
                 }
-                serde_json::Value::Object(object)
+                Value::Object(object, object_completion)
             }
-            JsonCollection::Array(values) => serde_json::Value::Array(values),
-            JsonCollection::QuotedString(s) => serde_json::Value::String(s),
-            JsonCollection::SingleQuotedString(s) => serde_json::Value::String(s),
-            JsonCollection::UnquotedString(s) => {
+            JsonCollection::Array(values, completion_state) => Value::Array(values, completion_state),
+            JsonCollection::QuotedString(s, completion_state) => Value::String(s, completion_state),
+            JsonCollection::SingleQuotedString(s, completion_state) => Value::String(s, completion_state),
+            JsonCollection::UnquotedString(s, completion_state) => {
                 let s = s.trim();
                 if s == "true" {
-                    serde_json::Value::Bool(true)
+                    Value::Boolean(true)
                 } else if s == "false" {
-                    serde_json::Value::Bool(false)
+                    Value::Boolean(false)
                 } else if s == "null" {
-                    serde_json::Value::Null
+                    Value::Null
                 } else if let Ok(n) = s.parse::<i64>() {
-                    serde_json::Value::Number(n.into())
+                    Value::Number(n.into(), completion_state)
                 } else if let Ok(n) = s.parse::<u64>() {
-                    serde_json::Value::Number(n.into())
+                    Value::Number(n.into(), completion_state)
                 } else if let Ok(n) = s.parse::<f64>() {
-                    serde_json::Value::Number(serde_json::Number::from_f64(n).unwrap())
+                    Value::Number(serde_json::Number::from_f64(n).unwrap(), completion_state)
                 } else {
-                    serde_json::Value::String(s.into())
+                    Value::String(s.into(), completion_state)
                 }
             }
         })
@@ -166,7 +168,7 @@ struct JsonParseState {
     collection_stack: Vec<JsonCollection>,
 
     // Technically we may find multiple values in a single string
-    completed_values: Vec<(&'static str, serde_json::Value)>,
+    completed_values: Vec<(&'static str, Value)>,
 }
 
 impl JsonParseState {
@@ -177,7 +179,7 @@ impl JsonParseState {
         }
     }
 
-    fn complete_collection(&mut self) {
+    fn complete_collection(&mut self, completion_state: CompletionState) {
         let collection = match self.collection_stack.pop() {
             Some(collection) => collection,
             None => return,
@@ -187,24 +189,27 @@ impl JsonParseState {
 
         log::debug!("Completed: {:?} -> {:?}", name, collection);
 
-        let value: serde_json::Value = match collection.into() {
+        let mut value: crate::jsonish::Value = match collection.into() {
             Some(value) => value,
             None => return,
         };
+        if completion_state == CompletionState::Complete {
+            value.complete_deeply();
+        }
 
         if let Some(last) = self.collection_stack.last_mut() {
             match last {
-                JsonCollection::Object(keys, values) => {
+                JsonCollection::Object(keys, values, completion_state) => {
                     if keys.len() == values.len() {
                         match value {
-                            serde_json::Value::String(s) => keys.push(s),
+                            Value::String(s, completion_state) => keys.push(s),
                             _ => keys.push(value.to_string()),
                         }
                     } else {
                         values.push(value);
                     }
                 }
-                JsonCollection::Array(values) => {
+                JsonCollection::Array(values, _) => {
                     values.push(value);
                 }
                 _ => {
@@ -223,11 +228,11 @@ impl JsonParseState {
     fn consume(&mut self, token: char) -> Result<usize> {
         let last = self.collection_stack.last_mut().unwrap();
         match last {
-            JsonCollection::QuotedString(s)
-            | JsonCollection::BlockComment(s)
-            | JsonCollection::SingleQuotedString(s)
-            | JsonCollection::UnquotedString(s)
-            | JsonCollection::TrailingComment(s) => {
+            JsonCollection::QuotedString(s, _)
+            | JsonCollection::BlockComment(s, _)
+            | JsonCollection::SingleQuotedString(s, _)
+            | JsonCollection::UnquotedString(s, _)
+            | JsonCollection::TrailingComment(s, _) => {
                 // println!("Consuming: {s} + {:?}", token);
                 s.push(token);
             }
@@ -239,7 +244,8 @@ impl JsonParseState {
     }
 
     fn is_string_complete(&self) -> bool {
-        let Some(JsonCollection::UnquotedString(v)) = self.collection_stack.last() else {
+        // TODO: Do we need to consider the CompletionState here?
+        let Some(JsonCollection::UnquotedString(v, _)) = self.collection_stack.last() else {
             return false;
         };
 
@@ -259,19 +265,19 @@ impl JsonParseState {
     fn should_close_unescaped_string(
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
-    ) -> Option<usize> {
+    ) -> CloseStringResult {
         let pos = if self.collection_stack.len() >= 2 {
             self.collection_stack
                 .get(self.collection_stack.len() - 2)
                 .map(|c| match c {
-                    JsonCollection::Object(keys, values) => {
+                    JsonCollection::Object(keys, values, _) => {
                         if keys.len() == values.len() {
                             2
                         } else {
                             3
                         }
                     }
-                    JsonCollection::Array(_) => 4,
+                    JsonCollection::Array(_, _) => 4,
                     _ => 1,
                 })
                 .unwrap()
@@ -286,28 +292,28 @@ impl JsonParseState {
                     counter = idx;
                     match c {
                         // If at some point we find a valid json character, we'll close the string
-                        '{' | '[' => return Some(idx),
+                        '{' | '[' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
-            1 => None,
+            1 => CloseStringResult::Continue,
             2 => {
                 // in object key
                 let mut counter = 0;
                 for (idx, c) in next.by_ref() {
                     counter = idx;
                     match c {
-                        ':' => return Some(idx),
+                        ':' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             3 => {
                 // in object value
@@ -319,23 +325,23 @@ impl JsonParseState {
                             if let Some((_, next_c)) = next.peek() {
                                 match next_c {
                                     '\n' => {
-                                        return Some(idx);
+                                        return CloseStringResult::Close(idx, CompletionState::Complete);
                                     }
                                     _ => {
                                         let _ = self.consume(c);
                                     }
                                 }
                             } else {
-                                return Some(idx);
+                                return CloseStringResult::Close(idx, CompletionState::Complete);
                             }
                         }
-                        '}' => return Some(idx),
+                        '}' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             4 => {
                 // in array
@@ -343,14 +349,14 @@ impl JsonParseState {
                 for (idx, c) in next {
                     counter = idx;
                     match c {
-                        ',' => return Some(idx),
-                        ']' => return Some(idx),
+                        ',' => return CloseStringResult::Close(idx, CompletionState::Complete),
+                        ']' => return CloseStringResult::Close(idx, CompletionState::Complete),
                         x => {
                             let _ = self.consume(x);
                         }
                     }
                 }
-                Some(counter)
+                CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
             _ => unreachable!("Invalid position"),
         }
@@ -366,14 +372,14 @@ impl JsonParseState {
                 self.collection_stack
                     .get(self.collection_stack.len() - 2)
                     .map(|c| match c {
-                        JsonCollection::Object(keys, values) => {
+                        JsonCollection::Object(keys, values, _) => {
                             if keys.len() == values.len() {
                                 (true, false, false)
                             } else {
                                 (false, true, true)
                             }
                         }
-                        JsonCollection::Array(_) => (false, false, true),
+                        JsonCollection::Array(_, _) => (false, false, true),
                         _ => (false, false, false),
                     })
                     .map(|(a, b, c)| (true, a, b, c))
@@ -459,11 +465,11 @@ impl JsonParseState {
         // println!("Processing: {:?}..{:?}", token, next.peek());
         if let Some(last) = self.collection_stack.last() {
             match last {
-                JsonCollection::Object(_, _) => {
+                JsonCollection::Object(_, _, _) => {
                     match token {
                         '}' => {
                             // We're ready to close the object
-                            self.complete_collection();
+                            self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
                         // We can safely ignore these tokens
@@ -472,7 +478,7 @@ impl JsonParseState {
                         _ => self.find_any_starting_value(token, next),
                     }
                 }
-                JsonCollection::Array(_) => {
+                JsonCollection::Array(_, _) => {
                     // We could be expecting:
                     // - A value
                     // - a comma
@@ -480,7 +486,7 @@ impl JsonParseState {
                     match token {
                         ']' => {
                             // We're ready to close the array
-                            self.complete_collection();
+                            self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
                         // Skip these tokens
@@ -488,7 +494,7 @@ impl JsonParseState {
                         _ => self.find_any_starting_value(token, next),
                     }
                 }
-                JsonCollection::QuotedString(_) => {
+                JsonCollection::QuotedString(_, _) => {
                     // We could be expecting:
                     // - A closing quote
                     // - A character
@@ -497,7 +503,7 @@ impl JsonParseState {
                             // It's possible that the LLM messed up the escaping
                             // We'll try to fix it.
                             if self.should_close_string(next, '"') {
-                                self.complete_collection();
+                                self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
                                 self.consume(token)
@@ -506,7 +512,7 @@ impl JsonParseState {
                         _ => self.consume(token),
                     }
                 }
-                JsonCollection::SingleQuotedString(_) => {
+                JsonCollection::SingleQuotedString(_, _) => {
                     // We could be expecting:
                     // - A closing quote
                     // - A character
@@ -516,7 +522,7 @@ impl JsonParseState {
                             // It's possible that the LLM messed up the escaping
                             // We'll try to fix it.
                             if self.should_close_string(next, '\'') {
-                                self.complete_collection();
+                                self.complete_collection(CompletionState::Complete);
                                 Ok(0)
                             } else {
                                 self.consume(token)
@@ -525,32 +531,32 @@ impl JsonParseState {
                         _ => self.consume(token),
                     }
                 }
-                JsonCollection::UnquotedString(_) => {
+                JsonCollection::UnquotedString(_, _) => {
                     // We could be expecting:
                     // - A terminating json character (comma, colon, bracket, space, newline)
                     // - A character
                     let res = self.consume(token);
-                    if let Some(count) = self.should_close_unescaped_string(next) {
-                        self.complete_collection();
+                    if let CloseStringResult::Close(count, completion_state) = self.should_close_unescaped_string(next) {
+                        self.complete_collection(completion_state);
                         Ok(count)
                     } else {
                         res
                     }
                 }
-                JsonCollection::TrailingComment(_) => {
+                JsonCollection::TrailingComment(_, _) => {
                     // We could be expecting:
                     // - A newline
                     // - A character
                     match token {
                         '\n' => {
                             // We're ready to close the comment
-                            self.complete_collection();
+                            self.complete_collection(CompletionState::Complete);
                             Ok(0)
                         }
                         _ => self.consume(token),
                     }
                 }
-                JsonCollection::BlockComment(_) => {
+                JsonCollection::BlockComment(_, _) => {
                     // We could be expecting:
                     // - A closing comment
                     // - A character
@@ -560,7 +566,7 @@ impl JsonParseState {
                             match next.peek() {
                                 Some((_, '/')) => {
                                     // We're ready to close the comment
-                                    self.complete_collection();
+                                    self.complete_collection(CompletionState::Complete);
                                     Ok(1)
                                 }
                                 _ => Ok(0),
@@ -588,30 +594,30 @@ impl JsonParseState {
         match token {
             '{' => {
                 self.collection_stack
-                    .push(JsonCollection::Object(vec![], vec![]));
+                    .push(JsonCollection::Object(vec![], vec![], CompletionState::Incomplete));
             }
             '[' => {
-                self.collection_stack.push(JsonCollection::Array(vec![]));
+                self.collection_stack.push(JsonCollection::Array(vec![], CompletionState::Incomplete));
             }
             '"' => {
                 self.collection_stack
-                    .push(JsonCollection::QuotedString(String::new()));
+                    .push(JsonCollection::QuotedString(String::new(), CompletionState::Incomplete));
             }
             '\'' => {
                 self.collection_stack
-                    .push(JsonCollection::SingleQuotedString(String::new()));
+                    .push(JsonCollection::SingleQuotedString(String::new(), CompletionState::Incomplete));
             }
             '/' => {
                 // Could be a comment
                 match next.peek() {
                     Some((_, '/')) => {
                         self.collection_stack
-                            .push(JsonCollection::TrailingComment(String::new()));
+                            .push(JsonCollection::TrailingComment(String::new(), CompletionState::Incomplete));
                         return Ok(1);
                     }
                     Some((_, '*')) => {
                         self.collection_stack
-                            .push(JsonCollection::BlockComment(String::new()));
+                            .push(JsonCollection::BlockComment(String::new(), CompletionState::Incomplete));
                         return Ok(1);
                     }
                     _ => {}
@@ -620,9 +626,9 @@ impl JsonParseState {
             x if x.is_whitespace() => {}
             x => {
                 self.collection_stack
-                    .push(JsonCollection::UnquotedString(x.into()));
-                if let Some(count) = self.should_close_unescaped_string(next) {
-                    self.complete_collection();
+                    .push(JsonCollection::UnquotedString(x.into(), CompletionState::Incomplete));
+                if let CloseStringResult::Close(count, completion_state) = self.should_close_unescaped_string(next) {
+                    self.complete_collection(completion_state);
                     return Ok(count);
                 }
             }
@@ -632,7 +638,7 @@ impl JsonParseState {
     }
 }
 
-pub fn try_fix_jsonish(str: &str) -> Result<serde_json::Value> {
+pub fn try_fix_jsonish(str: &str) -> Result<Value> {
     // Try to fix some common JSON issues
     // - Unquoted single word strings
     // - Single quoted strings
@@ -670,7 +676,7 @@ pub fn try_fix_jsonish(str: &str) -> Result<serde_json::Value> {
 
     // If we still have a collection open, close it
     while !state.collection_stack.is_empty() {
-        state.complete_collection();
+        state.complete_collection(CompletionState::Incomplete);
     }
 
     // Determine what to return.
@@ -683,12 +689,13 @@ pub fn try_fix_jsonish(str: &str) -> Result<serde_json::Value> {
         }
         _ => {
             if state.completed_values.iter().all(|f| f.0 == "string") {
-                Ok(serde_json::Value::Array(
+                Ok(Value::Array(
                     state.completed_values.iter().map(|f| f.1.clone()).collect(),
+                    CompletionState::Incomplete
                 ))
             } else {
                 // Filter for only objects and arrays
-                let values: Vec<serde_json::Value> = state
+                let values: Vec<Value> = state
                     .completed_values
                     .iter()
                     .filter_map(|f| {
@@ -702,7 +709,7 @@ pub fn try_fix_jsonish(str: &str) -> Result<serde_json::Value> {
                 match values.len() {
                     0 => Err(anyhow::anyhow!("No JSON objects found")),
                     1 => Ok(values[0].clone()),
-                    _ => Ok(serde_json::Value::Array(values)),
+                    _ => Ok(Value::Array(values, CompletionState::Incomplete)), // TODO: Correct completion state?
                 }
             }
         }
@@ -742,7 +749,7 @@ impl JSONishOptions {
 
 // Responsible for taking a string --> valid JSON
 // TODO: @hellovai add max recursive loop
-pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<serde_json::Value> {
+pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<Value> {
     log::debug!("Parsing:\n{:?}\n-------\n{:?}\n-------", options, str);
 
     if options.depth > 10 {
@@ -751,7 +758,9 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<serde_j
 
     // Try naive parsing first to see if it's valid JSON
     match serde_json::from_str(str) {
-        Ok(value) => return Ok(value),
+        Ok(value) => {
+            return Ok(value)
+        },
         Err(e) => {
             log::trace!("Failed to parse JSON: {:?}\n{str}", e);
         }
@@ -763,10 +772,10 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<serde_j
             if options.depth > 0 {
                 return Ok(value);
             }
-            return Ok(serde_json::Value::Array(vec![
+            return Ok(Value::Array(vec![
                 value,
-                serde_json::Value::String(str.into()),
-            ]));
+                Value::String(str.into(), CompletionState::Incomplete), // TODO: Correct?
+            ], CompletionState::Complete)); // TODO: Correct?
         }
     }
 
@@ -776,10 +785,10 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<serde_j
             if options.depth > 0 {
                 return Ok(value);
             }
-            return Ok(serde_json::Value::Array(vec![
+            return Ok(Value::Array(vec![
                 value,
-                serde_json::Value::String(str.into()),
-            ]));
+                Value::String(str.into(), CompletionState::Complete), // TODO: Correct?
+            ], CompletionState::Complete)); // TODO: Correct?
         }
     }
 
@@ -787,10 +796,10 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<serde_j
     if options.allow_fixes {
         match try_fix_jsonish(str) {
             Ok(value) => {
-                return Ok(serde_json::Value::Array(vec![
+                return Ok(Value::Array(vec![
                     value,
-                    serde_json::Value::String(str.into()),
-                ]));
+                    Value::String(str.into(), CompletionState::Complete), // TODO: Correct completion state?
+                ], CompletionState::Complete)); // TODO: Correct completion state?
             }
             Err(e) => {
                 log::trace!("Failed to fix JSON: {:?}", e);
@@ -801,8 +810,13 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<serde_j
     // If all else fails, return the original string
     if options.allow_as_string {
         // If all else fails, return the original string
-        Ok(serde_json::Value::String(str.into()))
+        Ok(Value::String(str.into(), CompletionState::Incomplete))
     } else {
         Err(anyhow::anyhow!("Failed to parse JSON"))
     }
+}
+
+enum CloseStringResult {
+    Close(usize, CompletionState),
+    Continue
 }

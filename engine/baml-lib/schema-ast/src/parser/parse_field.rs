@@ -54,21 +54,26 @@ pub(crate) fn parse_value_expr(
         _ => Err(DatamodelError::new_model_validation_error(
             "This field declaration is invalid. It is either missing a name or a type.",
             container_type,
-            model_name.as_ref().map_or("<unknown>", |f| f.name()),
+            model_name.as_ref().map_or("<unknown>", Identifier::name),
             diagnostics.span(pair_span),
         )),
     }
 }
 
+/// Sort all attributes on a field into either field attributes or type attributes.
+/// The name of the attribute fully determines whether it will be associated with
+/// the field, or with the type.
 fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type: &mut FieldType) {
     let mut all_attrs = field_type.attributes().to_owned();
     all_attrs.append(field_attributes);
-    let (attrs_for_type, attrs_for_field): (Vec<Attribute>, Vec<Attribute>) = all_attrs
+    let (attrs_for_type, attrs_for_field): (Vec<_>, Vec<_>) = all_attrs
         .into_iter()
-        .partition(|attr| ["assert", "check"].contains(&attr.name()));
-    field_type.set_attributes(attrs_for_type);
+        .partition(|attr| TYPE_ATTRIBUTE_NAMES.contains(&attr.name()));
+    field_type.set_attributes(attrs_for_type.clone());
     *field_attributes = attrs_for_field;
 }
+
+const TYPE_ATTRIBUTE_NAMES: [&str; 4] = ["assert", "check", "stream.done", "stream.with_state"];
 
 pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
@@ -96,7 +101,8 @@ pub(crate) fn parse_type_expr(
                 field_type = parse_field_type_chain(current, diagnostics);
             }
             Rule::field_attribute => {
-                field_attributes.push(parse_attribute(current, false, diagnostics))
+                let attribute = parse_attribute(current, false, diagnostics);
+                field_attributes.push(attribute);
             }
             _ => parsing_catch_all(current, "field"),
         }
@@ -213,13 +219,21 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
 
     let mut seen_types = vec![combined_type.clone()];
 
+    // In a union, use the attributes associated with the last type as the
+    // attributes of the union. Example:
+    //
+    // field: string? | int @alias("hello")
+    //
+    // The alias is part of the union.
+    let last_field_attrs = types.last().map(|t| t.attributes().to_vec());
+
     let mut earliest_start = combined_type.span().start;
     let mut latest_end = combined_type.span().end;
 
     for next_type in types.into_iter().skip(1) {
-        seen_types.push(next_type.clone());
+        let span = next_type.span().to_owned();
+        seen_types.push(next_type);
 
-        let span = next_type.span();
         if span.start < earliest_start {
             earliest_start = span.start;
         }
@@ -237,6 +251,11 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
             },
             None,
         );
+    }
+
+    // We know it's a union because it was assigned above in the for loop.
+    if let FieldType::Union(_, _, _, attrs) = &mut combined_type {
+        *attrs = last_field_attrs;
     }
 
     Some(combined_type)
@@ -477,6 +496,19 @@ mod tests {
         }
     }
 
+    #[test]
+    fn streaming_attributes() {
+        test_parse_baml_type! {
+            source: r#"int @stream.done @stream.not_null @stream.with_state"#,
+            target: FieldType::Primitive(
+                FieldArity::Required,
+                TypeValue::Int,
+                Span::fake(),
+                Some(vec![mk_bare_attribute("stream.done"), mk_bare_attribute("stream.not_null"), mk_bare_attribute("stream.with_state")])
+            ),
+        }
+    }
+
     // Convenience functions.
 
     fn mk_int(attrs: Option<Vec<Attribute>>) -> FieldType {
@@ -502,6 +534,17 @@ mod tests {
                     value: Expression::StringValue(value.to_string(), Span::fake()),
                     span: Span::fake(),
                 }],
+            },
+            span: Span::fake(),
+        }
+    }
+
+    fn mk_bare_attribute(value: &'static str) -> Attribute {
+        Attribute {
+            name: (value, Span::fake()).into(),
+            parenthesized: false,
+            arguments: ArgumentsList {
+                arguments: Vec::new(),
             },
             span: Span::fake(),
         }

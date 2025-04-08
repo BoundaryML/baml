@@ -23,9 +23,10 @@ use axum_extra::{
     headers::{self, authorization::Basic, Authorization, Header},
     TypedHeader,
 };
-use baml_types::{BamlValue, GeneratorDefaultClientMode};
+use baml_types::{BamlValue, GeneratorDefaultClientMode, GeneratorOutputType};
 use core::pin::Pin;
 use futures::Stream;
+use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{path::PathBuf, sync::Arc, task::Poll};
@@ -33,9 +34,7 @@ use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
 use crate::{
-    client_registry::ClientRegistry,
-    errors::ExposedError,
-    internal::llm_client::{LLMResponse, ResponseBamlValue},
+    client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
 use internal_baml_codegen::openapi::OpenApiSchema;
@@ -66,7 +65,7 @@ impl ServeArgs {
         if !self.preview {
             log::warn!(
                 r#"BAML-over-HTTP API is a preview feature.
-                
+
 Please run with --preview, like so:
 
     {} serve --preview
@@ -273,12 +272,6 @@ impl Server {
             return (StatusCode::FORBIDDEN, format!("{}\n", e.trim())).into_response();
         }
 
-        // log::info!(
-        //     "incoming request triggering middleware, basic auth is {:?} and x-baml-api-key is {:?}",
-        //     basic_auth,
-        //     baml_api_key
-        // );
-
         next.run(request).await
     }
 
@@ -328,7 +321,7 @@ impl Server {
         // out of the box.
         //
         // .with_graceful_shutdown(signal::ctrl_c());
-        log::info!(
+        baml_log::info!(
             r#"BAML-over-HTTP listening on port {}, serving from {}
 
 Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
@@ -356,12 +349,13 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
-        let ctx_mgr = RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
+        let ctx_mgr =
+            RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None, None);
         let client_registry = b_options.and_then(|options| options.client_registry);
 
         let locked = self.b.read().await;
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref())
+            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None)
             .await;
 
         match result {
@@ -369,8 +363,9 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 LLMResponse::Success(_) => {
                     match function_result.result_with_constraints_content() {
                         // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
-                        Ok(parsed) => (StatusCode::OK, Json::<ResponseBamlValue>(parsed.clone()))
-                            .into_response(),
+                        Ok(parsed) => {
+                            (StatusCode::OK, Json(parsed.serialize_final())).into_response()
+                        }
                         Err(e) => {
                             if let Some(ExposedError::ValidationError {
                                 prompt,
@@ -417,11 +412,11 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     ) -> Response {
         let mut b_options = None;
         if let Some(options_value) = b_args.get("__baml_options__") {
-            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+            match BamlOptions::deserialize(options_value) {
                 Ok(opts) => b_options = Some(opts),
-                Err(_) => {
+                Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: "Failed to parse __baml_options__".to_string(),
+                        message: format!("Failed to parse __baml_options__: {}", e),
                     }
                     .into_response()
                 }
@@ -447,7 +442,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
 
         tokio::spawn(async move {
             let ctx_mgr =
-                RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
+                RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None, None);
 
             let result_stream = self.b.read().await.stream_function(
                 b_fn,
@@ -455,6 +450,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 &ctx_mgr,
                 None,
                 client_registry.as_ref(),
+                Some(vec![]),
             );
 
             match result_stream {
@@ -483,7 +479,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                 match function_result.result_with_constraints_content() {
                                     // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
                                     Ok(parsed) => {
-                                        (StatusCode::OK, Json::<ResponseBamlValue>(parsed.clone()))
+                                        (StatusCode::OK, Json(&parsed.serialize_partial()))
                                             .into_response()
                                     }
 
@@ -552,11 +548,11 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     ) -> Response {
         let mut b_options = None;
         if let Some(options_value) = body.get("__baml_options__") {
-            match serde_json::from_value::<BamlOptions>(options_value.clone()) {
+            match BamlOptions::deserialize(options_value) {
                 Ok(opts) => b_options = Some(opts),
-                Err(_) => {
+                Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: "Failed to parse __baml_options__".to_string(),
+                        message: format!("Failed to parse __baml_options__: {}", e),
                     }
                     .into_response()
                 }
@@ -622,6 +618,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             true,
             GeneratorDefaultClientMode::Sync,
             Vec::new(),
+            None,
         )
         .map_err(|_| BamlError::InternalError {
             message: "Failed to make placeholder generator".to_string(),
@@ -657,7 +654,7 @@ impl Stream for EventStream {
         match self.receiver.poll_recv(cx) {
             Poll::Ready(Some(item)) => match item.result_with_constraints_content() {
                 // TODO: not sure if this is the correct way to implement this.
-                Ok(parsed) => Poll::Ready(Some(parsed.into())),
+                Ok(parsed) => Poll::Ready(Some(parsed.0.clone().into())),
                 Err(_) => Poll::Pending,
             },
             Poll::Ready(None) => Poll::Ready(None),
@@ -715,4 +712,67 @@ fn parse_args(
     }
 
     Ok(args)
+}
+
+#[cfg(test)]
+mod tests {
+    use baml_types::BamlMap;
+    use internal_llm_client::{ClientProvider, OpenAIClientProviderVariant};
+
+    use crate::client_registry::ClientProperty;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_baml_options() {
+        let baml_options: BamlOptions = serde_json::from_str(
+            r#"
+        {
+            "client_registry": {
+                "clients": [
+                    {
+                        "name": "testing",
+                        "provider": "openai",
+                        "options": {
+                            "model": "gpt-4o",
+                            "api_key": "[redacted]",
+                            "base_url": "[redacted]"
+                        }
+                    }
+                ],
+                "primary": "testing"
+            }
+        }"#,
+        )
+        .unwrap();
+        assert!(
+            baml_options.client_registry.is_some(),
+            "client_registry should be Some"
+        );
+        let client_registry = baml_options.client_registry.unwrap();
+
+        let provider = ClientProvider::OpenAI(OpenAIClientProviderVariant::Base);
+        let retry_policy = None;
+        let options = BamlMap::from_iter(vec![
+            ("model".to_string(), BamlValue::String("gpt-4o".to_string())),
+            (
+                "api_key".to_string(),
+                BamlValue::String("[redacted]".to_string()),
+            ),
+            (
+                "base_url".to_string(),
+                BamlValue::String("[redacted]".to_string()),
+            ),
+        ]);
+        let client_property =
+            ClientProperty::new("testing".into(), provider, retry_policy, options);
+
+        let expected_client_registry = {
+            let mut client_registry = ClientRegistry::new();
+            client_registry.add_client(client_property);
+            client_registry.set_primary("testing".to_string());
+            client_registry
+        };
+        assert_eq!(client_registry, expected_client_registry);
+    }
 }

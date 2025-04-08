@@ -9,9 +9,9 @@ crate::lang_wrapper!(BamlAudio, baml_types::BamlMedia);
 #[napi]
 impl BamlAudio {
     #[napi(ts_return_type = "BamlAudio")]
-    pub fn from_url(url: String) -> External<BamlAudio> {
+    pub fn from_url(url: String, media_type: Option<String>) -> External<BamlAudio> {
         let aud = BamlAudio {
-            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Audio, url, None),
+            inner: baml_types::BamlMedia::url(baml_types::BamlMediaType::Audio, url, media_type),
         };
         External::new(aud)
     }

@@ -8,11 +8,27 @@ function Bar(a: string, b: int | bool) -> int {
   prompt #"fa"#
 }
 
-// error: The function "Bar" cannot be defined because a function with that name already exists.
+// error: The function "Bar" cannot be re-defined because a function with that name already exists.
+//   -->  functions_v2/duplicate_names.baml:1
+//    | 
+//    | 
+//  1 | function Bar {
+//    | 
 //   -->  functions_v2/duplicate_names.baml:6
 //    | 
 //  5 | 
 //  6 | function Bar(a: string, b: int | bool) -> int {
+//    | 
+// error: The function "Bar" cannot be re-defined because a function with that name already exists.
+//   -->  functions_v2/duplicate_names.baml:6
+//    | 
+//  5 | 
+//  6 | function Bar(a: string, b: int | bool) -> int {
+//    | 
+//   -->  functions_v2/duplicate_names.baml:1
+//    | 
+//    | 
+//  1 | function Bar {
 //    | 
 // error: Invalid syntax for function "Bar". Use:
 // function Bar(params...) -> ReturnType { ... }

@@ -34,22 +34,49 @@ impl VertexAuth {
                 Ok(VertexAuth::CustomServiceAccount(authz_user))
             }
             ResolvedGcpAuthStrategy::SystemDefault => {
-                log::debug!("Attempting to auth using SystemDefault strategy");
-                if let Ok(authz_user) = gcp_auth::ConfigDefaultCredentials::new().await {
-                    log::debug!(
-                        "Successful auth using GcloudApplicationDefaultCredentials strategy"
-                    );
-                    return Ok(VertexAuth::ConfigDefaultCredentials(authz_user));
+                log::debug!("Attempting to auth using SystemDefault strategy (local mods)");
+                match gcp_auth::ConfigDefaultCredentials::new().await {
+                    Ok(authz_user) => {
+                        log::debug!(
+                            "Successful auth using GcloudApplicationDefaultCredentials strategy"
+                        );
+                        return Ok(VertexAuth::ConfigDefaultCredentials(authz_user));
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "{:?}",
+                            anyhow::Error::from(e).context(
+                                "Failed to auth using GcloudApplicationDefaultCredentials strategy"
+                            )
+                        );
+                    }
                 }
-                if let Ok(authz_user) = gcp_auth::MetadataServiceAccount::new().await {
-                    log::debug!("Successful auth using MetadataServiceAccount strategy");
-                    return Ok(VertexAuth::MetadataServiceAccount(authz_user));
+                match gcp_auth::MetadataServiceAccount::new().await {
+                    Ok(authz_user) => {
+                        log::debug!("Successful auth using MetadataServiceAccount strategy");
+                        return Ok(VertexAuth::MetadataServiceAccount(authz_user));
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "{:?}",
+                            anyhow::Error::from(e)
+                                .context("Failed to auth using MetadataServiceAccount strategy")
+                        );
+                    }
                 }
-                if let Ok(authz_user) = gcp_auth::GCloudAuthorizedUser::new().await {
-                    log::debug!("Successful auth using GCloudAuthorizedUser strategy");
-                    return Ok(VertexAuth::GCloudAuthorizedUser(authz_user));
+                match gcp_auth::GCloudAuthorizedUser::new().await {
+                    Ok(authz_user) => {
+                        log::debug!("Successful auth using GCloudAuthorizedUser strategy");
+                        return Ok(VertexAuth::GCloudAuthorizedUser(authz_user));
+                    }
+                    Err(e) => {
+                        log::error!(
+                            "{:?}",
+                            anyhow::Error::from(e)
+                                .context("Failed to auth using GCloudAuthorizedUser strategy")
+                        );
+                    }
                 }
-
                 anyhow::bail!(
                     "Failed to auth - system_default strategy did not resolve successfully"
                 )

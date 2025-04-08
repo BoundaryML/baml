@@ -1,9 +1,11 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use baml_types::EvaluationContext;
 use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::IRHelper;
+use minijinja::value::intern;
 
 use crate::{BamlMedia, BamlValue};
 
@@ -194,6 +196,10 @@ impl minijinja::value::StructObject for MinijinjaBamlClass {
 
     fn static_fields(&self) -> Option<&'static [&'static str]> {
         None
+    }
+
+    fn fields(&self) -> Vec<Arc<str>> {
+        self.class.keys().into_iter().map(|k| intern(k)).collect()       
     }
 }
 

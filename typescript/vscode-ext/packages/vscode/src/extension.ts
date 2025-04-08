@@ -2,7 +2,7 @@
 import * as vscode from 'vscode'
 import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
-import { WebPanelView, openPlaygroundConfig } from './panels/WebPanelView'
+import { WebviewPanelHost, openPlaygroundConfig } from './panels/WebviewPanelHost'
 import plugins from './plugins'
 import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server'
 import { telemetry } from './plugins/language-server'
@@ -172,7 +172,7 @@ export function activate(context: vscode.ExtensionContext) {
   let port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
-    WebPanelView.currentPanel?.postMessage('port_number', {
+    WebviewPanelHost.currentPanel?.postMessage('port_number', {
       port: port,
     })
   })
@@ -276,7 +276,7 @@ export function activate(context: vscode.ExtensionContext) {
       const config = vscode.workspace.getConfiguration()
       config.update('baml.bamlPanelOpen', true, vscode.ConfigurationTarget.Global)
 
-      WebPanelView.render(context.extensionUri, getPort, telemetry)
+      WebviewPanelHost.render(context.extensionUri, getPort, telemetry)
       if (telemetry) {
         telemetry.sendTelemetryEvent({
           event: 'baml.openBamlPanel',
@@ -287,7 +287,7 @@ export function activate(context: vscode.ExtensionContext) {
       requestDiagnostics()
 
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebPanelView.currentPanel?.postMessage('select_function', {
+      WebviewPanelHost.currentPanel?.postMessage('select_function', {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
       })
@@ -305,7 +305,7 @@ export function activate(context: vscode.ExtensionContext) {
       showTests?: boolean
       testCaseName?: string
     }) => {
-      WebPanelView.render(context.extensionUri, getPort, telemetry)
+      WebviewPanelHost.render(context.extensionUri, getPort, telemetry)
       if (telemetry) {
         telemetry.sendTelemetryEvent({
           event: 'baml.runBamlTest',
@@ -317,12 +317,12 @@ export function activate(context: vscode.ExtensionContext) {
       requestDiagnostics()
 
       openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebPanelView.currentPanel?.postMessage('select_function', {
+      WebviewPanelHost.currentPanel?.postMessage('select_function', {
         root_path: 'default',
         function_name: args?.functionName ?? 'default',
       })
 
-      WebPanelView.currentPanel?.postMessage('run_test', {
+      WebviewPanelHost.currentPanel?.postMessage('run_test', {
         test_name: args?.testCaseName ?? 'default',
       })
 
@@ -335,10 +335,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   const pythonSelector = { language: 'python', scheme: 'file' }
   const typescriptSelector = { language: 'typescript', scheme: 'file' }
+  const reactSelector = { language: 'typescriptreact', scheme: 'file' }
 
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider(pythonSelector, glooLens),
     vscode.languages.registerCodeLensProvider(typescriptSelector, glooLens),
+    vscode.languages.registerCodeLensProvider(reactSelector, glooLens),
   )
 
   context.subscriptions.push(diagnosticsCollection)
@@ -356,17 +358,19 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (editor) {
       const name = editor.document.fileName
-      const text = editor.document.getText()
+      if (name.endsWith('.baml')) {
+        const text = editor.document.getText()
 
-      // TODO: buggy when used with multiple functions, needs a fix.
-      WebPanelView.currentPanel?.postMessage('update_cursor', {
-        cursor: {
-          fileName: name,
-          fileText: text,
-          line: position.line + 1,
-          column: position.character,
-        },
-      })
+        // TODO: buggy when used with multiple functions, needs a fix.
+        WebviewPanelHost.currentPanel?.postMessage('update_cursor', {
+          cursor: {
+            fileName: name,
+            fileText: text,
+            line: position.line + 1,
+            column: position.character,
+          },
+        })
+      }
     }
   })
 

@@ -38,22 +38,26 @@ indexmap.workspace = true
 indoc.workspace = true
 # instant = "0.1"  # do not use this or wasm-timer - use web-time instead
 json_comments = "0.2.2"
-jsonish = { path = "../baml-lib/jsonish" }
+jsonish.workspace = true
 internal-baml-codegen.workspace = true
-baml-types = { path = "../baml-lib/baml-types" }
-internal-llm-client = { path = "../baml-lib/llm-client" }
-internal-baml-core = { path = "../baml-lib/baml-core" }
-internal-baml-jinja = { path = "../baml-lib/jinja-runtime" }
+baml-types.workspace = true
+baml-log.workspace = true
+internal-llm-client.workspace = true
+internal-baml-core.workspace = true
+internal-baml-jinja.workspace = true
 log.workspace = true
 minijinja.workspace = true
 pin-project-lite.workspace = true
+regex.workspace = true
 reqwest-eventsource = "0.6.0"
 scopeguard.workspace = true
+secrecy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 strsim = "0.11.1"
 strum.workspace = true
 strum_macros.workspace = true
+thiserror.workspace = true
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
@@ -61,7 +65,7 @@ tokio = { version = "1", default-features = false, features = [
 tokio-stream = "0.1.15"
 # NOTE(sam): adding this caused a build error, I suspect because tower uses nightly features or something
 # tower = "0.5.0"
-uuid = { version = "1.8.0", features = ["v4", "serde"] }
+uuid.workspace = true
 web-time.workspace = true
 static_assertions.workspace = true
 mime_guess = "=2.0.5"
@@ -79,7 +83,8 @@ infer = "0.16.0"
 url = "2.5.2"
 shell-escape = "0.1.5"
 aws-sigv4 = "1.2.2"
-aws-credential-types = "1.2.0"
+aws-credential-types = "1.2.1"
+aws-runtime = "1.5.5"
 aws-smithy-async = "1.2.1"
 aws-smithy-runtime-api = "1.7.0"
 aws-smithy-types = "1.2.0"
@@ -90,14 +95,16 @@ aws-smithy-json = "0.60.7"
 pretty_assertions = "1.4.0"
 valuable = { version = "0.1.0", features = ["derive"] }
 tracing = { version = "0.1.40", features = ["valuable"] }
+tracing-core = { version = "0.1.31" }
 tracing-subscriber = { version = "0.3.18", features = [
   "json",
   "env-filter",
   "valuable",
 ] }
-thiserror = "2.0.1"
 log-once = "0.4.1"
-jsonwebtoken = "9.3.0"
+once_cell.workspace = true
+time.workspace = true
+tempfile = "3.19.0"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -108,8 +115,13 @@ colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
 ] }
 futures-timer = { version = "3.0.3", features = ["wasm-bindgen"] }
-js-sys = "0.3.69"
-reqwest = { version = "0.12.12", features = ["stream", "json", "native-tls-vendored", "native-tls-alpn"] }
+js-sys = "=0.3.69"
+reqwest = { version = "0.12.12", features = [
+  "stream",
+  "json",
+  "native-tls-vendored",
+  "native-tls-alpn",
+] }
 # 
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 serde-wasm-bindgen = "0.6.5"
@@ -129,12 +141,14 @@ web-sys = { version = "0.3.69", features = [
   "SubtleCrypto",
   "Window",
 ] }
+wasmtimer = "0.4.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 aws-config = "1.5.3"
 aws-sdk-bedrockruntime = "1.37.0"
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
+criterion = "0.5.1"
 gcp_auth = "0.12.3"
 hostname = "0.3.1"
 jsonwebtoken = { version = "9.3.0" }
@@ -144,6 +158,8 @@ tokio = { version = "1", features = ["full"] }
 reqwest.workspace = true
 walkdir = "2.5.0"
 which = "6.0.3"
+indicatif = "0.17"
+junit-report = "0.8.3"
 
 
 [features]
@@ -155,6 +171,7 @@ skip-integ-tests = []
 [dev-dependencies]
 assert_cmd = "2"
 console_log = "1"
+criterion = "0.5.1"
 dissimilar = "1.0.4"
 expect-test = "1.1.0"
 indoc.workspace = true
@@ -163,3 +180,5 @@ rstest = "0.22.0"
 wasm-bindgen-test = "0.3.42"
 walkdir = "2.5.0"
 wasm-logger = "0.2.0"
+serial_test = "3.2.0"
+console_error_panic_hook = "0.1.7"

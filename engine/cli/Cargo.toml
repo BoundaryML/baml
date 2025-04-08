@@ -24,6 +24,7 @@ axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 baml-runtime = { path = "../baml-runtime", features = ["internal"] }
 baml-types.workspace = true
+baml-log.workspace = true
 base64.workspace = true
 bstd.workspace = true
 bytes.workspace = true
@@ -107,6 +108,7 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "valuable",
 ] }
+ctrlc = "3.4"
 
 
 [features]

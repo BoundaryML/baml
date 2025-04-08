@@ -108,11 +108,15 @@ fn validate_name(
             "env.* is reserved.",
             span.clone(),
         )),
-        ast::Identifier::Ref(_, span) => Err(DatamodelError::new_name_error(
-            _type,
-            "Namespace imports (using '.') are not yet supported.",
-            span.clone(),
-        )),
+        ast::Identifier::Ref(path, span) => {
+            let valid_paths = ["stream.done", "stream.not_null", "stream.with_state"];
+            if !valid_paths.contains(&path.full_name.as_str()) {
+                Err(DatamodelError::new_name_error(
+                _type,
+                "Namespace imports (using '.') are not yet supported.",
+                span.clone(),
+            ))} else { Ok(()) }
+        },
 
         ast::Identifier::Invalid(_, span) | ast::Identifier::String(_, span) => {
             Err(DatamodelError::new_name_error(

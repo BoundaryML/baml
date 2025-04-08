@@ -35,20 +35,25 @@ impl FunctionResult {
         ruby: &Ruby,
         rb_self: &FunctionResult,
         types: RModule,
+        partial_types: RModule,
+        allow_partials: bool,
     ) -> Result<Value> {
-        match rb_self.inner.result_with_constraints_content() {
-            Ok(parsed) => ruby_to_json::RubyToJson::serialize_baml(ruby, types, parsed.clone())
+        let res = match rb_self.inner.result_with_constraints_content() {
+            Ok(parsed) => {
+                ruby_to_json::RubyToJson::serialize_baml(ruby, types, partial_types, allow_partials, parsed.clone())
                 .map_err(|e| {
                     magnus::Error::new(
                         ruby.exception_type_error(),
                         format!("failing inside parsed_using_types: {:?}", e),
                     )
-                }),
+                })
+            },
             Err(_) => Err(Error::new(
                 ruby.exception_runtime_error(),
                 format!("Failed to parse LLM response: {}", rb_self.inner),
             )),
-        }
+        };
+        res
     }
 
     /// For usage in magnus::init
@@ -59,7 +64,7 @@ impl FunctionResult {
 
         cls.define_method(
             "parsed_using_types",
-            method!(FunctionResult::parsed_using_types, 1),
+            method!(FunctionResult::parsed_using_types, 3),
         )?;
 
         Ok(())

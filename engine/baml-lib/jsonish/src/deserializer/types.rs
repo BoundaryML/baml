@@ -89,7 +89,31 @@ impl BamlValueWithFlags {
     }
 }
 
-trait ParsingErrorToUiJson {
+impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
+    fn from(baml_value: BamlValueWithFlags) -> BamlValueWithMeta<Vec<Flag>> {
+        match baml_value {
+            BamlValueWithFlags::String(v) => BamlValueWithMeta::String(v.value, v.flags.flags),
+            BamlValueWithFlags::Int(v) => BamlValueWithMeta::Int(v.value, v.flags.flags),
+            BamlValueWithFlags::Float(v) => BamlValueWithMeta::Float(v.value, v.flags.flags),
+            BamlValueWithFlags::Bool(v) => BamlValueWithMeta::Bool(v.value, v.flags.flags),
+            BamlValueWithFlags::List(conditions, items) => {
+                BamlValueWithMeta::List(items.into_iter().map(|v| BamlValueWithMeta::from(v)).collect(), conditions.flags)
+            },
+            BamlValueWithFlags::Map(conditions, fields) => BamlValueWithMeta::Map(
+                 // NOTE: For some reason, Map is map<key, (conds, v)>, even though `v` contains conds.
+                 // Maybe the extra conds are for the field, not the value?
+                fields.into_iter().map(|(k,v)| (k, BamlValueWithMeta::from(v.1))).collect(), conditions.flags
+            ),
+            BamlValueWithFlags::Enum(n,v) => BamlValueWithMeta::Enum(n, v.value, v.flags.flags),
+            BamlValueWithFlags::Class(name, conds, fields) =>
+                BamlValueWithMeta::Class(name, fields.into_iter().map(|(k,v)| (k, BamlValueWithMeta::from(v))).collect(), conds.flags),
+            BamlValueWithFlags::Null(v) => BamlValueWithMeta::Null(v.flags),
+            BamlValueWithFlags::Media(v) => BamlValueWithMeta::Media(v.value, v.flags.flags),
+        }
+    }
+}
+
+pub trait ParsingErrorToUiJson {
     fn to_ui_json(&self) -> serde_json::Value;
 }
 
@@ -246,7 +270,7 @@ impl BamlValueWithFlags {
 #[derive(Debug, Clone)]
 pub struct ValueWithFlags<T> {
     pub value: T,
-    pub(super) flags: DeserializerConditions,
+    pub flags: DeserializerConditions,
 }
 
 impl<T> ValueWithFlags<T> {

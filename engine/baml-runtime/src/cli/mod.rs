@@ -1,7 +1,9 @@
 pub mod dev;
+mod dotenv;
 pub mod generate;
 pub mod init;
 pub mod serve;
+pub mod testing;
 
 use internal_baml_core::configuration::GeneratorOutputType;
 

@@ -40,7 +40,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_schema_ast::ast;
-use internal_baml_schema_ast::ast::{FieldType, SchemaAst, WithName};
+use internal_baml_schema_ast::ast::{FieldType, SchemaAst, ValExpId, WithName};
 pub use tarjan::Tarjan;
 pub use types::{
     Attributes, ClientProperties, ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType,
@@ -71,8 +71,10 @@ use names::Names;
 ///   fields.
 /// - Global validations are then performed on the mostly validated schema.
 ///   Currently only index name collisions.
+#[derive(Clone)]
 pub struct ParserDatabase {
-    ast: ast::SchemaAst,
+    /// The AST.
+    pub ast: ast::SchemaAst,
     interner: interner::StringInterner,
     names: Names,
     types: Types,
@@ -93,6 +95,15 @@ impl ParserDatabase {
             names: Default::default(),
             types: Default::default(),
         }
+    }
+
+    /// TODO: #1343 Temporary solution until we implement scoping in the AST.
+    pub fn add_test_case_db(&mut self, test_cases_id: ValExpId, scoped_db: Self) {
+        self.types
+            .test_cases
+            .get_mut(&test_cases_id)
+            .unwrap()
+            .type_builder_scoped_db = scoped_db;
     }
 
     /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
@@ -163,22 +174,37 @@ impl ParserDatabase {
                 match self.find_type_by_str(dep) {
                     Some(TypeWalker::Class(cls)) => {
                         resolved_deps.insert(cls.id);
+
+                        // TODO: #1343 Temporary solution until we implement scoping in the AST.
+                        if !cls.name().starts_with(ast::DYNAMIC_TYPE_NAME_PREFIX) {
+                            let dyn_def_name =
+                                format!("{}{}", ast::DYNAMIC_TYPE_NAME_PREFIX, cls.name());
+                            if let Some(TypeWalker::Class(dyn_def)) =
+                                self.find_type_by_str(&dyn_def_name)
+                            {
+                                resolved_deps.insert(dyn_def.id);
+                            }
+                        }
                     }
                     Some(TypeWalker::Enum(_)) => {}
                     // Gotta resolve type aliases.
                     Some(TypeWalker::TypeAlias(alias)) => {
-                        resolved_deps.extend(alias.resolved().flat_idns().iter().map(|ident| {
-                            match self.find_type_by_str(ident.name()) {
-                                Some(TypeWalker::Class(cls)) => cls.id,
-                                Some(TypeWalker::Enum(_)) => {
-                                    panic!("Enums are not allowed in type aliases")
+                        resolved_deps.extend(alias.resolved().flat_idns().iter().filter_map(
+                            |ident| {
+                                match self.find_type_by_str(ident.name()) {
+                                    Some(TypeWalker::Class(cls)) => Some(cls.id),
+                                    // Enums are not part of the dependency
+                                    // graph because they can't depend on other
+                                    // enums.
+                                    Some(TypeWalker::Enum(_)) => None,
+                                    // Skip this one, recursive type aliases are
+                                    // not part of the finite class cycle. They
+                                    // are handled separately.
+                                    Some(TypeWalker::TypeAlias(alias)) => None,
+                                    None => panic!("Unknown class `{dep}`"),
                                 }
-                                Some(TypeWalker::TypeAlias(alias)) => {
-                                    panic!("Alias should be resolved at this point")
-                                }
-                                None => panic!("Unknown class `{dep}`"),
-                            }
-                        }))
+                            },
+                        ))
                     }
                     None => panic!("Unknown class `{dep}`"),
                 }
@@ -187,12 +213,36 @@ impl ParserDatabase {
             resolved_dependency_graph.insert(*id, resolved_deps);
         }
 
+        // log::debug!(
+        //     "Resolved graph dependencies: {:?}",
+        //     resolved_dependency_graph
+        //         .iter()
+        //         .map(|(k, v)| {
+        //             (
+        //                 self.ast[*k].name.to_string(),
+        //                 v.iter()
+        //                     .map(|v| self.ast[*v].name.to_string())
+        //                     .collect::<HashSet<_>>(),
+        //             )
+        //         })
+        //         .collect::<HashMap<_, _>>()
+        // );
+
         // Find the cycles and inject them into parser DB. This will then be
         // passed into the IR and then into the Jinja output format.
-        //
-        // TODO: Should we update `class_dependencies` to include resolved
-        // aliases or not?
         self.types.finite_recursive_cycles = Tarjan::components(&resolved_dependency_graph);
+
+        // log::debug!(
+        //     "Cycles: {:?}",
+        //     self.types
+        //         .finite_recursive_cycles
+        //         .iter()
+        //         .map(|c| c
+        //             .iter()
+        //             .map(|id| self.ast[*id].name.to_string())
+        //             .collect::<Vec<_>>())
+        //         .collect::<Vec<_>>()
+        // );
 
         // Fully resolve function dependencies.
         let extends = self

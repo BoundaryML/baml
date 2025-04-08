@@ -1,3 +1,5 @@
+import { AwsCredentialIdentity } from '@smithy/types'
+
 // Commands that vscode sends to the webview
 export type VscodeToWebviewCommand =
   | {
@@ -72,6 +74,11 @@ export interface EchoResponse {
   message: string
 }
 
+export interface SetProxySettingsRequest {
+  vscodeCommand: 'SET_PROXY_SETTINGS'
+  proxyEnabled: boolean
+}
+
 export interface GetBamlSrcRequest {
   vscodeCommand: 'GET_BAML_SRC'
   path: string
@@ -110,6 +117,30 @@ export interface GetPlaygroundPortResponse {
   port: number
 }
 
+export interface LoadEnvRequest {
+  vscodeCommand: 'LOAD_ENV'
+}
+
+export interface LoadEnvResponse {
+  envVars: Record<string, string>
+  error?: string
+}
+
+export interface LoadAwsCredsRequest {
+  vscodeCommand: 'LOAD_AWS_CREDS'
+  profile: string | null
+}
+
+export type LoadAwsCredsResponse =
+  | {
+      ok: AwsCredentialIdentity
+    }
+  | {
+      error: {
+        message: string
+      }
+    }
+
 export interface InitializedRequest {
   vscodeCommand: 'INITIALIZED'
 }
@@ -121,10 +152,13 @@ export interface InitializedResponse {
 type ApiPairs = [
   // Echo is included here as an example of what a request/response pair looks like
   [EchoRequest, EchoResponse],
+  [SetProxySettingsRequest, void],
   [GetBamlSrcRequest, GetBamlSrcResponse],
   [GetWebviewUriRequest, GetWebviewUriResponse],
   [GetVSCodeSettingsRequest, GetVSCodeSettingsResponse],
   [GetPlaygroundPortRequest, GetPlaygroundPortResponse],
+  [LoadEnvRequest, LoadEnvResponse],
+  [LoadAwsCredsRequest, LoadAwsCredsResponse],
   [InitializedRequest, InitializedResponse],
 ]
 
