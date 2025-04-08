@@ -431,7 +431,7 @@ const plugin: BamlVSCodePlugin = {
     const cliVersion = {
       architecture: process.arch,
       platform: process.platform,
-      version: "0.82.0", // TODO: Get version on the client side.
+      version: '0.82.0', // TODO: Get version on the client side.
     }
 
     // TODO: Send notification, loading state, etc.

@@ -3,13 +3,13 @@
  * correct binary based on the version.
  */
 
+import { createWriteStream } from 'fs'
 import fs from 'fs/promises'
 import path from 'path'
 import os from 'os'
 import * as tar from 'tar'
 import axios from 'axios'
-// import zlib from 'zlib'
-// import extractZip from 'extract-zip'
+import AdmZip from 'adm-zip'
 
 type CliVersion = {
   architecture: string
@@ -134,7 +134,8 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
 
   // TODO: Testing
   const url =
-    'https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz'
+    // 'https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz'
+    'https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-pc-windows-msvc.zip'
 
   // Make HTTP request, follow redirects.
   const res = await axios.get(url, { responseType: 'stream' })
@@ -152,15 +153,33 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
 
   // Download the compressed file, extract and write the binary.
   // TODO: Check zip vs tar.gz.
-  res.data.pipe(
-    tar.extract(
-      {
-        cwd: INSTALL_PATH,
-        onReadEntry: (entry) => (entry.path = binaryFileName),
-      },
-      ['ripgrep-14.1.1-x86_64-unknown-linux-musl/rg'], // TODO: Change this to ['./baml-cli']
-    ),
-  )
+  if (extension === 'tar.gz') {
+    res.data.pipe(
+      tar.extract(
+        {
+          cwd: INSTALL_PATH,
+          onReadEntry: (entry) => (entry.path = binaryFileName),
+        },
+        ['ripgrep-14.1.1-x86_64-unknown-linux-musl/rg'], // TODO: Change this to ['./baml-cli']
+      ),
+    )
+  } else if (extension === 'zip') {
+    const compressedFilePath = path.join(INSTALL_PATH, compressedFileName)
+    const stream = res.data.pipe(createWriteStream(compressedFilePath))
+
+    // Due to the zip format, we can't use streaming APIs, we need the entire
+    // content to be downloaded before we can extract the binary.
+    stream.on('finish', () => {
+      const zip = new AdmZip(compressedFilePath)
+      zip.extractEntryTo(
+        'ripgrep-14.1.1-x86_64-pc-windows-msvc/rg.exe', // TODO: Change this to './baml-cli'
+        INSTALL_PATH,
+        false,
+      )
+    })
+  } else {
+    throw new Error(`Unsupported compressed file format for LSP download: ${extension}`)
+  }
 
   // TODO: Zip files
   // const unzip = zlib.createGunzip()
