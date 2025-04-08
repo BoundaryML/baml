@@ -130,7 +130,7 @@ export class BamlAsyncClient {
   }
   
   async AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"gt_ten">> {
     try {
@@ -2131,7 +2131,7 @@ export class BamlAsyncClient {
   }
   
   async ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Promise<Checked<number,"gt_ten">> {
     try {
@@ -3510,6 +3510,29 @@ export class BamlAsyncClient {
     }
   }
   
+  async TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<string> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = await this.runtime.callFunction(
+        "TestOpenAIDummyClient",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async TestOpenAIGPT4oMini(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -4043,7 +4066,7 @@ class BamlStreamClient {
   }
   
   AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
     try {
@@ -6566,7 +6589,7 @@ class BamlStreamClient {
   }
   
   ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
     try {
@@ -8285,6 +8308,35 @@ class BamlStreamClient {
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "TestOpenAI",
+        {
+          "input": input
+        },
+        undefined,
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return new BamlStream<string, string>(
+        raw,
+        (a): string => a,
+        (a): string => a,
+        this.ctxManager.cloneContext(),
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+  ): BamlStream<string, string> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.streamFunction(
+        "TestOpenAIDummyClient",
         {
           "input": input
         },

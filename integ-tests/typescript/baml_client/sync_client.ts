@@ -132,7 +132,7 @@ export class BamlSyncClient {
   }
   
   AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Checked<number,"gt_ten"> {
     try {
@@ -2133,7 +2133,7 @@ export class BamlSyncClient {
   }
   
   ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Checked<number,"gt_ten"> {
     try {
@@ -3498,6 +3498,29 @@ export class BamlSyncClient {
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "TestOpenAI",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as string
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): string {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.callFunctionSync(
+        "TestOpenAIDummyClient",
         {
           "input": input
         },

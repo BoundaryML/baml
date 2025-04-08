@@ -13,7 +13,7 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-__version__ = "0.81.0"
+__version__ = "0.82.0"
 
 try:
   from baml_py.safe_import import EnsureBamlPyImport
@@ -40,7 +40,6 @@ with EnsureBamlPyImport(__version__) as e:
   from . import partial_types
   from . import config
   from .config import reset_baml_env_vars
-
   
   from .async_client import b
   

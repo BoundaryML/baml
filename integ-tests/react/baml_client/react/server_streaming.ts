@@ -73,12 +73,12 @@ export const AliasThatPointsToRecursiveType = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { Checked<number,"gt_ten"> } money - Input parameter.
+ * @param { number } money - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const AliasWithMultipleAttrs = async (
-  money: Checked<number,"gt_ten">,
+  money: number,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.AliasWithMultipleAttrs(
     money,
@@ -1744,12 +1744,12 @@ export const RecursiveClassWithAliasIndirection = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { Checked<number,"gt_ten"> } money - Input parameter.
+ * @param { number } money - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const ReturnAliasWithMergedAttributes = async (
-  money: Checked<number,"gt_ten">,
+  money: number,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.ReturnAliasWithMergedAttributes(
     money,
@@ -2879,6 +2879,25 @@ export const TestOpenAI = async (
   input: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.TestOpenAI(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "TestOpenAIDummyClient" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenAIDummyClient = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenAIDummyClient(
     input,
   );
   return Promise.resolve(stream.toStreamable());

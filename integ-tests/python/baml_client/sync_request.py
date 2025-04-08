@@ -85,7 +85,7 @@ class HttpRequest:
     
     def AliasWithMultipleAttrs(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -2086,7 +2086,7 @@ class HttpRequest:
     
     def ReturnAliasWithMergedAttributes(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -3455,6 +3455,29 @@ class HttpRequest:
 
       return self.__runtime.build_request_sync(
         "TestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        False,
+      )
+    
+    def TestOpenAIDummyClient(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "TestOpenAIDummyClient",
         {
           "input": input,
         },
@@ -3983,7 +4006,7 @@ class HttpStreamRequest:
     
     def AliasWithMultipleAttrs(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5984,7 +6007,7 @@ class HttpStreamRequest:
     
     def ReturnAliasWithMergedAttributes(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7353,6 +7376,29 @@ class HttpStreamRequest:
 
       return self.__runtime.build_request_sync(
         "TestOpenAI",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        True,
+      )
+    
+    def TestOpenAIDummyClient(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      return self.__runtime.build_request_sync(
+        "TestOpenAIDummyClient",
         {
           "input": input,
         },

@@ -173,6 +173,7 @@ export type StreamingServerTypes = {
   TestOllama: string,
   TestOllamaHaiku: partial_types.Haiku,
   TestOpenAI: string,
+  TestOpenAIDummyClient: string,
   TestOpenAIGPT4oMini: string,
   TestOpenAILegacyProvider: string,
   TestOpenAIO1NoMaxTokens: string,

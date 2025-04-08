@@ -156,7 +156,7 @@ class BamlAsyncClient:
     
     async def AliasWithMultipleAttrs(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int, Literal["gt_ten"]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -2505,7 +2505,7 @@ class BamlAsyncClient:
     
     async def ReturnAliasWithMergedAttributes(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int, Literal["gt_ten"]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -4123,6 +4123,33 @@ class BamlAsyncClient:
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
+    async def TestOpenAIDummyClient(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = await self.__runtime.call_function(
+        "TestOpenAIDummyClient",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(str, raw.cast_to(types, types, partial_types, False))
+    
     async def TestOpenAIGPT4oMini(
         self,
         input: str,
@@ -4743,7 +4770,7 @@ class BamlStreamClient:
     
     def AliasWithMultipleAttrs(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -7620,7 +7647,7 @@ class BamlStreamClient:
     
     def ReturnAliasWithMergedAttributes(
         self,
-        money: Checked[int, Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -9583,6 +9610,39 @@ class BamlStreamClient:
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
       raw = self.__runtime.stream_function(
         "TestOpenAI",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestOpenAIDummyClient(
+        self,
+        input: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = self.__runtime.stream_function(
+        "TestOpenAIDummyClient",
         {
           "input": input,
         },

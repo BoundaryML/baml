@@ -57,6 +57,7 @@ serde_json.workspace = true
 strsim = "0.11.1"
 strum.workspace = true
 strum_macros.workspace = true
+thiserror.workspace = true
 tokio = { version = "1", default-features = false, features = [
   "macros",
   "time",
@@ -82,7 +83,8 @@ infer = "0.16.0"
 url = "2.5.2"
 shell-escape = "0.1.5"
 aws-sigv4 = "1.2.2"
-aws-credential-types = "1.2.0"
+aws-credential-types = "1.2.1"
+aws-runtime = "1.5.5"
 aws-smithy-async = "1.2.1"
 aws-smithy-runtime-api = "1.7.0"
 aws-smithy-types = "1.2.0"
@@ -99,7 +101,6 @@ tracing-subscriber = { version = "0.3.18", features = [
   "env-filter",
   "valuable",
 ] }
-thiserror = "2.0.1"
 log-once = "0.4.1"
 once_cell.workspace = true
 time.workspace = true

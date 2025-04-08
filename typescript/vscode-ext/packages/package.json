@@ -2,7 +2,7 @@
   "name": "baml-extension",
   "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
-  "version": "0.81.3",
+  "version": "0.82.0",
   "publisher": "Boundary",
   "packageManager": "pnpm@9.12.0",
   "repository": "https://github.com/BoundaryML/baml",
@@ -77,6 +77,16 @@
           "type": "boolean",
           "default": false,
           "description": "Indicates whether the Baml playground panel is open or closed."
+        },
+        "baml.envVarFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a .env file to load environment variables from (uses dotenv)."
+        },
+        "baml.envVarCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Command to run to get environment variables."
         }
       }
     },
@@ -191,4 +201,3 @@
   },
   "preview": false
 }
-
