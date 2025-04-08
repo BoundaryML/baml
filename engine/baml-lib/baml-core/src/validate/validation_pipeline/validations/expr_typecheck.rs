@@ -1,4 +1,5 @@
 use anyhow::Result;
+use baml_types::expr::VarIndex;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -83,7 +84,7 @@ pub fn typecheck_in_context(
             // Bare functions always typecheck.
             Ok(())
         }
-        Expr::Var(var, (var_span, maybe_type)) => {
+        Expr::FreeVar(var, (var_span, maybe_type)) => {
             if let Some(var_type) = maybe_type {
                 if let Some(ctx_type) = typing_context.get(var) {
                     if ir.is_subtype(&ctx_type, var_type) {
@@ -102,11 +103,25 @@ pub fn typecheck_in_context(
                 Ok(())
             }
         }
-        Expr::Lambda(param_names, body, (span, maybe_type)) => {
+        Expr::BoundVar(_, _) => Ok(()),
+        Expr::Lambda(arity, body, (span, maybe_type)) => {
             // (\(x,y) -> x + y) : (Int,Int) -> Int
             if let Some(FieldType::Arrow(arrow)) = maybe_type {
                 let mut inner_context = typing_context.clone();
-                for (param_type, param_name) in arrow.param_types.iter().zip(param_names.iter()) {
+                let fresh_names = body.fresh_names(*arity);
+                let opened_body = fresh_names.iter().enumerate().fold(
+                    body.clone(),
+                    |body, (index, fresh_name)| {
+                        let target = VarIndex {
+                            de_bruijn: 0,
+                            tuple: index as u32,
+                        };
+                        Arc::new(body.open(&target, fresh_name))
+                    },
+                );
+                for ((ind, param_name), param_type) in
+                    fresh_names.iter().enumerate().zip(arrow.param_types.iter())
+                {
                     inner_context.insert(param_name.to_string(), param_type.clone());
                 }
                 if !compatible_as_subtype(ir, &body.meta().1, &Some(arrow.return_type.clone())) {
@@ -122,7 +137,7 @@ pub fn typecheck_in_context(
                         body.meta().0.clone(),
                     ));
                 }
-                typecheck_in_context(ir, diagnostics, &inner_context, body)?;
+                typecheck_in_context(ir, diagnostics, &inner_context, &opened_body)?;
             }
             Ok(())
         }
@@ -142,7 +157,7 @@ pub fn typecheck_in_context(
                     }
                 }
                 x => {
-                    eprintln!("TYPECHECKING APP: UNEXPECTED ARGS: {:?}", x);
+                    eprintln!("TYPECHECKING APP: UNEXPECTED ARGS: {:?} {:?}", f, x);
                 }
             }
             Ok(())
@@ -343,15 +358,17 @@ fn compatible_as_subtype(
     }
 }
 
+/// Extends a typing context while examining an expression, also returns
+/// the expression with modified metadata.
 pub fn infer_types_in_context(
     typing_context: &mut HashMap<String, FieldType>,
     expr: Arc<Expr<ExprMetadata>>,
 ) -> Arc<Expr<ExprMetadata>> {
     match expr.as_ref() {
-        Expr::Var(ref var_name, (span, maybe_type)) => {
+        Expr::FreeVar(ref var_name, (span, maybe_type)) => {
             // Assign variables from the context.
             if let Some(ctx_ty) = typing_context.get(var_name) {
-                Arc::new(Expr::Var(
+                Arc::new(Expr::FreeVar(
                     var_name.clone(),
                     (span.clone(), Some(ctx_ty.clone())),
                 ))
@@ -404,16 +421,39 @@ pub fn infer_types_in_context(
                 (expr.meta().0.clone(), expr.meta().1.clone()),
             ))
         }
-        Expr::Lambda(param_names, body, (span, maybe_type)) => {
+        Expr::Lambda(arity, body, (span, maybe_type)) => {
+            let fresh_names = body.fresh_names(*arity);
             let mut local_typing_context = typing_context.clone();
+            let opened_body =
+                fresh_names
+                    .iter()
+                    .enumerate()
+                    .fold(body.clone(), |body, (index, fresh_name)| {
+                        let target = VarIndex {
+                            de_bruijn: 0,
+                            tuple: index as u32,
+                        };
+                        Arc::new(body.open(&target, fresh_name))
+                    });
             if let Some(FieldType::Arrow(arrow)) = maybe_type {
-                for (param_type, param_name) in arrow.param_types.iter().zip(param_names.iter()) {
+                for (param_type, param_name) in arrow.param_types.iter().zip(fresh_names.iter()) {
                     local_typing_context.insert(param_name.to_string(), param_type.clone());
                 }
             }
-            let new_body = infer_types_in_context(&mut local_typing_context, body.clone());
+            let body_with_inferred_types =
+                infer_types_in_context(&mut local_typing_context, opened_body.clone());
+            let new_body = fresh_names.iter().enumerate().fold(
+                body_with_inferred_types.clone(),
+                |body, (index, fresh_name)| {
+                    let target = VarIndex {
+                        de_bruijn: 0,
+                        tuple: index as u32,
+                    };
+                    Arc::new(body.close(&target, fresh_name))
+                },
+            );
             Arc::new(Expr::Lambda(
-                param_names.clone(),
+                *arity,
                 new_body,
                 (span.clone(), maybe_type.clone()),
             ))

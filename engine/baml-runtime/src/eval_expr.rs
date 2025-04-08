@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::{BamlRuntime, FunctionResult};
-use baml_types::expr::{Expr, ExprMetadata, Name};
+use baml_types::expr::{Expr, ExprMetadata, Name, VarIndex};
 use baml_types::Arrow;
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
@@ -29,24 +29,22 @@ impl<'a> EvalEnv<'a> {
     }
 }
 
+/// Substitute val for var_name in expr.
 fn subst2<'a>(
     expr: &Expr<ExprMetadata>,
-    var_name: &Name,
+    var_name: &VarIndex,
     val: &Expr<ExprMetadata>,
     env: &EvalEnv<'a>,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
     let res: anyhow::Result<Expr<ExprMetadata>> = match expr {
-        Expr::Var(expr_var_name, _) => {
+        Expr::BoundVar(expr_var_name, _) => {
             if expr_var_name == var_name {
                 Ok(val.clone())
             } else {
-                if let Some(expr_fn) = env.context.get(expr_var_name) {
-                    Ok(expr_fn.clone())
-                } else {
-                    Ok(expr.clone())
-                }
+                Ok(expr.clone())
             }
         }
+        Expr::FreeVar(name, _) => Ok(expr.clone()),
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::App(f, x, meta) => {
             let f2 = subst2(f, var_name, val, env)?;
@@ -67,19 +65,14 @@ fn subst2<'a>(
         }
         Expr::LLMFunction(_, _, _) => Ok(expr.clone()),
         Expr::Let(name, value, body, meta) => {
-            if name == var_name {
-                // Skip substitution if the let binding shadows the variable.
-                Ok(expr.clone())
-            } else {
-                let new_value = subst2(value, var_name, val, env)?;
-                let new_body = subst2(body, var_name, val, env)?;
-                Ok(Expr::Let(
-                    name.clone(),
-                    Arc::new(new_value),
-                    Arc::new(new_body),
-                    meta.clone(),
-                ))
-            }
+            let new_value = subst2(value, var_name, val, env)?;
+            let new_body = subst2(body, var_name, val, env)?;
+            Ok(Expr::Let(
+                name.clone(),
+                Arc::new(new_value),
+                Arc::new(new_body),
+                meta.clone(),
+            ))
         }
         Expr::List(items, meta) => {
             let new_items = items
@@ -140,17 +133,32 @@ async fn beta_reduce<'a>(
         Expr::Let(name, value, body, meta) => {
             // Rewrite the let binding as an application.
             // e.g. (let x = y in f) => (\x y => f)
-            let lambda = Expr::Lambda(vec![name.clone()], body.clone(), meta.clone());
+            // TODO: Should rewriting be done here in beta_reduce? Or elsewhere?
+            let target = VarIndex {
+                de_bruijn: 0,
+                tuple: 0,
+            };
+            let closed_body = body.close(&target, name);
+            let arity = 1;
+            let lambda = Expr::Lambda(arity, Arc::new(closed_body), meta.clone());
             let app = Expr::App(Arc::new(lambda), value.clone(), meta.clone());
             Box::pin(beta_reduce(env, &app)).await
         }
         Expr::App(f, x, meta) => {
             match (f.as_ref(), x.as_ref()) {
-                (Expr::Lambda(params, body, _), Expr::ArgsTuple(args, _)) => {
-                    let pairs = params
+                (Expr::Lambda(arity, body, _), Expr::ArgsTuple(args, _)) => {
+                    let pairs: Vec<(VarIndex, Expr<ExprMetadata>)> = args
                         .iter()
-                        .cloned()
-                        .zip(args.iter().cloned())
+                        .enumerate()
+                        .map(|(index, arg)| {
+                            (
+                                VarIndex {
+                                    de_bruijn: 0,
+                                    tuple: index as u32,
+                                },
+                                arg.clone(),
+                            )
+                        })
                         .collect::<Vec<_>>();
                     let new_body = pairs
                         .iter()
@@ -159,17 +167,30 @@ async fn beta_reduce<'a>(
                         });
                     Box::pin(beta_reduce(env, &new_body)).await
                 }
-                (Expr::Lambda(params, body, _), arg) => {
-                    if params.len() != 1 {
-                        return Err(anyhow::anyhow!(
-                            "Lambda takes exactly one argument: {:?}",
-                            expr
-                        ));
-                    }
-                    let new_body = subst2(body, &params[0], &arg, env)
-                        .as_ref()
-                        .unwrap()
-                        .clone();
+                (Expr::Lambda(arity, body, _), arg) => {
+                    let args = match arg {
+                        Expr::ArgsTuple(args, _) => args.clone(),
+                        x => vec![x.clone()],
+                    };
+                    let substitutions: Vec<(VarIndex, Expr<ExprMetadata>)> = args
+                        .iter()
+                        .enumerate()
+                        .map(|(index, arg)| {
+                            (
+                                VarIndex {
+                                    de_bruijn: 0,
+                                    tuple: index as u32,
+                                },
+                                arg.clone(),
+                            )
+                        })
+                        .collect();
+                    let new_body =
+                        substitutions
+                            .iter()
+                            .fold(body.as_ref().clone(), |acc, (param, arg)| {
+                                subst2(&acc, &param, &arg, env).as_ref().unwrap().clone()
+                            });
                     Box::pin(beta_reduce(env, &new_body)).await
                 }
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
@@ -218,7 +239,7 @@ async fn beta_reduce<'a>(
                         .map_meta(|_| ());
                     Ok(Expr::Atom(val.map_meta(|_| meta.clone())))
                 }
-                (Expr::Var(name, _), _) => {
+                (Expr::FreeVar(name, _), _) => {
                     let var_lookup = env
                         .context
                         .get(name)
@@ -230,13 +251,14 @@ async fn beta_reduce<'a>(
                 _ => Err(anyhow::anyhow!("Not a function: {:?}", f)),
             }
         }
-        Expr::Var(name, _) => {
+        Expr::FreeVar(name, _) => {
             let var_lookup = env
                 .context
                 .get(name)
                 .context(format!("Variable not found: {:?}", name))?;
             Ok(var_lookup.clone())
         }
+        Expr::BoundVar(_, _) => Ok(expr.clone()),
         Expr::List(_, _) => Ok(expr.clone()),
         Expr::Map(_, _) => Ok(expr.clone()),
         Expr::ClassConstructor { .. } => Ok(expr.clone()),
@@ -324,7 +346,7 @@ pub async fn eval_to_value<'a>(
     Err(anyhow::anyhow!("Max steps reached."))
 }
 
-#[cfg(test)]
+// #[cfg(test)]
 mod tests {
     use crate::internal_baml_diagnostics::Span;
     use baml_types::{BamlMap, BamlValue};
@@ -347,7 +369,7 @@ mod tests {
         .unwrap()
     }
 
-    // #[tokio::test] // Uncomment to run.
+    #[tokio::test] // Uncomment to run.
     async fn test_eval_expr() {
         let rt = runtime(
             r##"
@@ -459,6 +481,8 @@ test TestMakePerson() {
         let on_event = |res: FunctionResult| {
             eprintln!("on_event: {:?}", res);
         };
+        let f = rt.inner.ir.find_expr_fn("OuterPyramid").unwrap();
+        dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
             .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None)

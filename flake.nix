@@ -23,9 +23,9 @@
         pythonEnv = pkgs.python3.withPackages (ps: []);
 
         toolchain = with fenix.packages.${system}; combine [
-          minimal.cargo
-          minimal.rustc
-          minimal.rust-std
+          complete.cargo
+          complete.rustc
+          complete.rust-std
           complete.rustfmt
           targets.wasm32-unknown-unknown.latest.rust-std
 	        targets.x86_64-unknown-linux-musl.latest.rust-std
@@ -87,6 +87,7 @@
           librsvg
         ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
         nativeBuildInputs = [
+          pkgs.cmake
           pkgs.openssl
           pkgs.pkg-config
           pkgs.ruby
@@ -162,6 +163,7 @@
           devShell = pkgs.mkShell rec {
             inherit buildInputs;
             PATH="${clang}/bin:$PATH";
+            RUST_SRC_PATH = pkgs.rustPlatform.rustLibSrc;
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
               "" # Rely on default includes provided by stdenv.cc + libclang
