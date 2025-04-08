@@ -70,7 +70,7 @@ To set up BAML in python do the following:
         print(msg) # This will be a PartialResume type
       
       # This will be a Resume type
-      final = stream.get_final_response()
+      final = await stream.get_final_response()
 
       return final
     ```
@@ -91,7 +91,7 @@ To set up BAML in python do the following:
         print(msg) # This will be a PartialResume type
       
       # This will be a Resume type
-      final = stream.get_final_response()
+      final = await stream.get_final_response()
 
       return final
     ```
