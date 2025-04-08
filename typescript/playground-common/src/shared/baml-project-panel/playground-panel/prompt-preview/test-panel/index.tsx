@@ -23,7 +23,22 @@ const TestPanel = () => {
 
   // TODO: still render the client graph view even if no tests are running.
   if (testHistory.length === 0) {
-    return <div className='p-4 text-muted-foreground'>No tests running</div>
+    return (
+      <>
+        <div className='px-1 pt-2'>
+          <ErrorBoundary
+            fallback={<div>Error rendering</div>}
+            onReset={() => {
+              window.location.reload()
+            }}
+            resetKeys={[viewType]}
+          >
+            <TestMenu />
+          </ErrorBoundary>
+        </div>
+        <div className='p-4 text-muted-foreground'>No tests running</div>
+      </>
+    )
   }
 
   const currentRun = testHistory[selectedHistoryIndex]

@@ -14,7 +14,7 @@ import {
   selectedTestcaseAtom,
   updateCursorAtom,
 } from '@/shared/baml-project-panel/playground-panel/atoms'
-import { useRunTests } from '@/shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner'
+import { useRunBamlTests } from '@/shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner'
 import { orchIndexAtom } from '@/shared/baml-project-panel/playground-panel/atoms-orch-graph'
 import { CodeMirrorDiagnosticsAtom } from '@/shared/baml-project-panel/codemirror-panel/atoms'
 import { AlertTriangle, XCircle } from 'lucide-react'
@@ -87,7 +87,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setBamlConfig = useSetAtom(bamlConfig)
   const [bamlCliVersion, setBamlCliVersion] = useAtom(bamlCliVersionAtom)
-  const { setRunningTests } = useRunTests()
+  const runBamlTests = useRunBamlTests()
   const wasm = useAtomValue(wasmAtom)
   useEffect(() => {
     if (wasm) {
@@ -206,7 +206,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
         case 'run_test':
           if (selectedFunc) {
             setSelectedTestcase(content.test_name)
-            setRunningTests([{ functionName: selectedFunc, testName: content.test_name }])
+            runBamlTests([{ functionName: selectedFunc, testName: content.test_name }])
           } else {
             console.error('No function selected')
           }
@@ -221,7 +221,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
     return () => window.removeEventListener('message', fn)
     // If we dont add the jotai atom callbacks here like setRunningTests, this will call an old version of the atom (e.g. runTests which may have undefined dependencies).
-  }, [selectedFunc, setRunningTests, updateCursor])
+  }, [selectedFunc, runBamlTests, updateCursor])
 
   const version = useAtomValue(versionAtom)
 

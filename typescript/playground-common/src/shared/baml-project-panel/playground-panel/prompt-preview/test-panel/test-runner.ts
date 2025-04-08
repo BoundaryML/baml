@@ -12,10 +12,11 @@ import {
   selectedFunctionAtom,
 } from '../../atoms'
 import { vscode } from '../../../vscode'
-import { testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
+import { testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun, isParallelTestsEnabledAtom } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 
-export const useRunTests = (maxBatchSize = 5) => {
+// TODO: use a single hook for both run and parallel run
+const useRunTests = (maxBatchSize = 5) => {
   const { rt } = useAtomValue(runtimeAtom)
   const ctx = useAtomValue(ctxAtom)
   const wasm = useAtomValue(wasmAtom)
@@ -161,7 +162,7 @@ export const useRunTests = (maxBatchSize = 5) => {
   return { setRunningTests: runTests }
 }
 
-export const useParallelRunTests = (maxBatchSize = 5) => {
+const useParallelRunTests = (maxBatchSize = 5) => {
   const { rt } = useAtomValue(runtimeAtom)
   const ctx = useAtomValue(ctxAtom)
   const wasm = useAtomValue(wasmAtom)
@@ -240,18 +241,20 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
 
           try {
             // Prepare test cases for `run_tests`
-            const testCases = tests.map((test) => {
-              const testCase = get(testCaseAtom(test))
-              if (!testCase) {
-                setState(test, { status: 'error', message: 'Test case not found' })
-                return null
-              }
-              return {
-                functionName: testCase.fn.name,
-                testName: testCase.tc.name,
-                inputs: testCase.tc.inputs,
-              }
-            }).filter(Boolean)
+            const testCases = tests
+              .map((test) => {
+                const testCase = get(testCaseAtom(test))
+                if (!testCase) {
+                  setState(test, { status: 'error', message: 'Test case not found' })
+                  return null
+                }
+                return {
+                  functionName: testCase.fn.name,
+                  testName: testCase.tc.name,
+                  inputs: testCase.tc.inputs,
+                }
+              })
+              .filter(Boolean)
 
             if (testCases.length === 0) {
               console.error('No valid test cases found')
@@ -262,10 +265,17 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
             set(areTestsRunningAtom, true)
 
             // Call `run_tests` on the runtime
-            const results = await rt.run_tests(testCases, (partial: WasmFunctionResponse) => {
-              let pair = partial.func_test_pair()
-              setState({functionName: pair.function_name, testName: pair.test_name}, { status: 'running', response: partial });
-            }, findMediaFile)
+            const results = await rt.run_tests(
+              testCases,
+              (partial: WasmFunctionResponse) => {
+                const pair = partial.func_test_pair()
+                setState(
+                  { functionName: pair.function_name, testName: pair.test_name },
+                  { status: 'running', response: partial },
+                )
+              },
+              findMediaFile,
+            )
 
             const endTime = performance.now()
             const responseStatusMap = {
@@ -280,21 +290,20 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
 
             // Process results
             // TODO: is there a better way to handle Rust's Option? Or do we even need Option?
-            let response: WasmTestResponse | null | undefined;
-            while ((response = results.yield_next()) != null) {
-                const pair = response.func_test_pair();
-                const status = response.status();
-                setState(
-                    { functionName: pair.function_name, testName: pair.test_name },
-                    {
-                        status: 'done',
-                        response: response,
-                        response_status: responseStatusMap[status] || 'error',
-                        latency_ms: endTime - startTime,
-                    }
-                );
+            let response: WasmTestResponse | null | undefined
+            while ((response = results.yield_next()) != undefined) {
+              const pair = response.func_test_pair()
+              const status = response.status()
+              setState(
+                { functionName: pair.function_name, testName: pair.test_name },
+                {
+                  status: 'done',
+                  response: response,
+                  response_status: responseStatusMap[status] || 'error',
+                  latency_ms: endTime - startTime,
+                },
+              )
             }
-            
           } catch (e) {
             console.error('Error running tests:', e)
             tests.forEach((test) => {
@@ -315,4 +324,20 @@ export const useParallelRunTests = (maxBatchSize = 5) => {
   )
 
   return { setParallelTests: runParallelTests }
+}
+
+export const useRunBamlTests = () => {
+  const { setRunningTests } = useRunTests()
+  const { setParallelTests } = useParallelRunTests()
+  const isParallelTestsEnabled = useAtomValue(isParallelTestsEnabledAtom)
+
+  const runTests = (tests: { functionName: string; testName: string }[]) => {
+    if (isParallelTestsEnabled) {
+      setParallelTests(tests)
+    } else {
+      setRunningTests(tests)
+    }
+  }
+
+  return runTests
 }

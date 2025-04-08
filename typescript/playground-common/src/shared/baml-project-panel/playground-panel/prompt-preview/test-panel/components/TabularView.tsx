@@ -11,7 +11,7 @@ import { ErrorBoundary } from 'react-error-boundary'
 import { Button } from '~/components/ui/button'
 import { selectedItemAtom, testcaseObjectAtom, TestState } from '../../../atoms'
 import { type TestHistoryRun } from '../atoms'
-import { useRunTests } from '../test-runner'
+import { useRunBamlTests } from '../test-runner'
 import { getExplanation, getStatus, getTestStateResponse } from '../testStateUtils'
 import { ResponseViewType, tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
@@ -111,7 +111,7 @@ const ResponseContent = ({
 
 export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
   const [config, setConfig] = useAtom(tabularViewConfigAtom)
-  const { setRunningTests } = useRunTests() // Add runTest to the destructuring
+  const runBamlTests = useRunBamlTests()
   const [selectedItem, setSelectedItem] = useAtom(selectedItemAtom)
 
   const toggleConfig = (key: keyof typeof config) => {
@@ -236,7 +236,7 @@ export const TabularView: React.FC<TabularViewProps> = ({ currentRun }) => {
                       size='icon'
                       onClick={(e) => {
                         e.stopPropagation() // Prevent row selection when clicking the button
-                        setRunningTests([
+                        runBamlTests([
                           {
                             functionName: test.functionName,
                             testName: test.testName,

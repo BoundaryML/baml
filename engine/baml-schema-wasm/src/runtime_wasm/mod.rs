@@ -1,5 +1,6 @@
 pub mod generator;
 pub mod runtime_prompt;
+use self::runtime_prompt::WasmScope;
 use crate::aws_cred_bridge::js_fn_to_aws_cred_provider;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use anyhow::Context;
@@ -28,9 +29,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
-use self::runtime_prompt::WasmScope;
 use wasm_bindgen::JsValue;
+use wasm_bindgen_futures::JsFuture;
 
 type JsResult<T> = core::result::Result<T, JsError>;
 
@@ -55,7 +55,7 @@ pub fn on_wasm_init() {
         if #[cfg(debug_assertions)] {
             const LOG_LEVEL: log::Level = log::Level::Debug;
         } else {
-            const LOG_LEVEL: log::Level = log::Level::Debug;
+            const LOG_LEVEL: log::Level = log::Level::Info;
         }
     };
     // I dont think we need this line anymore -- seems to break logging if you add it.
@@ -392,13 +392,12 @@ pub struct WasmParam {
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Debug, Clone)]
-pub struct WasmFunctionTestPair{
+pub struct WasmFunctionTestPair {
     #[wasm_bindgen(readonly)]
     pub function_name: String,
     #[wasm_bindgen(readonly)]
     pub test_name: String,
 }
-
 
 #[wasm_bindgen]
 pub struct WasmFunctionResponse {
@@ -408,13 +407,14 @@ pub struct WasmFunctionResponse {
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Debug)]
-pub struct WasmTestResponses{
+pub struct WasmTestResponses {
     responses: Vec<WasmTestResponse>,
 }
 
 #[wasm_bindgen]
 impl WasmTestResponses {
-    #[wasm_bindgen(typescript_type = "WasmTestResponse | null")]
+    // #[wasm_bindgen(typescript_type = "WasmTestResponse | null")]
+    #[wasm_bindgen]
     pub fn yield_next(&mut self) -> Option<WasmTestResponse> {
         self.responses.pop()
     }
@@ -1570,7 +1570,6 @@ impl WasmRuntime {
                     let fn_name_copy = function_name.clone();
                     let test_name_copy = test_name.clone();
 
-
                     // Create a closure to handle partial responses for this test
                     let on_partial_response_clone = on_partial_response.clone();
                     let cb = Box::new(move |r| {
@@ -1581,7 +1580,8 @@ impl WasmRuntime {
                                 function_name: fn_name_copy.clone(),
                                 test_name: test_name_copy.clone(),
                             },
-                        }.into();
+                        }
+                        .into();
                         on_partial_response_clone.call1(&this, &res).unwrap();
                     });
 
@@ -1593,7 +1593,7 @@ impl WasmRuntime {
 
                     // Reference to the runtime
                     let rt = &self.runtime;
-                    
+
                     // Create a future for this test
                     let future = async move {
                         let (test_response, span) = rt
@@ -1605,10 +1605,10 @@ impl WasmRuntime {
                             test_response,
                             span,
                             tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
-                            func_test_pair: WasmFunctionTestPair{
+                            func_test_pair: WasmFunctionTestPair {
                                 function_name: function_name.clone(),
                                 test_name: test_name.clone(),
-                            }
+                            },
                         }
                     };
 
