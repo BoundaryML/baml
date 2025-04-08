@@ -132,7 +132,7 @@ export class BamlSyncClient {
   }
   
   AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Checked<number,"gt_ten"> {
     try {
@@ -2133,7 +2133,7 @@ export class BamlSyncClient {
   }
   
   ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Checked<number,"gt_ten"> {
     try {

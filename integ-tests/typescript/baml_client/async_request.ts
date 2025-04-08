@@ -72,7 +72,7 @@ export class AsyncHttpRequest {
   }
   
   async AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -1812,7 +1812,7 @@ export class AsyncHttpRequest {
   }
   
   async ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -3478,7 +3478,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -5218,7 +5218,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
+      money: number,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {

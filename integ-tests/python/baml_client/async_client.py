@@ -156,7 +156,7 @@ class BamlAsyncClient:
     
     async def AliasWithMultipleAttrs(
         self,
-        money: Checked[int,types.Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["gt_ten"]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -2505,7 +2505,7 @@ class BamlAsyncClient:
     
     async def ReturnAliasWithMergedAttributes(
         self,
-        money: Checked[int,types.Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int,types.Literal["gt_ten"]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -4770,7 +4770,7 @@ class BamlStreamClient:
     
     def AliasWithMultipleAttrs(
         self,
-        money: Checked[int,types.Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -7647,7 +7647,7 @@ class BamlStreamClient:
     
     def ReturnAliasWithMergedAttributes(
         self,
-        money: Checked[int,types.Literal["gt_ten"]],
+        money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[Optional[int],types.Literal["gt_ten"]], Checked[int,types.Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}

@@ -57,7 +57,7 @@ function MergeAliasAttributes(money: int) -> MergeAttrs {
     "#
 }
 
-function ReturnAliasWithMergedAttributes(money: Amount) -> Amount {
+function ReturnAliasWithMergedAttributes(money: int) -> Amount {
     client "openai/gpt-4o"
     prompt r#"
       Return the given integer without additional context:
@@ -68,7 +68,7 @@ function ReturnAliasWithMergedAttributes(money: Amount) -> Amount {
     "#
 }
 
-function AliasWithMultipleAttrs(money: MultipleAttrs) -> MultipleAttrs {
+function AliasWithMultipleAttrs(money: int) -> MultipleAttrs {
     client "openai/gpt-4o"
     prompt r#"
       Return the given integer without additional context:
