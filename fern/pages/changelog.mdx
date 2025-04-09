@@ -4,6 +4,29 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.83.0](https://github.com/boundaryml/baml/compare/0.82.0..0.83.0) - 2025-04-09
+
+
+### Documentation
+
+- **(dynamic-types.mdx)** Fix unstable_features.add_json_schema section (#1734) - ([5ab2c3e](https://github.com/boundaryml/baml/commit/5ab2c3ec453c112689ba3460432b1823afb38827)) - Elijas Dapšauskas
+- **(fallbacks)** fix typos (#1735) - ([463ad96](https://github.com/boundaryml/baml/commit/463ad96ca4bfa816a4497d549980960a2e8eaab2)) - Elijas Dapšauskas
+- update all docs with bun and deno (#1736) - ([44346ae](https://github.com/boundaryml/baml/commit/44346aefe22bfde052a9cd5a30d427e2573254ee)) - Chris Watts
+
+### Features
+
+- Playground now supports your aws profiles (no need to copy aws access key ids) (#1493) - ([53d3343](https://github.com/boundaryml/baml/commit/53d3343a304d6607460ca6ae25517577b22c6b1c)) - Samuel Lijin
+- Playground Tests can now be run in parallel (#1717) - ([b944438](https://github.com/boundaryml/baml/commit/b94443886931572572d4ba3a928c65a8e8db71d3)) - Rahul Tiwari
+
+### Bug-fix
+
+- Fix self-loop cycle detections in type-system (#1725) - ([ad5da5d](https://github.com/boundaryml/baml/commit/ad5da5dc289bbf527badc6207de8d613c81f7572)) - hellovai
+- Fix issue where setting baml_log would be overwritten (#1732) - ([412d7f8](https://github.com/boundaryml/baml/commit/412d7f8fec2b046098b65258d32cf8f213a4e5a2)) - aaronvg
+- Don't allow parameters with checks/asserts (#1689) - ([e66a462](https://github.com/boundaryml/baml/commit/e66a462bad18e33404a3c4c1c966fef22d6883ca)) - Antonio Sarosi
+- Fix whitespace in JSON keys by trimming during parsing (#1727) - ([5a93b0d](https://github.com/boundaryml/baml/commit/5a93b0d0e8a2011e58b42df94bc6fb09a26bff16)) - mentatbot[bot]
+- Fix python codgen use `Literal` directly instead of `types.Literal`. (#1697) - ([b0e79a2](https://github.com/boundaryml/baml/commit/b0e79a271203e5af6878d3f5827124995fb48852)) - hellovai
+- Support OpenSamba by parsing floats into ints (#1746) - ([28e3d0a](https://github.com/boundaryml/baml/commit/28e3d0a5e18796b8fb71ed57c7c2adad50a0d266)) - Greg Hale
+
 ## [0.82.0](https://github.com/boundaryml/baml/compare/0.81.3..0.82.0) - 2025-04-01
 
 
