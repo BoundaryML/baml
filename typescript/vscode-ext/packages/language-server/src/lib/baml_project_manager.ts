@@ -79,16 +79,8 @@ class Project {
 
   checkVersionOnSave() {
     let firstErrorMessage: undefined | string = undefined
-    let version: undefined | string = undefined
 
     this.list_generators().forEach((g) => {
-      // TODO: Nicer error message.
-      if (version && version !== g.version) {
-        firstErrorMessage = 'All generators must have the same version'
-        return
-      }
-      version = g.version
-
       const message = this.checkVersion(g, false)
       if (message) {
         if (!firstErrorMessage) {
