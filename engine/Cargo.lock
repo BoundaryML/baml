@@ -1261,7 +1261,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.82.0"
+version = "0.83.0"
 dependencies = [
  "anyhow",
  "baml-cli",
