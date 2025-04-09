@@ -80,9 +80,9 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        recipe: T.any(T::Array[String], String, NilClass),
+        recipe: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(T.any(T::Array[Baml::Types::Recipe], String))
+      ).returns(Baml::Types::Recipe)
     }
     def AaaSamOutputFormat(
         *varargs,
@@ -8110,13 +8110,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(T.nilable(String))
     }
     def TestOllama(
         *varargs,
-        
+        input:,
         baml_options: {}
     )
       if varargs.any?
@@ -8152,7 +8152,7 @@ module Baml
       raw = @runtime.call_function(
         "TestOllama",
         {
-          
+          input: input,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -9448,9 +9448,9 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        recipe: T.any(T::Array[String], String, NilClass),
+        recipe: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(Baml::BamlStream[T.any(T::Array[Baml::Types::Recipe], String)])
+      ).returns(Baml::BamlStream[Baml::Types::Recipe])
     }
     def AaaSamOutputFormat(
         *varargs,
@@ -9484,7 +9484,7 @@ module Baml
         baml_options[:client_registry],
         collector,
       )
-      Baml::BamlStream[T.nilable(T.any(T::Array[T.nilable(Baml::PartialTypes::Recipe)], T.nilable(String))), T.any(T::Array[Baml::Types::Recipe], String)].new(
+      Baml::BamlStream[T.nilable(Baml::PartialTypes::Recipe), Baml::Types::Recipe].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -16018,13 +16018,13 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        
+        input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::BamlStream[T.nilable(String)])
     }
     def TestOllama(
         *varargs,
-        
+        input:,
         baml_options: {}
     )
       if varargs.any?
@@ -16047,7 +16047,7 @@ module Baml
       raw = @runtime.stream_function(
         "TestOllama",
         {
-          
+          input: input,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),

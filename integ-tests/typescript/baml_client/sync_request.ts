@@ -32,14 +32,14 @@ export class HttpRequest {
 
   
   AaaSamOutputFormat(
-      recipe?: string[] | string | null,
+      recipe: string,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
         "AaaSamOutputFormat",
         {
-          "recipe": recipe?? null
+          "recipe": recipe
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -2952,14 +2952,14 @@ export class HttpRequest {
   }
   
   TestOllama(
-      
+      input: string,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
         "TestOllama",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -3438,14 +3438,14 @@ export class HttpStreamRequest {
 
   
   AaaSamOutputFormat(
-      recipe?: string[] | string | null,
+      recipe: string,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
         "AaaSamOutputFormat",
         {
-          "recipe": recipe?? null
+          "recipe": recipe
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -6358,14 +6358,14 @@ export class HttpStreamRequest {
   }
   
   TestOllama(
-      
+      input: string,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
       return this.runtime.buildRequestSync(
         "TestOllama",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

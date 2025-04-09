@@ -86,23 +86,23 @@ export class BamlSyncClient {
 
   
   AaaSamOutputFormat(
-      recipe?: string[] | string | null,
+      recipe: string,
       __baml_options__?: BamlCallOptions
-  ): Recipe[] | string {
+  ): Recipe {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.callFunctionSync(
         "AaaSamOutputFormat",
         {
-          "recipe": recipe?? null
+          "recipe": recipe
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
       )
-      return raw.parsed(false) as Recipe[] | string
+      return raw.parsed(false) as Recipe
     } catch (error: any) {
       throw toBamlError(error);
     }
@@ -3444,7 +3444,7 @@ export class BamlSyncClient {
   }
   
   TestOllama(
-      
+      input: string,
       __baml_options__?: BamlCallOptions
   ): string | null {
     try {
@@ -3453,7 +3453,7 @@ export class BamlSyncClient {
       const raw = this.runtime.callFunctionSync(
         "TestOllama",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),

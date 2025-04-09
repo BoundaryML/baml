@@ -102,9 +102,9 @@ class BamlAsyncClient:
     
     async def AaaSamOutputFormat(
         self,
-        recipe: Union[List[str], str, None],
+        recipe: str,
         baml_options: BamlCallOptions = {},
-    ) -> Union[List[types.Recipe], str]:
+    ) -> types.Recipe:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -125,7 +125,7 @@ class BamlAsyncClient:
         __cr__,
         collectors,
       )
-      return cast(Union[List[types.Recipe], str], raw.cast_to(types, types, partial_types, False))
+      return cast(types.Recipe, raw.cast_to(types, types, partial_types, False))
     
     async def AliasThatPointsToRecursiveType(
         self,
@@ -4044,7 +4044,7 @@ class BamlAsyncClient:
     
     async def TestOllama(
         self,
-        
+        input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -4060,7 +4060,7 @@ class BamlAsyncClient:
       raw = await self.__runtime.call_function(
         "TestOllama",
         {
-          
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
@@ -4704,9 +4704,9 @@ class BamlStreamClient:
     
     def AaaSamOutputFormat(
         self,
-        recipe: Union[List[str], str, None],
+        recipe: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[Union[List[partial_types.Recipe], Optional[str]]], Union[List[types.Recipe], str]]:
+    ) -> baml_py.BamlStream[partial_types.Recipe, types.Recipe]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -4728,10 +4728,10 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlStream[Optional[Union[List[partial_types.Recipe], Optional[str]]], Union[List[types.Recipe], str]](
+      return baml_py.BamlStream[partial_types.Recipe, types.Recipe](
         raw,
-        lambda x: cast(Optional[Union[List[partial_types.Recipe], Optional[str]]], x.cast_to(types, types, partial_types, True)),
-        lambda x: cast(Union[List[types.Recipe], str], x.cast_to(types, types, partial_types, False)),
+        lambda x: cast(partial_types.Recipe, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.Recipe, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     
@@ -9530,7 +9530,7 @@ class BamlStreamClient:
     
     def TestOllama(
         self,
-        
+        input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], Optional[str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
@@ -9545,6 +9545,7 @@ class BamlStreamClient:
       raw = self.__runtime.stream_function(
         "TestOllama",
         {
+          "input": input,
         },
         None,
         self.__ctx_manager.get(),

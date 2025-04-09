@@ -84,23 +84,23 @@ export class BamlAsyncClient {
 
   
   async AaaSamOutputFormat(
-      recipe?: string[] | string | null,
+      recipe: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<Recipe[] | string> {
+  ): Promise<Recipe> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = await this.runtime.callFunction(
         "AaaSamOutputFormat",
         {
-          "recipe": recipe?? null
+          "recipe": recipe
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
       )
-      return raw.parsed(false) as Recipe[] | string
+      return raw.parsed(false) as Recipe
     } catch (error) {
       throw toBamlError(error);
     }
@@ -3442,7 +3442,7 @@ export class BamlAsyncClient {
   }
   
   async TestOllama(
-      
+      input: string,
       __baml_options__?: BamlCallOptions
   ): Promise<string | null> {
     try {
@@ -3451,7 +3451,7 @@ export class BamlAsyncClient {
       const raw = await this.runtime.callFunction(
         "TestOllama",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         options.tb?.__tb(),
@@ -4008,16 +4008,16 @@ class BamlStreamClient {
 
   
   AaaSamOutputFormat(
-      recipe?: string[] | string | null,
+      recipe: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
-  ): BamlStream<((partial_types.Recipe | null)[] | (string | null)), Recipe[] | string> {
+  ): BamlStream<partial_types.Recipe, Recipe> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const raw = this.runtime.streamFunction(
         "AaaSamOutputFormat",
         {
-          "recipe": recipe ?? null
+          "recipe": recipe
         },
         undefined,
         this.ctxManager.cloneContext(),
@@ -4025,10 +4025,10 @@ class BamlStreamClient {
         options.clientRegistry,
         collector,
       )
-      return new BamlStream<((partial_types.Recipe | null)[] | (string | null)), Recipe[] | string>(
+      return new BamlStream<partial_types.Recipe, Recipe>(
         raw,
-        (a): ((partial_types.Recipe | null)[] | (string | null)) => a,
-        (a): Recipe[] | string => a,
+        (a): partial_types.Recipe => a,
+        (a): Recipe => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -8242,7 +8242,7 @@ class BamlStreamClient {
   }
   
   TestOllama(
-      
+      input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
   ): BamlStream<((string | null) | null), string | null> {
     try {
@@ -8251,7 +8251,7 @@ class BamlStreamClient {
       const raw = this.runtime.streamFunction(
         "TestOllama",
         {
-          
+          "input": input
         },
         undefined,
         this.ctxManager.cloneContext(),

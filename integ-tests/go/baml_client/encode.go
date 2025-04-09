@@ -258,11 +258,7 @@ var typeMap = map[string]reflect.Type{
   
   "Union__BookOrder__FlightConfirmation__GroceryReceipt": reflect.TypeOf(types.Union__BookOrder__FlightConfirmation__GroceryReceipt{}),
   
-  "Union__List__Recipe__string": reflect.TypeOf(types.Union__List__Recipe__string{}),
-  
   "Union__List__bool__List__int": reflect.TypeOf(types.Union__List__bool__List__int{}),
-  
-  "Union__List__string__string": reflect.TypeOf(types.Union__List__string__string{}),
   
   "Union__LiteralClassOne__LiteralClassTwo": reflect.TypeOf(types.Union__LiteralClassOne__LiteralClassTwo{}),
   
@@ -286,6 +282,8 @@ var typeMap = map[string]reflect.Type{
   
   "Union__int_1__bool_true__string_string_output": reflect.TypeOf(types.Union__int_1__bool_true__string_string_output{}),
   
+  "Union__int__float": reflect.TypeOf(types.Union__int__float{}),
+  
   "Union__int__string": reflect.TypeOf(types.Union__int__string{}),
   
   "Union__int__string__bool__float": reflect.TypeOf(types.Union__int__string__bool__float{}),
@@ -305,6 +303,8 @@ var typeMap = map[string]reflect.Type{
   "Union__string__int__float": reflect.TypeOf(types.Union__string__int__float{}),
   
   "Union__string_barisa__string_ox_burger": reflect.TypeOf(types.Union__string_barisa__string_ox_burger{}),
+  
+  "Union__string_breakfast__string_dinner": reflect.TypeOf(types.Union__string_breakfast__string_dinner{}),
   
   "Union__string_curiosity__string_personal_finance": reflect.TypeOf(types.Union__string_curiosity__string_personal_finance{}),
   

@@ -3631,11 +3631,9 @@ func (c PhoneNumber) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) 
 
 type Quantity struct {
 
-	Name string `json:"name"`
+	Amount Union__int__float `json:"amount"`
 
-	Amount float64 `json:"amount"`
-
-	Unit string `json:"unit"`
+	Unit *string `json:"unit"`
 
 
 }
@@ -3654,14 +3652,11 @@ func (c *Quantity) Decode(holder cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			valueHolder := field.Value(nil)
 			switch key {
 				
-				case "name":
-					c.Name = baml.Decode(valueHolder, typeMap).(string)
-				
 				case "amount":
-					c.Amount = baml.Decode(valueHolder, typeMap).(float64)
+					c.Amount = *baml.Decode(valueHolder, typeMap).(*Union__int__float)
 				
 				case "unit":
-					c.Unit = baml.Decode(valueHolder, typeMap).(string)
+					c.Unit = baml.Decode(valueHolder, typeMap).(*string)
 				
 			}
 		}
@@ -3673,8 +3668,6 @@ func (c *Quantity) Decode(holder cffi.CFFIValueClass, typeMap baml.TypeMap) {
 
 func (c Quantity) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	fields := map[string]any{}
-	
-	fields["name"] = c.Name
 	
 	fields["amount"] = c.Amount
 	
@@ -3853,9 +3846,9 @@ func (c ReceiptItem) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) 
 
 type Recipe struct {
 
-	Ingredients []Quantity `json:"ingredients"`
+	Ingredients map[string]Quantity `json:"ingredients"`
 
-	Recipe_type string `json:"recipe_type"`
+	Recipe_type Union__string_breakfast__string_dinner `json:"recipe_type"`
 
 
 }
@@ -3875,12 +3868,10 @@ func (c *Recipe) Decode(holder cffi.CFFIValueClass, typeMap baml.TypeMap) {
 			switch key {
 				
 				case "ingredients":
-					c.Ingredients = baml.DecodeList(valueHolder, typeMap, func(__holder *cffi.CFFIValueHolder, typeMap baml.TypeMap) Quantity {
-    return *baml.Decode(__holder, typeMap).(*Quantity)
-})
+					c.Ingredients = baml.Decode(valueHolder, typeMap).(map[string]Quantity)
 				
 				case "recipe_type":
-					c.Recipe_type = baml.Decode(valueHolder, typeMap).(string)
+					c.Recipe_type = *baml.Decode(valueHolder, typeMap).(*Union__string_breakfast__string_dinner)
 				
 			}
 		}

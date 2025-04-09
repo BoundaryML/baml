@@ -467,9 +467,8 @@ class PhoneNumber(BaseModel):
     value: str
 
 class Quantity(BaseModel):
-    name: str
-    amount: float
-    unit: str
+    amount: Union[int, float]
+    unit: Optional[str] = None
 
 class RaysData(BaseModel):
     dataType: "DataType"
@@ -487,8 +486,8 @@ class ReceiptItem(BaseModel):
     price: float
 
 class Recipe(BaseModel):
-    ingredients: List["Quantity"]
-    recipe_type: Literal["breakfast"]
+    ingredients: Dict[str, "Quantity"]
+    recipe_type: Union[Literal["breakfast"], Literal["dinner"]]
 
 class RecursiveAliasDependency(BaseModel):
     value: "JsonValue"

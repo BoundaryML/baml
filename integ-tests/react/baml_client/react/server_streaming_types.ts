@@ -24,7 +24,7 @@ import type * as types from "../types"
 import type { partial_types }from "../partial_types";
 
 export type StreamingServerTypes = {
-  AaaSamOutputFormat: ((partial_types.Recipe | null)[] | (string | null)),
+  AaaSamOutputFormat: partial_types.Recipe,
   AliasThatPointsToRecursiveType: partial_types.LinkedListAliasNode,
   AliasWithMultipleAttrs: Checked<number,"gt_ten">,
   AliasedInputClass: string,

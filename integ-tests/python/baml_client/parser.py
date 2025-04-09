@@ -41,7 +41,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Union[List[types.Recipe], str]:
+    ) -> types.Recipe:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -61,7 +61,7 @@ class LlmResponseParser:
         __cr__,
       )
 
-      return cast(Union[List[types.Recipe], str], parsed)
+      return cast(types.Recipe, parsed)
     
     def AliasThatPointsToRecursiveType(
         self,
@@ -4472,7 +4472,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[List[partial_types.Recipe], Optional[str]]]:
+    ) -> partial_types.Recipe:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4492,7 +4492,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Union[List[partial_types.Recipe], Optional[str]]], parsed)
+      return cast(partial_types.Recipe, parsed)
     
     def AliasThatPointsToRecursiveType(
         self,

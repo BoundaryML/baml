@@ -767,9 +767,7 @@ type PhoneNumber struct {
 
 type Quantity struct {
     
-    Name *string `json:"name"`
-    
-    Amount *float64 `json:"amount"`
+    Amount *types.Union__int__float `json:"amount"`
     
     Unit *string `json:"unit"`
     
@@ -811,9 +809,9 @@ type ReceiptItem struct {
 
 type Recipe struct {
     
-    Ingredients []Quantity `json:"ingredients"`
+    Ingredients map[string]*Quantity `json:"ingredients"`
     
-    Recipe_type *string `json:"recipe_type"`
+    Recipe_type *types.Union__string_breakfast__string_dinner `json:"recipe_type"`
     
     
 }

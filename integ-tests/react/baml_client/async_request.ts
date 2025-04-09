@@ -32,14 +32,14 @@ export class AsyncHttpRequest {
 
   
   async AaaSamOutputFormat(
-      recipe?: string[] | string | null,
+      recipe: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
         "AaaSamOutputFormat",
         {
-          "recipe": recipe?? null
+          "recipe": recipe
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -2952,14 +2952,14 @@ export class AsyncHttpRequest {
   }
   
   async TestOllama(
-      
+      input: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
         "TestOllama",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -3438,14 +3438,14 @@ export class AsyncHttpStreamRequest {
 
   
   async AaaSamOutputFormat(
-      recipe?: string[] | string | null,
+      recipe: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
         "AaaSamOutputFormat",
         {
-          "recipe": recipe?? null
+          "recipe": recipe
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -6358,14 +6358,14 @@ export class AsyncHttpStreamRequest {
   }
   
   async TestOllama(
-      
+      input: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
       return await this.runtime.buildRequest(
         "TestOllama",
         {
-          
+          "input": input
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

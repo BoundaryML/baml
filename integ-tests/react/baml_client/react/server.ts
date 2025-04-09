@@ -35,13 +35,13 @@ import type * as types from "../types"
  * This server action calls the underlying BAML function "AaaSamOutputFormat"
  * with the specified parameters.
  *
- * @param { string[] | string | null } recipe (optional) - Input parameter.
+ * @param { string } recipe - Input parameter.
  *
- * @returns {Promise<Recipe[] | string>} A promise that resolves with the result of the action.
+ * @returns {Promise<Recipe>} A promise that resolves with the result of the action.
  */
 export const AaaSamOutputFormat = async (
-  recipe?: string[] | string | null,
-): Promise<Recipe[] | string> => {
+  recipe: string,
+): Promise<Recipe> => {
   return b.AaaSamOutputFormat(
     recipe,
   );
@@ -2687,12 +2687,15 @@ export const TestNamedArgsLiteralString = async (
  * This server action calls the underlying BAML function "TestOllama"
  * with the specified parameters.
  *
+ * @param { string } input - Input parameter.
  *
  * @returns {Promise<string | null>} A promise that resolves with the result of the action.
  */
 export const TestOllama = async (
+  input: string,
 ): Promise<string | null> => {
   return b.TestOllama(
+    input,
   );
 };
 

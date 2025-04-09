@@ -360,13 +360,13 @@ function useBamlAction<FunctionName extends FunctionNames>(
  *
  * **Input Types:**
  *
- * - recipe (optional): string[] | string | null
+ * - recipe: string
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** Recipe[] | string
- * - **Streaming Partial:** ((partial_types.Recipe | null)[] | (string | null))
- * - **Streaming Final:** Recipe[] | string
+ * - **Non‑streaming:** Recipe
+ * - **Streaming Partial:** partial_types.Recipe
+ * - **Streaming Final:** Recipe
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -7383,6 +7383,8 @@ export function useTestNamedArgsLiteralString(
  * A specialized hook for the TestOllama BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
+ *
+ * - input: string
  *
  *
  * **Return Type:**

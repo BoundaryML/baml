@@ -422,9 +422,8 @@ export namespace partial_types {
     }
     
     export interface Quantity {
-        name?: (string | null)
-        amount?: (number | null)
-        unit?: (string | null)
+        amount?: ((number | null) | (number | null) | null)
+        unit: ((string | null) | null)
     }
     
     export interface RaysData {
@@ -446,8 +445,8 @@ export namespace partial_types {
     }
     
     export interface Recipe {
-        ingredients?: (partial_types.Quantity | null)[]
-        recipe_type: "breakfast"
+        ingredients?: (Record<string, (partial_types.Quantity | null)> | null)
+        recipe_type?: ("breakfast" | "dinner" | null)
     }
     
     export interface RecursiveAliasDependency {

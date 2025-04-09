@@ -30,7 +30,7 @@ export class LlmResponseParser {
   AaaSamOutputFormat(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): Recipe[] | string {
+  ): Recipe {
     try {
       return this.runtime.parseLlmResponse(
         "AaaSamOutputFormat",
@@ -39,7 +39,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-      ) as Recipe[] | string
+      ) as Recipe
     } catch (error) {
       throw toBamlError(error);
     }
@@ -3096,7 +3096,7 @@ export class LlmStreamParser {
   AaaSamOutputFormat(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): ((partial_types.Recipe | null)[] | (string | null)) {
+  ): partial_types.Recipe {
     try {
       return this.runtime.parseLlmResponse(
         "AaaSamOutputFormat",
@@ -3105,7 +3105,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-      ) as ((partial_types.Recipe | null)[] | (string | null))
+      ) as partial_types.Recipe
     } catch (error) {
       throw toBamlError(error);
     }

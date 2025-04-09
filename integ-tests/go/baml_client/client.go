@@ -58,7 +58,7 @@ func castOptional[T any](result any, castResult func(any) T) *T {
 
 
 
-func AaaSamOutputFormat(ctx context.Context, recipe *types.Union__List__string__string) (*types.Union__List__Recipe__string, error) {
+func AaaSamOutputFormat(ctx context.Context, recipe string) (*types.Recipe, error) {
 	args := map[string]any{ "recipe": recipe, }
 	encoded, err := baml.EncodeRoot(args, typeMap)
 	if err != nil {
@@ -73,8 +73,8 @@ func AaaSamOutputFormat(ctx context.Context, recipe *types.Union__List__string__
 		return nil, result.Error
 	}
 
-	castResult := func (result any) types.Union__List__Recipe__string {
-		return *(result).(*types.Union__List__Recipe__string)
+	castResult := func (result any) types.Recipe {
+		return *(result).(*types.Recipe)
 	}
 
 	casted := castResult(*result.Data)
@@ -82,13 +82,13 @@ func AaaSamOutputFormat(ctx context.Context, recipe *types.Union__List__string__
 	return &casted, nil
 }
 
-func (*stream) AaaSamOutputFormat(ctx context.Context, recipe *types.Union__List__string__string) <-chan types.Union__List__Recipe__string {
+func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string) <-chan types.Recipe {
 	args := map[string]any{ "recipe": recipe, }
 	encoded, err := baml.EncodeRoot(args, typeMap)
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan types.Union__List__Recipe__string)
+	channel := make(chan types.Recipe)
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "AaaSamOutputFormat", encoded)
 	if err != nil {
 		close(channel)
@@ -109,7 +109,7 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe *types.Union__List
 					close(channel)
 					return
 				}
-				channel <- (*result.Data).(types.Union__List__Recipe__string)
+				channel <- (*result.Data).(types.Recipe)
 			}
 		}
 	}()
@@ -8844,8 +8844,8 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string) 
 
 
 
-func TestOllama(ctx context.Context) (**string, error) {
-	args := map[string]any{  }
+func TestOllama(ctx context.Context, input string) (**string, error) {
+	args := map[string]any{ "input": input, }
 	encoded, err := baml.EncodeRoot(args, typeMap)
 	if err != nil {
 		panic(err)
@@ -8870,8 +8870,8 @@ func TestOllama(ctx context.Context) (**string, error) {
 	return &casted, nil
 }
 
-func (*stream) TestOllama(ctx context.Context) <-chan *string {
-	args := map[string]any{  }
+func (*stream) TestOllama(ctx context.Context, input string) <-chan *string {
+	args := map[string]any{ "input": input, }
 	encoded, err := baml.EncodeRoot(args, typeMap)
 	if err != nil {
 		panic(err)

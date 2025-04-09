@@ -30,11 +30,7 @@ paths:
             application/json:
               schema:
                 title: AaaSamOutputFormatResponse
-                oneOf:
-                - type: array
-                  items:
-                    $ref: '#/components/schemas/Recipe'
-                - type: string
+                $ref: '#/components/schemas/Recipe'
       operationId: AaaSamOutputFormat
   /call/AliasThatPointsToRecursiveType:
     post:
@@ -2371,15 +2367,12 @@ components:
             type: object
             properties:
               recipe:
-                oneOf:
-                - type: array
-                  items:
-                    type: string
-                - type: string
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
-            required: []
+            required:
+            - recipe
             additionalProperties: false
     AliasThatPointsToRecursiveType:
       required: true
@@ -4788,10 +4781,13 @@ components:
             title: TestOllamaRequest
             type: object
             properties:
+              input:
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
-            required: []
+            required:
+            - input
             additionalProperties: false
     TestOllamaHaiku:
       required: true
@@ -6276,15 +6272,13 @@ components:
       type: object
       properties:
         amount:
-          type: number
-        name:
-          type: string
+          oneOf:
+          - type: integer
+          - type: number
         unit:
           type: string
       required:
       - amount
-      - name
-      - unit
       additionalProperties: false
     RaysData:
       type: object
@@ -6336,11 +6330,13 @@ components:
       type: object
       properties:
         ingredients:
-          type: array
-          items:
+          type: object
+          additionalProperties:
             $ref: '#/components/schemas/Quantity'
         recipe_type:
-          type: string
+          oneOf:
+          - type: string
+          - type: string
       required:
       - ingredients
       - recipe_type

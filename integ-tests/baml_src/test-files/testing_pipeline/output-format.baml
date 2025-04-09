@@ -1,20 +1,19 @@
 class Recipe {
-  ingredients Quantity[]
-  recipe_type "breakfast"
+  ingredients map<string, Quantity>
+  recipe_type "breakfast" | "dinner"
 }
 
 class Quantity {
-  name string
-  amount float
-  unit string
+  amount int | float
+  unit string?
 }
 
-function AaaSamOutputFormat(recipe: string[] | string?) -> Recipe[] | string {
-  client Ollama
+function AaaSamOutputFormat(recipe: string) -> Recipe {
+  client GPT35
   prompt #"
-    Return this value back to me: {{recipe or "apple pie"}}
+    Return this value back to me: {{recipe}}
 
-    {{ ctx.output_format }}
+    {{ctx.output_format(map_style='angle')}}
   "#
 }
 

@@ -178,114 +178,6 @@ func Union__BookOrder__FlightConfirmation__GroceryReceiptNewWithGroceryReceipt(v
 
 
 
-type Union__List__Recipe__string struct {
-    variant string
-    
-    variant_List__Recipe *[]Recipe
-    
-    variant_string *string
-    
-}
-
-func (u *Union__List__Recipe__string) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-    valueHolder := holder.Value(nil)
-	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "List__Recipe"
-            value := baml.DecodeList(valueHolder, typeMap, func(__holder *cffi.CFFIValueHolder, typeMap baml.TypeMap) Recipe {
-    return *baml.Decode(__holder, typeMap).(*Recipe)
-})
-            u.variant_List__Recipe = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder, typeMap).(string)
-            u.variant_string = &value
-    
-	}
-}
-
-
-func (u Union__List__Recipe__string) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "List__Recipe":
-        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_List__Recipe)
-    
-    case "string":
-        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_string)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
-
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
-}
-
-
-func (u *Union__List__Recipe__string) SetList__Recipe(v []Recipe) {
-    u.variant = "List__Recipe"
-    u.variant_List__Recipe = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
-}
-
-func (u *Union__List__Recipe__string) IsList__Recipe() bool {
-    return u.variant == "List__Recipe"
-}
-
-func (u *Union__List__Recipe__string) List__Recipe() *[]Recipe {
-    if !u.IsList__Recipe() {
-        return nil
-    }
-    return u.variant_List__Recipe
-}
-
-func Union__List__Recipe__stringNewWithList__Recipe(v *[]Recipe) *Union__List__Recipe__string {
-    return &Union__List__Recipe__string{
-        variant: "List__Recipe",
-        variant_List__Recipe: v,
-    }
-}
-
-func (u *Union__List__Recipe__string) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_List__Recipe = nil
-    
-    
-    
-    
-}
-
-func (u *Union__List__Recipe__string) IsString() bool {
-    return u.variant == "string"
-}
-
-func (u *Union__List__Recipe__string) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
-}
-
-func Union__List__Recipe__stringNewWithString(v *string) *Union__List__Recipe__string {
-    return &Union__List__Recipe__string{
-        variant: "string",
-        variant_string: v,
-    }
-}
-
-
-
 type Union__List__bool__List__int struct {
     variant string
     
@@ -391,114 +283,6 @@ func Union__List__bool__List__intNewWithList__int(v *[]int64) *Union__List__bool
     return &Union__List__bool__List__int{
         variant: "List__int",
         variant_List__int: v,
-    }
-}
-
-
-
-type Union__List__string__string struct {
-    variant string
-    
-    variant_List__string *[]string
-    
-    variant_string *string
-    
-}
-
-func (u *Union__List__string__string) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
-    valueHolder := holder.Value(nil)
-	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "List__string"
-            value := baml.DecodeList(valueHolder, typeMap, func(__holder *cffi.CFFIValueHolder, typeMap baml.TypeMap) string {
-    return baml.Decode(__holder, typeMap).(string)
-})
-            u.variant_List__string = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder, typeMap).(string)
-            u.variant_string = &value
-    
-	}
-}
-
-
-func (u Union__List__string__string) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "List__string":
-        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_List__string)
-    
-    case "string":
-        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_string)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
-
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
-}
-
-
-func (u *Union__List__string__string) SetList__string(v []string) {
-    u.variant = "List__string"
-    u.variant_List__string = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
-}
-
-func (u *Union__List__string__string) IsList__string() bool {
-    return u.variant == "List__string"
-}
-
-func (u *Union__List__string__string) List__string() *[]string {
-    if !u.IsList__string() {
-        return nil
-    }
-    return u.variant_List__string
-}
-
-func Union__List__string__stringNewWithList__string(v *[]string) *Union__List__string__string {
-    return &Union__List__string__string{
-        variant: "List__string",
-        variant_List__string: v,
-    }
-}
-
-func (u *Union__List__string__string) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_List__string = nil
-    
-    
-    
-    
-}
-
-func (u *Union__List__string__string) IsString() bool {
-    return u.variant == "string"
-}
-
-func (u *Union__List__string__string) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
-}
-
-func Union__List__string__stringNewWithString(v *string) *Union__List__string__string {
-    return &Union__List__string__string{
-        variant: "string",
-        variant_string: v,
     }
 }
 
@@ -1769,6 +1553,112 @@ func Union__int_1__bool_true__string_string_outputNewWithString_string_output(v 
     return &Union__int_1__bool_true__string_string_output{
         variant: "string_string_output",
         variant_string_string_output: v,
+    }
+}
+
+
+
+type Union__int__float struct {
+    variant string
+    
+    variant_int *int64
+    
+    variant_float *float64
+    
+}
+
+func (u *Union__int__float) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
+    valueHolder := holder.Value(nil)
+	switch holder.ValueTypeIndex() {
+    
+	    case 0:
+            u.variant = "int"
+            value := baml.Decode(valueHolder, typeMap).(int64)
+            u.variant_int = &value
+    
+	    case 1:
+            u.variant = "float"
+            value := baml.Decode(valueHolder, typeMap).(float64)
+            u.variant_float = &value
+    
+	}
+}
+
+
+func (u Union__int__float) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+    switch u.variant {
+    
+    case "int":
+        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_int)
+    
+    case "float":
+        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_float)
+    
+    case "":
+        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+    }
+
+    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+
+func (u *Union__int__float) SetInt(v int64) {
+    u.variant = "int"
+    u.variant_int = &v
+    
+    
+    
+    
+        u.variant_float = nil
+    
+    
+}
+
+func (u *Union__int__float) IsInt() bool {
+    return u.variant == "int"
+}
+
+func (u *Union__int__float) Int() *int64 {
+    if !u.IsInt() {
+        return nil
+    }
+    return u.variant_int
+}
+
+func Union__int__floatNewWithInt(v *int64) *Union__int__float {
+    return &Union__int__float{
+        variant: "int",
+        variant_int: v,
+    }
+}
+
+func (u *Union__int__float) SetFloat(v float64) {
+    u.variant = "float"
+    u.variant_float = &v
+    
+    
+        u.variant_int = nil
+    
+    
+    
+    
+}
+
+func (u *Union__int__float) IsFloat() bool {
+    return u.variant == "float"
+}
+
+func (u *Union__int__float) Float() *float64 {
+    if !u.IsFloat() {
+        return nil
+    }
+    return u.variant_float
+}
+
+func Union__int__floatNewWithFloat(v *float64) *Union__int__float {
+    return &Union__int__float{
+        variant: "float",
+        variant_float: v,
     }
 }
 
@@ -3509,6 +3399,112 @@ func Union__string_barisa__string_ox_burgerNewWithString_ox_burger(v *string) *U
     return &Union__string_barisa__string_ox_burger{
         variant: "string_ox_burger",
         variant_string_ox_burger: v,
+    }
+}
+
+
+
+type Union__string_breakfast__string_dinner struct {
+    variant string
+    
+    variant_string_breakfast *string
+    
+    variant_string_dinner *string
+    
+}
+
+func (u *Union__string_breakfast__string_dinner) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
+    valueHolder := holder.Value(nil)
+	switch holder.ValueTypeIndex() {
+    
+	    case 0:
+            u.variant = "string_breakfast"
+            value := baml.Decode(valueHolder, typeMap).(string)
+            u.variant_string_breakfast = &value
+    
+	    case 1:
+            u.variant = "string_dinner"
+            value := baml.Decode(valueHolder, typeMap).(string)
+            u.variant_string_dinner = &value
+    
+	}
+}
+
+
+func (u Union__string_breakfast__string_dinner) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+    switch u.variant {
+    
+    case "string_breakfast":
+        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_string_breakfast)
+    
+    case "string_dinner":
+        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_string_dinner)
+    
+    case "":
+        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+    }
+
+    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+
+func (u *Union__string_breakfast__string_dinner) SetString_breakfast(v string) {
+    u.variant = "string_breakfast"
+    u.variant_string_breakfast = &v
+    
+    
+    
+    
+        u.variant_string_dinner = nil
+    
+    
+}
+
+func (u *Union__string_breakfast__string_dinner) IsString_breakfast() bool {
+    return u.variant == "string_breakfast"
+}
+
+func (u *Union__string_breakfast__string_dinner) String_breakfast() *string {
+    if !u.IsString_breakfast() {
+        return nil
+    }
+    return u.variant_string_breakfast
+}
+
+func Union__string_breakfast__string_dinnerNewWithString_breakfast(v *string) *Union__string_breakfast__string_dinner {
+    return &Union__string_breakfast__string_dinner{
+        variant: "string_breakfast",
+        variant_string_breakfast: v,
+    }
+}
+
+func (u *Union__string_breakfast__string_dinner) SetString_dinner(v string) {
+    u.variant = "string_dinner"
+    u.variant_string_dinner = &v
+    
+    
+        u.variant_string_breakfast = nil
+    
+    
+    
+    
+}
+
+func (u *Union__string_breakfast__string_dinner) IsString_dinner() bool {
+    return u.variant == "string_dinner"
+}
+
+func (u *Union__string_breakfast__string_dinner) String_dinner() *string {
+    if !u.IsString_dinner() {
+        return nil
+    }
+    return u.variant_string_dinner
+}
+
+func Union__string_breakfast__string_dinnerNewWithString_dinner(v *string) *Union__string_breakfast__string_dinner {
+    return &Union__string_breakfast__string_dinner{
+        variant: "string_dinner",
+        variant_string_dinner: v,
     }
 }
 

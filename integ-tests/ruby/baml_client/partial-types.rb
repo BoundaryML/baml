@@ -1153,13 +1153,11 @@ module Baml
     end
     class Quantity < T::Struct
       include Baml::Sorbet::Struct
-      const :name, T.nilable(String)
-      const :amount, T.nilable(Float)
+      const :amount, T.nilable(T.any(T.nilable(Integer), T.nilable(Float)))
       const :unit, T.nilable(String)
 
       def initialize(props)
         super(
-          name: props[:name],
           amount: props[:amount],
           unit: props[:unit],
         )
@@ -1217,8 +1215,8 @@ module Baml
     end
     class Recipe < T::Struct
       include Baml::Sorbet::Struct
-      const :ingredients, T::Array[T.nilable(Baml::PartialTypes::Quantity)]
-      const :recipe_type, T.nilable(String)
+      const :ingredients, T::Hash[String, T.nilable(Baml::PartialTypes::Quantity)]
+      const :recipe_type, T.nilable(T.any(T.nilable(String), T.nilable(String)))
 
       def initialize(props)
         super(

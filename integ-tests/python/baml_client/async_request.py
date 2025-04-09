@@ -39,7 +39,7 @@ class AsyncHttpRequest:
     
     async def AaaSamOutputFormat(
         self,
-        recipe: Union[List[str], str, None],
+        recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -3405,7 +3405,7 @@ class AsyncHttpRequest:
     
     async def TestOllama(
         self,
-        
+        input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -3418,6 +3418,7 @@ class AsyncHttpRequest:
       return await self.__runtime.build_request(
         "TestOllama",
         {
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
@@ -3963,7 +3964,7 @@ class AsyncHttpStreamRequest:
     
     async def AaaSamOutputFormat(
         self,
-        recipe: Union[List[str], str, None],
+        recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7329,7 +7330,7 @@ class AsyncHttpStreamRequest:
     
     async def TestOllama(
         self,
-        
+        input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7342,6 +7343,7 @@ class AsyncHttpStreamRequest:
       return await self.__runtime.build_request(
         "TestOllama",
         {
+          "input": input,
         },
         self.__ctx_manager.get(),
         tb,
