@@ -728,19 +728,31 @@ mod tests {
         ))));
         let full = optional_list.to_type_ref_2(&ir, false);
         let partial = optional_list.to_partial_type_ref_2(&ir, false, false);
-        assert_eq!(full.name, "Optional[List[str]]");
-        assert_eq!(partial, "Optional[List[str]]");
+        assert_eq!(full.name, "*[]string");
+        assert_eq!(partial, "*[]string");
     }
-
     #[test]
     fn test_union() {
         let ir = make_test_ir("").unwrap();
-        let optional_list = FieldType::Optional(Box::new(FieldType::List(Box::new(
+        let union = FieldType::Union(vec![
             FieldType::Primitive(TypeValue::String),
-        ))));
-        let full = optional_list.to_type_ref_2(&ir, false);
-        let partial = optional_list.to_partial_type_ref_2(&ir, false, false);
-        assert_eq!(full.name, "Optional[List[str]]");
-        assert_eq!(partial, "Optional[List[str]]");
+            FieldType::Primitive(TypeValue::Int),
+        ]);
+        let full = union.to_type_ref_2(&ir, false);
+        let partial = union.to_partial_type_ref_2(&ir, false, false);
+        assert_eq!(full.name, "Union__string__int");
+        assert_eq!(partial, "*types.Union__string__int");
+    }
+    #[test]
+    fn test_union_with_optional() {
+        let ir = make_test_ir("").unwrap();
+        let union = FieldType::Union(vec![
+            FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::String))),
+            FieldType::Primitive(TypeValue::Int),
+        ]);
+        let full = union.to_type_ref_2(&ir, false);
+        let partial = union.to_partial_type_ref_2(&ir, false, false);
+        assert_eq!(full.name, "*Union__string__int");
+        assert_eq!(partial, "*types.Union__string__int");
     }
 }
