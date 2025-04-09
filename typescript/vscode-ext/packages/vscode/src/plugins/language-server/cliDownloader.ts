@@ -169,13 +169,24 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
 
     // Due to the zip format, we can't use streaming APIs, we need the entire
     // content to be downloaded before we can extract the binary.
-    stream.on('finish', () => {
+    stream.on('finish', async () => {
       const zip = new AdmZip(compressedFilePath)
       zip.extractEntryTo(
         'ripgrep-14.1.1-x86_64-pc-windows-msvc/rg.exe', // TODO: Change this to './baml-cli'
         INSTALL_PATH,
         false,
+        true,
+        false,
+        binaryFileName,
       )
+
+      // TODO: Don't know why keeping the original permissions in the call above
+      // doesn't work.
+      const binaryFilePath = path.join(INSTALL_PATH, binaryFileName)
+      await fs.chmod(binaryFilePath, 0o755)
+
+      // Remove the compressed file.
+      await fs.unlink(compressedFilePath)
     })
   } else {
     throw new Error(`Unsupported compressed file format for LSP download: ${extension}`)
