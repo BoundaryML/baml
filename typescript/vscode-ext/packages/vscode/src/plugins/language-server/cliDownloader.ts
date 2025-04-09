@@ -191,9 +191,4 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
   } else {
     throw new Error(`Unsupported compressed file format for LSP download: ${extension}`)
   }
-
-  // TODO: Zip files
-  // const unzip = zlib.createGunzip()
-  // unzip.pipe(createWriteStream(path.join(INSTALL_PATH, binaryFileName)))
-  // await extractZip(compressedFilePath, { dir: INSTALL_PATH })
 }

@@ -436,7 +436,17 @@ const plugin: BamlVSCodePlugin = {
 
     // TODO: Send notification, loading state, etc.
     if (!(await checkIfCliBinaryExists(cliVersion))) {
-      await downloadCli(cliVersion)
+      await window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          cancellable: false,
+          title: 'Downloading BAML LSP',
+        },
+        async (progress, token) => {
+          await downloadCli(cliVersion)
+        },
+      )
+      window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
     }
 
     activateClient(context, serverOptions, clientOptions)
