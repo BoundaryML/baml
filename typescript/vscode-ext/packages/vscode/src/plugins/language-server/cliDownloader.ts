@@ -17,10 +17,9 @@ type CliVersion = {
   version: string
 }
 
-// TODO: This is a draft release for testing.
-const BASE_URL = 'https://github.com/BoundaryML/baml/releases/download/untagged-c52d304b99ce91cdc208'
+const BASE_URL = 'https://github.com/BoundaryML/baml/releases/download'
 
-// TODO: $HOME/.baml for Linux, figure out other platforms.
+// TODO: $HOME/.baml for Linux, should use XDG? KnownFolders on Windows?
 const INSTALL_PATH = path.join(os.homedir(), '.baml')
 
 /**
@@ -67,7 +66,7 @@ function getReleasePlatform(platform: string): string {
  * @returns The extension for the compressed file.
  */
 function getCliCompressedFileExtension(platform: string): string {
-  switch (platform) {
+  switch (getReleasePlatform(platform)) {
     case 'pc-windows-msvc':
       return 'zip'
     case 'apple-darwin':
@@ -80,7 +79,8 @@ function getCliCompressedFileExtension(platform: string): string {
 }
 
 /**
- * Returns the filename of the CLI binary for the given platform, architecture and version.
+ * Returns the filename of the CLI binary for the given platform, architecture
+ * and version.
  *
  * @param platform Current Node.js platform.
  * @param architecture The architecture of the Node.js runtime.
@@ -122,6 +122,9 @@ export async function checkIfCliBinaryExists(cliVersion: CliVersion): Promise<bo
 }
 
 export async function downloadCli(cliVersion: CliVersion): Promise<void> {
+  // TODO: Testing
+  cliVersion.version = '0.1.0'
+
   // Filenames.
   const binaryFileName = cliBinaryFileName(cliVersion)
   const extension = getCliCompressedFileExtension(cliVersion.platform)
@@ -130,12 +133,9 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
   const compressedFileName = `${binaryFileName}.${extension}`
 
   // Github release download URL.
-  // const url = `${BASE_URL}/${compressedFileName}`
+  const url = `${BASE_URL}/${cliVersion.version}/${compressedFileName}`
 
-  // TODO: Testing
-  const url =
-    // 'https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz'
-    'https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-pc-windows-msvc.zip'
+  console.log('LSP Download URL', url)
 
   // Make HTTP request, follow redirects.
   const res = await axios.get(url, { responseType: 'stream' })
@@ -160,7 +160,7 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
           cwd: INSTALL_PATH,
           onReadEntry: (entry) => (entry.path = binaryFileName),
         },
-        ['ripgrep-14.1.1-x86_64-unknown-linux-musl/rg'], // TODO: Change this to ['./baml-cli']
+        ['./baml-cli'],
       ),
     )
   } else if (extension === 'zip') {
@@ -172,7 +172,7 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
     stream.on('finish', async () => {
       const zip = new AdmZip(compressedFilePath)
       zip.extractEntryTo(
-        'ripgrep-14.1.1-x86_64-pc-windows-msvc/rg.exe', // TODO: Change this to './baml-cli'
+        './baml-cli.exe',
         INSTALL_PATH,
         false,
         true,

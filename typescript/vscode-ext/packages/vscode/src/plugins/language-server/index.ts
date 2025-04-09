@@ -47,7 +47,7 @@ export const requestDiagnostics = async () => {
   await client?.sendRequest('requestDiagnostics', { projectId: currentFile })
 }
 
-export const requestBamlCLIVersion = async () => {
+export const requestBamlCLIVersion = async (): Promise<string | undefined> => {
   try {
     const version = await client?.sendRequest('bamlCliVersion')
     if (!version) {
@@ -55,6 +55,7 @@ export const requestBamlCLIVersion = async () => {
     }
     console.log('Got BAML CLI version', version)
     bamlConfig.cliVersion = version as string
+    return version as string
   } catch (e) {
     console.error('Failed to get BAML CLI version', e)
   }
@@ -428,30 +429,37 @@ const plugin: BamlVSCodePlugin = {
       }),
     )
 
-    const cliVersion = {
-      architecture: process.arch,
-      platform: process.platform,
-      version: '0.82.0', // TODO: Get version on the client side.
-    }
+    const version = await client?.sendRequest('bamlCliVersion')
 
-    // TODO: Send notification, loading state, etc.
-    if (!(await checkIfCliBinaryExists(cliVersion))) {
-      window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          cancellable: false,
-          title: 'Downloading BAML LSP',
-        },
-        async (progress, token) => {
-          try {
-            await downloadCli(cliVersion)
-            window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
-          } catch (error) {
-            window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
-          }
-        },
-      )
-    }
+    console.debug('VERSION', version)
+
+    // TODO: If no version found, use bundled LSP else start new LSP.
+    // if (version) {
+      const cliVersion = {
+        architecture: process.arch,
+        platform: process.platform,
+        version: version as string,
+      }
+
+      // TODO: Send notification, loading state, etc.
+      if (!(await checkIfCliBinaryExists(cliVersion))) {
+        window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            cancellable: false,
+            title: 'Downloading BAML LSP',
+          },
+          async (progress, token) => {
+            try {
+              await downloadCli(cliVersion)
+              window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
+            } catch (error) {
+              window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
+            }
+          },
+        )
+      }
+    // }
 
     activateClient(context, serverOptions, clientOptions)
 
