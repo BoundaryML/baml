@@ -8,8 +8,6 @@ import (
 /*
 #cgo CFLAGS: -I${SRCDIR}/../include
 #cgo CFLAGS: -O3 -g
-#cgo LDFLAGS: -ldl
-#include <dlfcn.h>
 #include <baml_cffi_wrapper.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -19,10 +17,6 @@ import (
 import "C"
 
 func CreateBamlRuntime(rootPath string, srcFilesJson string, envVarsJson string) (unsafe.Pointer, error) {
-	if err := initialization(); err != nil {
-		return nil, err
-	}
-
 	cRootPath := C.CString(rootPath)
 	defer C.free(unsafe.Pointer(cRootPath))
 
@@ -40,26 +34,15 @@ func CreateBamlRuntime(rootPath string, srcFilesJson string, envVarsJson string)
 }
 
 func DestroyBamlRuntime(runtime unsafe.Pointer) error {
-	if err := initialization(); err != nil {
-		return err
-	}
-
 	C.WrapDestroyBamlRuntime(runtime)
 	return nil
 }
 
 func BamlVersion() string {
-	if err := initialization(); err != nil {
-		return ""
-	}
 	return C.GoString(C.WrapVersion())
 }
 
 func InvokeRuntimeCli(args []string) (int, error) {
-	if err := initialization(); err != nil {
-		return 0, err
-	}
-
 	cArgs := make([]*C.char, len(args))
 	for i, arg := range args {
 		cArgs[i] = C.CString(arg)
@@ -72,19 +55,11 @@ func InvokeRuntimeCli(args []string) (int, error) {
 }
 
 func RegisterCallbacks(callbackFn unsafe.Pointer, errorFn unsafe.Pointer) error {
-	if err := initialization(); err != nil {
-		return err
-	}
-
 	C.WrapRegisterCallbacks((C.CallbackFn)(callbackFn), (C.CallbackFn)(errorFn))
 	return nil
 }
 
 func CallFunctionFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) (unsafe.Pointer, error) {
-	if err := initialization(); err != nil {
-		return nil, err
-	}
-
 	cFunctionName := C.CString(functionName)
 	defer C.free(unsafe.Pointer(cFunctionName))
 
@@ -96,10 +71,6 @@ func CallFunctionFromC(runtime unsafe.Pointer, functionName string, encodedArgs 
 }
 
 func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) (unsafe.Pointer, error) {
-	if err := initialization(); err != nil {
-		return nil, err
-	}
-
 	cFunctionName := C.CString(functionName)
 	defer C.free(unsafe.Pointer(cFunctionName))
 

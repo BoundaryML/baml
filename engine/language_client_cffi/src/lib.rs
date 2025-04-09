@@ -7,10 +7,12 @@ use anyhow::Result;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[no_mangle]
 pub extern "C" fn version() -> *const libc::c_char {
-    let version = env!("CARGO_PKG_VERSION");
-    CString::new(version).unwrap().as_ptr()
+    let version = CString::new(VERSION).unwrap();
+    version.into_raw() as *const libc::c_char
 }
 
 #[no_mangle]
