@@ -18,11 +18,11 @@ $ pnpm add @boundaryml/baml
 /**
  * If this import fails, you may need to upgrade @boundaryml/baml.
  * 
- * Please upgrade @boundaryml/baml to 0.82.0.
+ * Please upgrade @boundaryml/baml to 0.83.0.
  * 
- * $ npm install @boundaryml/baml@0.82.0
- * $ yarn add @boundaryml/baml@0.82.0
- * $ pnpm add @boundaryml/baml@0.82.0
+ * $ npm install @boundaryml/baml@0.83.0
+ * $ yarn add @boundaryml/baml@0.83.0
+ * $ pnpm add @boundaryml/baml@0.83.0
  * 
  * If nothing else works, please ask for help:
  * 
@@ -32,7 +32,7 @@ $ pnpm add @boundaryml/baml
  **/
 import { ThrowIfVersionMismatch } from "@boundaryml/baml";
 
-export const version = "0.82.0";
+export const version = "0.83.0";
 
 ThrowIfVersionMismatch(version);
 
