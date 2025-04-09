@@ -88,6 +88,7 @@ pub enum FieldType {
     Tuple(Vec<FieldType>),
     Optional(Box<FieldType>),
     RecursiveTypeAlias(String),
+    Arrow(Box<Arrow>),
     WithMetadata {
         base: Box<FieldType>,
         constraints: Vec<Constraint>,
@@ -97,6 +98,12 @@ pub enum FieldType {
 
 pub trait HasFieldType {
     fn field_type<'a>(&'a self) -> &'a FieldType;
+}
+
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Arrow {
+    pub param_types: Vec<FieldType>,
+    pub return_type: FieldType,
 }
 
 // Impl display for FieldType
@@ -133,6 +140,17 @@ impl std::fmt::Display for FieldType {
             FieldType::Map(k, v) => write!(f, "map<{k}, {v}>"),
             FieldType::List(t) => write!(f, "{t}[]"),
             FieldType::Optional(t) => write!(f, "{t}?"),
+            FieldType::Arrow(arrow) => write!(
+                f,
+                "({}) -> {}",
+                arrow
+                    .param_types
+                    .iter()
+                    .map(|t| t.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                arrow.return_type.to_string()
+            ),
             FieldType::WithMetadata { base, .. } => base.fmt(f),
         }
     }
@@ -239,7 +257,8 @@ impl ToUnionName for FieldType {
             | FieldType::Enum(_)
             | FieldType::Literal(_)
             | FieldType::Class(_)
-            | FieldType::RecursiveTypeAlias(_) => IndexSet::new(),
+            | FieldType::RecursiveTypeAlias(_)
+            | FieldType::Arrow(_) => IndexSet::new(),
             FieldType::Tuple(inner) => inner.iter().flat_map(|t| t.find_union_types()).collect(),
             FieldType::Optional(inner) => inner.find_union_types(),
             FieldType::WithMetadata { base, .. } => base.find_union_types(),
@@ -295,6 +314,7 @@ impl ToUnionName for FieldType {
             }
             FieldType::RecursiveTypeAlias(name) => name.to_string(),
             FieldType::WithMetadata { base, .. } => base.to_union_name(),
+            FieldType::Arrow(_) => "function".to_string(),
         }
     }
 }

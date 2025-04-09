@@ -682,6 +682,7 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                 }
                 None => base.to_type_spec(_ir)?,
             },
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         })
     }
 }

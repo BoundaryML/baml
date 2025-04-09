@@ -502,6 +502,7 @@ fn has_none_default(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
         FieldType::WithMetadata { .. } => {
             unreachable!("FieldType::WithMetadata is always consumed by distribute_metadata")
         }
+        FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
     }
 }
 
@@ -595,6 +596,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 }
                 None => base.to_type_ref_2(ir, use_module_prefix).name,
             },
+            FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
         }
     }
 
@@ -672,6 +674,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             FieldType::WithMetadata { .. } => {
                 unreachable!("distribute_metadata makes this branch unreachable.")
             }
+            FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
         };
         let base_type_ref = if is_partial_type {
             base_rep

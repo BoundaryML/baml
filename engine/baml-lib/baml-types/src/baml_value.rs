@@ -549,6 +549,44 @@ impl<T> BamlValueWithMeta<T> {
         }
     }
 
+    /// Apply the same meta value to every node throughout a BamlValue.
+    pub fn with_const_meta(value: &BamlValue, meta: T) -> BamlValueWithMeta<T>
+    where
+        T: Clone,
+    {
+        use BamlValueWithMeta::*;
+        match value {
+            BamlValue::String(s) => String(s.clone(), meta),
+            BamlValue::Int(i) => Int(*i, meta),
+            BamlValue::Float(f) => Float(*f, meta),
+            BamlValue::Bool(b) => Bool(*b, meta),
+            BamlValue::Map(entries) => BamlValueWithMeta::Map(
+                entries
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
+                    .collect(),
+                meta,
+            ),
+            BamlValue::List(items) => List(
+                items
+                    .iter()
+                    .map(|i| Self::with_const_meta(i, meta.clone()))
+                    .collect(),
+                meta,
+            ),
+            BamlValue::Media(m) => Media(m.clone(), meta),
+            BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), meta),
+            BamlValue::Class(_, items) => Map(
+                items
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
+                    .collect(),
+                meta,
+            ),
+            BamlValue::Null => Null(meta),
+        }
+    }
+
     pub fn map_meta<'a, F, U>(&'a self, f: F) -> BamlValueWithMeta<U>
     where
         F: Fn(&'a T) -> U + Copy,
