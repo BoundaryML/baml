@@ -38,7 +38,7 @@ const (
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
-	bamlDisableDlEnv   = "BAML_DISABLE_DOWNLOAD"
+	bamlDisableDlEnv   = "BAML_LIBRARY_DISABLE_DOWNLOAD"
 )
 
 var (
@@ -72,10 +72,6 @@ func init() {
 	initOnce.Do(func() {
 		initErr = initializeBaml()
 		if initErr != nil {
-			logger.Error("FATAL: BAML Go library initialization failed.", "error", initErr)
-			logger.Error("Check environment variables and network connection if applicable.",
-				"envVar_libraryPath", bamlLibraryPathEnv,
-				"envVar_cacheDir", bamlCacheDirEnvVar)
 			panic(initErr)
 		}
 	})
@@ -88,7 +84,6 @@ func GetInitError() error {
 func initializeBaml() error {
 	if !isSupportedPlatform() {
 		err := fmt.Errorf("%w: OS=%s Arch=%s", ErrNotSupportedPlatform, runtime.GOOS, runtime.GOARCH)
-		logger.Error("Platform not supported", "os", runtime.GOOS, "arch", runtime.GOARCH, "error", err)
 		return err
 	}
 
@@ -130,7 +125,6 @@ func initializeBaml() error {
 			dlopenErr = fmt.Errorf("%w (library or dependency not found)", dlopenErr)
 		}
 		err := fmt.Errorf("%w: %w", ErrLoadLibrary, dlopenErr)
-		// logger.Error("Failed to load BAML shared library", "path", bamlSharedLibraryPath, "dlerror", dlErrStr, "error", err)
 		return err
 	}
 	bamlLibHandle = handle
@@ -140,7 +134,6 @@ func initializeBaml() error {
 		defer func() {
 			if r := recover(); r != nil {
 				symbolLookupErr = fmt.Errorf("panic during symbol lookup: %v", r)
-				logger.Error("Panic during BAML symbol lookup", "panic_value", r)
 			}
 		}()
 		lib := library{handle: bamlLibHandle}
@@ -170,8 +163,8 @@ func initializeBaml() error {
 		return err
 	}
 
-	logger.Info("BAML library loaded successfully", "version", goVersionStr)
-	logger.Debug("Library details", "path", bamlSharedLibraryPath)
+	logger.Info(fmt.Sprintf("BAML (v%s) loaded", goVersionStr))
+	logger.Debug(fmt.Sprintf("Library path: %s", bamlSharedLibraryPath))
 	return nil
 }
 
@@ -252,8 +245,7 @@ func findOrDownloadLibrary() error {
 			bamlSharedLibraryPath = cachedLibPath
 			return nil
 		}
-		logger.Error("Error downloading BAML library", "error", err)
-		logger.Warn("Download failed. Checking default system paths.")
+		logger.Warn(fmt.Sprintf("BAML library download failed: %s", err))
 	}
 
 	logger.Debug("Checking default system library paths")
@@ -417,12 +409,10 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	_, err = io.Copy(multiOut, resp.Body)
 	progWriter.Finish()
 	if err != nil {
-		logger.Error("Download interrupted", "temp_file", tmpFile.Name(), "error", err)
 		return fmt.Errorf("%w: download interrupted writing to %s: %w", ErrDownloadFailed, tmpFile.Name(), err)
 	}
 
 	if err := tmpFile.Close(); err != nil {
-		logger.Error("Failed closing temporary file after download", "temp_file", tmpFile.Name(), "error", err)
 		return fmt.Errorf("%w: failed closing temporary file %s: %w", ErrDownloadFailed, tmpFile.Name(), err)
 	}
 
@@ -430,14 +420,8 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	if expectedChecksum != "" {
 		logger.Debug("Verifying checksum")
 		if actualChecksum != expectedChecksum {
-			err := fmt.Errorf("%w: checksum mismatch for %s. Expected %s, got %s. File %s may be corrupt.",
+			err := fmt.Errorf("%w: checksum mismatch for %s. Expected %s, got %s. File %s may be corrupt",
 				ErrChecksumMismatch, filename, expectedChecksum, actualChecksum, tmpFile.Name())
-			logger.Error("Checksum mismatch",
-				"filename", filename,
-				"expected", expectedChecksum,
-				"actual", actualChecksum,
-				"temp_file", tmpFile.Name(),
-				"error", err)
 			return err
 		}
 		logger.Info("Checksum verified successfully", "checksum_prefix", actualChecksum[:8])
@@ -451,12 +435,6 @@ func downloadBamlLibrary(destDir string, filename string) error {
 		logger.Warn("Atomic rename failed, attempting copy fallback", "rename_error", err, "from", tmpFile.Name(), "to", destPath)
 		if copyErr := copyFile(tmpFile.Name(), destPath); copyErr != nil {
 			err := fmt.Errorf("%w: failed moving temp file %s to %s: rename failed (%w) and copy failed (%w)", ErrDownloadFailed, tmpFile.Name(), destPath, err, copyErr)
-			logger.Error("Failed to move temp file to final location (rename and copy failed)",
-				"temp_file", tmpFile.Name(),
-				"destination", destPath,
-				"rename_error", err,
-				"copy_error", copyErr,
-				"final_error", err)
 			return err
 		}
 		logger.Info("Copy fallback succeeded", "from", tmpFile.Name(), "to", destPath)
@@ -474,7 +452,6 @@ func downloadBamlLibrary(destDir string, filename string) error {
 func downloadChecksum(checksumURL string, targetFilename string) (string, error) {
 	resp, err := http.Get(checksumURL)
 	if err != nil {
-		logger.Error("Network error fetching checksum", "url", checksumURL, "error", err)
 		return "", fmt.Errorf("network error fetching checksum %s: %w", checksumURL, err)
 	}
 	defer resp.Body.Close()
@@ -484,13 +461,11 @@ func downloadChecksum(checksumURL string, targetFilename string) (string, error)
 		return "", fmt.Errorf("checksum file not found (404)")
 	}
 	if resp.StatusCode != http.StatusOK {
-		logger.Error("Unexpected HTTP status fetching checksum", "url", checksumURL, "status_code", resp.StatusCode)
 		return "", fmt.Errorf("unexpected status %d fetching checksum %s", resp.StatusCode, checksumURL)
 	}
 
 	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
 	if err != nil {
-		logger.Error("Error reading checksum response body", "url", checksumURL, "error", err)
 		return "", fmt.Errorf("error reading checksum body %s: %w", checksumURL, err)
 	}
 
@@ -535,33 +510,28 @@ func copyFile(src, dst string) (err error) {
 	logger.Debug("Attempting to copy file", "source", src, "destination", dst)
 	source, err := os.Open(src)
 	if err != nil {
-		logger.Error("Failed to open source file for copy", "source", src, "error", err)
 		return fmt.Errorf("failed open source %s: %w", src, err)
 	}
 	defer source.Close()
 
 	destination, err := os.Create(dst)
 	if err != nil {
-		logger.Error("Failed to create destination file for copy", "destination", dst, "error", err)
 		return fmt.Errorf("failed create destination %s: %w", dst, err)
 	}
 	defer func() {
 		cerr := destination.Close()
 		if err == nil && cerr != nil {
-			logger.Error("Failed to close destination file after copy", "destination", dst, "error", cerr)
 			err = fmt.Errorf("failed close destination %s: %w", dst, cerr)
 		}
 	}()
 
 	_, err = io.Copy(destination, source)
 	if err != nil {
-		logger.Error("Failed during copy operation", "source", src, "destination", dst, "error", err)
 		return fmt.Errorf("failed copying from %s to %s: %w", src, dst, err)
 	}
 
 	err = destination.Sync()
 	if err != nil {
-		logger.Error("Failed syncing destination file after copy", "destination", dst, "error", err)
 		return fmt.Errorf("failed syncing destination %s: %w", dst, err)
 	}
 
@@ -577,7 +547,6 @@ func isSupportedPlatform() bool {
 
 func getFromLibraryFn(handle unsafe.Pointer, fnName string) unsafe.Pointer {
 	if handle == nil {
-		logger.Error("CRITICAL: BAML library handle is nil during symbol lookup", "symbol", fnName)
 		panic(fmt.Sprintf("internal error: BAML library handle is nil when looking up symbol '%s'.", fnName))
 	}
 	cFnName := C.CString(fnName)
@@ -600,14 +569,6 @@ func getFromLibraryFn(handle unsafe.Pointer, fnName string) unsafe.Pointer {
 		errMsg += fmt.Sprintf("\n       - Verify library (%s) version (%s) and architecture (%s/%s).", bamlSharedLibraryPath, VERSION, runtime.GOOS, runtime.GOARCH)
 		errMsg += "\n       - Ensure library file is not corrupted and exports required symbols (`nm` tool)."
 
-		logger.Error("CRITICAL: Failed to lookup symbol in BAML library",
-			"symbol", fnName,
-			"library_path", bamlSharedLibraryPath,
-			"dlerror", errStr,
-			"os", runtime.GOOS,
-			"arch", runtime.GOARCH,
-			"expected_version", VERSION,
-		)
 		panic(errMsg)
 	}
 	return fnPtr

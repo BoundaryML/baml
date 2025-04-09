@@ -81,7 +81,6 @@ impl GenerateArgs {
                         version.to_string(),
                         false,
                         default_client_mode,
-                        // TODO: this should be set if user is asking for openapi
                         vec![],
                         None,
                         if matches!(

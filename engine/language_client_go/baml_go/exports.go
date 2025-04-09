@@ -43,13 +43,17 @@ func BamlVersion() string {
 }
 
 func InvokeRuntimeCli(args []string) (int, error) {
-	cArgs := make([]*C.char, len(args))
+	arg_c_strings := make([]*C.char, len(args))
 	for i, arg := range args {
-		cArgs[i] = C.CString(arg)
-		defer C.free(unsafe.Pointer(cArgs[i]))
+		arg_c_strings[i] = C.CString(arg)
 	}
+	defer func() {
+		for _, arg_c_string := range arg_c_strings {
+			C.free(unsafe.Pointer(arg_c_string))
+		}
+	}()
 
-	result := C.WrapInvokeRuntimeCli((**C.char)(unsafe.Pointer(&cArgs[0])))
+	result := C.WrapInvokeRuntimeCli((**C.char)(unsafe.Pointer(&arg_c_strings[0])))
 
 	return int(result), nil
 }
