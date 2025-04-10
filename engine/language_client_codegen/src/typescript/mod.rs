@@ -35,6 +35,7 @@ mod framework {
                 Some(GeneratorOutputType::OpenApi) => None,
                 Some(GeneratorOutputType::PythonPydantic) => None,
                 Some(GeneratorOutputType::RubySorbet) => None,
+                Some(GeneratorOutputType::Go) => None,
             }
         }
     }
@@ -593,6 +594,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::WithMetadata { .. } => {
                 unreachable!("distribute_metadata makes this field unreachable.")
             }
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         };
         let base_type_ref = if is_partial_type {
             base_rep
@@ -673,6 +675,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Optional(inner) => {
                 format!("{} | null", inner.to_type_ref(ir, use_module_prefix))
             }
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_type_ref(ir, use_module_prefix);

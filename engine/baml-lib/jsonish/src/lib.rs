@@ -7,7 +7,9 @@ pub mod deserializer;
 use std::collections::HashMap;
 pub mod jsonish;
 
-use baml_types::{BamlValue, BamlValueWithMeta, FieldType, JinjaExpression, ResponseCheck};
+use baml_types::{
+    BamlValue, BamlValueWithMeta, FieldType, HasFieldType, JinjaExpression, ResponseCheck,
+};
 use deserializer::{
     coercer::{ParsingContext, ParsingError, TypeCoercer},
     deserialize_flags::DeserializerConditions,
@@ -25,9 +27,27 @@ use jsonish::Value;
 use serde::{ser::SerializeMap, ser::SerializeStruct, Serialize, Serializer};
 
 #[derive(Clone, Debug)]
-pub struct ResponseBamlValue(
-    pub BamlValueWithMeta<(Vec<Flag>, Vec<ResponseCheck>, Completion)>,
+pub struct ResponseBamlValue(pub BamlValueWithMeta<ResponseValueMeta>);
+
+#[derive(Clone, Debug)]
+pub struct ResponseValueMeta(
+    pub Vec<Flag>,
+    pub Vec<ResponseCheck>,
+    pub Completion,
+    pub FieldType,
 );
+
+impl From<FieldType> for ResponseValueMeta {
+    fn from(field_type: FieldType) -> Self {
+        ResponseValueMeta(vec![], vec![], Completion::default(), field_type)
+    }
+}
+
+impl baml_types::HasFieldType for ResponseValueMeta {
+    fn field_type<'a>(&'a self) -> &'a FieldType {
+        &self.3
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SerializeMode {
@@ -38,27 +58,27 @@ pub enum SerializeMode {
 /// A special-purpose wrapper for specifying the serialization format of a
 /// `ResponseBamlValue`. You should construct these from `ResponseBamlValue`
 /// with the `serialize_final` or `serialize_partial` method.
-pub struct SerializeResponseBamlValue<'a>{
-    pub value: &'a BamlValueWithMeta<(Vec<Flag>, Vec<ResponseCheck>, Completion)>,
+pub struct SerializeResponseBamlValue<'a> {
+    pub value: &'a BamlValueWithMeta<ResponseValueMeta>,
     pub serialize_mode: SerializeMode,
 }
 
 impl ResponseBamlValue {
     /// Prepare a `ResponseBamlValue` for "final" serialization (serialization
     /// with no stream-state metadata).
-    pub fn serialize_final<'a> (&'a self) -> SerializeResponseBamlValue<'a> {
+    pub fn serialize_final<'a>(&'a self) -> SerializeResponseBamlValue<'a> {
         SerializeResponseBamlValue {
             value: &self.0,
-            serialize_mode: SerializeMode::Final
+            serialize_mode: SerializeMode::Final,
         }
     }
 
     /// Prepare a `ResponseBamlValue` for "partial" serialization (serialization
     /// with stream-state metadata).
-    pub fn serialize_partial<'a> (&'a self) -> SerializeResponseBamlValue<'a> {
+    pub fn serialize_partial<'a>(&'a self) -> SerializeResponseBamlValue<'a> {
         SerializeResponseBamlValue {
             value: &self.0,
-            serialize_mode: SerializeMode::Partial
+            serialize_mode: SerializeMode::Partial,
         }
     }
 }
@@ -73,18 +93,31 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
             Float(f, ref meta) => serialize_with_meta(&f, &meta, serialize_mode, serializer),
             Bool(b, ref meta) => serialize_with_meta(&b, &meta, serialize_mode, serializer),
             Media(v, ref meta) => serialize_with_meta(&v, &meta, serialize_mode, serializer),
-            Enum(ref _name, v, ref meta) => serialize_with_meta(&v, &meta, serialize_mode, serializer),
+            Enum(ref _name, v, ref meta) => {
+                serialize_with_meta(&v, meta, serialize_mode, serializer)
+            }
             Map(items, ref meta) => {
                 let new_items = items
                     .into_iter()
-                    .map(|(k, v)| (k.clone(), SerializeResponseBamlValue{value: &v, serialize_mode: serialize_mode.clone()}))
+                    .map(|(k, v)| {
+                        (
+                            k.clone(),
+                            SerializeResponseBamlValue {
+                                value: &v,
+                                serialize_mode: serialize_mode.clone(),
+                            },
+                        )
+                    })
                     .collect::<IndexMap<std::string::String, SerializeResponseBamlValue<'_>>>();
                 serialize_with_meta(&new_items, &meta, serialize_mode, serializer)
             }
             List(items, ref meta) => {
                 let new_items = items
                     .into_iter()
-                    .map(|v| SerializeResponseBamlValue{value: v, serialize_mode: serialize_mode.clone()})
+                    .map(|v| SerializeResponseBamlValue {
+                        value: v,
+                        serialize_mode: serialize_mode.clone(),
+                    })
                     .collect::<Vec<_>>();
                 serialize_with_meta(&new_items, &meta, serialize_mode, serializer)
             }
@@ -92,12 +125,19 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
                 let new_fields = fields
                     .into_iter()
                     .map(|(k, v)| {
-                        let subvalue_serialize_mode = match (&serialize_mode, v.meta().2.required_done) {
-                            (SerializeMode::Final, _) => SerializeMode::Final,
-                            (SerializeMode::Partial, true) => SerializeMode::Final,
-                            (SerializeMode::Partial, false) => SerializeMode::Partial,
-                        };
-                        (k, SerializeResponseBamlValue{value: v, serialize_mode: subvalue_serialize_mode})
+                        let subvalue_serialize_mode =
+                            match (&serialize_mode, v.meta().2.required_done) {
+                                (SerializeMode::Final, _) => SerializeMode::Final,
+                                (SerializeMode::Partial, true) => SerializeMode::Final,
+                                (SerializeMode::Partial, false) => SerializeMode::Partial,
+                            };
+                        (
+                            k,
+                            SerializeResponseBamlValue {
+                                value: v,
+                                serialize_mode: subvalue_serialize_mode,
+                            },
+                        )
                     })
                     .collect::<IndexMap<_, _>>();
                 serialize_with_meta(&new_fields, &meta, serialize_mode, serializer)
@@ -128,11 +168,12 @@ impl<'a, T: Serialize> serde::Serialize for ResponseChecksMetadata<'a, T> {
 
 fn serialize_with_meta<S: Serializer, T: Serialize>(
     value: &T,
-    meta: &(Vec<Flag>, Vec<ResponseCheck>, Completion),
+    meta: &ResponseValueMeta,
     serialize_mode: &SerializeMode,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    let should_display_stream_state = meta.2.display && matches!(serialize_mode, SerializeMode::Partial);
+    let should_display_stream_state =
+        meta.2.display && matches!(serialize_mode, SerializeMode::Partial);
     match (meta.1.len(), should_display_stream_state) {
         (0, false) => value.serialize(serializer),
         (_, false) => ResponseChecksMetadata((value, &meta.1)).serialize(serializer),
@@ -158,7 +199,9 @@ pub fn from_str(
     allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
     if matches!(target, FieldType::Primitive(TypeValue::String)) {
-        return Ok(BamlValueWithFlags::String(raw_string.to_string().into()));
+        return Ok(BamlValueWithFlags::String(
+            (raw_string.to_string(), target).into(),
+        ));
     }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.

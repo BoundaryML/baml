@@ -3,10 +3,10 @@ use internal_baml_core::ir::FieldType;
 
 use baml_types::CompletionState;
 
-use crate::{deserializer::{
+use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
-}};
+};
 
 use super::{ParsingContext, ParsingError, TypeCoercer};
 
@@ -55,5 +55,5 @@ pub(super) fn coerce_array(
         None => {}
     };
 
-    Ok(BamlValueWithFlags::List(flags, items))
+    Ok(BamlValueWithFlags::List(flags, list_target.clone(), items))
 }

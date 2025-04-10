@@ -35,6 +35,7 @@ target_clients = {
     "ruby": FILE_PATH / "ruby" / "baml_client",
     "react": FILE_PATH / "react" / "baml_client",
     "openapi": FILE_PATH / "openapi" / "baml_client",
+    "go": FILE_PATH / "go" / "baml_client",
 }
 
 

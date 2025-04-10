@@ -33,12 +33,11 @@ pub enum StreamingError {
 pub fn validate_streaming_state(
     ir: &impl IRHelperExtended,
     baml_value: &BamlValueWithFlags,
-    field_type: &FieldType,
     allow_partials: bool,
 ) -> Result<BamlValueWithMeta<Completion>, StreamingError> {
     let baml_value_with_meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let typed_baml_value: BamlValueWithMeta<(Vec<Flag>, FieldType)> =
-        ir.distribute_type_with_meta(baml_value_with_meta_flags, field_type.clone())?;
+        ir.distribute_type_with_meta(baml_value_with_meta_flags, baml_value.field_type().clone())?;
     let baml_value_with_streaming_state_and_behavior =
         typed_baml_value.map_meta(|(flags, r#type)| (completion_state(&flags), r#type));
 
@@ -299,6 +298,7 @@ fn required_done(ir: &impl IRHelperExtended, field_type: &FieldType) -> bool {
         // TODO: This rule is pretty aggressive. For example in the case of
         // Class | Enum it would not allow classes to be streamed.
         FieldType::Union(options) => options.iter().any(|option| required_done(ir, option)),
+        FieldType::Arrow(_) => false, // TODO: Error? Arrow shouldn't appear here.
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
         }
@@ -333,18 +333,23 @@ mod tests {
     use super::*;
 
     fn mk_null() -> BamlValueWithFlags {
-        BamlValueWithFlags::Null(DeserializerConditions::default())
+        BamlValueWithFlags::Null(
+            FieldType::Primitive(TypeValue::Null),
+            DeserializerConditions::default(),
+        )
     }
 
     fn mk_string(s: &str) -> BamlValueWithFlags {
         BamlValueWithFlags::String(ValueWithFlags {
             value: s.to_string(),
+            target: FieldType::Primitive(TypeValue::String),
             flags: DeserializerConditions::default(),
         })
     }
     fn mk_float(s: f64) -> BamlValueWithFlags {
         BamlValueWithFlags::Float(ValueWithFlags {
             value: s,
+            target: FieldType::Primitive(TypeValue::Float),
             flags: DeserializerConditions::default(),
         })
     }
@@ -359,7 +364,11 @@ mod tests {
         .unwrap();
 
         fn mk_list(items: Vec<BamlValueWithFlags>) -> BamlValueWithFlags {
-            BamlValueWithFlags::List(DeserializerConditions::default(), items)
+            BamlValueWithFlags::List(
+                DeserializerConditions::default(),
+                FieldType::RecursiveTypeAlias("A".to_string()).as_list(),
+                items,
+            )
         }
 
         let value = mk_list(vec![
@@ -368,13 +377,7 @@ mod tests {
             mk_list(vec![mk_list(vec![]), mk_list(vec![])]),
         ]);
 
-        let res = validate_streaming_state(
-            &ir,
-            &value,
-            &FieldType::RecursiveTypeAlias("A".to_string()),
-            true,
-        )
-        .unwrap();
+        let res = validate_streaming_state(&ir, &value, true).unwrap();
 
         assert_eq!(res.into_iter().count(), 6);
     }
@@ -404,12 +407,14 @@ mod tests {
         let value = BamlValueWithFlags::Class(
             "Info".to_string(),
             DeserializerConditions::default(),
+            FieldType::Class("Info".into()),
             vec![
                 (
                     "name".to_string(),
                     BamlValueWithFlags::Class(
                         "Name".to_string(),
                         DeserializerConditions::default(),
+                        FieldType::Class("Name".into()),
                         vec![
                             ("first".to_string(), mk_string("Greg")),
                             ("last".to_string(), mk_string("Hale")),
@@ -427,7 +432,7 @@ mod tests {
         );
         let field_type = FieldType::class("Info");
 
-        let res = validate_streaming_state(&ir, &value, &field_type, true).unwrap();
+        let res = validate_streaming_state(&ir, &value, true).unwrap();
 
         // The first key should be "Name", matching the order specified in the
         // original value.

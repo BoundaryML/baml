@@ -2689,11 +2689,11 @@ export const TestNamedArgsLiteralString = async (
  *
  * @param { string } input - Input parameter.
  *
- * @returns {Promise<string>} A promise that resolves with the result of the action.
+ * @returns {Promise<string | null>} A promise that resolves with the result of the action.
  */
 export const TestOllama = async (
   input: string,
-): Promise<string> => {
+): Promise<string | null> => {
   return b.TestOllama(
     input,
   );

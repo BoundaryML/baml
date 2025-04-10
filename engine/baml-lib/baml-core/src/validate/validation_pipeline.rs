@@ -1,5 +1,5 @@
 mod context;
-mod validations;
+pub mod validations;
 
 use crate::{internal_baml_diagnostics::Diagnostics, PreviewFeature};
 use enumflags2::BitFlags;

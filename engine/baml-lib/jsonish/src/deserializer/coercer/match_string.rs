@@ -5,7 +5,7 @@
 use std::{cmp::Ordering, collections::HashMap};
 
 use anyhow::Result;
-use baml_types::FieldType;
+use baml_types::{FieldType, TypeValue};
 
 use crate::{
     deserializer::{
@@ -119,7 +119,7 @@ fn try_match_only_once(
         ));
     };
 
-    Ok((string_match.to_string(), flags).into())
+    Ok((string_match.to_string(), target, flags).into())
 }
 
 /// Heuristic string match algorithm.

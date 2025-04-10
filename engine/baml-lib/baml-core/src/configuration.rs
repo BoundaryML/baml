@@ -47,6 +47,7 @@ pub struct CodegenGenerator {
     pub on_generate: Vec<String>,
     output_dir: PathBuf,
     pub version: String,
+    pub client_package_name: Option<String>,
 
     pub span: crate::ast::Span,
 }

@@ -170,7 +170,7 @@ export type StreamingServerTypes = {
   TestNamedArgsLiteralBool: string,
   TestNamedArgsLiteralInt: string,
   TestNamedArgsLiteralString: string,
-  TestOllama: string,
+  TestOllama: ((string | null) | null),
   TestOllamaHaiku: partial_types.Haiku,
   TestOpenAI: string,
   TestOpenAIDummyClient: string,

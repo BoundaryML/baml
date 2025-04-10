@@ -86,11 +86,14 @@ pub(super) fn coerce_map(
                 // is also checked at `coerce_arg` in
                 // baml-lib/baml-core/src/ir/ir_helpers/to_baml_arg.rs
                 // TODO: Is it Ok that we assume keys are complete?
-                let key_as_jsonish = jsonish::Value::String(key.to_owned(), CompletionState::Complete);
+                let key_as_jsonish =
+                    jsonish::Value::String(key.to_owned(), CompletionState::Complete);
                 match key_type.coerce(ctx, key_type, Some(&key_as_jsonish)) {
                     Ok(_) => {
                         // Hack to avoid cloning the key twice.
-                        let jsonish::Value::String(owned_key, CompletionState::Complete) = key_as_jsonish else {
+                        let jsonish::Value::String(owned_key, CompletionState::Complete) =
+                            key_as_jsonish
+                        else {
                             unreachable!("key_as_jsonish is defined as jsonish::Value::String");
                         };
 
@@ -107,7 +110,7 @@ pub(super) fn coerce_map(
             if *completion_state == CompletionState::Incomplete {
                 flags.add_flag(Flag::Incomplete);
             }
-            Ok(BamlValueWithFlags::Map(flags, items))
+            Ok(BamlValueWithFlags::Map(flags, map_target.clone(), items))
         }
         // TODO: first map in an array that matches
         _ => Err(ctx.error_unexpected_type(map_target, value)),

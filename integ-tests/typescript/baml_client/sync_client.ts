@@ -3446,7 +3446,7 @@ export class BamlSyncClient {
   TestOllama(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): string {
+  ): string | null {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -3460,7 +3460,7 @@ export class BamlSyncClient {
         options.clientRegistry,
         collector,
       )
-      return raw.parsed(false) as string
+      return raw.parsed(false) as string | null
     } catch (error: any) {
       throw toBamlError(error);
     }

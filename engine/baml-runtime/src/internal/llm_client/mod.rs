@@ -35,12 +35,12 @@ use wasm_bindgen::JsValue;
 pub fn parsed_value_to_response(
     ir: &impl IRHelperExtended,
     baml_value: BamlValueWithFlags,
-    field_type: &FieldType,
     allow_partials: bool,
 ) -> Result<ResponseBamlValue> {
     let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
+    let meta_field_type: BamlValueWithMeta<FieldType> = baml_value.clone().into();
 
     let value_with_response_checks: BamlValueWithMeta<Vec<ResponseCheck>> = baml_value_with_meta
         .map_meta(|cs| {
@@ -56,9 +56,8 @@ pub fn parsed_value_to_response(
                 .collect()
         });
 
-    let baml_value_with_streaming =
-        validate_streaming_state(ir, &baml_value, field_type, allow_partials)
-            .map_err(|s| anyhow::anyhow!("{s:?}"))?;
+    let baml_value_with_streaming = validate_streaming_state(ir, &baml_value, allow_partials)
+        .map_err(|s| anyhow::anyhow!("{s:?}"))?;
 
     // Combine the baml_value, its types, the parser flags, and the streaming state
     // into a final value.
@@ -66,7 +65,10 @@ pub fn parsed_value_to_response(
     let response_value = baml_value_with_streaming
         .zip_meta(&value_with_response_checks)?
         .zip_meta(&meta_flags)?
-        .map_meta(|((x, y), z)| (z.clone(), y.clone(), x.clone()));
+        .zip_meta(&meta_field_type)?
+        .map_meta(|(((x, y), z), ft)| {
+            jsonish::ResponseValueMeta(z.clone(), y.clone(), x.clone(), ft.clone())
+        });
     Ok(ResponseBamlValue(response_value))
 }
 
@@ -415,11 +417,13 @@ mod tests {
             DeserializerConditions {
                 flags: vec![Flag::Incomplete],
             },
+            FieldType::class("Foo"),
             vec![
                 (
                     "i".to_string(),
                     BamlValueWithFlags::Int(ValueWithFlags {
                         value: 1,
+                        target: FieldType::int(),
                         flags: DeserializerConditions { flags: Vec::new() },
                     }),
                 ),
@@ -427,6 +431,7 @@ mod tests {
                     "s".to_string(),
                     BamlValueWithFlags::String(ValueWithFlags {
                         value: "H".to_string(),
+                        target: FieldType::string(),
                         flags: DeserializerConditions {
                             flags: vec![Flag::Incomplete],
                         },
@@ -436,23 +441,25 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        let response = parsed_value_to_response(&ir, val, &FieldType::class("Foo"), true);
+        let response = parsed_value_to_response(&ir, val, true);
         assert!(response.is_ok());
     }
 
     fn mk_null() -> BamlValueWithFlags {
-        BamlValueWithFlags::Null(DeserializerConditions::default())
+        BamlValueWithFlags::Null(FieldType::null(), DeserializerConditions::default())
     }
 
     fn mk_string(s: &str) -> BamlValueWithFlags {
         BamlValueWithFlags::String(ValueWithFlags {
             value: s.to_string(),
+            target: FieldType::string(),
             flags: DeserializerConditions::default(),
         })
     }
     fn mk_float(s: f64) -> BamlValueWithFlags {
         BamlValueWithFlags::Float(ValueWithFlags {
             value: s,
+            target: FieldType::float(),
             flags: DeserializerConditions::default(),
         })
     }
@@ -482,12 +489,14 @@ mod tests {
         let value = BamlValueWithFlags::Class(
             "Info".to_string(),
             DeserializerConditions::default(),
+            FieldType::class("Info"),
             vec![
                 (
                     "name".to_string(),
                     BamlValueWithFlags::Class(
                         "Name".to_string(),
                         DeserializerConditions::default(),
+                        FieldType::class("Name"),
                         vec![
                             ("first".to_string(), mk_string("Greg")),
                             ("last".to_string(), mk_string("Hale")),
@@ -505,7 +514,7 @@ mod tests {
         );
         let field_type = FieldType::class("Info");
 
-        let res = parsed_value_to_response(&ir, value, &field_type, true).unwrap();
+        let res = parsed_value_to_response(&ir, value, true).unwrap();
 
         let json = serde_json::to_value(res.serialize_final()).unwrap();
 

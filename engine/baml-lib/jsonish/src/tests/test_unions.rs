@@ -19,6 +19,52 @@ test_deserializer!(
   {"hi": ["a", "b"]}
 );
 
+#[test_log::test]
+fn test_union_full() {
+    let ir = crate::helpers::load_test_ir(FOO_FILE);
+    let target_type = FieldType::union(vec![
+        FieldType::class("Foo"),
+        FieldType::class("Bar").as_list(),
+    ]);
+    let target =
+        crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
+
+    let result = from_str(&target, &target_type, r#"{"hi": ["a", "b"]}"#, false);
+
+    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+
+    let value = result.unwrap();
+    log::trace!("Score: {}", value.score());
+    assert_eq!(value.field_type(), &target_type);
+    if let BamlValueWithFlags::Class(cls_name, _, cls_type, props) = &value {
+        for (prop_name, prop_value) in props {
+            match prop_name.as_str() {
+                "hi" => {
+                    assert_eq!(
+                        prop_value.field_type(),
+                        &FieldType::Primitive(TypeValue::String).as_list()
+                    );
+                    for item in prop_value.as_list().unwrap() {
+                        assert_eq!(item.field_type(), &FieldType::Primitive(TypeValue::String));
+                    }
+                }
+                _ => {
+                    panic!("Unexpected property: {}", prop_name);
+                }
+            }
+        }
+    } else {
+        panic!("Expected a class");
+    }
+    let value: BamlValue = value.into();
+    log::info!("{}", value);
+    let json_value = json!(value);
+
+    let expected = serde_json::json!({"hi": ["a", "b"]});
+
+    assert_json_diff::assert_json_eq!(json_value, expected);
+}
+
 const SPUR_FILE: &str = r###"
 enum CatA {
   A

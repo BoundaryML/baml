@@ -54,7 +54,11 @@ impl TypeCoercer for Enum {
         let enum_match = apply_constraints(
             target,
             vec![],
-            BamlValueWithFlags::Enum(self.name.real_name().to_string(), variant_match),
+            BamlValueWithFlags::Enum(
+                self.name.real_name().to_string(),
+                target.clone(),
+                variant_match,
+            ),
             constraints.clone(),
             StreamingBehavior::default(),
         )?;

@@ -1,0 +1,113 @@
+package baml_client
+
+import (
+	"context"
+	"os"
+	"strings"
+
+	"{{ package_name }}/baml_client/types"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+)
+
+var bamlRuntime *baml.BamlRuntime
+
+func init() {
+	var env_vars = map[string]string{}
+	for _, env_var := range os.Environ() {
+		key, value, _ := strings.Cut(env_var, "=")
+		env_vars[key] = value
+	}
+	baml.SetTypeMap(typeMap)
+	runtime, err := baml.CreateRuntime("./baml_src", getBamlFiles(), env_vars)
+	if err != nil {
+		panic(err)
+	}
+	bamlRuntime = &runtime
+}
+
+type stream struct {}
+
+var Stream = &stream{}
+
+func castSlice[T any](result any, castResult func(any) T) []T {
+	items := result.([]any)
+	casted := make([]T, len(items))
+	for i, item := range items {
+		casted[i] = castResult(item)
+	}
+	return casted
+}
+
+func castOptional[T any](result any, castResult func(any) T) *T {
+	if result == nil {
+		return nil
+	}
+	val := castResult(result)
+	return &val
+}
+
+{% for fn in funcs %}
+
+func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
+        , {{name}} {{type}}
+        {%- endfor %}) (*{{ fn.return_type }}, error) {
+	args := map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func (result any) {{ fn.return_type }} {
+		return {{ crate::go::cast_value("result", fn.return_type_type) }}
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
+		, {{name}} {{type}}
+		{%- endfor %}) <-chan {{ fn.return_type }} {
+	args := map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan {{ fn.return_type }})
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).({{ fn.return_type }})
+			}
+		}
+	}()
+	return channel
+}
+
+{% endfor %}

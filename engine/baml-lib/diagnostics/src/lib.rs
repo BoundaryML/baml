@@ -8,5 +8,5 @@ mod warning;
 pub use collection::Diagnostics;
 pub use error::DatamodelError;
 pub use source_file::SourceFile;
-pub use span::Span;
+pub use span::{Span, SerializedSpan};
 pub use warning::DatamodelWarning;

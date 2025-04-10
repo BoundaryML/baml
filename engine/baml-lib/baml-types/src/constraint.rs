@@ -1,6 +1,6 @@
 use crate::JinjaExpression;
 
-#[derive(Clone, Debug, serde::Serialize, PartialEq)]
+#[derive(Clone, Debug, serde::Serialize, PartialEq, Eq, Hash)]
 pub struct Constraint {
     pub level: ConstraintLevel,
     pub expression: JinjaExpression,
@@ -20,7 +20,7 @@ impl Constraint {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, Eq, Hash)]
 pub enum ConstraintLevel {
     Check,
     Assert,

@@ -58,11 +58,13 @@ impl Span {
             }
         }
 
-        match (start, end) {
+        let res = match (start, end) {
             (Some(start), Some(end)) => (start, end),
             (Some(start), None) => (start, (line, column)),
             _ => ((0, 0), (0, 0)),
-        }
+        };
+        log::info!("Span line and column: {:?} => {:?}", self, res);
+        res
     }
 
     /// Create a fake span. Useful when generating test data that requires
@@ -79,6 +81,31 @@ impl From<(SourceFile, pest::Span<'_>)> for Span {
             file,
             start: s.start(),
             end: s.end(),
+        }
+    }
+}
+
+/// A special-purpose span used for communicating with the JS playground.
+/// Currently its only job is indicating the span of a currently-active
+/// LLM Function.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct SerializedSpan {
+    pub file_path: String,
+    pub start_line: usize,
+    pub start: usize,
+    pub end_line: usize,
+    pub end: usize,
+}
+
+impl SerializedSpan {
+    pub fn serialize(span: &Span) -> Self {
+        let (start, end) = span.line_and_column();
+        SerializedSpan {
+            file_path: span.file.path().to_string(),
+            start_line: start.0,
+            start: start.1,
+            end_line: end.0,
+            end: end.1,
         }
     }
 }
