@@ -23,10 +23,11 @@ impl S3UploadMetadata {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Result;
     use serde_json::{self, json};
 
     #[test]
-    fn test_s3_upload_metadata_deserialization() {
+    fn test_s3_upload_metadata_deserialization() -> Result<()> {
         let project_id = ProjectId::new();
         let example = json!({
             "project_id": project_id.to_string(),
@@ -34,15 +35,17 @@ mod tests {
             "env_name": "test-env"
         });
 
-        let metadata: S3UploadMetadata = serde_json::from_value(example).unwrap();
+        let metadata: S3UploadMetadata = serde_json::from_value(example)?;
 
         assert_eq!(metadata.project_id, project_id);
         assert_eq!(metadata.api_key_name, "test-api-key");
         assert_eq!(metadata.env_name, "test-env");
+
+        Ok(())
     }
 
     #[test]
-    fn test_s3_upload_metadata_to_map() {
+    fn test_s3_upload_metadata_to_map() -> Result<()> {
         let metadata = S3UploadMetadata {
             project_id: ProjectId::new(),
             api_key_name: "test-api-key".to_string(),
@@ -50,8 +53,10 @@ mod tests {
         };
 
         assert_eq!(
-            serde_json::to_value(metadata.to_map()).unwrap(),
-            serde_json::to_value(metadata).unwrap()
+            serde_json::to_value(metadata.to_map())?,
+            serde_json::to_value(metadata)?
         );
+
+        Ok(())
     }
 }
