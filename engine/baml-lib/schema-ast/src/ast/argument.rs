@@ -1,5 +1,5 @@
 use super::{Expression, Span, WithSpan};
-use std::fmt::{self, Display, Formatter};
+use std::fmt::{Display, Formatter};
 
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.
@@ -31,23 +31,6 @@ pub struct ArgumentsList {
     ///         ^^^^^^^^^^^^^^^^^^^^^^^^
     /// ```
     pub arguments: Vec<Argument>,
-}
-
-impl Display for ArgumentsList {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "(")?;
-        write!(
-            f,
-            "{}",
-            self.arguments
-                .iter()
-                .map(|arg| arg.to_string())
-                .collect::<Vec<_>>()
-                .join(", ")
-        )?;
-        write!(f, ")")?;
-        Ok(())
-    }
 }
 
 impl ArgumentsList {

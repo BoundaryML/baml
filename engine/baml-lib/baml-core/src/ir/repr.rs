@@ -1,21 +1,16 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use baml_types::BamlMap;
 use baml_types::{
-    expr::{self, Expr, ExprMetadata, Name},
-    Arrow, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable,
-    StreamingBehavior, StringOr, TypeValue, UnresolvedValue,
+    Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable, StreamingBehavior,
+    UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
-use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::{
     walkers::{
-        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, ExprFnWalker,
-        FieldWalker, FunctionWalker, TemplateStringWalker, TopLevelAssignmentWalker,
-        TypeAliasWalker, Walker as AstWalker,
+        ClassWalker, ClientWalker, ConfigurationWalker, EnumValueWalker, EnumWalker, FieldWalker,
+        FunctionWalker, TemplateStringWalker, TypeAliasWalker, Walker as AstWalker,
     },
     Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy, TypeWalker,
 };
@@ -27,7 +22,6 @@ use internal_baml_schema_ast::ast::{
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
-use crate::validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context;
 use crate::Configuration;
 
 /// This class represents the intermediate representation of the BAML AST.
@@ -39,9 +33,7 @@ pub struct IntermediateRepr {
     enums: Vec<Node<Enum>>,
     classes: Vec<Node<Class>>,
     type_aliases: Vec<Node<TypeAlias>>,
-    pub functions: Vec<Node<Function>>,
-    pub expr_fns: Vec<Node<ExprFunction>>,
-    pub toplevel_assignments: Vec<Node<TopLevelAssignment>>,
+    functions: Vec<Node<Function>>,
     clients: Vec<Node<Client>>,
     retry_policies: Vec<Node<RetryPolicy>>,
     template_strings: Vec<Node<TemplateString>>,
@@ -56,314 +48,6 @@ pub struct IntermediateRepr {
     structural_recursive_alias_cycles: Vec<IndexMap<String, FieldType>>,
 
     configuration: Configuration,
-}
-
-#[derive(Debug)]
-pub struct TopLevelAssignment {
-    pub name: Node<String>,
-    pub expr: Node<Expr<ExprMetadata>>,
-}
-
-#[derive(Clone, Debug)]
-pub struct ClassConstructor {
-    pub class_name: Node<String>,
-    pub fields: Vec<Node<ClassConstructorField>>,
-}
-
-#[derive(Clone, Debug)]
-pub enum ClassConstructorField {
-    Named(Node<String>, Node<Expr<ExprMetadata>>),
-    Spread(Node<Expr<ExprMetadata>>),
-}
-
-impl WithRepr<TopLevelAssignment> for TopLevelAssignmentWalker<'_> {
-    fn attributes(&self, _: &ParserDatabase) -> NodeAttributes {
-        // TODO: Add attributes.
-        NodeAttributes::default()
-    }
-
-    fn repr(&self, db: &ParserDatabase) -> Result<TopLevelAssignment> {
-        let name = self
-            .top_level_assignment()
-            .stmt
-            .identifier
-            .name()
-            .to_string();
-        let expr = self.top_level_assignment().stmt.body.repr(db)?;
-        Ok(TopLevelAssignment {
-            name: Node {
-                elem: name,
-                attributes: NodeAttributes::default(),
-            },
-            expr: Node {
-                elem: expr,
-                attributes: NodeAttributes::default(),
-            },
-        })
-    }
-}
-
-impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
-    fn repr(&self, db: &ParserDatabase) -> Result<ExprFunction> {
-        let body = convert_function_body(self.expr_fn().body.to_owned(), db)?;
-        let args: Vec<(String, FieldType)> = self
-            .expr_fn()
-            .args
-            .args
-            .iter()
-            .map(|(arg_name, arg_type)| {
-                arg_type
-                    .field_type
-                    .repr(db)
-                    .map(|ty| (arg_name.to_string(), ty))
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let arg_names = self
-            .expr_fn()
-            .args
-            .args
-            .iter()
-            .map(|(arg_name, _arg_type)| arg_name.to_string())
-            .collect();
-        let tests = self
-            .walk_tests()
-            .map(|e| e.node(db))
-            .collect::<Result<Vec<_>>>()?;
-        let arg_types = args.iter().map(|(_, arg_type)| arg_type.clone()).collect();
-        let return_type = self
-            .expr_fn()
-            .return_type
-            .clone()
-            .map(|ret| ret.repr(db))
-            .transpose()?
-            .ok_or(anyhow::anyhow!(
-                "Expression functions must have a return type"
-            ))?;
-        let lambda_type = FieldType::Arrow(Box::new(Arrow {
-            param_types: arg_types,
-            return_type: return_type.clone(),
-        }));
-        let expr_fn = ExprFunction {
-            name: self.expr_fn().name.to_string(),
-            inputs: args,
-            output: return_type,
-            expr: Expr::Lambda(
-                arg_names,
-                Arc::new(body),
-                (self.expr_fn().span.clone(), Some(lambda_type)),
-            ),
-            tests,
-        };
-        Ok(expr_fn)
-    }
-}
-
-fn weird_default() -> FieldType {
-    FieldType::Primitive(TypeValue::Null)
-}
-
-impl WithRepr<Function> for ExprFnWalker<'_> {
-    fn repr(&self, db: &ParserDatabase) -> Result<Function> {
-        // TODO: Drop weird default (replace by better validation).
-        let body = convert_function_body(self.expr_fn().body.to_owned(), db)?;
-        let args = self
-            .expr_fn()
-            .args
-            .args
-            .iter()
-            .map(|(arg_name, arg_type)| {
-                let ty = arg_type.field_type.repr(db)?;
-                Ok((arg_name.to_string(), ty))
-            })
-            .collect::<Result<_>>()?;
-        let return_ty = self
-            .expr_fn()
-            .return_type
-            .as_ref()
-            .ok_or(anyhow::anyhow!(
-                "Expression functions must have return type."
-            ))?
-            .repr(db)?;
-        let function = Function {
-            name: self.expr_fn().name.to_string(),
-            inputs: args,
-            output: return_ty,
-            configs: vec![],
-            default_config: "".to_string(),
-            tests: vec![],
-        };
-        Ok(function)
-    }
-}
-
-/// Convert a function body to an expression.
-///
-/// The function body is a list of statements, which are let bindings.
-/// We fold the let bindings into a single expression.
-/// {
-///   let x = 1;
-///   let y = x;
-///   y
-/// }
-/// =>
-/// Let "x" 1 (Let "y" x (y))
-fn convert_function_body(
-    function_body: ast::ExpressionBlock,
-    db: &ParserDatabase,
-) -> Result<Expr<ExprMetadata>> {
-    function_body.expr.repr(db).map(|fn_body| {
-        let expr = function_body
-            .stmts
-            .iter()
-            .fold(fn_body, |acc, stmt| match stmt.body.repr(db) {
-                Ok(stmt_expr) => Expr::Let(
-                    stmt.identifier.name().to_string(),
-                    Arc::new(stmt_expr),
-                    Arc::new(acc),
-                    (stmt.body.span().clone(), None),
-                ),
-                Err(e) => acc,
-            });
-        expr
-    })
-}
-
-impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
-    fn repr(&self, db: &ParserDatabase) -> Result<Expr<ExprMetadata>> {
-        match self {
-            ast::Expression::BoolValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::Bool(
-                *val,
-                (span.clone(), Some(FieldType::Primitive(TypeValue::Bool))),
-            ))),
-            ast::Expression::NumericValue(val, span) => val
-                .parse::<i64>()
-                .map(|v| {
-                    Expr::Atom(BamlValueWithMeta::Int(
-                        v,
-                        (span.clone(), Some(FieldType::Primitive(TypeValue::Int))),
-                    ))
-                })
-                .or_else(|_| {
-                    val.parse::<f64>()
-                        .map(|v| {
-                            Expr::Atom(BamlValueWithMeta::Float(
-                                v,
-                                (span.clone(), Some(FieldType::Primitive(TypeValue::Float))),
-                            ))
-                        })
-                        .or_else(|_| Err(anyhow!("Invalid numeric value: {}", val)))
-                }),
-            ast::Expression::StringValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::String(
-                val.to_string(),
-                (span.clone(), Some(FieldType::Primitive(TypeValue::String))),
-            ))),
-            ast::Expression::RawStringValue(val) => Ok(Expr::Atom(BamlValueWithMeta::String(
-                val.value().to_string(),
-                (
-                    val.span().clone(),
-                    Some(FieldType::Primitive(TypeValue::String)),
-                ),
-            ))),
-            ast::Expression::JinjaExpressionValue(val, span) => {
-                Ok(Expr::Atom(BamlValueWithMeta::String(
-                    val.to_string(),
-                    (span.clone(), Some(FieldType::Primitive(TypeValue::String))),
-                )))
-            }
-            ast::Expression::Array(vals, span) => {
-                let new_items = vals
-                    .iter()
-                    .map(|v| v.repr(db))
-                    .collect::<Result<Vec<_>>>()?;
-                let mut item_types = new_items
-                    .iter()
-                    .filter_map(|v| v.meta().1.clone())
-                    .collect::<Vec<_>>();
-                item_types.dedup();
-                let item_type = match item_types.len() {
-                    0 => None,
-                    1 => Some(item_types[0].clone()),
-                    _ => Some(FieldType::Union(item_types)),
-                };
-                let list_type = item_type.map(|t| FieldType::List(Box::new(t)));
-                Ok(Expr::List(new_items, (span.clone(), list_type)))
-            }
-            ast::Expression::Map(vals, span) => {
-                let new_items = vals
-                    .iter()
-                    .map(|(k, v)| v.repr(db).map(|v2| (k.to_string(), v2)))
-                    .collect::<Result<IndexMap<_, _>>>()?;
-                let mut item_types = new_items
-                    .iter()
-                    .filter_map(|v| v.1.meta().1.clone())
-                    .collect::<Vec<_>>();
-                item_types.dedup();
-                let item_type = match item_types.len() {
-                    0 => None,
-                    1 => Some(item_types[0].clone()),
-                    _ => Some(FieldType::Union(item_types)),
-                };
-                // TODO: Is this correct?
-                let key_type = FieldType::Primitive(TypeValue::String);
-                let map_type = item_type.map(|t| FieldType::Map(Box::new(key_type), Box::new(t)));
-                Ok(Expr::Map(new_items, (span.clone(), map_type)))
-            }
-            ast::Expression::Identifier(id) => {
-                Ok(Expr::Var(id.name().to_string(), (id.span().clone(), None)))
-            }
-
-            ast::Expression::Lambda(args, body, span) => {
-                let args = args
-                    .arguments
-                    .iter()
-                    .filter_map(|arg| arg.value.as_string_value().map(|v| v.0.to_string()))
-                    .collect();
-                let body = convert_function_body(*body.to_owned(), db)?;
-                Ok(Expr::Lambda(args, Arc::new(body), (span.clone(), None)))
-            }
-            ast::Expression::FnApp(func, args, span) => {
-                let func = Expr::Var(func.name().to_string(), (func.span().clone(), None));
-                let args = args.iter().map(|arg| arg.repr(db)).collect::<Result<_>>()?;
-                Ok(Expr::App(
-                    Arc::new(func),
-                    Arc::new(Expr::ArgsTuple(args, (span.clone(), None))), // TODO: We don't really have a span for the ArgsTuple, so we're using the one for the whole FnApp.
-                    (span.clone(), None),
-                ))
-            }
-            ast::Expression::ClassConstructor(
-                ast::ClassConstructor { class_name, fields },
-                span,
-            ) => {
-                let mut new_fields = BamlMap::new();
-                let mut spread = None;
-                for f in fields {
-                    match f {
-                        ast::ClassConstructorField::Named(name, expr) => {
-                            new_fields.insert(name.to_string(), expr.repr(db)?);
-                        }
-                        ast::ClassConstructorField::Spread(expr) => {
-                            spread = Some(Box::new(expr.repr(db)?));
-                        }
-                    }
-                }
-                Ok(Expr::ClassConstructor {
-                    name: class_name.name().to_string(),
-                    fields: new_fields,
-                    spread,
-                    meta: (
-                        span.clone(),
-                        Some(FieldType::Class(class_name.name().to_string())),
-                    ),
-                })
-            }
-            ast::Expression::ExprBlock(block, span) => {
-                // We use "function_body" and "expr_block" interchangeably.
-                // This may need to be revisited?
-                let body = convert_function_body(block.clone(), db)?;
-                Ok(body)
-            }
-        }
-    }
 }
 
 /// A generic walker. Only walkers instantiated with a concrete ID type (`I`) are useful.
@@ -384,8 +68,6 @@ impl IntermediateRepr {
             finite_recursive_cycles: vec![],
             structural_recursive_alias_cycles: vec![],
             functions: vec![],
-            expr_fns: vec![],
-            toplevel_assignments: vec![],
             clients: vec![],
             retry_policies: vec![],
             template_strings: vec![],
@@ -464,31 +146,6 @@ impl IntermediateRepr {
         self.functions.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    // TODO: This is a quick workaround in order to make expr_fns compatible
-    // with LLM functions for the purpose of listing functions and test
-    // cases in the playground.
-    pub fn expr_fns_as_functions(&self) -> Vec<Node<Function>> {
-        self.expr_fns
-            .iter()
-            .map(|efn| Node {
-                elem: efn.elem.pretend_to_be_llm_function(),
-                attributes: efn.attributes.clone(),
-            })
-            .collect::<Vec<_>>()
-    }
-
-    pub fn walk_toplevel_assignments(
-        &self,
-    ) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TopLevelAssignment>>> {
-        self.toplevel_assignments
-            .iter()
-            .map(|e| Walker { ir: self, item: e })
-    }
-
-    pub fn walk_expr_fns(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<ExprFunction>>> {
-        self.expr_fns.iter().map(|e| Walker { ir: self, item: e })
-    }
-
     pub fn walk_tests(
         &self,
     ) -> impl Iterator<Item = Walker<'_, (&Node<Function>, &Node<TestCase>)>> {
@@ -564,14 +221,6 @@ impl IntermediateRepr {
             },
             functions: db
                 .walk_functions()
-                .map(|e| e.node(db))
-                .collect::<Result<Vec<_>>>()?,
-            expr_fns: db
-                .walk_expr_fns()
-                .map(|e| e.node(db))
-                .collect::<Result<Vec<_>>>()?,
-            toplevel_assignments: db
-                .walk_toplevel_assignments()
                 .map(|e| e.node(db))
                 .collect::<Result<Vec<_>>>()?,
             clients: db
@@ -696,7 +345,7 @@ impl IntermediateRepr {
 //   [x] rename lockfile/mod.rs to ir/mod.rs
 //   [x] wire Result<> type through, need this to be more sane
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct NodeAttributes {
     /// Map of attributes on the corresponding IR node.
     ///
@@ -886,7 +535,7 @@ fn to_ir_attributes(
 }
 
 /// Nodes allow attaching metadata to a given IR entity: attributes, source location, etc
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Node<T> {
     pub attributes: NodeAttributes,
     pub elem: T,
@@ -1072,12 +721,7 @@ impl WithRepr<FieldType> for ast::FieldType {
                         }
                     }
 
-                    None => {
-                        return Err(anyhow!(
-                            "Field type uses unresolvable local identifier {}",
-                            idn
-                        ))
-                    }
+                    None => return Err(anyhow!("Field type uses unresolvable local identifier")),
                 },
                 arity,
             ),
@@ -1180,10 +824,10 @@ impl WithRepr<TemplateString> for TemplateStringWalker<'_> {
 }
 type EnumId = String;
 
-#[derive(Clone, serde::Serialize, Debug)]
+#[derive(serde::Serialize, Debug)]
 pub struct EnumValue(pub String);
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Enum {
     pub name: EnumId,
     pub values: Vec<(Node<EnumValue>, Option<Docstring>)>,
@@ -1247,10 +891,10 @@ impl WithRepr<Enum> for EnumWalker<'_> {
     }
 }
 
-#[derive(Clone, serde::Serialize, Debug)]
+#[derive(serde::Serialize, Debug)]
 pub struct Docstring(pub String);
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Field {
     pub name: String,
     pub r#type: Node<FieldType>,
@@ -1292,7 +936,7 @@ impl WithRepr<Field> for FieldWalker<'_> {
 type ClassId = String;
 
 /// A BAML Class.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Class {
     /// User defined class name.
     pub name: ClassId,
@@ -1359,7 +1003,7 @@ impl Class {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TypeAlias {
     pub name: String,
     pub r#type: Node<FieldType>,
@@ -1477,169 +1121,11 @@ pub struct FunctionConfig {
     pub client: ClientSpec,
 }
 
-#[derive(Clone, Debug)]
-pub struct ExprFunction {
-    pub name: FunctionId,
-    pub inputs: Vec<(String, FieldType)>,
-    pub output: FieldType,
-    pub expr: Expr<ExprMetadata>,
-    pub tests: Vec<Node<TestCase>>,
-}
-
-impl ExprFunction {
-    /// This is a temporary workaround for making expr_fns behave like llm_functions
-    /// for the purpose of listing functions and tests in the playground.
-    /// TODO: (Greg) handle different types of functions through separate paths.
-    pub fn pretend_to_be_llm_function(&self) -> Function {
-        Function {
-            name: self.name.clone(),
-            inputs: self.inputs.clone(),
-            output: self.output.clone(),
-            tests: self.tests.clone(),
-            configs: vec![],
-            default_config: "default_config".to_string(),
-        }
-    }
-
-    pub fn inputs(&self) -> &Vec<(String, FieldType)> {
-        &self.inputs
-    }
-
-    pub fn tests(&self) -> &Vec<Node<TestCase>> {
-        &self.tests
-    }
-
-    /// Traverse the function body adding type annotations to variables that
-    /// correspond to function parameters.
-    /// TODO: Make this capture-avoiding.
-    pub fn assign_param_types_to_body_variables(self) -> Self {
-        let new_expr = match &self.expr {
-            Expr::Lambda(params, body, meta) => {
-                let body = Arc::unwrap_or_clone(body.clone());
-                let new_body = self.inputs.iter().fold(body, |body, (name, r#type)| {
-                    annotate_variable(name, r#type.clone(), body)
-                });
-                Expr::Lambda(params.clone(), Arc::new(new_body), meta.clone())
-            }
-            // TODO: Handle other cases - traverse the tree.
-            // It seems like only Expr::Lambda is admissable as an ExprBody's expr field?
-            _ => self.expr,
-        };
-        ExprFunction {
-            expr: new_expr,
-            ..self
-        }
-    }
-}
-
-/// For all variables under an expression, assign them the given type.
-/// TODO: This ignores scope completely. Make it capture-avoiding.
-pub fn annotate_variable(
-    name: &str,
-    r#type: FieldType,
-    expr: Expr<ExprMetadata>,
-) -> Expr<ExprMetadata> {
-    match &expr {
-        Expr::Var(var_name, meta) => {
-            let mut new_expr = expr.clone();
-            if name == var_name {
-                new_expr.meta_mut().1 = Some(r#type);
-            }
-            new_expr
-        }
-        Expr::Lambda(params, body, meta) => {
-            if !params.contains(&name.to_string()) {
-                let new_body =
-                    annotate_variable(name, r#type.clone(), Arc::unwrap_or_clone(body.clone()));
-                // new_expr = annotate_variable(name, r#type.clone(), body);
-                Expr::Lambda(params.clone(), Arc::new(new_body), meta.clone())
-            } else {
-                expr
-            }
-        }
-        Expr::App(f, args, meta) => {
-            let new_f = annotate_variable(name, r#type.clone(), Arc::unwrap_or_clone(f.clone()));
-            let new_args = annotate_variable(name, r#type, Arc::unwrap_or_clone(args.clone()));
-            Expr::App(Arc::new(new_f), Arc::new(new_args), meta.clone())
-        }
-        Expr::Let(var_name, expr, body, meta) => {
-            let new_binding =
-                annotate_variable(name, r#type.clone(), Arc::unwrap_or_clone(expr.clone()));
-            let new_body = if var_name != name {
-                Arc::new(annotate_variable(
-                    name,
-                    r#type.clone(),
-                    Arc::unwrap_or_clone(body.clone()),
-                ))
-            } else {
-                body.clone()
-            };
-            Expr::Let(
-                var_name.clone(),
-                Arc::new(new_binding),
-                new_body,
-                meta.clone(),
-            )
-        }
-        Expr::ArgsTuple(args, meta) => Expr::ArgsTuple(
-            args.iter()
-                .map(|arg| annotate_variable(name, r#type.clone(), arg.clone()))
-                .collect(),
-            meta.clone(),
-        ),
-        Expr::Atom(_) => expr,
-        Expr::LLMFunction(_, _, _) => expr,
-        Expr::ClassConstructor {
-            name,
-            fields,
-            spread,
-            meta,
-        } => {
-            let new_fields = fields
-                .iter()
-                .map(|(key, value)| {
-                    (
-                        key.clone(),
-                        annotate_variable(name, r#type.clone(), value.clone()),
-                    )
-                })
-                .collect();
-            let new_spread = match spread {
-                None => None,
-                Some(expr) => Some(Box::new(annotate_variable(
-                    name,
-                    r#type.clone(),
-                    expr.as_ref().clone(),
-                ))),
-            };
-            Expr::ClassConstructor {
-                name: name.clone(),
-                fields: new_fields,
-                spread: new_spread,
-                meta: meta.clone(),
-            }
-        }
-        Expr::Map(entries, meta) => {
-            let new_entries = entries
-                .iter()
-                .map(|(key, value)| {
-                    (
-                        key.clone(),
-                        annotate_variable(name, r#type.clone(), value.clone()),
-                    )
-                })
-                .collect();
-            Expr::Map(new_entries, meta.clone())
-        }
-        Expr::List(items, meta) => {
-            let new_items = items
-                .iter()
-                .map(|item| annotate_variable(name, r#type.clone(), item.clone()))
-                .collect();
-            Expr::List(new_items, meta.clone())
-        }
-    }
-}
+// impl std::fmt::Display for ClientSpec {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "{}", self.as_str())
+//     }
+// }
 
 fn process_field(
     overrides: &IndexMap<(String, String), IndexMap<String, UnresolvedValue<()>>>, // Adjust the type according to your actual field type
@@ -1826,7 +1312,7 @@ impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
 }
 
 // TODO: #1343 Temporary solution until we implement scoping in the AST.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum TypeBuilderEntry {
     Enum(Node<Enum>),
     Class(Node<Class>),
@@ -1834,14 +1320,14 @@ pub enum TypeBuilderEntry {
 }
 
 // TODO: #1343 Temporary solution until we implement scoping in the AST.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TestTypeBuilder {
     pub entries: Vec<TypeBuilderEntry>,
     pub recursive_classes: Vec<IndexSet<String>>,
     pub recursive_aliases: Vec<IndexMap<String, FieldType>>,
 }
 
-#[derive(Clone, serde::Serialize, Debug)]
+#[derive(serde::Serialize, Debug)]
 pub struct TestCaseFunction(String);
 
 impl TestCaseFunction {
@@ -1850,7 +1336,7 @@ impl TestCaseFunction {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TestCase {
     pub name: String,
     pub functions: Vec<Node<TestCaseFunction>>,
@@ -1992,23 +1478,6 @@ impl WithRepr<Prompt> for PromptAst<'_> {
 /// Generate an IntermediateRepr from a single block of BAML source code.
 /// This is useful for generating IR test fixtures.
 pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
-    let (ir, diagnostics) = make_test_ir_and_diagnostics(source_code)?;
-    if diagnostics.has_errors() {
-        return Err(anyhow::anyhow!(
-            "Source code was invalid: \n{:?}",
-            diagnostics.errors()
-        ));
-    } else {
-        Ok(ir)
-    }
-}
-
-/// Generate an IntermediateRepr from a single block of BAML source code.
-/// This is useful for generating IR test fixtures. Also return the
-/// `Diagnostics`.
-pub fn make_test_ir_and_diagnostics(
-    source_code: &str,
-) -> anyhow::Result<(IntermediateRepr, Diagnostics)> {
     use crate::validate;
     use crate::ValidatedSchema;
     use internal_baml_diagnostics::SourceFile;
@@ -2017,12 +1486,18 @@ pub fn make_test_ir_and_diagnostics(
     let path: PathBuf = "fake_file.baml".into();
     let source_file: SourceFile = (path.clone(), source_code).into();
     let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);
-    let diagnostics = validated_schema.diagnostics;
+    let diagnostics = &validated_schema.diagnostics;
+    if diagnostics.has_errors() {
+        return Err(anyhow::anyhow!(
+            "Source code was invalid: \n{:?}",
+            diagnostics.errors()
+        ));
+    }
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,
         validated_schema.configuration,
     )?;
-    Ok((ir, diagnostics))
+    Ok(ir)
 }
 
 /// Pull out `StreamingBehavior` from `NodeAttributes`.
@@ -2037,59 +1512,6 @@ fn streaming_behavior_from_attributes(attributes: &NodeAttributes) -> StreamingB
         done: is_some_true(attributes.get("stream.done")),
         state: is_some_true(attributes.get("stream.with_state")),
     }
-}
-
-/// Create a context from the expr_functions, top_level_assignments, and
-/// functions in the IR.
-/// This context is used in evaluating expressions.
-pub fn initial_context(ir: &IntermediateRepr) -> HashMap<Name, Expr<ExprMetadata>> {
-    let mut ctx = HashMap::new();
-
-    for expr_fn in ir.expr_fns.iter() {
-        ctx.insert(expr_fn.elem.name.clone(), expr_fn.elem.expr.clone());
-    }
-    for top_level_assignment in ir.toplevel_assignments.iter() {
-        ctx.insert(
-            top_level_assignment.elem.name.elem.clone(),
-            top_level_assignment.elem.expr.elem.clone(),
-        );
-    }
-    for llm_function in ir.functions.iter() {
-        let params = llm_function
-            .elem
-            .inputs
-            .iter()
-            .map(|arg| arg.0.clone())
-            .collect::<Vec<_>>();
-        let params_type: Vec<FieldType> = llm_function
-            .elem
-            .inputs
-            .iter()
-            .map(|arg| arg.1.clone())
-            .collect::<Vec<_>>();
-        let body_type = llm_function.elem.output.clone();
-        let lambda_type = FieldType::Arrow(Box::new(Arrow {
-            param_types: params_type,
-            return_type: body_type,
-        }));
-        ctx.insert(
-            llm_function.elem.name.clone(),
-            Expr::LLMFunction(
-                llm_function.elem.name.clone(),
-                params,
-                (
-                    llm_function
-                        .attributes
-                        .span
-                        .as_ref()
-                        .expect("LLM Functions have spans until we use dynamic types")
-                        .clone(),
-                    Some(lambda_type),
-                ),
-            ),
-        );
-    }
-    ctx
 }
 
 #[cfg(test)]
@@ -2298,29 +1720,5 @@ mod tests {
 
         assert_eq!(constraints[2].level, ConstraintLevel::Check);
         assert_eq!(constraints[2].label, Some("gt_ten".to_string()));
-    }
-
-    #[test]
-    fn test_expr_fn_tests() {
-        let ir = make_test_ir(
-            r##"
-            fn Foo(x: int) -> int {
-                x
-            }
-
-            test FooTest {
-                functions [Foo]
-                args {
-                    x 1
-                }
-            }
-        "##,
-        )
-        .unwrap();
-
-        let function = ir.find_expr_fn("Foo").unwrap();
-        let test = ir.find_expr_fn_test(&function, "FooTest").unwrap();
-        assert_eq!(test.item.1.elem.functions.len(), 1);
-        assert_eq!(test.item.1.elem.functions[0].elem.name(), "Foo");
     }
 }

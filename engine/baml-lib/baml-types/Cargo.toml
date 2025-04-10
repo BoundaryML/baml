@@ -19,7 +19,6 @@ anyhow.workspace = true
 clap.workspace = true
 derive_builder.workspace = true
 itertools = "0.14.0"
-internal-baml-diagnostics = { path = "../diagnostics" }
 log.workspace = true
 minijinja.workspace = true
 once_cell.workspace = true

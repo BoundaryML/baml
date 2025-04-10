@@ -1,11 +1,11 @@
 schema = {
-    SOI ~ (expr_fn | top_level_assignment | value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
+    SOI ~ (value_expression_block | type_expression_block | template_declaration | type_alias | comment_block | raw_string_literal | empty_lines | CATCH_ALL)* ~ EOI
 }
 
 // ######################################
 // Unified Block for Class and Enum
 // ######################################
-type_expression_block = { identifier ~ identifier ~ named_argument_list? ~ BLOCK_OPEN ~ type_expression_contents ~ BLOCK_CLOSE }
+type_expression_block    = { identifier ~ identifier ~ named_argument_list? ~ BLOCK_OPEN ~ type_expression_contents ~ BLOCK_CLOSE }
 
 // Dynamic declarations start with the dynamic keyword followed by a normal type expression.
 dynamic_type_expression_block = { identifier ~ type_expression_block }
@@ -35,7 +35,7 @@ value_expression          = { identifier ~ expression? ~ (NEWLINE? ~ field_attri
 // Type builder
 // ######################################
 
-type_builder_block    = {
+type_builder_block = {
     TYPE_BUILDER_KEYWORD ~ BLOCK_OPEN ~ type_builder_contents ~ BLOCK_CLOSE
 }
 type_builder_contents = { (dynamic_type_expression_block | type_expression_block | type_alias | comment_block | empty_lines | BLOCK_LEVEL_CATCH_ALL)* }
@@ -84,10 +84,10 @@ non_union = { array_notation | map | identifier | group | tuple | literal_type }
 
 parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
 
-path_identifier       =  { single_word ~ ("." ~ single_word)+ }
-identifier            =  { path_identifier | namespaced_identifier | single_word }
-single_word           = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
-namespaced_identifier =  { single_word ~ ("::" ~ single_word)+ }
+path_identifier =  { single_word ~ ("." ~ single_word)+ }
+identifier      = { path_identifier | namespaced_identifier | single_word }
+single_word     = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
+namespaced_identifier = { single_word ~ ("::" ~ single_word)+ }
 
 // ######################################
 // Type Alias
@@ -112,18 +112,7 @@ jinja_block_open  = _{ "{{" }
 jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
-expression        =  {
-    fn_app |
-    lambda |
-    jinja_expression |
-    map_expression |
-    expr_block |
-    array_expression |
-    numeric_literal |
-    class_constructor |
-    string_literal |
-    identifier
-}
+expression        =  { jinja_expression | map_expression | array_expression | numeric_literal | string_literal | identifier }
 ARRAY_CATCH_ALL   =  { !"]" ~ CATCH_ALL }
 ENTRY_CATCH_ALL   =  { field_attribute | BLOCK_LEVEL_CATCH_ALL }
 // ######################################
@@ -134,7 +123,7 @@ numeric_literal = @{ ("-")? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 // ######################################
 // String literals. These behave specially in BAML.
 // ######################################
-banned_chars            = @{ "#" | "@" | "{" | "(" | "[" | "<" | "}" | ")" | "]" | ">" | "," | "'" | ";" | " //" | NEWLINE }
+banned_chars            = @{ "#" | "@" | "{" | "(" | "[" | "<" | "}" | ")" | "]" | ">" | "," | "'" | " //" | NEWLINE }
 banned_start_chars      =  { WHITESPACE | banned_chars }
 banned_end_chars        =  { WHITESPACE | banned_chars }
 unquoted_string_literal = @{ (!banned_start_chars ~ ANY) ~ (!banned_chars ~ !"\"" ~ ANY)* ~ (!banned_end_chars ~ ANY)* }
@@ -187,7 +176,7 @@ doc_content      = @{ (!NEWLINE ~ ANY)* }
 // Shared Building Blocks and Comments
 // ######################################
 WHITESPACE  = _{ " " | "\t" }
-NEWLINE     =  { "\n" | "\r\n" | "\r" }
+NEWLINE     = { "\n" | "\r\n" | "\r" }
 empty_lines = @{ (WHITESPACE* ~ NEWLINE)+ }
 
 // ######################################
@@ -209,53 +198,3 @@ TYPE_BUILDER_KEYWORD = { "type_builder" }
 CLIENT_KEYWORD       = { "client<llm>" | "client" }
 GENERATOR_KEYWORD    = { "generator" }
 RETRY_POLICY_KEYWORD = { "retry_policy" }
-SEMICOLON = { ";" }
-COLON = { ":" }
-COMMA = { "," }
-
-// #################################################
-// BAML Expressions
-// #################################################
-
-// Constant applicative form.
-// e.g. top-level
-//   - `let x = go(1,2)`
-//   - `let z = { let b = 2; [b, 3] }
-top_level_assignment = { stmt }
-
-// Regular function.
-// e.g.:
-// fn foo(x:int, y: bool?) -> string {
-//   go(x,y)
-// }
-expr_fn = { "fn" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
-
-// Body of a function (including curly brackets).
-expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE)* ~ expression ~ NEWLINE? ~ BLOCK_CLOSE }
-
-// Statement.
-// Currently the only statement is a let-binding.
-stmt = { let_expr ~ SEMICOLON? }
-
-// Let-binding statement.
-let_expr = { "let" ~ identifier ~ "=" ~ expression }
-
-// Function application.
-fn_app = { identifier ~ "(" ~ expression? ~ ("," ~ expression)* ~ ")" }
-
-// Anonymous function.
-lambda = { named_argument_list ~ "=>" ~ expression }
-
-// Class constructors.
-// e.g. `new MyClass { x = 1, y = 2 }`.
-// 
-class_constructor = { identifier ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
-
-// A single field in a class constructor.
-class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }
-
-// struct spread a.k.a struct update syntax.
-// e.g. `..other_struct`
-// Used in constructors to initialize fields of a new struct from some other struct.
-// e.g. `new MyClass { a: 1, b: 2, ..other_struct }`
-struct_spread = { ".." ~ expression }

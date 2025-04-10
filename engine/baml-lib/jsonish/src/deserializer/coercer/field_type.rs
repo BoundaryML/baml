@@ -98,7 +98,6 @@ impl TypeCoercer for FieldType {
                 }
                 FieldType::Map(_, _) => coerce_map(ctx, self, value).map(|v| v.with_target(target)),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
-                FieldType::Arrow(_) => Err(ctx.error_internal("Arrow type not supported")),
                 FieldType::WithMetadata { base, .. } => {
                     let mut coerced_value = base.coerce(ctx, target, value)?;
                     let constraint_results = run_user_checks(&coerced_value.clone().into(), self)
@@ -211,7 +210,6 @@ impl DefaultValue for FieldType {
                 }
             }
             FieldType::Primitive(_) => None,
-            FieldType::Arrow(_) => None,
             // If it has constraints, we can't assume our defaults meet them.
             FieldType::WithMetadata { .. } => None,
         }

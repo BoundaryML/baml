@@ -7,7 +7,7 @@ use crate::ast::Span;
 use bstd::dedent;
 use std::fmt;
 
-use super::{ArgumentsList, Identifier, WithName, WithSpan};
+use super::{Identifier, WithName, WithSpan};
 use baml_types::JinjaExpression;
 
 #[derive(Debug, Clone)]
@@ -109,15 +109,6 @@ pub enum Expression {
     Map(Vec<(Expression, Expression)>, Span),
     /// A JinjaExpression. e.g. "this|length > 5".
     JinjaExpressionValue(JinjaExpression, Span),
-    /// Function abstraction.
-    Lambda(ArgumentsList, Box<ExpressionBlock>, Span),
-    /// Function Application
-    /// TODO: Function should be an Expression, not an Identifier.
-    FnApp(Identifier, Vec<Expression>, Span),
-    /// A class constructor, e.g. `MyClass { x = 1, y = 2 }`.
-    ClassConstructor(ClassConstructor, Span),
-    /// An expression block, e.g. `{ let x = 1; x + 2 }`.
-    ExprBlock(ExpressionBlock, Span),
 }
 
 impl fmt::Display for Expression {
@@ -146,39 +137,6 @@ impl fmt::Display for Expression {
                     .collect::<Vec<_>>()
                     .join(",");
                 write!(f, "{{{vals}}}")
-            }
-            Expression::ClassConstructor(cc, ..) => {
-                write!(f, "{} {{", cc.class_name)?;
-                for field in &cc.fields {
-                    match field {
-                        ClassConstructorField::Named(name, expr) => {
-                            write!(f, " {name}: {expr};")?;
-                        }
-                        ClassConstructorField::Spread(expr) => {
-                            write!(f, " ..{expr};")?;
-                        }
-                    }
-                }
-                write!(f, "}}")
-            }
-            Expression::Lambda(args, body, _span) => {
-                write!(f, "{} => {}", args, body)
-            }
-            Expression::FnApp(name, args, _span) => {
-                write!(f, "{name}(")?;
-                for arg in args {
-                    write!(f, "{arg},")?; // TODO: Drop the comma for the last argument.
-                }
-                write!(f, ")")?;
-                Ok(())
-            }
-            Expression::ExprBlock(block, _span) => {
-                write!(f, "{{")?;
-                for stmt in &block.stmts {
-                    write!(f, "{stmt};")?;
-                }
-                write!(f, "{}", block.expr)?;
-                write!(f, "}}")
             }
         }
     }
@@ -289,10 +247,6 @@ impl Expression {
             Self::Identifier(id) => id.span(),
             Self::Map(_, span) => span,
             Self::Array(_, span) => span,
-            Self::ClassConstructor(_, span) => span,
-            Self::Lambda(_, _, span) => span,
-            Self::FnApp(_, _, span) => span,
-            Self::ExprBlock(_, span) => span,
         }
     }
 
@@ -301,7 +255,7 @@ impl Expression {
     }
 
     /// Creates a friendly readable representation for a value's type.
-    pub fn describe_value_type(&self) -> &str {
+    pub fn describe_value_type(&self) -> &'static str {
         match self {
             Expression::BoolValue(_, _) => "boolean",
             Expression::NumericValue(_, _) => "numeric",
@@ -317,10 +271,6 @@ impl Expression {
             },
             Expression::Map(_, _) => "map",
             Expression::Array(_, _) => "array",
-            Expression::ClassConstructor(cc, _) => cc.class_name.name(),
-            Expression::Lambda(_, _, _) => "function",
-            Expression::FnApp(_, _, _) => "function_application",
-            Expression::ExprBlock(_, _) => "expression_block",
         }
     }
 
@@ -375,33 +325,6 @@ impl Expression {
                 });
             }
             (Map(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (ClassConstructor(cc1, _), ClassConstructor(cc2, _)) => {
-                cc1.assert_eq_up_to_span(cc2);
-            }
-            (ClassConstructor(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (Lambda(args1, body1, _), Lambda(args2, body2, _)) => {
-                assert_eq!(args1.arguments.len(), args2.arguments.len());
-                for (arg1, arg2) in args1.arguments.iter().zip(args2.arguments.iter()) {
-                    arg1.assert_eq_up_to_span(arg2);
-                }
-                body1.assert_eq_up_to_span(body2);
-            }
-            (Lambda(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (FnApp(name1, args1, _), FnApp(name2, args2, _)) => {
-                name1.assert_eq_up_to_span(name2);
-                assert_eq!(args1.len(), args2.len());
-                for (arg1, arg2) in args1.iter().zip(args2.iter()) {
-                    arg1.assert_eq_up_to_span(arg2);
-                }
-            }
-            (FnApp(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (ExprBlock(block1, _), ExprBlock(block2, _)) => {
-                for (stmt1, stmt2) in block1.stmts.iter().zip(block2.stmts.iter()) {
-                    stmt1.assert_eq_up_to_span(stmt2);
-                }
-                block1.expr.assert_eq_up_to_span(&block2.expr);
-            }
-            (ExprBlock(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -477,130 +400,6 @@ impl Expression {
                     span.clone(),
                 ))
             }
-            Expression::ClassConstructor(cc, span) => {
-                let fields = cc
-                    .fields
-                    .iter()
-                    .filter_map(|f| f.to_unresolved_value(_diagnostics))
-                    .collect::<Vec<_>>();
-                Some(UnresolvedValue::ClassConstructor(
-                    cc.class_name.name().to_string(),
-                    fields,
-                    span.clone(),
-                ))
-            }
-            Expression::Lambda(_arg_names, _body, _span) => todo!(),
-            Expression::FnApp(_, _, _) => None,  // Is this right?
-            Expression::ExprBlock(_, _) => None, // Is this right?
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ClassConstructor {
-    pub class_name: Identifier,
-    pub fields: Vec<ClassConstructorField>,
-}
-
-#[derive(Debug, Clone)]
-pub enum ClassConstructorField {
-    Named(Identifier, Expression),
-    Spread(Expression),
-}
-
-impl ClassConstructor {
-    pub fn assert_eq_up_to_span(&self, other: &ClassConstructor) {
-        assert_eq!(self.class_name, other.class_name);
-        assert_eq!(self.fields.len(), other.fields.len());
-        self.fields
-            .iter()
-            .zip(other.fields.iter())
-            .for_each(|(a, b)| {
-                a.assert_eq_up_to_span(b);
-            });
-    }
-}
-
-impl ClassConstructorField {
-    pub fn assert_eq_up_to_span(&self, other: &ClassConstructorField) {
-        use ClassConstructorField::*;
-        match (self, other) {
-            (Named(name1, expr1), Named(name2, expr2)) => {
-                name1.assert_eq_up_to_span(name2);
-                expr1.assert_eq_up_to_span(expr2);
-            }
-            (Spread(expr1), Spread(expr2)) => {
-                expr1.assert_eq_up_to_span(expr2);
-            }
-            (Named(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (Spread(_expr), _) => panic!("Types do not match: {self:?} and {other:?}"),
-        }
-    }
-
-    // TODO: This is weird. Figure out what should happen with UnresolvedValue on spreads.
-    pub fn to_unresolved_value(
-        &self,
-        _diagnostics: &mut internal_baml_diagnostics::Diagnostics,
-    ) -> Option<(String, UnresolvedValue)> {
-        match self {
-            ClassConstructorField::Named(name, expr) => Some((
-                name.name().to_string(),
-                expr.to_unresolved_value(_diagnostics)?,
-            )),
-            ClassConstructorField::Spread(_expr) => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ExpressionBlock {
-    pub stmts: Vec<Stmt>,
-    pub expr: Box<Expression>,
-}
-
-// TODO: How do we indent the inner statements?
-impl fmt::Display for ExpressionBlock {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{{")?;
-        for stmt in &self.stmts {
-            write!(f, "{stmt}")?;
-        }
-        write!(f, "{}", self.expr)?;
-        write!(f, "}}")
-    }
-}
-
-impl ExpressionBlock {
-    pub fn assert_eq_up_to_span(&self, other: &ExpressionBlock) {
-        self.stmts
-            .iter()
-            .zip(other.stmts.iter())
-            .for_each(|(a, b)| {
-                a.assert_eq_up_to_span(b);
-            });
-        self.expr.assert_eq_up_to_span(&other.expr);
-    }
-}
-
-// TODO: Stmt statements have the form` `let x = some_expr`.
-// When we add more statements, `Stmt` will become an enum.
-#[derive(Debug, Clone)]
-pub struct Stmt {
-    pub identifier: Identifier,
-    pub body: Expression,
-    pub span: Span,
-}
-
-impl fmt::Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "let {} = {}", self.identifier, self.body)?;
-        Ok(())
-    }
-}
-
-impl Stmt {
-    pub fn assert_eq_up_to_span(&self, other: &Stmt) {
-        self.identifier.assert_eq_up_to_span(&other.identifier);
-        self.body.assert_eq_up_to_span(&other.body);
     }
 }

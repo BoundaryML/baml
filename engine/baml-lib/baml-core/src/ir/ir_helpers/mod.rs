@@ -6,7 +6,6 @@ use std::collections::HashSet;
 
 use indexmap::IndexMap;
 use internal_baml_diagnostics::Span;
-use internal_baml_parser_database::walkers::ExprFnWalker;
 use internal_baml_schema_ast::ast::{WithIdentifier, WithSpan};
 use itertools::Itertools;
 
@@ -27,10 +26,9 @@ use baml_types::{
 };
 pub use to_baml_arg::ArgCoercer;
 
-use super::{repr, ExprFunctionNode};
+use super::repr;
 
 pub type FunctionWalker<'a> = Walker<'a, &'a FunctionNode>;
-pub type ExprFunctionWalker<'a> = Walker<'a, &'a ExprFunctionNode>;
 pub type EnumWalker<'a> = Walker<'a, &'a Enum>;
 pub type EnumValueWalker<'a> = Walker<'a, &'a EnumValue>;
 pub type ClassWalker<'a> = Walker<'a, &'a Class>;
@@ -39,22 +37,15 @@ pub type TemplateStringWalker<'a> = Walker<'a, &'a TemplateString>;
 pub type ClientWalker<'a> = Walker<'a, &'a Client>;
 pub type RetryPolicyWalker<'a> = Walker<'a, &'a RetryPolicy>;
 pub type TestCaseWalker<'a> = Walker<'a, (&'a FunctionNode, &'a TestCase)>;
-pub type TestCaseExprWalker<'a> = Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>;
 pub type ClassFieldWalker<'a> = Walker<'a, &'a Field>;
 
 pub trait IRHelper {
     fn find_enum<'a>(&'a self, enum_name: &str) -> Result<EnumWalker<'a>>;
     fn find_class<'a>(&'a self, class_name: &str) -> Result<ClassWalker<'a>>;
     fn find_type_alias<'a>(&'a self, alias_name: &str) -> Result<TypeAliasWalker<'a>>;
-    fn find_expr_fn<'a>(&'a self, function_name: &str) -> Result<ExprFunctionWalker<'a>>;
     fn find_function<'a>(&'a self, function_name: &str) -> Result<FunctionWalker<'a>>;
     fn find_client<'a>(&'a self, client_name: &str) -> Result<ClientWalker<'a>>;
     fn find_retry_policy<'a>(&'a self, retry_policy_name: &str) -> Result<RetryPolicyWalker<'a>>;
-    fn find_expr_fn_test<'a>(
-        &'a self,
-        function: &'a ExprFunctionWalker<'a>,
-        test_name: &str,
-    ) -> Result<TestCaseExprWalker<'a>>;
     fn find_template_string<'a>(
         &'a self,
         template_string_name: &str,
@@ -71,7 +62,7 @@ pub trait IRHelper {
 
     fn check_function_params<'a>(
         &'a self,
-        function_params: &Vec<(String, FieldType)>,
+        function: &'a FunctionWalker<'a>,
         params: &BamlMap<String, BamlValue>,
         coerce_settings: ArgCoercer,
     ) -> Result<BamlValue>;
@@ -127,16 +118,12 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
                 .get_all_recursive_aliases(name)
                 .any(|target| self.is_subtype(base, target)),
 
+            (FieldType::Primitive(TypeValue::Null), FieldType::Optional(_)) => true,
             (FieldType::Optional(base_item), FieldType::Optional(other_item)) => {
                 self.is_subtype(base_item, other_item)
             }
-            (FieldType::Primitive(TypeValue::Null), FieldType::Optional(_)) => true,
             (_, FieldType::Optional(t)) => self.is_subtype(base, t),
             (FieldType::Optional(_), _) => false,
-
-            (FieldType::Primitive(p1), FieldType::Primitive(p2)) => p1 == p2,
-            (FieldType::Primitive(TypeValue::Null), _) => false,
-            (FieldType::Primitive(p1), _) => false,
 
             // Handle types that nest other types.
             (FieldType::List(base_item), FieldType::List(other_item)) => {
@@ -193,22 +180,9 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
                         .all(|(base_item, other_item)| self.is_subtype(base_item, other_item))
             }
             (FieldType::Tuple(_), _) => false,
+            (FieldType::Primitive(_), _) => false,
             (FieldType::Enum(_), _) => false,
             (FieldType::Class(_), _) => false,
-
-            (FieldType::Arrow(arrow1), FieldType::Arrow(arrow2)) => {
-                let param_lengths_match = arrow1.param_types.len() == arrow2.param_types.len();
-                // N.B. Functions are covariant in their return type and contravariant in their arguments.
-                // This is why a and b are swapped in the parameters check, and no in the return type check.
-                let return_types_match = self.is_subtype(&arrow1.return_type, &arrow2.return_type);
-                let args_match = arrow1
-                    .param_types
-                    .iter()
-                    .zip(arrow2.param_types.iter())
-                    .all(|(a, b)| self.is_subtype(b, a));
-                param_lengths_match && return_types_match && args_match
-            }
-            (FieldType::Arrow(_), _) => false,
         }
     }
 
@@ -585,24 +559,6 @@ impl IRHelper for IntermediateRepr {
         }
     }
 
-    fn find_expr_fn_test<'a>(
-        &'a self,
-        function: &'a ExprFunctionWalker<'a>,
-        test_name: &str,
-    ) -> Result<TestCaseExprWalker<'a>> {
-        match function.find_test(test_name) {
-            Some(t) => Ok(t),
-            None => {
-                // Get best match.
-                let tests = function
-                    .walk_tests()
-                    .map(|t| t.item.1.elem.name.as_str())
-                    .collect::<Vec<_>>();
-                error_not_found!("test", test_name, &tests)
-            }
-        }
-    }
-
     fn find_enum(&self, enum_name: &str) -> Result<EnumWalker<'_>> {
         match self.walk_enums().find(|e| e.name() == enum_name) {
             Some(e) => Ok(e),
@@ -646,28 +602,6 @@ impl IRHelper for IntermediateRepr {
             None => {
                 // Get best match.
                 let functions = self.walk_functions().map(|f| f.name()).collect::<Vec<_>>();
-                error_not_found!("function", function_name, &functions)
-            }
-        }
-    }
-
-    fn find_expr_fn<'a>(&'a self, function_name: &str) -> Result<ExprFunctionWalker<'a>> {
-        let expr_fn_names = self
-            .walk_expr_fns()
-            .map(|f| f.item.elem.name.clone())
-            .collect::<Vec<_>>();
-        match self
-            .walk_expr_fns()
-            .find(|f| f.item.elem.name == function_name)
-        {
-            Some(f) => Ok(f),
-
-            None => {
-                // Get best match.
-                let functions = self
-                    .walk_expr_fns()
-                    .map(|f| f.item.elem.name.clone())
-                    .collect::<Vec<_>>();
                 error_not_found!("function", function_name, &functions)
             }
         }
@@ -922,10 +856,12 @@ impl IRHelper for IntermediateRepr {
 
     fn check_function_params<'a>(
         &'a self,
-        function_params: &Vec<(String, FieldType)>,
+        function: &'a FunctionWalker<'a>,
         params: &BamlMap<String, BamlValue>,
         coerce_settings: ArgCoercer,
     ) -> Result<BamlValue> {
+        let function_params = function.inputs();
+
         // Now check that all required parameters are present.
         let mut scope = ScopeStack::new();
         let mut baml_arg_map = BamlMap::new();
@@ -1125,7 +1061,6 @@ pub fn item_type<'ir, 'a, T: std::fmt::Debug>(
             }
         }
         FieldType::Tuple(_) => None,
-        FieldType::Arrow(_) => None,
         FieldType::WithMetadata { base, .. } => item_type(ir, base, baml_child_values),
     };
     res
@@ -1162,7 +1097,6 @@ where
             variant_map_types.next()
         }
         FieldType::Class(_) => None,
-        FieldType::Arrow(_) => None,
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata never returns this variant")
         }
@@ -1555,7 +1489,7 @@ mod tests {
             span_path: None,
             allow_implicit_cast_to_string: true,
         };
-        let res = ir.check_function_params(&function.inputs(), &params, arg_coercer);
+        let res = ir.check_function_params(&function, &params, arg_coercer);
         assert!(res.is_err());
     }
 

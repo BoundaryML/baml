@@ -58,8 +58,8 @@ pub struct Class {
 pub struct OutputFormatContent {
     pub enums: Arc<IndexMap<String, Enum>>,
     pub classes: Arc<IndexMap<String, Class>>,
-    pub recursive_classes: Arc<IndexSet<String>>,
-    pub structural_recursive_aliases: Arc<IndexMap<String, FieldType>>,
+    recursive_classes: Arc<IndexSet<String>>,
+    structural_recursive_aliases: Arc<IndexMap<String, FieldType>>,
     pub target: FieldType,
 }
 
@@ -320,21 +320,6 @@ impl OutputFormatContent {
         Builder::new(target)
     }
 
-    /// A temporary OutputFormatContent constructor used by Expression functions.
-    /// Expression Functions have no prompt and no client, so OutputFormatContent
-    /// is not applicable to them. However one is needed for generating a
-    /// PromptRenderer, which is technically needed in order to call the
-    /// function-calling methods of BamlRuntime.
-    pub fn mk_fake() -> OutputFormatContent {
-        OutputFormatContent {
-            enums: Arc::new(IndexMap::new()),
-            classes: Arc::new(IndexMap::new()),
-            recursive_classes: Arc::new(IndexSet::new()),
-            structural_recursive_aliases: Arc::new(IndexMap::new()),
-            target: FieldType::Primitive(TypeValue::String),
-        }
-    }
-
     fn prefix(&self, options: &RenderOptions) -> Option<String> {
         fn auto_prefix(
             ft: &FieldType,
@@ -384,7 +369,6 @@ impl OutputFormatContent {
                 FieldType::WithMetadata { base, .. } => {
                     auto_prefix(base, options, output_format_content)
                 }
-                FieldType::Arrow(_) => None, // TODO: Error? Arrow shouldn't appear here.
             }
         }
 
@@ -590,12 +574,6 @@ impl OutputFormatContent {
                 )?,
             }
             .to_string(),
-            FieldType::Arrow(_) => {
-                return Err(minijinja::Error::new(
-                    minijinja::ErrorKind::BadSerialization,
-                    "Arrow type is not supported in LLM function outputs",
-                ))
-            }
         })
     }
 

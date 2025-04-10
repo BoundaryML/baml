@@ -19,6 +19,7 @@ unused_variables = "deny"
 [dependencies]
 reqwest.workspace = true
 anyhow.workspace = true
+futures.workspace = true
 baml-runtime = { path = "../baml-runtime", features = [
   "internal",
 ], default-features = false }
@@ -26,7 +27,6 @@ baml-types = { path = "../baml-lib/baml-types" }
 cfg-if.workspace = true
 console_error_panic_hook = "0.1.7"
 console_log = { version = "1", features = ["color"] }
-futures.workspace = true
 getrandom = { version = "0.2.15", features = ["js"] }
 indexmap.workspace = true
 internal-baml-codegen.workspace = true

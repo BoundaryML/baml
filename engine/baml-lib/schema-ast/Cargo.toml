@@ -10,6 +10,7 @@ license-file.workspace = true
 dead_code = "deny"
 elided_named_lifetimes = "deny"
 unused_imports = "allow"
+unused_variables = "deny"
 
 [dependencies]
 internal-baml-diagnostics = { path = "../diagnostics" }

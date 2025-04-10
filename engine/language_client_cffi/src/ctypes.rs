@@ -204,13 +204,13 @@ impl From<CFFIValueUnionVariant<'_>> for BamlValue {
 }
 
 impl From<CFFIValueChecked<'_>> for BamlValue {
-    fn from(_value: CFFIValueChecked) -> Self {
+    fn from(value: CFFIValueChecked) -> Self {
         unimplemented!("CFFIValueChecked is not supported");
     }
 }
 
 impl From<CFFIValueStreamingState<'_>> for BamlValue {
-    fn from(_value: CFFIValueStreamingState) -> Self {
+    fn from(value: CFFIValueStreamingState) -> Self {
         unimplemented!("CFFIValueStreamingState is not supported");
     }
 }
@@ -605,11 +605,12 @@ where
                 type_alias.as_union_value(),
             )
         }
-        baml_types::FieldType::Tuple(_field_types) => unimplemented!("Tuple is not supported"),
-        baml_types::FieldType::WithMetadata { .. } => {
-            unimplemented!("WithMetadata is not supported")
-        }
-        baml_types::FieldType::Arrow(_) => unimplemented!("Functions are not supported."),
+        baml_types::FieldType::Tuple(field_types) => unimplemented!("Tuple is not supported"),
+        baml_types::FieldType::WithMetadata {
+            base,
+            constraints,
+            streaming_behavior,
+        } => unimplemented!("WithMetadata is not supported"),
     };
 
     CFFIFieldTypeHolder::create(

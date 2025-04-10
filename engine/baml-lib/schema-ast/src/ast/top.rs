@@ -1,7 +1,6 @@
 use super::{
     assignment::Assignment, traits::WithSpan, Identifier, Span, TemplateString,
     TypeExpressionBlock, ValueExprBlock, WithIdentifier,
-    expr::{TopLevelAssignment, ExprFn}
 };
 
 /// Enum for distinguishing between top-level entries
@@ -27,10 +26,6 @@ pub enum Top {
     TestCase(ValueExprBlock),
 
     RetryPolicy(ValueExprBlock),
-
-    TopLevelAssignment(TopLevelAssignment),
-
-    ExprFn(ExprFn),
 }
 
 impl Top {
@@ -46,8 +41,6 @@ impl Top {
             Top::Generator(_) => "generator",
             Top::TestCase(_) => "test_case",
             Top::RetryPolicy(_) => "retry_policy",
-            Top::TopLevelAssignment(_) => "assignment",
-            Top::ExprFn(_) => "function",
         }
     }
 
@@ -84,21 +77,8 @@ impl Top {
             _ => None,
         }
     }
-
-    pub fn as_top_level_assignment(&self) -> Option<&TopLevelAssignment> {
-        match self {
-            Top::TopLevelAssignment(assignment) => Some(assignment),
-            _ => None,
-        }
-    }
-
-    pub fn as_expr_fn(&self) -> Option<&ExprFn> {
-        match self {
-            Top::ExprFn(expr_fn) => Some(expr_fn),
-            _ => None,
-        }
-    }
 }
+
 impl WithIdentifier for Top {
     /// The name of the item.
     fn identifier(&self) -> &Identifier {
@@ -113,8 +93,6 @@ impl WithIdentifier for Top {
             Top::Generator(x) => x.identifier(),
             Top::TestCase(x) => x.identifier(),
             Top::RetryPolicy(x) => x.identifier(),
-            Top::TopLevelAssignment(x) => &x.stmt.identifier,
-            Top::ExprFn(x) => &x.name,
         }
     }
 }
@@ -131,8 +109,6 @@ impl WithSpan for Top {
             Top::Generator(gen) => gen.span(),
             Top::TestCase(test) => test.span(),
             Top::RetryPolicy(retry) => retry.span(),
-            Top::TopLevelAssignment(asmnt) => &asmnt.stmt.span,
-            Top::ExprFn(function) => &function.span,
         }
     }
 }

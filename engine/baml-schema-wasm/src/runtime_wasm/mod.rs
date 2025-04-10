@@ -9,10 +9,8 @@ use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::BamlSrcReader;
-use baml_runtime::FunctionResult;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
-use baml_runtime::SerializedSpan;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
@@ -21,11 +19,7 @@ use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
-use internal_baml_core::ir::repr::Walker;
 use internal_llm_client::AllowedRoleMetadata;
-
-use futures::channel::mpsc;
-use futures::StreamExt;
 use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
@@ -915,7 +909,6 @@ fn get_dummy_value(
             Some(format!("({},)", dummy))
         }
         baml_runtime::FieldType::Optional(_) => None,
-        baml_runtime::FieldType::Arrow(_) => None,
         baml_runtime::FieldType::WithMetadata { base, .. } => {
             get_dummy_value(indent, allow_multiline, base)
         }
@@ -983,17 +976,6 @@ impl WasmRuntime {
             .internal()
             .ir()
             .walk_functions()
-            .chain(
-                self.runtime
-                    .internal()
-                    .ir()
-                    .expr_fns_as_functions()
-                    .iter()
-                    .map(|f| Walker {
-                        ir: &self.runtime.internal().ir(),
-                        item: f,
-                    }),
-            )
             .map(|f| {
                 let snippet = format!(
                     r#"test TestName {{
@@ -1821,84 +1803,6 @@ impl WasmFunction {
             )
             .await
             .map_err(|e| wasm_bindgen::JsError::new(format!("{e:?}").as_str()))
-    }
-
-    #[wasm_bindgen]
-    pub async fn run_test_with_expr_events(
-        &self,
-        rt: &mut WasmRuntime,
-        test_name: String,
-        env_vars: JsValue,
-        on_partial_response: js_sys::Function,
-        get_baml_src_cb: js_sys::Function,
-        load_aws_creds_cb: js_sys::Function,
-        on_expr_event: js_sys::Function,
-    ) -> Result<WasmTestResponse, JsValue> {
-        log::info!("TEST LOGGING");
-        let rt = &rt.runtime;
-        let function_name = self.name.clone();
-
-        let function_name_for_test_pair = function_name.clone();
-        let test_name_for_test_pair = test_name.clone();
-
-        // Create the closure to handle partial responses:
-        let cb = Box::new(move |r: FunctionResult| {
-            let this = JsValue::NULL;
-            let res = WasmFunctionResponse {
-                function_response: r,
-                func_test_pair: WasmFunctionTestPair {
-                    function_name: function_name_for_test_pair.clone(),
-                    test_name: test_name_for_test_pair.clone(),
-                },
-            }
-            .into();
-            on_partial_response.call1(&this, &res).unwrap();
-        });
-
-        // Create the channel for expression events
-        let (tx, mut rx) = mpsc::unbounded::<Vec<SerializedSpan>>();
-
-        // Spawn a task to handle expression events
-        let on_expr_event_clone = on_expr_event.clone();
-        wasm_bindgen_futures::spawn_local(async move {
-            while let Some(spans) = rx.next().await {
-                let this = JsValue::NULL;
-                match serde_wasm_bindgen::to_value(&spans) {
-                    Ok(res) => {
-                        on_expr_event_clone.call1(&this, &res).expect("TODO");
-                    }
-                    Err(e) => {
-                        log::error!("Error serializing spans: {e}");
-                    }
-                }
-            }
-        });
-
-        // Create your evaluation context, etc.
-        let ctx = rt.create_ctx_manager_with_env(
-            BamlValue::String("wasm".to_string()),
-            serde_wasm_bindgen::from_value::<HashMap<String, String>>(env_vars)
-                .map_err(|e| JsValue::from_str(&format!("Failed to parse env_vars: {:?}", e)))?,
-            js_fn_to_baml_src_reader(get_baml_src_cb),
-            js_fn_to_aws_cred_provider(load_aws_creds_cb),
-        );
-
-        // Pass the sender to run_test_with_expr_events
-        let (test_response, span) = rt
-            .run_test_with_expr_events(&function_name, &test_name, &ctx, Some(cb), Some(tx), None)
-            .await;
-
-        log::info!("test_response: {:#?}", test_response);
-
-        Ok(WasmTestResponse {
-            test_response,
-            span,
-            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
-            func_test_pair: WasmFunctionTestPair {
-                function_name,
-                test_name,
-            },
-        })
     }
 
     #[wasm_bindgen]

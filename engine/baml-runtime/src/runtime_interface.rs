@@ -1,7 +1,6 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue, Constraint};
 use internal_baml_core::internal_baml_diagnostics::Diagnostics;
-use internal_baml_core::ir::ExprFunctionWalker;
 use internal_baml_core::ir::{repr::IntermediateRepr, FunctionWalker};
 use internal_baml_jinja::RenderedPrompt;
 use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
@@ -134,11 +133,6 @@ pub trait InternalRuntimeInterface {
         function_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<FunctionWalker<'ir>>;
-    fn get_expr_function<'ir>(
-        &'ir self,
-        function_name: &str,
-        ctx: &RuntimeContext,
-    ) -> Result<ExprFunctionWalker<'ir>>;
 
     #[allow(async_fn_in_trait)]
     async fn render_prompt(

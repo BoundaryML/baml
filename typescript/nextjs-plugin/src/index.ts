@@ -133,15 +133,6 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
           })
         }
 
-        // Ensure module and rules are defined
-        config.module = config.module || {}
-        config.module.rules = config.module.rules || []
-        // Add WebAssembly loading configuration (properly indented)
-        config.module.rules.push({
-          test: /\.wasm$/,
-          type: 'asset/resource',
-        })
-
         return config
       },
     } as T

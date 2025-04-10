@@ -1,12 +1,9 @@
 use std::path::{Path, PathBuf};
 
 use super::{
-    parse_assignment::parse_assignment,
-    parse_expr::{parse_expr_fn, parse_top_level_assignment},
-    parse_template_string::parse_template_string,
+    parse_assignment::parse_assignment, parse_template_string::parse_template_string,
     parse_type_expression_block::parse_type_expression_block,
-    parse_value_expression_block::parse_value_expression_block,
-    BAMLParser, Rule,
+    parse_value_expression_block::parse_value_expression_block, BAMLParser, Rule,
 };
 use crate::ast::*;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
@@ -63,19 +60,6 @@ pub fn parse_schema(
 
             while let Some(current) = pairs.next() {
                 match current.as_rule() {
-                    Rule::top_level_assignment => {
-                        parse_top_level_assignment(current, &mut diagnostics).map(
-                            |top_level_assignment| {
-                                top_level_definitions
-                                    .push(Top::TopLevelAssignment(top_level_assignment));
-                            },
-                        );
-                    }
-                    Rule::expr_fn => {
-                        parse_expr_fn(current, &mut diagnostics).map(|expr_fn| {
-                            top_level_definitions.push(Top::ExprFn(expr_fn));
-                        });
-                    }
                     Rule::type_expression_block => {
                         let type_expr = parse_type_expression_block(
                             current,
@@ -204,7 +188,7 @@ mod tests {
 
     use super::parse_schema;
     use crate::ast::*;
-    use baml_types::{expr::Expr, TypeValue};
+    use baml_types::TypeValue;
     // Add this line to import the ast module
     use internal_baml_diagnostics::SourceFile;
 
@@ -412,48 +396,5 @@ mod tests {
         };
 
         assert_eq!(alias.to_string(), "One");
-    }
-
-    #[test]
-    fn test_top_level_assignment() {
-        let input = "let x = 1;";
-        let path = "example_file.baml";
-        let source = SourceFile::new_static(path.into(), input);
-        let (ast, _) = parse_schema(&Path::new(path), &source).unwrap();
-        match ast.tops.as_slice() {
-            [Top::TopLevelAssignment(x)] => {
-                assert_eq!(x.stmt.identifier.name(), "x");
-            }
-            _ => panic!("Expected a single top level assignment."),
-        }
-    }
-
-    #[test]
-    fn test_top_level_block_assignment() {
-        let input = r#"
-          let x = {
-            let y = 10;
-            go(y, 20)
-          };
-        "#;
-        let path = "example_file.baml";
-        let source = SourceFile::new_static(path.into(), input);
-        let (ast, _) = parse_schema(&Path::new(path), &source).unwrap();
-        match ast.tops.as_slice() {
-            [Top::TopLevelAssignment(x)] => {
-                dbg!(&x);
-                dbg!(&x.stmt);
-                assert_eq!(x.stmt.identifier.name(), "x");
-                match &x.stmt.body {
-                    Expression::ExprBlock(ExpressionBlock { stmts, expr }, _) => {
-                        assert_eq!(stmts.len(), 1);
-                        assert_eq!(stmts[0].identifier.name(), "y");
-                        assert!(matches!(expr.as_ref(), Expression::FnApp(_, _, _)));
-                    }
-                    _ => panic!("Expected ExpressionBlock"),
-                }
-            }
-            _ => panic!("Expected a single top level assignment."),
-        }
     }
 }

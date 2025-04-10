@@ -428,7 +428,6 @@ fn relevant_data_models<'a>(
             }
             (FieldType::Literal(_), _) => {}
             (FieldType::Primitive(_), _) => {}
-            (FieldType::Arrow(_), _) => {}
             (FieldType::WithMetadata { .. }, _) => {
                 unreachable!("It is guaranteed that a call to distribute_constraints will not return FieldType::Constrained")
             }

@@ -10,39 +10,11 @@ use internal_llm_client::ClientSpec;
 use std::collections::HashSet;
 
 use super::{
-    repr::{self, ExprFunction, FunctionConfig, TypeBuilderEntry, WithRepr}, Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FieldType, FunctionNode, IRHelper, Impl, RetryPolicy, TemplateString, TestCase, TypeAlias, Walker
+    repr::{self, FunctionConfig, TypeBuilderEntry, WithRepr},
+    Class, Client, Enum, EnumValue, Field, FieldType, FunctionNode, IRHelper, Impl, RetryPolicy,
+    TemplateString, TestCase, TypeAlias, Walker,
 };
 use crate::ir::jinja_helpers::render_expression;
-
-impl<'a> Walker<'a, &'a ExprFunctionNode> {
-    pub fn name(&self) -> &'a str {
-        self.elem().name.as_str()
-    }
-
-    pub fn inputs(&self) -> &'a Vec<(String, baml_types::FieldType)> {
-        self.elem().inputs()
-    }
-
-    pub fn walk_tests(
-        &'a self,
-    ) -> impl Iterator<Item = Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>> {
-        self.elem().tests().iter().map(|i| Walker {
-            ir: self.ir,
-            item: (self.item, i),
-        })
-    }
-
-    pub fn elem(&self) -> &'a repr::ExprFunction {
-        &self.item.elem
-    }
-
-    pub fn find_test(
-        &'a self,
-        test_name: &str,
-    ) -> Option<Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>>{
-        self.walk_tests().find(|t| t.item.1.elem.name == test_name)
-    }
-}
 
 impl<'a> Walker<'a, &'a FunctionNode> {
     pub fn name(&self) -> &'a str {
@@ -220,42 +192,6 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a Impl)> {
     pub fn elem(&self) -> &'a repr::Implementation {
         &self.item.1.elem
     }
-
-}
-
-impl<'a> Walker<'a, (&'a ExprFunctionNode, &'a TestCase )> {
-    pub fn matches(&self, function_name: &str, test_name: &str) -> bool {
-        self.item.0.elem.name == function_name && self.item.1.elem.name == test_name
-    }
-    
-    pub fn name(&self) -> String {
-        format!("{}::{}", self.item.0.elem.name, self.item.1.elem.name)
-    }
-    
-    pub fn args(&self) -> &IndexMap<String, UnresolvedValue<()>> {
-        &self.item.1.elem.args
-    }
-    
-    pub fn test_case(&self) -> &repr::TestCase {
-        &self.item.1.elem
-    }
-    
-    pub fn span(&self) -> Option<&crate::Span> {
-        self.item.1.attributes.span.as_ref()
-    }
-    
-    pub fn test_case_params(
-        &self,
-        ctx: &EvaluationContext<'_>,
-    ) -> Result<IndexMap<String, Result<BamlValue>>> {
-        self.args()
-            .iter()
-            .map(|(k, v)| Ok((k.clone(), v.resolve_serde::<BamlValue>(ctx))))
-            .collect()
-    }
-    
-    
-    
 }
 
 impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {

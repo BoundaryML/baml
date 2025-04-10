@@ -33,11 +33,10 @@ use baml_types::tracing::events::{
 };
 
 use baml_types::{BamlMap, BamlValue, Constraint, EvaluationContext};
-use internal_baml_core::ir::repr::{Node, TypeBuilderEntry};
-use internal_baml_core::ir::TestCase;
+use internal_baml_core::ir::repr::TypeBuilderEntry;
 use internal_baml_core::{
     internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper},
+    ir::{repr::IntermediateRepr, ArgCoercer, FunctionWalker, IRHelper},
     validate,
 };
 use internal_baml_jinja::RenderedPrompt;
@@ -153,9 +152,8 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedRoleMetadata)> {
         let func = self.get_function(function_name, ctx)?;
-        let function_params = func.inputs();
         let baml_args = self.ir().check_function_params(
-            &function_params,
+            &func,
             params,
             ArgCoercer {
                 span_path: None,
@@ -231,15 +229,6 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         Ok(walker)
     }
 
-    fn get_expr_function<'ir>(
-        &'ir self,
-        function_name: &str,
-        _ctx: &RuntimeContext,
-    ) -> Result<ExprFunctionWalker<'ir>> {
-        let walker = self.ir().find_expr_fn(function_name)?;
-        Ok(walker)
-    }
-
     fn ir(&self) -> &IntermediateRepr {
         use std::ops::Deref;
         self.ir.deref()
@@ -252,26 +241,13 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         ctx: &RuntimeContext,
         strict: bool,
     ) -> Result<BamlMap<String, BamlValue>> {
-        let maybe_test_and_params = self.get_function(function_name, ctx).and_then(|func| {
-            let test = self.ir().find_test(&func, test_name)?;
-            let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
-            let inputs = func.inputs().clone();
-            Ok((test_case_params, inputs))
-        });
-        let maybe_expr_test_and_params =
-            self.get_expr_function(function_name, ctx).and_then(|func| {
-                let test = self.ir().find_expr_fn_test(&func, test_name)?;
-                let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
-                let inputs = func.inputs().clone();
-                Ok((test_case_params, inputs))
-            });
-
-        let maybe_params = maybe_test_and_params.or(maybe_expr_test_and_params);
+        let func = self.get_function(function_name, ctx)?;
+        let test = self.ir().find_test(&func, test_name)?;
 
         let eval_ctx = ctx.eval_ctx(strict);
 
-        match maybe_params {
-            Ok((params, function_params)) => {
+        match test.test_case_params(&eval_ctx) {
+            Ok(params) => {
                 // Collect all errors and return them as a single error.
                 let mut errors = Vec::new();
                 let params = params
@@ -293,10 +269,10 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                 }
 
                 let baml_args = self.ir().check_function_params(
-                    &function_params,
+                    &func,
                     &params,
                     ArgCoercer {
-                        span_path: None,
+                        span_path: test.span().map(|s| s.file.path_buf().clone()),
                         allow_implicit_cast_to_string: true,
                     },
                 )?;
@@ -428,23 +404,23 @@ impl RuntimeInterface for InternalBamlRuntime {
             );
         }
 
-        let func = match self.get_function(&function_name, &ctx) {
-            Ok(func) => func,
-            Err(e) => {
-            return Ok(FunctionResult::new(
-                OrchestrationScope::default(),
-                LLMResponse::UserFailure(format!(
-                    "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
-                    e
-                )),
-                None,
-            ))
-            }
-        };
-
         let future = async {
+            let func = match self.get_function(&function_name, &ctx) {
+                Ok(func) => func,
+                Err(e) => {
+                return Ok(FunctionResult::new(
+                    OrchestrationScope::default(),
+                    LLMResponse::UserFailure(format!(
+                        "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
+                        e
+                    )),
+                    None,
+                ))
+                }
+            };
+
             let baml_args = self.ir().check_function_params(
-                &func.inputs(),
+                &func,
                 params,
                 ArgCoercer {
                     span_path: None,
@@ -463,34 +439,6 @@ impl RuntimeInterface for InternalBamlRuntime {
                 .await;
 
             FunctionResult::new_chain(history)
-        };
-        let baml_args = self.ir().check_function_params(
-            func.inputs(),
-            params,
-            ArgCoercer {
-                span_path: None,
-                allow_implicit_cast_to_string: false,
-            },
-        )?;
-        let baml_args = match self.ir().check_function_params(
-            &func.inputs(),
-            &params,
-            ArgCoercer {
-                span_path: None,
-                allow_implicit_cast_to_string: false,
-            },
-        ) {
-            Ok(args) => args,
-            Err(e) => {
-                return Ok(FunctionResult::new(
-                    OrchestrationScope::default(),
-                    LLMResponse::UserFailure(format!(
-                        "Failed while validating args for {function_name}: {:?}",
-                        e
-                    )),
-                    None,
-                ))
-            }
         };
 
         let result = future.await;
@@ -532,63 +480,33 @@ impl RuntimeInterface for InternalBamlRuntime {
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
         collectors: Vec<Arc<Collector>>,
     ) -> Result<FunctionResultStream> {
-        let is_expr_fn = self.get_expr_function(&function_name, &ctx).is_ok();
-        if is_expr_fn {
-            let func = self.get_expr_function(&function_name, &ctx)?;
-            let renderer = PromptRenderer::mk_fake();
-            let orchestrator = vec![];
-            let baml_args = self
-                .ir
-                .check_function_params(
-                    &func.inputs(),
-                    params,
-                    ArgCoercer {
-                        span_path: None,
-                        allow_implicit_cast_to_string: false,
-                    },
-                )?
-                .as_map_owned()
-                .ok_or(anyhow::anyhow!("Failed to check function params."))?;
-            Ok(FunctionResultStream {
-                function_name,
-                ir: self.ir.clone(),
-                params: baml_args,
-                orchestrator,
-                tracer,
-                renderer,
-                #[cfg(not(target_arch = "wasm32"))]
-                tokio_runtime,
-                collectors,
-            })
-        } else {
-            let func = self.get_function(&function_name, &ctx)?;
-            let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-            let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
-            let Some(baml_args) = self
-                .ir
-                .check_function_params(
-                    &func.inputs(),
-                    params,
-                    ArgCoercer {
-                        span_path: None,
-                        allow_implicit_cast_to_string: false,
-                    },
-                )?
-                .as_map_owned()
-            else {
-                anyhow::bail!("Expected parameters to be a map for: {}", function_name);
-            };
-            Ok(FunctionResultStream {
-                function_name,
-                ir: self.ir.clone(),
-                params: baml_args,
-                orchestrator,
-                tracer,
-                renderer,
-                #[cfg(not(target_arch = "wasm32"))]
-                tokio_runtime,
-                collectors,
-            })
-        }
+        let func = self.get_function(&function_name, &ctx)?;
+        let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
+        let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
+        let Some(baml_args) = self
+            .ir
+            .check_function_params(
+                &func,
+                params,
+                ArgCoercer {
+                    span_path: None,
+                    allow_implicit_cast_to_string: false,
+                },
+            )?
+            .as_map_owned()
+        else {
+            anyhow::bail!("Expected parameters to be a map for: {}", function_name);
+        };
+        Ok(FunctionResultStream {
+            function_name,
+            ir: self.ir.clone(),
+            params: baml_args,
+            orchestrator,
+            tracer,
+            renderer,
+            #[cfg(not(target_arch = "wasm32"))]
+            tokio_runtime,
+            collectors,
+        })
     }
 }

@@ -6,7 +6,7 @@ mod walker;
 
 pub use ir_helpers::{
     scope_diagnostics, ArgCoercer, ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker,
-    EnumWalker, ExprFunctionWalker, FunctionWalker, IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
+    EnumWalker, FunctionWalker, IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
     RetryPolicyWalker, TemplateStringWalker, TestCaseWalker, TypeAliasWalker,
 };
 
@@ -21,7 +21,6 @@ pub type Field = repr::Node<repr::Field>;
 pub type FieldType = baml_types::FieldType;
 pub type TypeValue = baml_types::TypeValue;
 pub type FunctionNode = repr::Node<repr::Function>;
-pub type ExprFunctionNode = repr::Node<repr::ExprFunction>;
 #[allow(dead_code)]
 pub(super) type Function = repr::Function;
 pub(super) type FunctionArgs = repr::FunctionArgs;

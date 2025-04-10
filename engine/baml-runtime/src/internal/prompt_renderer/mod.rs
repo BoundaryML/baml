@@ -5,7 +5,7 @@ use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use render_output_format::render_output_format;
 
 use anyhow::Result;
-use baml_types::{BamlValue, FieldType, StreamingBehavior, TypeValue};
+use baml_types::{BamlValue, FieldType, StreamingBehavior};
 use internal_baml_core::{
     error_unsupported,
     ir::{
@@ -25,10 +25,10 @@ use super::llm_client::parsed_value_to_response;
 
 #[derive(Debug)]
 pub struct PromptRenderer {
-    pub function_name: String,
-    pub client_spec: ClientSpec,
-    pub output_defs: OutputFormatContent,
-    pub output_type: FieldType,
+    function_name: String,
+    client_spec: ClientSpec,
+    output_defs: OutputFormatContent,
+    output_type: FieldType,
 }
 
 impl PromptRenderer {
@@ -51,18 +51,6 @@ impl PromptRenderer {
             output_defs: render_output_format(ir, ctx, &func_v2.output)?,
             output_type: func_v2.output.clone(),
         })
-    }
-
-    /// A temporary function used to generate a fake prompt renderer, for cases
-    /// when we call BamlRuntime's `call` API with Expression fns, which
-    /// don't have a prompt.
-    pub fn mk_fake() -> PromptRenderer {
-        PromptRenderer {
-            function_name: "fake".into(),
-            client_spec: ClientSpec::Named("fake".into()),
-            output_defs: OutputFormatContent::mk_fake(),
-            output_type: FieldType::Primitive(TypeValue::String),
-        }
     }
 
     pub fn client_spec(&self) -> &ClientSpec {

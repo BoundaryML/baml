@@ -19,6 +19,7 @@ $RECYCLE.BIN/
 **/dist
 *.cab
 *.env
+*.exe
 *.icloud
 *.lcov
 *.lnk
@@ -164,5 +165,3 @@ yarn-debug.log*
 yarn-error.log*
 yarn.lock
 artifacts
-.direnv
-typescript/vscode-ext/packages/vscode/server/baml-cli
