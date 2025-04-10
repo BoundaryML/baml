@@ -17,7 +17,7 @@ import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 import { getCurrentOpenedFile } from '../../helpers/get-open-file'
 import { bamlConfig, getConfig } from './bamlConfig'
-import { checkIfCliBinaryExists, downloadCli } from './cliDownloader'
+import { checkIfCliBinaryExists, cliBinaryPath, downloadCli } from './cliDownloader'
 
 export { bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line
@@ -131,6 +131,8 @@ const activateClient = (
 ) => {
   getConfig()
 
+  // TODO: Use bundled LSP to find out the generator versions, then if mismatch
+  // download new version and switch to that one.
   // Create the language client
   client = createLanguageServer(serverOptions, clientOptions)
 
@@ -271,8 +273,10 @@ const activateClient = (
         version: version as string,
       }
 
+      let restartLsp = false
+
       if (!(await checkIfCliBinaryExists(cliVersion))) {
-        await window.withProgress(
+        restartLsp = await window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
             cancellable: false,
@@ -282,12 +286,46 @@ const activateClient = (
             try {
               await downloadCli(cliVersion)
               window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
+              return true
             } catch (error) {
               window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
+              return false
             }
           },
         )
+      } else {
+        restartLsp = true
       }
+
+      // TODO: Restart LSP.
+      // if (restartLsp) {
+      //   const cliAbsolutePath = cliBinaryPath(cliVersion)
+
+      //   serverOptions = {
+      //     run: {
+      //       command: cliAbsolutePath,
+      //       args: ['lsp'],
+      //       options: {
+      //         env: process.env,
+      //       },
+      //     },
+      //     debug: {
+      //       command: cliAbsolutePath,
+      //       args: ['lsp'],
+      //     },
+      //   }
+
+      //   await window.withProgress(
+      //     {
+      //       location: vscode.ProgressLocation.Notification,
+      //       cancellable: false,
+      //       title: "Restarting BAML LSP...",
+      //     },
+      //     async (progress, token) => {
+      //       await restartClient(context, client, serverOptions, clientOptions)
+      //     },
+      //   )
+      // }
     })
   })
 
