@@ -173,6 +173,8 @@ impl Session {
             .flatten()
             .collect();
 
+        log::info!("file length: {:?}", files.len());
+
         // Index all the files, except for the ones with unsaved changes.
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
@@ -300,13 +302,13 @@ impl Session {
 
                     let start_time = Instant::now();
 
-                    // project
-                    //     .lock()
-                    //     .unwrap()
-                    //     .update_runtime(notifier.clone())
-                    //     .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
+                    project
+                        .lock()
+                        .unwrap()
+                        .update_runtime(notifier.clone())
+                        .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
                     let elapsed = start_time.elapsed();
-                    // tracing::info!("update_runtime took {:?}ms", elapsed.as_millis());
+                    tracing::info!("update_runtime took {:?}ms", elapsed.as_millis());
                 }
                 Ok::<(), anyhow::Error>(())
             })?;

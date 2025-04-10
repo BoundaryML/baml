@@ -722,14 +722,6 @@ impl Project {
         let start_time = Instant::now();
         let fake_env_vars: HashMap<String, String> = HashMap::new();
         let _no_version_check = false;
-
-        // let runtime = self.runtime();
-        let runtime = self.baml_project.runtime(fake_env_vars);
-        self.current_runtime = runtime.clone().ok();
-        if runtime.is_ok() {
-            self.last_successful_runtime = runtime.ok();
-        }
-
         let files = self.baml_project.files();
         // dbg!(&files);
         let mut file_map = HashMap::new();
@@ -752,6 +744,13 @@ impl Project {
                     }),
                 )))?;
         }
+
+        // let runtime = self.runtime();
+        // let runtime = self.baml_project.runtime(fake_env_vars);
+        // self.current_runtime = runtime.clone().ok();
+        // if runtime.is_ok() {
+        //     self.last_successful_runtime = runtime.ok();
+        // }
 
         // let diagnostics = self
         //     .baml_project

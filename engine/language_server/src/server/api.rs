@@ -1,18 +1,19 @@
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use crate::{server::schedule::Task, session::Session};
 use diagnostics::project_diagnostics;
 use log::info;
 use lsp_server;
 use lsp_types::{
-    DocumentDiagnosticReport, DocumentDiagnosticReportResult, FullDocumentDiagnosticReport,
-    RelatedFullDocumentDiagnosticReport,
+    DidChangeTextDocumentParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
+    FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
 };
 use serde::Deserialize;
 use url::Url;
 
 mod diagnostics;
-mod notifications;
+pub(crate) mod notifications;
 mod requests;
 mod traits;
 
@@ -30,6 +31,9 @@ use super::{
     schedule::BackgroundSchedule,
     Result,
 };
+
+// --- Add debounce duration constant ---
+const DID_CHANGE_DEBOUNCE_DURATION: Duration = Duration::from_millis(250);
 
 pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
     let id = req.id.clone();
@@ -149,106 +153,10 @@ fn handle_notification_result_error<N: traits::NotificationHandler>(
 
 pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Vec<Task<'a>> {
     match notif.method.as_str() {
-        notification::DidChangeTextDocumentHandler::METHOD => {
-            let params_result =
-                cast_notification::<notification::DidChangeTextDocumentHandler>(notif);
-            match params_result {
-                Ok((id, params)) => {
-                    let mut tasks = Vec::new();
-
-                    // 1. Local Task for DidChangeTextDocument
-                    let params_local = params.clone();
-                    tasks.push(Task::local(move |session, notifier, requester, _| {
-                        if let Err(err) = notification::DidChangeTextDocumentHandler::run(
-                            session, notifier, requester, params_local,
-                        ) {
-                            tracing::error!(
-                                "An error occurred while running local {id}: {err}"
-                            );
-                            show_err_msg!(
-                                "BAML encountered a problem processing document change (local). Check the logs."
-                            );
-                        }
-                    }));
-
-                    // 2. Background Task for DidChangeTextDocument
-                    // Note: We need a way to get the URL for the background task.
-                    // Assuming BackgroundDocumentNotificationHandler is implemented for DidChangeTextDocumentHandler
-                    // If not, this part needs adjustment based on how DidChangeTextDocumentHandler can provide the URL.
-                    let params_background = params;
-                    // *** IMPORTANT: Assumes DidChangeTextDocumentHandler implements BackgroundDocumentNotificationHandler ***
-                    // ***           and provides the document_url method. If not, this needs modification.       ***
-                    let url = params_background.text_document.uri.clone();
-
-                    let schedule = BackgroundSchedule::LatencySensitive; // Or appropriate schedule for diagnostics/updates
-                    tasks.push(Task::background(schedule, move |session: &Session| {
-                        let Some(snapshot) = session.take_snapshot(url.clone()) else {
-                            tracing::warn!(
-                                "Could not take snapshot for background notification {id}: {}",
-                                url
-                            );
-                            return Box::new(|_, _| {});
-                        };
-
-                        // Get the project DB Arc in the outer closure
-                        let project_db =
-                            match session.project_db_for_path(url.to_file_path().unwrap()) {
-                                Some(db) => db.clone(), // Clone the Arc, cheap operation
-                                None => {
-                                    tracing::error!(
-                                        "Could not find project for path in background task: {}",
-                                        url
-                                    );
-                                    return Box::new(|_, _| {});
-                                }
-                            };
-
-                        // Move the cloned Arc into the inner closure
-                        Box::new(move |notifier: Notifier, _| {
-                            // Assuming background task mainly needs Notifier
-                            // *** IMPORTANT: Assumes run_with_snapshot is implemented ***
-
-                            // Use the captured project_db Arc
-                            match project_db.lock().unwrap().update_runtime(Some(notifier)) {
-                                Ok(_) => (),
-                                Err(err) => {
-                                    tracing::error!("Error updating runtime: {err}");
-                                    show_err_msg!(
-                                        "BAML encountered a problem processing document change (background). Check the logs."
-                                    );
-                                }
-                            }
-                            // if let Err(err) =
-                            //     // notification::DidChangeTextDocumentHandler::run_with_snapshot(
-                            //     //     snapshot, // snapshot is still available here if needed
-                            //     //     notifier,
-                            //     //     params_background, // Pass the correct params here
-                            //     // )
-                            // {
-                            //     tracing::error!(
-                            //         "An error occurred while running background {id}: {err}"
-                            //     );
-                            //     show_err_msg!(
-                            //         "BAML encountered a problem processing document change (background). Check the logs."
-                            //     );
-                            // }
-                        })
-                    }));
-
-                    tasks
-                }
-                Err(err) => {
-                    tracing::error!(
-                        "Encountered error parsing params for {}: {err}",
-                        notification::DidChangeTextDocumentHandler::METHOD
-                    );
-                    show_err_msg!(
-                        "BAML failed to handle a notification from the editor. Check the logs."
-                    );
-                    vec![Task::nothing()]
-                }
-            }
-        }
+        // --- Remove DidChangeTextDocumentHandler case ---
+        // notification::DidChangeTextDocumentHandler::METHOD => {
+        //     // ... existing logic removed ...
+        // }
 
         // --- Use local_notification_task helper for these ---
         notification::DidChangeWatchedFiles::METHOD => {
@@ -417,7 +325,7 @@ fn respond<Req>(
 
 /// Tries to cast a serialized request from the server into
 /// a parameter type for a specific request handler.
-fn cast_notification<N>(
+pub fn cast_notification<N>(
     notification: lsp_server::Notification,
 ) -> super::Result<
     (
@@ -513,4 +421,58 @@ impl<T> ResultExt<T> for std::result::Result<T, ()> {
             code: lsp_server::ErrorCode::InternalError,
         })
     }
+}
+
+// Placeholder function to encapsulate task creation for DidChangeTextDocument
+// This logic was moved from the `api::notification` function.
+// The actual implementation would likely live within the Scheduler or be called by it.
+pub(super) fn create_did_change_tasks(
+    params: lsp_types::DidChangeTextDocumentParams,
+    // We might need access to Session or other resources depending on the final implementation
+    // For now, we'll recreate the basic structure
+) -> Vec<Task<'static>> {
+    let mut tasks = Vec::new();
+
+    // --- Recreate Local Task ---
+    let params_local = params.clone();
+    tasks.push(Task::local(move |session, notifier, requester, _| {
+        if let Err(err) = notification::DidChangeTextDocumentHandler::run(
+            session,
+            notifier,
+            requester,
+            params_local,
+        ) {
+            tracing::error!(
+                "An error occurred while running debounced local DidChangeTextDocument: {err}"
+            );
+            show_err_msg!(
+                "BAML encountered a problem processing document change (local). Check the logs."
+            );
+        }
+    }));
+
+    // --- Recreate Background Task (if needed/enabled later) ---
+    let url = params.text_document.uri.clone();
+    let schedule = BackgroundSchedule::LatencySensitive;
+    // tasks.push(Task::background(schedule, move |session: &Session| {
+    //     // ... snapshot logic ...
+    //     let project_db = match session.project_db_for_path(url.to_file_path().unwrap()) {
+    //         Some(db) => db,
+    //         None => {
+    //             tracing::error!("Could not find project for path");
+    //             return Box::new(|_, _| {});
+    //         }
+    //     };
+    //     Box::new(move |notifier: Notifier, _| {
+    //         match project_db.lock().unwrap().update_runtime(Some(notifier)) {
+    //             Ok(_) => (),
+    //             Err(err) => {
+    //                 tracing::error!("An error occurred while running background DidChangeTextDocument: {err}");
+    //                 show_err_msg!("BAML encountered a problem processing document change (background). Check the logs.");
+    //             }
+    //         }
+    //     })
+    // }));
+
+    tasks
 }

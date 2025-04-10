@@ -46,7 +46,7 @@ pub(super) trait BackgroundDocumentRequestHandler: RequestHandler {
 }
 
 /// A supertrait for any server notification handler.
-pub(super) trait NotificationHandler {
+pub trait NotificationHandler {
     type NotificationType: LSPNotification;
     const METHOD: &'static str =
         <<Self as NotificationHandler>::NotificationType as LSPNotification>::METHOD;

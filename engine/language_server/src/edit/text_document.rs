@@ -84,7 +84,7 @@ impl TextDocument {
             range: None, text, ..
         }] = changes.as_slice()
         {
-            tracing::debug!("Fast path - replacing entire document");
+            tracing::info!("Fast path - replacing entire document");
             self.modify(|contents, version| {
                 contents.clone_from(text);
                 *version = new_version;
@@ -101,6 +101,7 @@ impl TextDocument {
             ..
         } in changes
         {
+            tracing::info!("apply_changes: {:?}, {:?}", range, change);
             if let Some(range) = range {
                 let range = range.to_text_range(&new_contents, &active_index, encoding);
                 new_contents.replace_range(

@@ -6,19 +6,21 @@ use std::num::NonZeroUsize;
 #[allow(deprecated)]
 use std::panic::PanicInfo;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use lsp_server::Message;
 use lsp_types::{
-    ClientCapabilities, CodeLensOptions, CompletionOptions, DiagnosticOptions,
-    DiagnosticServerCapabilities, FileSystemWatcher, HoverProviderCapability, InitializeParams,
-    MessageType, SaveOptions, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
-    TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
+    notification::DidChangeTextDocument, ClientCapabilities, CodeLensOptions, CompletionOptions,
+    DiagnosticOptions, DiagnosticServerCapabilities, FileSystemWatcher, HoverProviderCapability,
+    InitializeParams, MessageType, SaveOptions, ServerCapabilities, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
 };
 use schedule::Task;
 
 use self::connection::{Connection, ConnectionInitializer};
 use self::schedule::event_loop_thread;
 use crate::baml_project::file_utils::{find_baml_src, find_top_level_parent};
+
 use crate::session::{AllSettings, ClientSettings, Session};
 use crate::PositionEncoding;
 
@@ -41,7 +43,6 @@ pub(crate) struct Server {
 
 impl Server {
     pub fn new(worker_threads: NonZeroUsize) -> anyhow::Result<Self> {
-        tracing::info!("Starting server with {} worker threads", worker_threads);
         let connection = ConnectionInitializer::stdio();
         let (id, init_params) = connection.initialize_start()?;
 
@@ -126,6 +127,8 @@ impl Server {
             // TODO(dhruvmanila): Support multi-root workspaces
             anyhow::bail!("Multi-root workspaces are not supported yet");
         }
+        // for some reason tracing logs are not available before this point
+        tracing::info!("Starting server with {} worker threads", worker_threads);
 
         let mut session = Session::new(
             &client_capabilities,
@@ -223,21 +226,85 @@ impl Server {
         let mut scheduler =
             schedule::Scheduler::new(&mut session, worker_threads, connection.make_sender());
 
+        // Add state to scheduler conceptually (actual implementation depends on schedule.rs)
+        // scheduler.init_debouncer(api::DID_CHANGE_DEBOUNCE_DURATION);
+
         Self::try_register_capabilities(&_client_capabilities, &mut scheduler);
 
-        for msg in connection.incoming() {
-            if connection.handle_shutdown(&msg)? {
-                break;
-            }
-            let tasks = match msg {
-                Message::Request(req) => vec![api::request(req)],
-                Message::Notification(notification) => api::notification(notification),
-                Message::Response(response) => vec![scheduler.response(response)],
-            };
+        // Timer for checking debounced changes
+        let mut last_debounce_check = Instant::now();
 
-            // Dispatch each task in the vector
-            for task in tasks {
-                scheduler.dispatch(task);
+        loop {
+            // Use loop instead of for msg in connection.incoming() to allow non-blocking checks
+            // 1. Check for ready debounced changes periodically
+            if last_debounce_check.elapsed() >= std::time::Duration::from_millis(50) {
+                // Check every 50ms
+                // Conceptual call to the scheduler to process ready changes
+                // This method would internally generate and dispatch tasks.
+                scheduler.process_ready_changes();
+                last_debounce_check = Instant::now();
+            }
+
+            // 2. Process incoming messages non-blockingly
+            match connection
+                .receiver()
+                .recv_timeout(std::time::Duration::from_millis(10))
+            {
+                // Short timeout
+                Ok(msg) => {
+                    if connection.handle_shutdown(&msg)? {
+                        break; // Exit loop on shutdown
+                    }
+
+                    let tasks = match msg {
+                        Message::Request(req) => vec![api::request(req)],
+                        Message::Notification(notif) => {
+                            // --- Intercept DidChangeTextDocument ---
+                            if notif.method == "textDocument/didChange" {
+                                match api::cast_notification::<
+                                    crate::server::api::notifications::DidChangeTextDocumentHandler,
+                                >(notif)
+                                {
+                                    Ok((_, params)) => {
+                                        let url = params.text_document.uri.clone();
+                                        // Conceptual call to scheduler to register the change for debouncing
+                                        scheduler.register_pending_change(url.clone(), params);
+                                        tracing::info!("Registered debounced change for {}", url);
+                                        // Don't generate tasks immediately
+                                        vec![]
+                                    }
+                                    Err(err) => {
+                                        tracing::error!(
+                                            "Failed to parse DidChangeTextDocument params: {}",
+                                            err
+                                        );
+                                        show_err_msg!(
+                                            "BAML failed to handle a document change notification."
+                                        );
+                                        vec![Task::nothing()]
+                                    }
+                                }
+                            } else {
+                                // Handle other notifications as before
+                                api::notification(notif)
+                            }
+                        }
+                        Message::Response(response) => vec![scheduler.response(response)],
+                    };
+
+                    // Dispatch tasks generated from requests, other notifications, or responses
+                    for task in tasks {
+                        scheduler.dispatch(task);
+                    }
+                }
+                Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
+                    // No message received, continue loop to check debouncer again
+                    continue;
+                }
+                Err(crossbeam::channel::RecvTimeoutError::Disconnected) => {
+                    tracing::warn!("Client connection disconnected.");
+                    break; // Exit loop if channel disconnected
+                }
             }
         }
 
@@ -328,7 +395,7 @@ impl Server {
             text_document_sync: Some(TextDocumentSyncCapability::Options(
                 TextDocumentSyncOptions {
                     open_close: Some(true),
-                    change: Some(TextDocumentSyncKind::INCREMENTAL),
+                    change: Some(TextDocumentSyncKind::FULL),
                     will_save: Some(true),
                     save: Some(TextDocumentSyncSaveOptions::SaveOptions(SaveOptions {
                         include_text: Some(false),

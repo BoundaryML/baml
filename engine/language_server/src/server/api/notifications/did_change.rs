@@ -25,7 +25,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         params: DidChangeTextDocumentParams,
     ) -> Result<()> {
         tracing::info!("------- DidChangeTextDocumentHandlerrrr");
-        let start_time = Instant::now();
+        let start_time_total = Instant::now();
 
         let url = params.text_document.uri;
         let path = url
@@ -34,7 +34,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         session
             .ensure_project_db_for_baml_file(&url)
             .internal_error()?;
-        let elapsed = start_time.elapsed();
+        let elapsed = start_time_total.elapsed();
         tracing::info!(
             "ensure_project_db_for_baml_file took {:?}ms",
             elapsed.as_millis()
@@ -61,7 +61,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         let elapsed = start_time.elapsed();
         tracing::info!("update_text_document took {:?}ms", elapsed.as_millis());
 
-        let diagnostics = session_lsp_diagnostics(session, &url);
+        let diagnostics: Vec<lsp_types::Diagnostic> = session_lsp_diagnostics(session, &url);
         notifier
             .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
                 uri: url,
@@ -70,6 +70,8 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             })
             .map_err(|e| anyhow::anyhow!("did_change err: {}", e))
             .internal_error()?;
+        let elapsed = start_time_total.elapsed();
+        tracing::info!("total took {:?}ms", elapsed.as_millis());
         Ok(())
     }
 }

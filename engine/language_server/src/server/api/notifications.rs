@@ -11,7 +11,7 @@ use super::traits::{
     BackgroundDocumentNotificationHandler, NotificationHandler, SyncNotificationHandler,
 };
 // pub(super) use cancel::Cancel;
-pub(super) use did_change::DidChangeTextDocumentHandler;
+pub(crate) use did_change::DidChangeTextDocumentHandler;
 pub(super) use did_change_configuration::DidChangeConfiguration;
 pub(super) use did_change_watched_files::DidChangeWatchedFiles;
 pub(super) use did_save_text_document::DidSaveTextDocument;
