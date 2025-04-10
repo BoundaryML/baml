@@ -81,6 +81,11 @@ impl Server {
             global_settings.tracing.log_level.unwrap_or_default(),
             global_settings.tracing.log_file.as_deref(),
         );
+        if let Err(e) = tracing_log::LogTracer::init() {
+            eprintln!("Failed to initialize log tracer: {}", e);
+            // Decide how to handle this error - maybe log it via tracing if possible,
+            // or exit if logging is critical.
+        }
 
         let mut workspace_for_url = |url: Url| {
             let Some(workspace_settings) = workspace_settings.as_mut() else {
@@ -224,12 +229,16 @@ impl Server {
             if connection.handle_shutdown(&msg)? {
                 break;
             }
-            let task = match msg {
-                Message::Request(req) => api::request(req),
+            let tasks = match msg {
+                Message::Request(req) => vec![api::request(req)],
                 Message::Notification(notification) => api::notification(notification),
-                Message::Response(response) => scheduler.response(response),
+                Message::Response(response) => vec![scheduler.response(response)],
             };
-            scheduler.dispatch(task);
+
+            // Dispatch each task in the vector
+            for task in tasks {
+                scheduler.dispatch(task);
+            }
         }
 
         Ok(())

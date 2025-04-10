@@ -68,25 +68,6 @@ export const AliasThatPointsToRecursiveType = async (
 };
 
 /**
- * Executes the streaming variant of the "AliasWithMultipleAttrs" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- * @param { Checked<number,"gt_ten"> } money - Input parameter.
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const AliasWithMultipleAttrs = async (
-  money: Checked<number,"gt_ten">,
-): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.AliasWithMultipleAttrs(
-    money,
-  );
-  return Promise.resolve(stream.toStreamable());
-};
-
-/**
  * Executes the streaming variant of the "AliasedInputClass" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -1734,25 +1715,6 @@ export const RecursiveClassWithAliasIndirection = async (
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.RecursiveClassWithAliasIndirection(
     cls,
-  );
-  return Promise.resolve(stream.toStreamable());
-};
-
-/**
- * Executes the streaming variant of the "ReturnAliasWithMergedAttributes" BAML action.
- *
- * This action initiates a streaming response by calling the corresponding
- * BAML stream function. The returned stream yields incremental updates.
- *
- * @param { Checked<number,"gt_ten"> } money - Input parameter.
- *
- * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
- */
-export const ReturnAliasWithMergedAttributes = async (
-  money: Checked<number,"gt_ten">,
-): Promise<ReadableStream<Uint8Array>> => {
-  const stream = b.stream.ReturnAliasWithMergedAttributes(
-    money,
   );
   return Promise.resolve(stream.toStreamable());
 };

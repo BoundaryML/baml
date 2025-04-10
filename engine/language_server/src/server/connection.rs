@@ -14,7 +14,7 @@ pub struct ConnectionInitializer {
 /// Handles inbound and outbound messages with the client.
 pub struct Connection {
     sender: Arc<ConnectionSender>,
-    receiver: ConnectionReceiver,
+    pub receiver: ConnectionReceiver,
     threads: Option<lsp::IoThreads>,
 }
 
@@ -87,6 +87,10 @@ impl Connection {
     /// An iterator over incoming messages from the client.
     pub fn incoming(&self) -> crossbeam::channel::Iter<lsp::Message> {
         self.receiver.iter()
+    }
+
+    pub fn receiver(&self) -> &ConnectionReceiver {
+        &self.receiver
     }
 
     /// Check and respond to any incoming shutdown requests; returns`true` if the server should be shutdown.

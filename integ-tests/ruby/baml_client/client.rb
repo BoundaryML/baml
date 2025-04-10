@@ -190,61 +190,6 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(Baml::Checked[Integer])
-    }
-    def AliasWithMultipleAttrs(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        
-        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
-      end
-
-      # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
-
-      collector = if baml_options[:collector]
-        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
-      else
-        []
-      end
-
-      raw = @runtime.call_function(
-        "AliasWithMultipleAttrs",
-        {
-          money: money,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        collector,
-      )
-      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
         input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(String)
@@ -4975,61 +4920,6 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(Baml::Checked[Integer])
-    }
-    def ReturnAliasWithMergedAttributes(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        
-        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
-      end
-
-      # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
-
-      collector = if baml_options[:collector]
-        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
-      else
-        []
-      end
-
-      raw = @runtime.call_function(
-        "ReturnAliasWithMergedAttributes",
-        {
-          money: money,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        collector,
-      )
-      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
         inp: Integer,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Integer)
@@ -9538,51 +9428,6 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(Baml::BamlStream[Baml::Checked[Integer]])
-    }
-    def AliasWithMultipleAttrs(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        
-        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
-      end
-
-      # Merge options from initialization with those passed to the method
-      baml_options = (@baml_options || {}).merge(baml_options)
-
-      collector = if baml_options[:collector]
-        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
-      else
-        []
-      end
-
-      raw = @runtime.stream_function(
-        "AliasWithMultipleAttrs",
-        {
-          money: money,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        collector,
-      )
-      Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
         input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::BamlStream[String])
@@ -13445,51 +13290,6 @@ module Baml
         collector,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::NodeWithAliasIndirection), Baml::Types::NodeWithAliasIndirection].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(Baml::BamlStream[Baml::Checked[Integer]])
-    }
-    def ReturnAliasWithMergedAttributes(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        
-        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
-      end
-
-      # Merge options from initialization with those passed to the method
-      baml_options = (@baml_options || {}).merge(baml_options)
-
-      collector = if baml_options[:collector]
-        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
-      else
-        []
-      end
-
-      raw = @runtime.stream_function(
-        "ReturnAliasWithMergedAttributes",
-        {
-          money: money,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        collector,
-      )
-      Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

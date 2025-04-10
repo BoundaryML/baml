@@ -87,7 +87,7 @@ impl Notifier {
                 serde_json::json!({
                     "type": "info",
                     "message": msg,
-                    "durationMs": 7000,
+                    "durationMs": 4000,
                 }),
             )))
     }

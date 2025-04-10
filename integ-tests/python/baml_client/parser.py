@@ -89,32 +89,6 @@ class LlmResponseParser:
 
       return cast(types.LinkedListAliasNode, parsed)
     
-    def AliasWithMultipleAttrs(
-        self,
-        llm_response: str,
-        baml_options: BamlCallOptions = {},
-    ) -> Checked[int,types.Literal["gt_ten"]]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      parsed = self.__runtime.parse_llm_response(
-        "AliasWithMultipleAttrs",
-        llm_response,
-        types,
-        types,
-        partial_types,
-        False,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-
-      return cast(Checked[int,types.Literal["gt_ten"]], parsed)
-    
     def AliasedInputClass(
         self,
         llm_response: str,
@@ -2351,32 +2325,6 @@ class LlmResponseParser:
 
       return cast(types.NodeWithAliasIndirection, parsed)
     
-    def ReturnAliasWithMergedAttributes(
-        self,
-        llm_response: str,
-        baml_options: BamlCallOptions = {},
-    ) -> Checked[int,types.Literal["gt_ten"]]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      parsed = self.__runtime.parse_llm_response(
-        "ReturnAliasWithMergedAttributes",
-        llm_response,
-        types,
-        types,
-        partial_types,
-        False,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-
-      return cast(Checked[int,types.Literal["gt_ten"]], parsed)
-    
     def ReturnFailingAssert(
         self,
         llm_response: str,
@@ -4519,32 +4467,6 @@ class LlmStreamParser:
       )
 
       return cast(partial_types.LinkedListAliasNode, parsed)
-    
-    def AliasWithMultipleAttrs(
-        self,
-        llm_response: str,
-        baml_options: BamlCallOptions = {},
-    ) -> Checked[Optional[int],types.Literal["gt_ten"]]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      parsed = self.__runtime.parse_llm_response(
-        "AliasWithMultipleAttrs",
-        llm_response,
-        types,
-        types,
-        partial_types,
-        True,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-
-      return cast(Checked[Optional[int],types.Literal["gt_ten"]], parsed)
     
     def AliasedInputClass(
         self,
@@ -6781,32 +6703,6 @@ class LlmStreamParser:
       )
 
       return cast(partial_types.NodeWithAliasIndirection, parsed)
-    
-    def ReturnAliasWithMergedAttributes(
-        self,
-        llm_response: str,
-        baml_options: BamlCallOptions = {},
-    ) -> Checked[Optional[int],types.Literal["gt_ten"]]:
-      __tb__ = baml_options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = baml_options.get("client_registry", None)
-
-      parsed = self.__runtime.parse_llm_response(
-        "ReturnAliasWithMergedAttributes",
-        llm_response,
-        types,
-        types,
-        partial_types,
-        True,
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-      )
-
-      return cast(Checked[Optional[int],types.Literal["gt_ten"]], parsed)
     
     def ReturnFailingAssert(
         self,

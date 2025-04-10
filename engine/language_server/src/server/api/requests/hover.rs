@@ -28,9 +28,16 @@ impl SyncRequestHandler for Hover {
         let project = session
             .project_db_for_path_mut(path)
             .expect("Ensured that a project db exists");
-        let document_key = DocumentKey::from_url(project.root_path(), &url).internal_error()?;
+        let document_key =
+            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
 
-        let text_document_item = match project.baml_project.files.get(&document_key) {
+        let text_document_item = match project
+            .lock()
+            .unwrap()
+            .baml_project
+            .files
+            .get(&document_key)
+        {
             None => {
                 tracing::warn!("*** HOVER: Failed to find doc {:?}", url);
                 Err(anyhow::anyhow!(
@@ -48,6 +55,8 @@ impl SyncRequestHandler for Hover {
         .internal_error()?;
         let position = params.text_document_position_params.position;
         let hover = project
+            .lock()
+            .unwrap()
             .handle_hover_request(&text_document_item, &position, notifier)
             .internal_error()?;
         Ok(hover)

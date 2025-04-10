@@ -43,7 +43,8 @@ pub fn run_server() -> anyhow::Result<()> {
 
     Server::new(worker_threads)
         .context("Failed to start server")?
-        .run()?;
+        .run()
+        .context("Failed to run server")?;
 
     Ok(())
 }

@@ -40,14 +40,19 @@ impl SyncRequestHandler for GotoDefinition {
         let project = session
             .project_db_for_path_mut(path)
             .expect("Ensured that a project db exists");
-        project.update_runtime(Some(notifier)).internal_error()?;
+        project
+            .lock()
+            .unwrap()
+            .update_runtime(Some(notifier))
+            .internal_error()?;
 
         let document_key = DocumentKey::from_url(
-            &PathBuf::from(project.root_path()),
+            &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
             &params.text_document_position_params.text_document.uri,
         )
         .internal_error()?;
-        let doc = project
+        let guard = project.lock().unwrap();
+        let doc = guard
             .baml_project
             .files
             .get(&document_key)
@@ -64,7 +69,7 @@ impl SyncRequestHandler for GotoDefinition {
         if cleaned_word.is_empty() {
             return Ok(None);
         }
-        let rt = project.runtime().internal_error()?;
+        let rt = guard.runtime().internal_error()?;
         let maybe_symbol = rt.search_for_symbol(&cleaned_word);
         match maybe_symbol {
             None => Ok(None),

@@ -30,9 +30,10 @@ impl SyncRequestHandler for Completion {
         let project = session
             .project_db_for_path(path)
             .expect("Ensured that a project db exists");
+        let guard = project.lock().unwrap();
         let document_key =
-            DocumentKey::from_url(&PathBuf::from(project.root_path()), &url).internal_error()?;
-        let doc = project
+            DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;
+        let doc = guard
             .baml_project
             .files
             .get(&document_key)

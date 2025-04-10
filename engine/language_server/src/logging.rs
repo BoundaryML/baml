@@ -15,6 +15,8 @@ use tracing_subscriber::{
 };
 
 pub(crate) fn init_logging(_log_level: LogLevel, log_file: Option<&std::path::Path>) {
+    // We can't have baml_log print to stdout or it will mess up the LSP communication protocol,
+    // which uses stdout/stderr for communication.
     let log_file = log_file
         .map(|path| {
             // this expands `logFile` so that tildes and environment variables
@@ -53,7 +55,7 @@ pub(crate) fn init_logging(_log_level: LogLevel, log_file: Option<&std::path::Pa
         tracing_subscriber::fmt::layer()
             .with_timer(Uptime::default())
             .with_thread_names(true)
-            .with_ansi(false)
+            .with_ansi(false) // Enable ANSI colors
             .with_writer(logger)
             .with_span_events(FmtSpan::ENTER)
             .with_filter(LogLevelFilter {
@@ -63,6 +65,13 @@ pub(crate) fn init_logging(_log_level: LogLevel, log_file: Option<&std::path::Pa
 
     tracing::subscriber::set_global_default(subscriber)
         .expect("should be able to set global default subscriber");
+
+    match baml_log::set_running_in_lsp(true) {
+        Ok(_) => (),
+        Err(e) => {
+            tracing::error!("Failed to set running in LSP: {}", e);
+        }
+    }
 }
 
 /// The log level for the server as provided by the client during initialization.

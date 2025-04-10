@@ -94,6 +94,7 @@ aws-smithy-json = "0.60.7"
 pretty_assertions = "1.4.0"
 valuable = { version = "0.1.0", features = ["derive"] }
 tracing = { version = "0.1.40", features = ["valuable"] }
+tracing-log = "0.2.0"
 tracing-core = { version = "0.1.31" }
 tracing-subscriber = { version = "0.3.18", features = [
   "json",

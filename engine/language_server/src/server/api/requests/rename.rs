@@ -25,66 +25,79 @@ impl SyncRequestHandler for Rename {
         _requester: &mut Requester,
         params: RenameParams,
     ) -> Result<Option<lsp_types::WorkspaceEdit>> {
-      let url = params.text_document_position.text_document.uri;
-      let path = url
-          .to_file_path()
-          .internal_error_msg("Could not convert URL to path")?;
-      session
-          .ensure_project_db_for_baml_file(&url)
-          .internal_error()?;
-      let project = session
-          .project_db_for_path(path)
-          .expect("Ensured that a project db exists");
-      let document_key =
-          DocumentKey::from_url(&PathBuf::from(project.root_path()), &url).internal_error()?;
-      
-      // Get the symbol under point.
-      let doc = project.baml_project.files.get(&document_key).ok_or(anyhow::anyhow!(
-          "File {} was not present in the project",
-          document_key
-      ))
-      .internal_error()?;
-      let symbol = get_word_at_position(&doc.contents, &params.text_document_position.position);
-      let new_symbol = params.new_name;
+        let url = params.text_document_position.text_document.uri;
+        let path = url
+            .to_file_path()
+            .internal_error_msg("Could not convert URL to path")?;
+        session
+            .ensure_project_db_for_baml_file(&url)
+            .internal_error()?;
+        let project = session
+            .project_db_for_path(path)
+            .expect("Ensured that a project db exists");
+        let guard = project.lock().unwrap();
+        let document_key =
+            DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;
 
-      // If the symbol is a class, find all occurrences and replace them.
-      let runtime = project.baml_project.runtime(HashMap::new());
-      let rt = runtime.as_ref().clone().map_err(|_| anyhow::anyhow!("Failed to get runtime")).internal_error()?;
-      let res = if rt.is_valid_class(&symbol) {
-          let symbol_locations = rt.search_for_class_locations(&symbol);
-          let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+        // Get the symbol under point.
+        let doc = guard
+            .baml_project
+            .files
+            .get(&document_key)
+            .ok_or(anyhow::anyhow!(
+                "File {} was not present in the project",
+                document_key
+            ))
+            .internal_error()?;
+        let symbol = get_word_at_position(&doc.contents, &params.text_document_position.position);
+        let new_symbol = params.new_name;
 
-          symbol_locations.iter().try_for_each(|ref loc| {
-              let loc_url = PathBuf::from(&loc.uri);
-              let range = lsp_types::Range::new(
-                  lsp_types::Position::new(loc.start_line as u32, loc.start_character as u32),
-                  lsp_types::Position::new(loc.end_line as u32, loc.end_character as u32 ),
-              );
-              let symbol_doc_key = DocumentKey::from_path(&PathBuf::from(project.root_path()), &loc_url).internal_error_msg("Could not convert URL to path")?;
-              let text_edit = TextEdit { range, new_text: new_symbol.clone() };
+        // If the symbol is a class, find all occurrences and replace them.
+        let runtime = guard.baml_project.runtime(HashMap::new());
+        let rt = runtime
+            .as_ref()
+            .clone()
+            .map_err(|_| anyhow::anyhow!("Failed to get runtime"))
+            .internal_error()?;
+        let res = if rt.is_valid_class(&symbol) {
+            let symbol_locations = rt.search_for_class_locations(&symbol);
+            let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
 
-              let entry = changes.entry(symbol_doc_key.url()).or_insert_with(Vec::new);
-              entry.push(text_edit);
-              Ok(())
-          })?;
-          Ok(Some(WorkspaceEdit {
-              changes: Some(changes),
-              document_changes: None,
-              change_annotations: None,
-          }))
-      } else if rt.is_valid_function(&symbol) {
-          Ok(None)
-      } else if rt.is_valid_enum(&symbol) {
-          Ok(None)
-      } else if rt.is_valid_type_alias(&symbol) {
-          Ok(None)
-      } else {
-          Ok(None)
-      };
-    
-    session.reload(Some(notifier)).internal_error()?;
-      
-    res
+            symbol_locations.iter().try_for_each(|ref loc| {
+                let loc_url = PathBuf::from(&loc.uri);
+                let range = lsp_types::Range::new(
+                    lsp_types::Position::new(loc.start_line as u32, loc.start_character as u32),
+                    lsp_types::Position::new(loc.end_line as u32, loc.end_character as u32),
+                );
+                let symbol_doc_key =
+                    DocumentKey::from_path(&PathBuf::from(guard.root_path()), &loc_url)
+                        .internal_error_msg("Could not convert URL to path")?;
+                let text_edit = TextEdit {
+                    range,
+                    new_text: new_symbol.clone(),
+                };
+
+                let entry = changes.entry(symbol_doc_key.url()).or_insert_with(Vec::new);
+                entry.push(text_edit);
+                Ok(())
+            })?;
+            Ok(Some(WorkspaceEdit {
+                changes: Some(changes),
+                document_changes: None,
+                change_annotations: None,
+            }))
+        } else if rt.is_valid_function(&symbol) {
+            Ok(None)
+        } else if rt.is_valid_enum(&symbol) {
+            Ok(None)
+        } else if rt.is_valid_type_alias(&symbol) {
+            Ok(None)
+        } else {
+            Ok(None)
+        };
+
+        session.reload(Some(notifier)).internal_error()?;
+
+        res
     }
-            
 }

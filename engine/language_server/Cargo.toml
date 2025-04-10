@@ -28,10 +28,11 @@ regex = { version = "1.10.2" }
 rustc-hash = { version = "2.0.0" }
 serde = { version = "1.0.197", features = ["derive"] }
 serde_json = { version = "1.0.113" }
-
+tracing-log = "0.2.0"
 shellexpand = { version = "3.0.0" }
 
 thiserror = { version = "2.0.0" }
+baml-log = { path = "../baml-lib/baml-log" }
 
 tracing = { version = "0.1.40" }
 

@@ -30,9 +30,18 @@ impl SyncRequestHandler for DocumentFormatting {
         let project = session
             .project_db_for_path_mut(path)
             .expect("Ensured that a project db exists");
-        let document_key =
-            DocumentKey::from_url(&PathBuf::from(project.root_path()), &url).internal_error()?;
-        let doc_contents = match project.baml_project.files.get(&document_key) {
+        let document_key = DocumentKey::from_url(
+            &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
+            &url,
+        )
+        .internal_error()?;
+        let doc_contents = match project
+            .lock()
+            .unwrap()
+            .baml_project
+            .files
+            .get(&document_key)
+        {
             None => {
                 tracing::warn!("Failed to find doc {:?}", url);
                 Err(anyhow::anyhow!(

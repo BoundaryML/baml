@@ -131,29 +131,6 @@ export class BamlSyncClient {
     }
   }
   
-  AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
-      __baml_options__?: BamlCallOptions
-  ): Checked<number,"gt_ten"> {
-    try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const raw = this.runtime.callFunctionSync(
-        "AliasWithMultipleAttrs",
-        {
-          "money": money
-        },
-        this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
-      )
-      return raw.parsed(false) as Checked<number,"gt_ten">
-    } catch (error: any) {
-      throw toBamlError(error);
-    }
-  }
-  
   AliasedInputClass(
       input: InputClass,
       __baml_options__?: BamlCallOptions
@@ -2127,29 +2104,6 @@ export class BamlSyncClient {
         collector,
       )
       return raw.parsed(false) as NodeWithAliasIndirection
-    } catch (error: any) {
-      throw toBamlError(error);
-    }
-  }
-  
-  ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
-      __baml_options__?: BamlCallOptions
-  ): Checked<number,"gt_ten"> {
-    try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const raw = this.runtime.callFunctionSync(
-        "ReturnAliasWithMergedAttributes",
-        {
-          "money": money
-        },
-        this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
-      )
-      return raw.parsed(false) as Checked<number,"gt_ten">
     } catch (error: any) {
       throw toBamlError(error);
     }

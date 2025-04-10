@@ -1,3 +1,4 @@
+use crate::baml_project::Project;
 use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
 use crate::server::api::ResultExt;
 use crate::server::client::Requester;
@@ -23,10 +24,12 @@ impl SyncRequestHandler for CodeLens {
         _requester: &mut Requester,
         params: CodeLensParams,
     ) -> Result<Option<Vec<lsp_types::CodeLens>>> {
+        tracing::info!("CodeLens request");
         let url = params.text_document.uri.clone();
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
+
         session
             .ensure_project_db_for_baml_file(&params.text_document.uri)
             .internal_error()?;
@@ -34,12 +37,12 @@ impl SyncRequestHandler for CodeLens {
         let project = session
             .project_db_for_path_mut(path)
             .expect("Ensured that a project db exists");
-
         let fake_env = HashMap::new();
-        let baml_diagnostics = match project.baml_project.runtime(fake_env) {
+        let baml_diagnostics = match project.lock().unwrap().baml_project.runtime(fake_env) {
             Ok(runtime) => runtime.internal().diagnostics().clone(),
             Err(err) => err,
         };
+
         if baml_diagnostics.has_errors() {
             return Ok(None);
         }
@@ -51,11 +54,15 @@ impl SyncRequestHandler for CodeLens {
             )
         };
 
-        let doc_matches = |span: &BamlSpan| {
-            let absolute_file = DocumentKey::from_url(project.root_path(), &url);
-            let absolute_target =
-                DocumentKey::from_path(project.root_path(), &PathBuf::from(span.file_path.clone()));
-            let is_match = match (&absolute_file, &absolute_target) {
+        let project_lock = project.lock().unwrap();
+
+        let doc_matches = |span: &BamlSpan, project_lock: &Project| {
+            let absolute_file = DocumentKey::from_url(project_lock.root_path(), &url);
+            let absolute_target = DocumentKey::from_path(
+                project_lock.root_path(),
+                &PathBuf::from(span.file_path.clone()),
+            );
+            match (&absolute_file, &absolute_target) {
                 (Ok(file), Ok(target)) => file.path() == target.path(),
                 _ => {
                     tracing::error!(
@@ -65,40 +72,40 @@ impl SyncRequestHandler for CodeLens {
                     );
                     false
                 }
-            };
-            is_match
+            }
         };
 
-        let mut function_lenses: Vec<lsp_types::CodeLens> = project
+        let mut function_lenses: Vec<lsp_types::CodeLens> = project_lock
             .list_functions()
             .unwrap_or(vec![])
             .iter()
-            .filter(|func| doc_matches(&func.span))
+            .filter(|func| doc_matches(&func.span, &project_lock))
             .map(|func| {
                 let range = mk_range(&func.span);
                 let command = Command::new(
                     "▶ Open Playground ✨".to_string(),
                     "baml.openBamlPanel".to_string(),
                     Some(vec![serde_json::json!({
-                        "projectId": project.root_path(),
+                        "projectId": project_lock.root_path(),
                         "functionName": func.name.clone(),
                         "showTests": true,
                     })]),
                 );
-                let lens = lsp_types::CodeLens {
+                lsp_types::CodeLens {
                     range,
                     command: Some(command),
                     data: None,
-                };
-                lens
+                }
             })
             .collect();
 
-        let test_case_lenses: Vec<lsp_types::CodeLens> = project
+        tracing::info!("Function lenses calculated");
+
+        let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
             .list_testcases()
             .unwrap_or(vec![])
             .iter()
-            .filter(|testcase| doc_matches(&testcase.span))
+            .filter(|testcase| doc_matches(&testcase.span, &project_lock))
             .map(|testcase| {
                 let range = mk_range(&testcase.span);
                 let command_name = if testcase.parent_functions.len() > 1 {
@@ -110,23 +117,21 @@ impl SyncRequestHandler for CodeLens {
                     command_name,
                     "baml.runBamlTest".to_string(),
                     Some(vec![serde_json::json!({
-                        "projectId": project.root_path(),
+                        "projectId": project_lock.root_path(),
                         "testCaseName": testcase.name.clone(),
                         "functionName": testcase.parent_functions[0].name.clone(),
                         "showTests": true,
                     })]),
                 );
-                let lens = lsp_types::CodeLens {
+                lsp_types::CodeLens {
                     range,
                     command: Some(command),
                     data: None,
-                };
-                lens
+                }
             })
             .collect();
 
         function_lenses.extend(test_case_lenses);
-
         Ok(Some(function_lenses))
     }
 }

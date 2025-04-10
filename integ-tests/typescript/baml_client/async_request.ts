@@ -71,26 +71,6 @@ export class AsyncHttpRequest {
     }
   }
   
-  async AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "AliasWithMultipleAttrs",
-        {
-          "money": money
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
   async AliasedInputClass(
       input: InputClass,
       __baml_options__?: BamlCallOptions
@@ -1800,26 +1780,6 @@ export class AsyncHttpRequest {
         "RecursiveClassWithAliasIndirection",
         {
           "cls": cls
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  async ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "ReturnAliasWithMergedAttributes",
-        {
-          "money": money
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
@@ -3477,26 +3437,6 @@ export class AsyncHttpStreamRequest {
     }
   }
   
-  async AliasWithMultipleAttrs(
-      money: Checked<number,"gt_ten">,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "AliasWithMultipleAttrs",
-        {
-          "money": money
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
   async AliasedInputClass(
       input: InputClass,
       __baml_options__?: BamlCallOptions
@@ -5206,26 +5146,6 @@ export class AsyncHttpStreamRequest {
         "RecursiveClassWithAliasIndirection",
         {
           "cls": cls
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  async ReturnAliasWithMergedAttributes(
-      money: Checked<number,"gt_ten">,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "ReturnAliasWithMergedAttributes",
-        {
-          "money": money
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

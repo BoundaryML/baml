@@ -67,7 +67,6 @@ impl BamlProject {
         no_version_check: Option<bool>,
     ) -> Result<Vec<GenerateOutput>, anyhow::Error> {
         let env = std::env::vars().collect();
-        let runtime = self.runtime(env)?;
         let all_files = self
             .files
             .iter()
@@ -76,7 +75,34 @@ impl BamlProject {
                 (PathBuf::from(path_buf), text_document.contents.clone())
             })
             .collect();
-        let generated = runtime.run_codegen(&all_files, no_version_check.unwrap_or(false))?;
+        tracing::info!("Running generators");
+        let start_time = Instant::now();
+
+        let runtime = self.runtime(env)?;
+        tracing::info!("Runtime loaded in {:?}ms", start_time.elapsed().as_millis());
+
+        let generated = match runtime.run_codegen(&all_files, no_version_check.unwrap_or(false)) {
+            Ok(gen) => {
+                let elapsed = start_time.elapsed();
+                tracing::info!(
+                    "Generated {:?} baml_clients in {:?}ms",
+                    gen.len(),
+                    elapsed.as_millis()
+                );
+                gen
+            }
+            Err(e) => {
+                let elapsed = start_time.elapsed();
+                tracing::info!(
+                    "Failed to run codegen in {:?}ms: {:?}",
+                    elapsed.as_millis(),
+                    e
+                );
+                tracing::error!("Failed to run codegen: {:?}", e);
+                return Err(e);
+            }
+        };
+        tracing::info!("Generated {:?} baml_clients", generated.len());
 
         match generated.len() {
             1 => tracing::info!(
@@ -143,10 +169,16 @@ impl BamlProject {
         let mut hm = self.files.iter().collect::<HashMap<_, _>>();
         hm.extend(self.unsaved_files.iter());
 
+        let start_time = Instant::now();
+        let elapsed = start_time.elapsed();
+
+        let start_time = Instant::now();
+
         let files_for_runtime = hm
             .into_iter()
             .map(|(k, v)| (k.unchecked_to_string(), v.contents.clone()))
             .collect::<HashMap<_, _>>();
+        let elapsed = start_time.elapsed();
 
         BamlRuntime::from_file_content(
             &self.root_dir_name.to_string_lossy(),
@@ -613,13 +645,18 @@ impl BamlRuntimeExt for BamlRuntime {
 
 /// The Project struct wraps a WASM project, its runtime, and exposes methods for file updates,
 /// diagnostics, symbol lookup, and code generation.
-#[derive(Clone)]
 pub struct Project {
     pub baml_project: BamlProject,
     // A callback invoked when a runtime update succeeds (passing diagnostics and a file map).
     // on_success: Box<dyn Fn(WasmDiagnosticError, HashMap<String, String>)>,
     pub current_runtime: Option<BamlRuntime>,
     pub last_successful_runtime: Option<BamlRuntime>,
+}
+
+impl std::fmt::Debug for Project {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Project")
+    }
 }
 
 impl Project {
@@ -682,6 +719,7 @@ impl Project {
     /// invokes diagnostics, and calls the success callback.
     /// TODO: Consider pushing diagnostics here.
     pub fn update_runtime(&mut self, runtime_notifier: Option<Notifier>) -> anyhow::Result<()> {
+        let start_time = Instant::now();
         let fake_env_vars: HashMap<String, String> = HashMap::new();
         let _no_version_check = false;
 
@@ -720,6 +758,8 @@ impl Project {
         //     .diagnostics(self.current_runtime.as_ref().unwrap());
         // (self.on_success)(diagnostics, file_map);
         // todo!()
+        let elapsed = start_time.elapsed();
+        tracing::info!("update_runtime took {:?}ms", elapsed.as_millis());
         Ok(())
     }
 
@@ -933,9 +973,11 @@ impl Project {
         F: Fn(String) + Send,
         E: Fn(String) + Send,
     {
+        tracing::info!("Running generators without debounce");
         let start = Instant::now();
         match self.baml_project.run_generators_native(None) {
             Ok(generators) => {
+                tracing::info!("Generators generated");
                 let mut generated_file_count = 0;
                 for gen in generators {
                     // Process each generator and simulate file generation.
@@ -944,7 +986,10 @@ impl Project {
                 }
                 let elapsed = start.elapsed();
                 if generated_file_count > 0 {
-                    on_success(format!("BAML client generated! (took {:?})", elapsed));
+                    on_success(format!(
+                        "BAML client generated! (took {}ms)",
+                        elapsed.as_millis()
+                    ));
                 }
             }
             Err(e) => {

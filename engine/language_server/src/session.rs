@@ -6,7 +6,8 @@ use itertools::any;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use anyhow::anyhow;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
@@ -31,23 +32,29 @@ mod settings;
 // should use methods on `ProjectDatabase`.
 
 /// The global state for the LSP
+#[derive(Debug)]
 pub struct Session {
     /// Used to retrieve information about open documents and settings.
-    ///
-    /// This will be [`None`] when a mutable reference is held to the index via [`index_mut`]
-    /// to prevent the index from being accessed while it is being modified. It will be restored
-    /// when the mutable reference ([`MutIndexGuard`]) is dropped.
-    ///
-    /// [`index_mut`]: Session::index_mut
-    pub index: Option<Arc<index::Index>>,
+    pub index: Arc<Mutex<index::Index>>,
 
     /// Maps workspace folders to their respective project databases.
-    pub projects_by_workspace_folder: BTreeMap<PathBuf, Project>,
+    pub projects_by_workspace_folder: Arc<Mutex<BTreeMap<PathBuf, Arc<Mutex<Project>>>>>,
 
     /// The global position encoding, negotiated during LSP initialization.
     pub position_encoding: PositionEncoding,
     /// Tracks what LSP features the client supports and doesn't support.
     pub resolved_client_capabilities: Arc<ResolvedClientCapabilities>,
+}
+
+impl Clone for Session {
+    fn clone(&self) -> Self {
+        Self {
+            index: self.index.clone(),
+            projects_by_workspace_folder: self.projects_by_workspace_folder.clone(),
+            position_encoding: self.position_encoding.clone(),
+            resolved_client_capabilities: self.resolved_client_capabilities.clone(),
+        }
+    }
 }
 
 impl Session {
@@ -67,18 +74,18 @@ impl Session {
 
             workspaces.insert(
                 workspace_path.clone(),
-                Project::new(BamlProject {
+                Arc::new(Mutex::new(Project::new(BamlProject {
                     root_dir_name: workspace_path,
                     files: HashMap::new(),
                     unsaved_files: HashMap::new(),
-                }),
+                }))),
             );
         }
 
         Ok(Self {
             position_encoding,
-            projects_by_workspace_folder: workspaces,
-            index: Some(Arc::new(index)),
+            projects_by_workspace_folder: Arc::new(Mutex::new(workspaces)),
+            index: Arc::new(Mutex::new(index)),
             resolved_client_capabilities: Arc::new(ResolvedClientCapabilities::new(
                 client_capabilities,
             )),
@@ -90,12 +97,12 @@ impl Session {
     pub(crate) fn project_db_for_path(
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
-    ) -> Option<&Project> {
-        self
-            .projects_by_workspace_folder
+    ) -> Option<Arc<Mutex<Project>>> {
+        let guard = self.projects_by_workspace_folder.lock().unwrap();
+        guard
             .range(..=path.as_ref().to_path_buf())
             .next_back()
-            .map(|(_, db)| db)
+            .map(|(_, db)| db.clone())
     }
 
     /// Returns a mutable reference to the project [`ProjectDatabase`] corresponding to the given
@@ -103,29 +110,32 @@ impl Session {
     pub(crate) fn project_db_for_path_mut(
         &mut self,
         path: impl AsRef<Path> + std::fmt::Debug,
-    ) -> Option<&mut Project> {
-        self
-            .projects_by_workspace_folder
-            .range_mut(..=path.as_ref().to_path_buf())
+    ) -> Option<Arc<Mutex<Project>>> {
+        let guard = self.projects_by_workspace_folder.lock().unwrap();
+        guard
+            .range(..=path.as_ref().to_path_buf())
             .next_back()
-            .map(|(_, db)| db)
+            .map(|(_, db)| db.clone())
     }
 
     /// Ensures that a project database exists for the given BAML file,
     /// creating one if it doesn't exist.
     pub fn ensure_project_db_for_baml_file(&mut self, url: &Url) -> anyhow::Result<()> {
-        let baml_src = find_top_level_parent(&PathBuf::from(url.to_file_path().map_err(|_| anyhow::anyhow!("Failed to convert URL to path"))?))
-            .context("Failed to find top level parent 2")?;
+        let baml_src = find_top_level_parent(&PathBuf::from(
+            url.to_file_path()
+                .map_err(|_| anyhow::anyhow!("Failed to convert URL to path"))?,
+        ))
+        .context("Failed to find top level parent 2")?;
         match self.project_db_for_path(&baml_src) {
             Some(_) => Ok(()),
             None => {
-                self.projects_by_workspace_folder.insert(
+                self.projects_by_workspace_folder.lock().unwrap().insert(
                     baml_src.clone(),
-                    Project::new(BamlProject {
+                    Arc::new(Mutex::new(Project::new(BamlProject {
                         root_dir_name: baml_src,
                         files: HashMap::new(),
                         unsaved_files: HashMap::new(),
-                    }),
+                    }))),
                 );
                 Ok(())
             }
@@ -133,15 +143,22 @@ impl Session {
     }
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
+        tracing::info!("Reloading session");
         let project_updates: Vec<HashMap<_, _>> = self
             .projects_by_workspace_folder
+            .lock()
+            .unwrap()
             .iter_mut()
             .map(|(_projet_root, project)| {
-                let files_map = project.baml_project.load_files()?;
-                project.update_runtime(notifier.clone()).map_err(|e| {
-                    tracing::error!("Failed to update runtime after reloading files: {e}");
-                    anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
-                })?;
+                let files_map = project.lock().unwrap().baml_project.load_files()?;
+                project
+                    .lock()
+                    .unwrap()
+                    .update_runtime(notifier.clone())
+                    .map_err(|e| {
+                        tracing::error!("Failed to update runtime after reloading files: {e}");
+                        anyhow::anyhow!("Failed to update runtime after reloading files: {e}")
+                    })?;
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
@@ -159,9 +176,17 @@ impl Session {
         // Index all the files, except for the ones with unsaved changes.
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
-            let document_is_unsaved = any(&self.projects_by_workspace_folder, |(_, project)| {
-                project.baml_project.unsaved_files.contains_key(&file_url)
-            });
+            let document_is_unsaved = any(
+                self.projects_by_workspace_folder.lock().unwrap().iter(),
+                |(_, project)| {
+                    project
+                        .lock()
+                        .unwrap()
+                        .baml_project
+                        .unsaved_files
+                        .contains_key(&file_url)
+                },
+            );
             if !document_is_unsaved {
                 self.open_text_document(file_url.clone(), text_document);
             }
@@ -174,19 +199,24 @@ impl Session {
     pub fn take_snapshot(&self, url: Url) -> Option<DocumentSnapshot> {
         // let key = self.key_from_url(url);
         let project = self.project_db_for_path(url.to_file_path().ok()?)?;
-        let document_key = DocumentKey::from_url(&PathBuf::from(project.root_path()), &url).ok()?;
+        let document_key = DocumentKey::from_url(
+            &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
+            &url,
+        )
+        .ok()?;
         Some(DocumentSnapshot {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
-            document_ref: self.index().make_document_ref(document_key)?,
+            document_ref: self.index.lock().unwrap().make_document_ref(document_key)?,
             position_encoding: self.position_encoding,
+            session: Arc::new((*self).clone()),
         })
     }
 
     /// Registers a text document at the provided `url`.
     /// If a document is already open here, it will be overwritten.
-    pub(crate) fn open_text_document(&mut self, document_key: DocumentKey, document: TextDocument) {
-        self.index_mut()
-            .open_text_document(document_key.clone(), document.clone());
+    pub(crate) fn open_text_document(&self, document_key: DocumentKey, document: TextDocument) {
+        let mut index = self.index.lock().unwrap();
+        index.open_text_document(document_key, document);
     }
 
     pub(crate) fn set_unsaved_file(
@@ -202,9 +232,11 @@ impl Session {
                 )
             }
         };
-        for (_folder, project) in self.projects_by_workspace_folder.iter_mut() {
+        for (_folder, project) in self.projects_by_workspace_folder.lock().unwrap().iter_mut() {
             let text_document = TextDocument::new(new_contents.clone(), 0);
             project
+                .lock()
+                .unwrap()
                 .baml_project
                 .unsaved_files
                 .insert(document_key.clone(), text_document);
@@ -216,47 +248,65 @@ impl Session {
     ///
     /// The document key must point to a text document, or this will throw an error.
     pub(crate) fn update_text_document(
-        &mut self,
+        &self,
         key: &DocumentKey,
         content_changes: Vec<TextDocumentContentChangeEvent>,
         new_version: DocumentVersion,
         notifier: Option<Notifier>,
     ) -> anyhow::Result<()> {
         let position_encoding = self.position_encoding;
-
-        // let doc_key = match key {
-        //     DocumentKey::Text(url) => url,
-        // };
         let doc_key = key;
+        let start_time = Instant::now();
         let doc_contents = {
-            let mut index = self.index_mut();
+            let mut index = self.index.lock().unwrap();
             index.update_text_document(key, content_changes, new_version, position_encoding)?;
 
-            let doc_controller = {
-                index
-                    .documents
-                    .get(doc_key)
-                    .expect("We just inserted this, so it should be there")
-            };
+            let doc_controller = index
+                .documents
+                .get(doc_key)
+                .expect("We just inserted this, so it should be there");
+
             let text_document = match doc_controller {
                 DocumentController::Text(text_document) => text_document,
             };
             text_document.contents().to_string()
         };
+        let elapsed = start_time.elapsed();
+        tracing::info!("update_text_document took {:?}ms", elapsed.as_millis());
 
+        let start_time = Instant::now();
         self.projects_by_workspace_folder
+            .lock()
+            .unwrap()
             .iter_mut()
             .try_for_each(|(_folder, project)| {
                 let text_document = TextDocument::new(doc_contents.clone(), 0);
-                if project.baml_project.files.get(&doc_key).is_some() {
+                if project
+                    .lock()
+                    .unwrap()
+                    .baml_project
+                    .files
+                    .get(&doc_key)
+                    .is_some()
+                {
                     project
+                        .lock()
+                        .unwrap()
                         .baml_project
                         .unsaved_files
                         .insert(doc_key.clone(), text_document);
+                    let elapsed = start_time.elapsed();
+                    tracing::info!("set_unsaved_file took {:?}ms", elapsed.as_millis());
 
-                    project
-                        .update_runtime(notifier.clone())
-                        .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
+                    let start_time = Instant::now();
+
+                    // project
+                    //     .lock()
+                    //     .unwrap()
+                    //     .update_runtime(notifier.clone())
+                    //     .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
+                    let elapsed = start_time.elapsed();
+                    // tracing::info!("update_runtime took {:?}ms", elapsed.as_millis());
                 }
                 Ok::<(), anyhow::Error>(())
             })?;
@@ -265,86 +315,15 @@ impl Session {
 
     /// De-registers a document, specified by its key.
     /// Calling this multiple times for the same document is a logic error.
-    pub(crate) fn close_document(&mut self, key: &DocumentKey) -> anyhow::Result<()> {
-        self.index_mut().close_document(key)?;
+    pub(crate) fn close_document(&self, key: &DocumentKey) -> anyhow::Result<()> {
+        let mut index = self.index.lock().unwrap();
+        index.close_document(key)?;
         Ok(())
     }
 
     /// Returns a reference to the index.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there's a mutable reference to the index via [`index_mut`].
-    ///
-    /// [`index_mut`]: Session::index_mut
-    pub fn index(&self) -> &index::Index {
-        self.index.as_ref().unwrap()
-    }
-
-    /// Returns a mutable reference to the index.
-    ///
-    /// This method drops all references to the index and returns a guard that will restore the
-    /// references when dropped. This guard holds the only reference to the index and allows
-    /// modifying it.
-    fn index_mut(&mut self) -> MutIndexGuard {
-        let index = self.index.take().unwrap();
-
-        // for db in self.projects_by_workspace_folder.values_mut() {
-        //     // Remove the `index` from each database. This drops the count of `Arc<Index>` down to 1
-        //     // db.system_mut()
-        //     //     .as_any_mut()
-        //     //     .downcast_mut::<LSPSystem>()
-        //     //     .unwrap()
-        //     //     .take_index();
-        // }
-
-        // There should now be exactly one reference to index which is self.index.
-        let index = Arc::into_inner(index);
-
-        MutIndexGuard {
-            session: self,
-            index,
-        }
-    }
-}
-
-/// A guard that holds the only reference to the index and allows modifying it.
-///
-/// When dropped, this guard restores all references to the index.
-struct MutIndexGuard<'a> {
-    session: &'a mut Session,
-    index: Option<index::Index>,
-}
-
-impl Deref for MutIndexGuard<'_> {
-    type Target = index::Index;
-
-    fn deref(&self) -> &Self::Target {
-        self.index.as_ref().unwrap()
-    }
-}
-
-impl DerefMut for MutIndexGuard<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.index.as_mut().unwrap()
-    }
-}
-
-// TODO: Fix this?
-impl Drop for MutIndexGuard<'_> {
-    fn drop(&mut self) {
-        if let Some(index) = self.index.take() {
-            let index = Arc::new(index);
-            // for db in self.session.projects_by_workspace_folder.values_mut() {
-            //     // db.system_mut()
-            //     //     .as_any_mut()
-            //     //     .downcast_mut::<LSPSystem>()
-            //     //     .unwrap()
-            //     //     .set_index(index.clone());
-            // }
-
-            self.session.index = Some(index);
-        }
+    pub fn index(&self) -> &Arc<Mutex<index::Index>> {
+        &self.index
     }
 }
 
@@ -355,6 +334,7 @@ pub struct DocumentSnapshot {
     resolved_client_capabilities: Arc<ResolvedClientCapabilities>,
     document_ref: index::DocumentQuery,
     position_encoding: PositionEncoding,
+    session: Arc<Session>,
 }
 
 impl DocumentSnapshot {
@@ -370,4 +350,8 @@ impl DocumentSnapshot {
         self.position_encoding
     }
 
+    pub(crate) fn project(&self) -> Option<Arc<Mutex<Project>>> {
+        self.session
+            .project_db_for_path(self.document_ref.file_url().to_file_path().unwrap())
+    }
 }

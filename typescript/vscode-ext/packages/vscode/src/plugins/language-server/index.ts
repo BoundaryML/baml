@@ -36,10 +36,6 @@ const intervalTimers: NodeJS.Timeout[] = []
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
 
-export const generateTestRequest = async (test_request: TestRequest): Promise<string | undefined> => {
-  return await client.sendRequest('generatePythonTests', test_request)
-}
-
 export const requestDiagnostics = async () => {
   const currentFile = getCurrentOpenedFile()
   if (!currentFile) {
@@ -145,6 +141,8 @@ const activateClient = (
     .onReady()
     .then(() => {
       console.log('client ready')
+      client.createDefaultErrorHandler(2)
+      client.outputChannel.show()
       client.onNotification('baml/showLanguageServerOutput', () => {
         // need to append line for the show to work for some reason.
         // dont delete this.
@@ -152,6 +150,7 @@ const activateClient = (
         client.outputChannel.show(true)
       })
       client.onNotification('baml/message', (message: BAMLMessage) => {
+        console.log('baml/message', message)
         client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
         let msg: Thenable<any>
         switch (message.type) {
@@ -239,7 +238,7 @@ const activateClient = (
 
       // Handler for both notifications and requests of type "runtime_updated".
       const handleRuntimeUpdated = (params: { root_path: string; files: Record<string, string> }) => {
-        console.log('*** HANDLE RUNTIME UPDATED ***' + JSON.stringify(params, null, 2))
+        // console.log('*** HANDLE RUNTIME UPDATED ***' + JSON.stringify(params, null, 2))
         // Only send message if current file is part of this root path
         const activeEditor =
           vscode.window.activeTextEditor ||
@@ -339,6 +338,7 @@ const plugin: BamlVSCodePlugin = {
       execArgv: ['--nolazy', '--inspect=6009'],
       env: {
         DEBUG: true,
+        RUST_BACKTRACE: 'full',
         ...process.env,
       },
     }
@@ -392,9 +392,7 @@ const plugin: BamlVSCodePlugin = {
     }
 
     let serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', targetTriple, serverExecutableName))
-    const devServerPath = context.asAbsolutePath(
-      path.join('..', '..', 'engine', 'target', 'debug', serverExecutableName),
-    ) // Adjust dev path if necessary
+    const devServerPath = context.asAbsolutePath(path.join('vscode', 'server', 'baml-cli')) // Adjust dev path if necessary
 
     // If the dev server file exists, overwrite serverAbsolutePath with it for local development.
     if (fs.existsSync(devServerPath)) {
@@ -448,6 +446,7 @@ const plugin: BamlVSCodePlugin = {
       },
       debug: {
         command: serverAbsolutePath,
+
         args: ['lsp'],
         options: debugOptions,
       },
@@ -462,8 +461,8 @@ const plugin: BamlVSCodePlugin = {
           pattern: '**/baml_src/**',
         },
       ],
-      outputChannel: vscode.window.createOutputChannel('Baml Language Server2'),
-      traceOutputChannel: vscode.window.createOutputChannel('Baml Language Server Trace'),
+      outputChannel: vscode.window.createOutputChannel('Baml Language Server'),
+      // traceOutputChannel: vscode.window.createOutputChannel('Baml Language Server Trace'),
       revealOutputChannelOn: RevealOutputChannelOn.Never,
       // initializationOptions // TODO add settings here.
       synchronize: {

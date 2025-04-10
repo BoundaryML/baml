@@ -47,8 +47,8 @@ mod logger;
 // Re-export the core types and functions
 pub use logger::{
     get_log_level, init, log_event_internal, log_internal, reload_from_env, set_color_mode,
-    set_from_env, set_json_mode, set_log_level, set_max_message_length, Level, LogError, Loggable,
-    MaxMessageLength,
+    set_from_env, set_json_mode, set_log_level, set_max_message_length, set_running_in_lsp, Level,
+    LogError, Loggable, MaxMessageLength,
 };
 
 pub use crate::{

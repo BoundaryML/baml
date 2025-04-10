@@ -650,6 +650,7 @@ impl BamlRuntime {
             })
             .collect::<Result<_>>()
             .context("Internal error: failed to collect generators")?;
+        log::info!("Generated {:?} generatorsss", client_types.len());
 
         // VSCode / WASM can't run "on_generate", so if any generator specifies on_generate,
         // we disable codegen. (This can be super surprising behavior to someone, but we'll cross
@@ -678,11 +679,14 @@ impl BamlRuntime {
                     .output_type
                     .generate_client(self.inner.ir(), args)
                     .with_context(|| {
-                        let ((line, col), _) = generator.span.line_and_column();
-                        format!(
-                            "Error while running generator defined at {}:{line}:{col}",
-                            generator.span.file.path()
-                        )
+                        let err_msg = format!(
+                            "Error while running generator defined at {}:{}:{}",
+                            generator.span.file.path(),
+                            generator.span.line_and_column().0 .0,
+                            generator.span.line_and_column().0 .1
+                        );
+                        log::error!("{}", err_msg);
+                        err_msg
                     })
             })
             .collect()

@@ -57,27 +57,27 @@ function MergeAliasAttributes(money: int) -> MergeAttrs {
     "#
 }
 
-function ReturnAliasWithMergedAttributes(money: Amount) -> Amount {
-    client "openai/gpt-4o"
-    prompt r#"
-      Return the given integer without additional context:
+// function ReturnAliasWithMergedAttributes(money: Amount) -> Amount {
+//     client "openai/gpt-4o"
+//     prompt r#"
+//       Return the given integer without additional context:
 
-      {{ money }}
+//       {{ money }}
 
-      {{ ctx.output_format }}
-    "#
-}
+//       {{ ctx.output_format }}
+//     "#
+// }
 
-function AliasWithMultipleAttrs(money: MultipleAttrs) -> MultipleAttrs {
-    client "openai/gpt-4o"
-    prompt r#"
-      Return the given integer without additional context:
+// function AliasWithMultipleAttrs(money: MultipleAttrs) -> MultipleAttrs {
+//     client "openai/gpt-4o"
+//     prompt r#"
+//       Return the given integer without additional context:
 
-      {{ money }}
+//       {{ money }}
 
-      {{ ctx.output_format }}
-    "#
-}
+//       {{ ctx.output_format }}
+//     "#
+// }
 
 type RecursiveMapAlias = map<string, RecursiveMapAlias>
 

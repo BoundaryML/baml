@@ -36,14 +36,16 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
         match session.project_db_for_path(path) {
             None => {}
             Some(project) => {
-                let document_key = DocumentKey::from_url(&PathBuf::from(project.root_path()), &url)
-                    .internal_error()?;
+                let document_key = DocumentKey::from_url(
+                    &PathBuf::from(project.lock().unwrap().root_path()),
+                    &url,
+                )
+                .internal_error()?;
                 session
                     .close_document(&document_key)
                     .with_failure_code(ErrorCode::InternalError)?;
             }
         }
-
 
         Ok(())
     }

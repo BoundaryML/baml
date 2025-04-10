@@ -1,3 +1,5 @@
+use std::sync::{Arc, Mutex};
+
 use crate::{server::schedule::Task, session::Session};
 use diagnostics::project_diagnostics;
 use log::info;
@@ -17,9 +19,17 @@ mod traits;
 use notifications as notification;
 use requests as request;
 
-use self::traits::{NotificationHandler, RequestHandler};
+use self::traits::{
+    BackgroundDocumentNotificationHandler, NotificationHandler, RequestHandler,
+    SyncNotificationHandler,
+};
 
-use super::{client::Responder, schedule::BackgroundSchedule, Result};
+use super::{
+    client::Responder,
+    client::{Notifier, Requester},
+    schedule::BackgroundSchedule,
+    Result,
+};
 
 pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
     let id = req.id.clone();
@@ -43,14 +53,19 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     .unwrap_or(())
             });
         }
-        request::Completion::METHOD => local_request_task::<request::Completion>(req),
-        request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
-        request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
-        request::Rename::METHOD => local_request_task::<request::Rename>(req),
+        // request::Completion::METHOD => local_request_task::<request::Completion>(req),
+        // request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
+        // request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
+        // request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
-            local_request_task::<request::DocumentDiagnosticRequestHandler>(req)
+            tracing::info!("diagnostic notif");
+            background_request_task::<request::DocumentDiagnosticRequestHandler>(
+                req,
+                BackgroundSchedule::LatencySensitive,
+            )
         }
         "requestDiagnostics" => {
+            tracing::info!("requestDiagnostics");
             return Task::local(move |session, _, _, responder| {
                 let result: anyhow::Result<()> = (|| {
                     let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
@@ -61,7 +76,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     let project = session
                         .project_db_for_path(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
-                    let diagnostics = project_diagnostics(&project, Some(&url));
+                    let diagnostics = project_diagnostics(project, Some(&url));
 
                     let report = Ok(DocumentDiagnosticReportResult::Report(
                         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
@@ -81,12 +96,13 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                 })
             });
         }
-        // request::DocumentDiagnosticRequestHandler::METHOD => {
-        //     background_request_task::<request::DocumentDiagnosticRequestHandler>(
-        //         req,
-        //         BackgroundSchedule::LatencySensitive,
-        //     )
-        // }
+        request::DocumentDiagnosticRequestHandler::METHOD => {
+            tracing::info!("DocumentDiagnosticRequestHandler");
+            background_request_task::<request::DocumentDiagnosticRequestHandler>(
+                req,
+                BackgroundSchedule::LatencySensitive,
+            )
+        }
 
         // request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
         // request::Format::METHOD => {
@@ -98,9 +114,9 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         request::DocumentFormatting::METHOD => {
             local_request_task::<request::DocumentFormatting>(req)
         }
-        request::Hover::METHOD => local_request_task::<request::Hover>(req),
+        // request::Hover::METHOD => local_request_task::<request::Hover>(req),
         method => {
-            tracing::warn!("Received request {method} which does not have a handler");
+            // tracing::warn!("Received request {method} which does not have a handler");
             return Task::nothing();
         }
     }
@@ -114,35 +130,154 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
     })
 }
 
-pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Task<'a> {
-    match notif.method.as_str() {
-        notification::DidChangeTextDocumentHandler::METHOD => {
-            local_notification_task::<notification::DidChangeTextDocumentHandler>(notif)
-        }
-        notification::DidChangeConfiguration::METHOD => {
-            local_notification_task::<notification::DidChangeConfiguration>(notif)
-        }
-        notification::DidChangeWatchedFiles::METHOD => {
-            local_notification_task::<notification::DidChangeWatchedFiles>(notif)
-        }
-        // notification::DidChangeWorkspace::METHOD => {
-        //     local_notification_task::<notification::DidChangeWorkspace>(notif)
-        // }
-        notification::DidCloseTextDocumentHandler::METHOD => local_notification_task::<notification::DidCloseTextDocumentHandler>(notif),
-        notification::DidOpenTextDocumentHandler::METHOD => local_notification_task::<notification::DidOpenTextDocumentHandler>(notif),
-        notification::DidSaveTextDocument::METHOD => {
-            local_notification_task::<notification::DidSaveTextDocument>(notif)
-        }
-        method => {
-            tracing::warn!("Received notification {method} which does not have a handler.");
-            return Task::nothing();
+// Helper function to handle errors consistently when Result is involved
+fn handle_notification_result_error<N: traits::NotificationHandler>(
+    result: super::Result<Vec<Task<'static>>>,
+) -> Vec<Task<'static>> {
+    match result {
+        Ok(tasks) => tasks,
+        Err(err) => {
+            tracing::error!(
+                "Encountered error when creating task for notification {}: {err}",
+                N::METHOD
+            );
+            show_err_msg!("BAML failed to handle a notification from the editor. Check the logs.");
+            vec![Task::nothing()]
         }
     }
-    .unwrap_or_else(|err| {
-        tracing::error!("Encountered error when routing notification: {err}");
-        show_err_msg!("BAML failed to handle a notification from the editor. Check the logs for more details.");
-        Task::nothing()
-    })
+}
+
+pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Vec<Task<'a>> {
+    match notif.method.as_str() {
+        notification::DidChangeTextDocumentHandler::METHOD => {
+            let params_result =
+                cast_notification::<notification::DidChangeTextDocumentHandler>(notif);
+            match params_result {
+                Ok((id, params)) => {
+                    let mut tasks = Vec::new();
+
+                    // 1. Local Task for DidChangeTextDocument
+                    let params_local = params.clone();
+                    tasks.push(Task::local(move |session, notifier, requester, _| {
+                        if let Err(err) = notification::DidChangeTextDocumentHandler::run(
+                            session, notifier, requester, params_local,
+                        ) {
+                            tracing::error!(
+                                "An error occurred while running local {id}: {err}"
+                            );
+                            show_err_msg!(
+                                "BAML encountered a problem processing document change (local). Check the logs."
+                            );
+                        }
+                    }));
+
+                    // 2. Background Task for DidChangeTextDocument
+                    // Note: We need a way to get the URL for the background task.
+                    // Assuming BackgroundDocumentNotificationHandler is implemented for DidChangeTextDocumentHandler
+                    // If not, this part needs adjustment based on how DidChangeTextDocumentHandler can provide the URL.
+                    let params_background = params;
+                    // *** IMPORTANT: Assumes DidChangeTextDocumentHandler implements BackgroundDocumentNotificationHandler ***
+                    // ***           and provides the document_url method. If not, this needs modification.       ***
+                    let url = params_background.text_document.uri.clone();
+
+                    let schedule = BackgroundSchedule::LatencySensitive; // Or appropriate schedule for diagnostics/updates
+                    tasks.push(Task::background(schedule, move |session: &Session| {
+                        let Some(snapshot) = session.take_snapshot(url.clone()) else {
+                            tracing::warn!(
+                                "Could not take snapshot for background notification {id}: {}",
+                                url
+                            );
+                            return Box::new(|_, _| {});
+                        };
+
+                        // Get the project DB Arc in the outer closure
+                        let project_db =
+                            match session.project_db_for_path(url.to_file_path().unwrap()) {
+                                Some(db) => db.clone(), // Clone the Arc, cheap operation
+                                None => {
+                                    tracing::error!(
+                                        "Could not find project for path in background task: {}",
+                                        url
+                                    );
+                                    return Box::new(|_, _| {});
+                                }
+                            };
+
+                        // Move the cloned Arc into the inner closure
+                        Box::new(move |notifier: Notifier, _| {
+                            // Assuming background task mainly needs Notifier
+                            // *** IMPORTANT: Assumes run_with_snapshot is implemented ***
+
+                            // Use the captured project_db Arc
+                            match project_db.lock().unwrap().update_runtime(Some(notifier)) {
+                                Ok(_) => (),
+                                Err(err) => {
+                                    tracing::error!("Error updating runtime: {err}");
+                                    show_err_msg!(
+                                        "BAML encountered a problem processing document change (background). Check the logs."
+                                    );
+                                }
+                            }
+                            // if let Err(err) =
+                            //     // notification::DidChangeTextDocumentHandler::run_with_snapshot(
+                            //     //     snapshot, // snapshot is still available here if needed
+                            //     //     notifier,
+                            //     //     params_background, // Pass the correct params here
+                            //     // )
+                            // {
+                            //     tracing::error!(
+                            //         "An error occurred while running background {id}: {err}"
+                            //     );
+                            //     show_err_msg!(
+                            //         "BAML encountered a problem processing document change (background). Check the logs."
+                            //     );
+                            // }
+                        })
+                    }));
+
+                    tasks
+                }
+                Err(err) => {
+                    tracing::error!(
+                        "Encountered error parsing params for {}: {err}",
+                        notification::DidChangeTextDocumentHandler::METHOD
+                    );
+                    show_err_msg!(
+                        "BAML failed to handle a notification from the editor. Check the logs."
+                    );
+                    vec![Task::nothing()]
+                }
+            }
+        }
+
+        // --- Use local_notification_task helper for these ---
+        notification::DidChangeWatchedFiles::METHOD => {
+            handle_notification_result_error::<notification::DidChangeWatchedFiles>(
+                local_notification_task::<notification::DidChangeWatchedFiles>(notif),
+            )
+        }
+        notification::DidCloseTextDocumentHandler::METHOD => {
+            handle_notification_result_error::<notification::DidCloseTextDocumentHandler>(
+                local_notification_task::<notification::DidCloseTextDocumentHandler>(notif),
+            )
+        }
+        notification::DidOpenTextDocumentHandler::METHOD => {
+            handle_notification_result_error::<notification::DidOpenTextDocumentHandler>(
+                local_notification_task::<notification::DidOpenTextDocumentHandler>(notif),
+            )
+        }
+        // --- DidSaveTextDocument now uses the simple local task helper ---
+        notification::DidSaveTextDocument::METHOD => {
+            handle_notification_result_error::<notification::DidSaveTextDocument>(
+                local_notification_task::<notification::DidSaveTextDocument>(notif),
+            )
+        }
+
+        method => {
+            tracing::warn!("Received notification {method} which does not have a handler.");
+            vec![Task::nothing()]
+        }
+    }
 }
 
 fn local_request_task<'a, R: traits::SyncRequestHandler>(
@@ -166,67 +301,67 @@ fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
         .to_file_path()
         .internal_error_msg("Could not convert URL to path")?;
     Ok(Task::background(schedule, move |session: &Session| {
-        // let Ok(path) = url_to_any_system_path(&url) else {
-        //     return Box::new(|_, _| {});
-        // };
-        // let db = match path {
-        //     AnySystemPath::System(path) => match session.project_db_for_path(path.as_std_path()) {
-        //         Some(db) => db.clone(),
-        //         None => session.default_project_db().clone(),
-        //     },
-        //     AnySystemPath::SystemVirtual(_) => session.default_project_db().clone(),
-        // };
-
         let Some(_snapshot) = session.take_snapshot(url) else {
             return Box::new(|_, _| {});
         };
-        // TODO get the relevant Project and pass it in.
         info!(
             "session.projects.len(): {:?}",
-            session.projects_by_workspace_folder.len()
+            session.projects_by_workspace_folder.lock().unwrap().len()
         );
         let _db = session.project_db_for_path(path).clone();
+        if _db.is_none() {
+            tracing::error!("Could not find project for path");
+            return Box::new(|_, _| {});
+        }
+        let _db = _db.unwrap();
 
         Box::new(move |_notifier, _responder| {
-            // let result = R::run_with_snapshot(snapshot, db, notifier, params);
-            // respond::<R>(id, result, &responder);
+            R::run_with_snapshot(_snapshot, _db, _notifier, params);
         })
     }))
 }
 
 fn local_notification_task<'a, N: traits::SyncNotificationHandler>(
     notif: lsp_server::Notification,
-) -> super::Result<Task<'a>> {
+) -> super::Result<Vec<Task<'a>>> {
     let (id, params) = cast_notification::<N>(notif)?;
-    Ok(Task::local(move |session, notifier, requester, _| {
+    Ok(vec![Task::local(move |session, notifier, requester, _| {
         if let Err(err) = N::run(session, notifier, requester, params) {
-            tracing::error!("An error occurred while running {id}: {err}");
-            show_err_msg!("BAML encountered a problem. Check the logs for more details.");
+            tracing::error!("An error occurred while running sync notification {id}: {err}");
+            show_err_msg!("BAML encountered a problem handling a notification. Check the logs.");
         }
-    }))
+    })])
 }
 
-// #[allow(dead_code)]
-// fn background_notification_thread<'a, N: traits::BackgroundDocumentNotificationHandler>(
-//     req: lsp_server::Notification,
-//     schedule: BackgroundSchedule,
-// ) -> super::Result<Task<'a>> {
-//     let (_id, params) = cast_notification::<N>(req)?;
-//     Ok(Task::background(schedule, move |session: &Session| {
-//         let project = session.default_project_db()?;
-//         let document_key = DocumentKey::from_path(project.root_path(), params)?;
-//         // TODO(jane): we should log an error if we can't take a snapshot.
-//         let Some(_snapshot) = session.take_snapshot(document_key) else {
-//             return Box::new(|_, _| {});
-//         };
-//         Box::new(move |_notifier, _| {
-//             // if let Err(err) = N::run_with_snapshot(snapshot, notifier, params) {
-//             //     tracing::error!("An error occurred while running {id}: {err}");
-//             //     show_err_msg!("BAML encountered a problem. Check the logs for more details.");
-//             // }
-//         })
-//     }))
-// }
+fn background_notification_task<'a, N: traits::BackgroundDocumentNotificationHandler>(
+    notif: lsp_server::Notification,
+    schedule: BackgroundSchedule,
+) -> super::Result<Vec<Task<'a>>> {
+    let (id, params) = cast_notification::<N>(notif)?;
+    let url = N::document_url(&params).into_owned();
+
+    Ok(vec![Task::background(
+        schedule,
+        move |session: &Session| {
+            let Some(snapshot) = session.take_snapshot(url.clone()) else {
+                tracing::warn!(
+                    "Could not take snapshot for background notification {id}: {}",
+                    url
+                );
+                return Box::new(|_, _| {});
+            };
+
+            Box::new(move |notifier, _| {
+                if let Err(err) = N::run_with_snapshot(snapshot, notifier, params) {
+                    tracing::error!(
+                        "An error occurred while running background notification {id}: {err}"
+                    );
+                    show_err_msg!("BAML encountered a background problem. Check the logs.");
+                }
+            })
+        },
+    )])
+}
 
 #[derive(Deserialize)]
 struct DiagnosticRequestParams {

@@ -1,5 +1,7 @@
 //! A stateful LSP implementation that calls into the Ruff API.
 
+use std::sync::{Arc, Mutex};
+
 use crate::baml_project::Project;
 use crate::server::client::{Notifier, Requester};
 use crate::session::{DocumentSnapshot, Session};
@@ -7,6 +9,8 @@ use crate::session::{DocumentSnapshot, Session};
 // use crate::baml_project::ProjectDatabase;
 use lsp_types::notification::Notification as LSPNotification;
 use lsp_types::request::Request;
+
+use super::notifications::DidSaveTextDocument;
 
 /// A supertrait for any server request handler.
 pub(super) trait RequestHandler {
@@ -35,7 +39,7 @@ pub(super) trait BackgroundDocumentRequestHandler: RequestHandler {
 
     fn run_with_snapshot(
         snapshot: DocumentSnapshot,
-        db: Project,
+        db: Arc<Mutex<Project>>,
         notifier: Notifier,
         params: <<Self as RequestHandler>::RequestType as Request>::Params,
     ) -> super::Result<<<Self as RequestHandler>::RequestType as Request>::Result>;

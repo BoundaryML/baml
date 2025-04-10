@@ -95,37 +95,6 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Ffi::HTTPRequest)
-    }
-    def AliasWithMultipleAttrs(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
-      end
-
-      @runtime.build_request(
-        "AliasWithMultipleAttrs",
-        {
-          money: money,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        false
-      )
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
         input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Ffi::HTTPRequest)
@@ -2781,37 +2750,6 @@ module Baml
         "RecursiveClassWithAliasIndirection",
         {
           cls: cls,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        false
-      )
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Ffi::HTTPRequest)
-    }
-    def ReturnAliasWithMergedAttributes(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
-      end
-
-      @runtime.build_request(
-        "ReturnAliasWithMergedAttributes",
-        {
-          money: money,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -5377,37 +5315,6 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Ffi::HTTPRequest)
-    }
-    def AliasWithMultipleAttrs(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
-      end
-
-      @runtime.build_request(
-        "AliasWithMultipleAttrs",
-        {
-          money: money,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        true
-      )
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
         input: Baml::Types::InputClass,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Ffi::HTTPRequest)
@@ -8063,37 +7970,6 @@ module Baml
         "RecursiveClassWithAliasIndirection",
         {
           cls: cls,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        true
-      )
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
-        money: Baml::Checked[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(Baml::Ffi::HTTPRequest)
-    }
-    def ReturnAliasWithMergedAttributes(
-        *varargs,
-        money:,
-        baml_options: {}
-    )
-      if varargs.any?
-        raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
-      end
-
-      @runtime.build_request(
-        "ReturnAliasWithMergedAttributes",
-        {
-          money: money,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),

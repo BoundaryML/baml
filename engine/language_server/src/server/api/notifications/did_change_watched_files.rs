@@ -20,7 +20,24 @@ impl super::SyncNotificationHandler for DidChangeWatchedFiles {
         _requester: &mut Requester,
         params: types::DidChangeWatchedFilesParams,
     ) -> Result<()> {
-        tracing::info!("DidChangeWatchedFiles");
+        // tracing::info!("DidChangeWatchedFiles {:?}", params.changes);
+        // Filter out CHANGED events - only process CREATED and DELETED
+        let filtered_changes: Vec<_> = params
+            .changes
+            .into_iter()
+            .filter(|file_event| file_event.typ != types::FileChangeType::CHANGED)
+            .collect();
+
+        // If there are no events to process after filtering, return early
+        if filtered_changes.is_empty() {
+            tracing::debug!("No CREATED or DELETED file events to process");
+            return Ok(());
+        }
+
+        // Replace the original changes with the filtered ones
+        let params = types::DidChangeWatchedFilesParams {
+            changes: filtered_changes,
+        };
         // session.reload_settings(&params.changes);
 
         session.reload(Some(notifier.clone())).internal_error()?;

@@ -4,6 +4,7 @@ use lsp_types::DiagnosticSeverity;
 use lsp_types::{notification::PublishDiagnostics, PublishDiagnosticsParams, Url};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 use crate::baml_project::Project;
 use crate::baml_text_size::TextSize;
@@ -42,10 +43,14 @@ pub fn session_lsp_diagnostics(
     project_diagnostics(project, Some(file_url))
 }
 
-pub fn project_diagnostics(project: &Project, file_url: Option<&Url>) -> Vec<lsp_types::Diagnostic> {
-    let root_path = PathBuf::from(project.root_path());
+pub fn project_diagnostics(
+    project: Arc<Mutex<Project>>,
+    file_url: Option<&Url>,
+) -> Vec<lsp_types::Diagnostic> {
+    let guard = project.lock().unwrap();
+    let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
-    let baml_diagnostics = match project.baml_project.runtime(fake_env) {
+    let baml_diagnostics = match guard.baml_project.runtime(fake_env) {
         Ok(runtime) => {
             runtime.internal().diagnostics().clone()
             // Diagnostics::new(PathBuf::from("/fake1"))
@@ -59,7 +64,7 @@ pub fn project_diagnostics(project: &Project, file_url: Option<&Url>) -> Vec<lsp
         .filter(|e| file_url.map_or(true, |url| matches_target(&root_path, &url, &e.span())))
         .filter_map(|error| {
             Some(lsp_types::Diagnostic::new(
-                span_to_range(project, &root_path, error.span())?,
+                span_to_range(&guard, &root_path, error.span())?,
                 Some(DiagnosticSeverity::ERROR),
                 None,
                 None,
@@ -74,7 +79,7 @@ pub fn project_diagnostics(project: &Project, file_url: Option<&Url>) -> Vec<lsp
         .filter(|w| file_url.map_or(true, |url| matches_target(&root_path, &url, &w.span())))
         .filter_map(|warning| {
             Some(lsp_types::Diagnostic::new(
-                span_to_range(project, &root_path, warning.span())?,
+                span_to_range(&guard, &root_path, warning.span())?,
                 Some(DiagnosticSeverity::WARNING),
                 None,
                 None,
