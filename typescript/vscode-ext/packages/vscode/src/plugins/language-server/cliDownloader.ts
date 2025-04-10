@@ -128,10 +128,6 @@ export async function checkIfCliBinaryExists(cliVersion: CliVersion): Promise<bo
  * @param cliVersion CLI metadata, platform-architecture-version.
  */
 export async function downloadCli(cliVersion: CliVersion): Promise<void> {
-  // TODO: Testing
-  cliVersion.version = '0.1.0'
-  // cliVersion.platform = 'win32'
-
   // Filenames.
   const binaryFileName = cliBinaryFileName(cliVersion)
   const extension = getCliCompressedFileExtension(cliVersion.platform)
@@ -140,7 +136,10 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
   const compressedFileName = `${binaryFileName}.${extension}`
 
   // Github release download URL.
-  const url = `${BASE_URL}/${cliVersion.version}/${compressedFileName}`
+  // const url = `${BASE_URL}/${cliVersion.version}/${compressedFileName}`
+
+  // TODO: Mock download. Remove this.
+  const url = `${BASE_URL}/0.1.0/${cliBinaryFileName({ ...cliVersion, version: '0.1.0' })}.${extension}`
 
   console.log('LSP Download URL', url)
 

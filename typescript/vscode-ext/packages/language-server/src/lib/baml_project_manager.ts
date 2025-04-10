@@ -77,18 +77,36 @@ class Project {
     return message
   }
 
+  // TODO: Check all generators have the same version.
+  generatorVersion(): string | undefined {
+    if (this.list_generators().length === 0) {
+      return undefined
+    }
+
+    return this.list_generators()[0].version
+  }
+
   checkVersionOnSave() {
     let firstErrorMessage: undefined | string = undefined
+    let prevGenerator: undefined | BamlWasm.WasmGeneratorConfig
 
-    this.list_generators().forEach((g) => {
-      const message = this.checkVersion(g, false)
-      if (message) {
-        if (!firstErrorMessage) {
-          firstErrorMessage = message
-        }
-        console.error(message)
+    for (const g of this.list_generators()) {
+      if (!prevGenerator) {
+        prevGenerator = g
       }
-    })
+      if (g.version !== prevGenerator.version) {
+        firstErrorMessage = `All generators must have the same version. Found two different versions: ${g.version} and ${prevGenerator.version}`
+        break
+      }
+
+      // const message = this.checkVersion(g, false)
+      // if (message) {
+      //   if (!firstErrorMessage) {
+      //     firstErrorMessage = message
+      //   }
+      //   console.error(message)
+      // }
+    }
 
     return firstErrorMessage
   }

@@ -260,6 +260,35 @@ const activateClient = (
         6 * 60 * 60 * 1000 /* 6h in milliseconds: min/hr * secs/min * ms/sec */,
       ),
     )
+
+    client.onRequest('setLspVersion', async (version: string) => {
+      console.log('======= setLspVersion', version)
+
+      // TODO: If no version found, use bundled LSP else start new LSP.
+      const cliVersion = {
+        architecture: process.arch,
+        platform: process.platform,
+        version: version as string,
+      }
+
+      if (!(await checkIfCliBinaryExists(cliVersion))) {
+        await window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            cancellable: false,
+            title: `Downloading BAML LSP v${cliVersion.version}`,
+          },
+          async (progress, token) => {
+            try {
+              await downloadCli(cliVersion)
+              window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
+            } catch (error) {
+              window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
+            }
+          },
+        )
+      }
+    })
   })
 
   const disposable = client.start()
@@ -428,38 +457,6 @@ const plugin: BamlVSCodePlugin = {
         }
       }),
     )
-
-    const version = await client?.sendRequest('bamlCliVersion')
-
-    console.debug('VERSION', version)
-
-    // TODO: If no version found, use bundled LSP else start new LSP.
-    // if (version) {
-    const cliVersion = {
-      architecture: process.arch,
-      platform: process.platform,
-      version: version as string,
-    }
-
-    // TODO: Send notification, loading state, etc.
-    if (!(await checkIfCliBinaryExists(cliVersion))) {
-      window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          cancellable: false,
-          title: 'Downloading BAML LSP',
-        },
-        async (progress, token) => {
-          try {
-            await downloadCli(cliVersion)
-            window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
-          } catch (error) {
-            window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
-          }
-        },
-      )
-    }
-    // }
 
     activateClient(context, serverOptions, clientOptions)
 

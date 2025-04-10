@@ -312,7 +312,7 @@ export function startServer(options?: LSOptions): void {
   connection.onDidChangeConfiguration((_change) => {
     getConfig()
       .then(() => {
-        console.log('baml_settings_updated', bamlConfig.config)
+        console.log('baml_settings_updated', bamlConfig)
         connection.sendRequest('baml_settings_updated', bamlConfig)
         if (hasConfigurationCapability) {
           // Reset all cached document settings
@@ -327,7 +327,17 @@ export function startServer(options?: LSOptions): void {
   })
 
   documents.onDidOpen(async (e) => {
-    await bamlProjectManager.touch_project(URI.parse(e.document.uri))
+    const uri = URI.parse(e.document.uri)
+    await bamlProjectManager.touch_project(uri)
+
+    const project = bamlProjectManager.getProjectById(uri)
+
+    if (project) {
+      const version = project.generatorVersion()
+      if (version) {
+        connection.sendRequest('setLspVersion', version)
+      }
+    }
 
     // e.document.uri
     // try {
@@ -389,6 +399,13 @@ export function startServer(options?: LSOptions): void {
           durationMs: 7000,
         })
         return
+      }
+
+      // TODO: Make this call only if new version is different from current
+      // version. Client side or server side?
+      const newVersion = proj.generatorVersion()
+      if (newVersion) {
+        connection.sendRequest('setLspVersion', newVersion)
       }
 
       if (bamlConfig.config?.cliPath) {
@@ -679,6 +696,9 @@ export function startServer(options?: LSOptions): void {
   })
 
   connection.onRequest('bamlCliVersion', async () => {
+    if (!bamlConfig.cliVersion) {
+      await loadBamlCLIVersion()
+    }
     return bamlConfig.cliVersion
   })
 
