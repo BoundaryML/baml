@@ -18,6 +18,12 @@ const nextConfig = {
       // config.devtool = 'eval-source-map'
     }
 
+    // Fixed WebAssembly loading configuration
+    config.module.rules.push({
+      test: /\.wasm$/,
+      type: 'asset/resource',
+    })
+
     if (!isServer) {
       // watch my locak pnpm package @gloo-ai/playground-common for changes
       config.watchOptions = {
