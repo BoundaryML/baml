@@ -3,13 +3,15 @@ import { BAML } from '@boundaryml/baml-lezer'
 import { linter } from '@codemirror/lint'
 import { tags as t } from '@lezer/highlight'
 import { vscodeDarkInit, vscodeLightInit } from '@uiw/codemirror-theme-vscode'
-import CodeMirror, { Compartment, EditorView, type Extension, type ReactCodeMirrorRef } from '@uiw/react-codemirror'
+import CodeMirror, { Compartment, EditorView, type Extension, type ReactCodeMirrorRef, Transaction, ChangeDesc } from '@uiw/react-codemirror'
 import { inlineCopilot } from 'codemirror-copilot'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view'
+import { StateField, StateEffect, RangeSet } from '@codemirror/state'
 
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link'
 import { langs } from '@uiw/codemirror-extensions-langs'
-import { useSetAtom, useStore } from 'jotai'
+import { useSetAtom, useStore, useAtomValue } from 'jotai'
 import { type ICodeBlock } from '../types'
 import { CodeMirrorDiagnosticsAtom } from './atoms'
 
@@ -20,7 +22,7 @@ import { tsAutocomplete, tsFacet, tsHover, tsLinter, tsSync } from '@valtown/cod
 import { createDefaultMapFromCDN, createSystem, createVirtualTypeScriptEnvironment } from '@typescript/vfs'
 import { useTheme } from 'next-themes'
 import ts from 'typescript'
-import { updateCursorAtom } from '../playground-panel/atoms'
+import { FlashRange, flashRangesAtom, updateCursorAtom } from '../playground-panel/atoms'
 
 const extensionMap = {
   js: [langs.javascript()],
@@ -35,6 +37,74 @@ export interface GeneratedFile {
   path: string
   content: string
 }
+
+const addFlashingEffect = StateEffect.define<{from: number, to: number}[]>();
+const clearFlashingEffect = StateEffect.define<void>();
+const flashingMark = Decoration.mark({
+  attributes: {
+    style: `
+      color: #00FF00;
+      font-weight: bold;
+      background-color: transparent;
+      text-decoration: none;
+      text-shadow: 0 0 4px #00FF00, 0 0 6px #00FF00;
+      animation: pulseGlow 1s ease-in-out infinite alternate;
+    `
+  }
+})
+
+// Add the animation keyframes to the document
+if (typeof document !== 'undefined') {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes pulseGlow {
+      from {
+        color: #005500;
+        text-shadow: 0 0 2px #005500, 0 0 3px #005500;
+      }
+      to {
+        color: #00FF00;
+        text-shadow: 0 0 4px #00FF00, 0 0 6px #00FF00;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+}
+
+// Create a StateField for the highlights
+const createFlashingField = () => {
+  return StateField.define({
+    create() {
+      return RangeSet.empty;
+    },
+    update(highlights, tr) {
+      // Map the decorations through document changes
+      highlights = highlights.map(tr.changes);
+      
+      // Apply effects
+      for (const effect of tr.effects) {
+        if (effect.is(addFlashingEffect)) {
+          // Create new highlight decorations
+          const decorations = effect.value.map(range => 
+            flashingMark.range(range.from, range.to)
+          );
+          
+          // Add them to the set
+          highlights = highlights.update({
+            add: decorations,
+            sort: true
+          });
+        } else if (effect.is(clearFlashingEffect)) {
+          // Clear all decorations
+          highlights = RangeSet.empty;
+        }
+      }
+      
+      return highlights;
+    },
+    provide: field => EditorView.decorations.from(field)
+  });
+};
 
 export const CodeMirrorViewer = ({
   lang,
@@ -57,6 +127,25 @@ export const CodeMirrorViewer = ({
 }) => {
   const ref = useRef<ReactCodeMirrorRef>({})
   const store = useStore()
+  const flashRanges = useAtomValue(flashRangesAtom)
+
+  useEffect(() => {
+    console.log('flashRanges updated: ', flashRanges)
+    if (!ref.current.view) return;
+    const view = ref.current.view;
+    // TODO: Filter by filename?
+    const convertedRanges = flashRanges.map((range) => ({
+      from: view.state.doc.line(range.startLine + 1).from + range.startCol,
+      to: view.state.doc.line(range.endLine + 1).from + range.endCol,
+    }))
+    console.log('convertedRanges: ', convertedRanges)
+    view?.dispatch({
+      effects: [
+        clearFlashingEffect.of(),
+        addFlashingEffect.of(convertedRanges)
+      ]
+    })
+  }, [flashRanges]);
 
   const makeLinter = useCallback(() => {
     if (lang === 'baml') {
@@ -99,7 +188,6 @@ export const CodeMirrorViewer = ({
   const [extensions, setExtensions] = useState<Extension[]>([])
 
   useEffect(() => {
-    // const interval = setInterval(() => {
     if (ref.current?.view?.contentDOM) {
       const line = ref.current.view.state.doc.lineAt(ref.current.view.state.doc.length)
       if (line) {
@@ -110,18 +198,40 @@ export const CodeMirrorViewer = ({
           })
         }
       }
-
-      // // Scroll to the bottom of the container
-      // containerRef.current.contentDOM.scrollIntoView({
-      //   behavior: "smooth",
-      // });
     }
-    // }, 1000); // Adjust the interval time (in milliseconds) as needed
-
-    // return () => clearInterval(interval); // Clean up the interval on component unmount
   }, [fileContent, ref, shouldScrollDown])
 
   const setUpdateCursor = useSetAtom(updateCursorAtom)
+
+  // useEffect(() => {
+  //   if (flashRanges && ref.current?.view) {
+  //     // Convert line/column positions to character positions
+  //     const doc = ref.current.view.state.doc
+  //     const charRanges = flashRanges.map(range => {
+  //       const from = doc.line(range.startLine).from + range.startCol - 1
+  //       const to = doc.line(range.endLine).from + range.endCol - 1
+  //       return { from, to }
+  //     })
+
+  //     console.log('Dispatching flash effect for ranges:', charRanges)
+  //     ref.current.view.dispatch({
+  //       effects: [flashEffect.of(charRanges)],
+  //       annotations: [Transaction.userEvent.of('flash')]
+  //     })
+
+  //     const timeout = setTimeout(() => {
+  //       if (ref.current?.view) {
+  //         console.log('Clearing flash effect')
+  //         ref.current.view.dispatch({
+  //           effects: [flashEffect.of([])],
+  //           annotations: [Transaction.userEvent.of('clear')]
+  //         })
+  //       }
+  //     }, 1000) // Fixed duration of 1 second
+
+  //     return () => clearTimeout(timeout)
+  //   }
+  // }, [flashRanges])
 
   useEffect(() => {
     async function initializeExtensions() {
@@ -159,7 +269,7 @@ export const CodeMirrorViewer = ({
             }),
           ]
 
-          setExtensions([...tsExtensions, EditorView.lineWrapping, hyperLink])
+          setExtensions([...tsExtensions, EditorView.lineWrapping, hyperLink, createFlashingField()])
           return
         }
 
@@ -168,6 +278,7 @@ export const CodeMirrorViewer = ({
           EditorView.lineWrapping,
           lang === 'baml' ? compartment.of(makeLinter()) : [],
           hyperLink,
+          createFlashingField(),
         ])
       } catch (e) {
         console.error('Error initializing extensions', e)

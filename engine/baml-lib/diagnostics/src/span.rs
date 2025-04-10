@@ -63,7 +63,6 @@ impl Span {
             (Some(start), None) => (start, (line, column)),
             _ => ((0, 0), (0, 0)),
         };
-        log::info!("Span line and column: {:?} => {:?}", self, res);
         res
     }
 
