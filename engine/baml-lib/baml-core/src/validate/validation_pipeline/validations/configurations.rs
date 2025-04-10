@@ -29,11 +29,23 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     // TODO: Check args.
                 }
                 None => {
-                    ctx.push_warning(DatamodelWarning::new_type_not_found_error(
-                        name,
-                        ctx.db.valid_function_names(),
-                        s.clone(),
-                    ));
+                    let expr_fns = ctx
+                        .db
+                        .walk_expr_fns()
+                        .filter(|f| f.name() == name)
+                        .collect::<Vec<_>>();
+                    match ctx.db.find_expr_fn_by_name(name) {
+                        Some(_f) => {
+                            // TODO: Check args.
+                        }
+                        None => {
+                            ctx.push_warning(DatamodelWarning::new_type_not_found_error(
+                                name,
+                                ctx.db.valid_function_names(),
+                                s.clone(),
+                            ));
+                        }
+                    }
                 }
             });
     }

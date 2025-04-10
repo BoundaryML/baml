@@ -23,7 +23,9 @@ use axum_extra::{
     headers::{self, authorization::Basic, Authorization, Header},
     TypedHeader,
 };
-use baml_types::{BamlValue, GeneratorDefaultClientMode, GeneratorOutputType};
+use baml_types::{
+    expr::Expr, expr::ExprMetadata, BamlValue, GeneratorDefaultClientMode, GeneratorOutputType,
+};
 use core::pin::Pin;
 use futures::Stream;
 use jsonish::ResponseBamlValue;
@@ -206,15 +208,12 @@ impl Server {
                 "Failed to bind to port {}; try using --port PORT to specify a different port.",
                 port
             ))?;
-
+        let baml_runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
         Ok((
             Arc::new(Self {
                 src_dir: src_dir.clone(),
                 port,
-                b: Arc::new(RwLock::new(BamlRuntime::from_directory(
-                    &src_dir,
-                    std::env::vars().collect(),
-                )?)),
+                b: Arc::new(RwLock::new(baml_runtime)),
             }),
             tcp_listener,
         ))
@@ -285,13 +284,23 @@ impl Server {
         let s = self.clone();
         let app = app.route(
             "/call/:msg",
-            post(move |b_fn, b_args| s.clone().baml_call_axum(b_fn, b_args)),
+            post(
+                move |extract::Path(b_fn): extract::Path<String>,
+                      extract::Json(b_args): extract::Json<serde_json::Value>| async move {
+                    s.clone().baml_call_axum(b_fn, b_args).await
+                },
+            ),
         );
 
         let s = self.clone();
         let app = app.route(
             "/stream/:msg",
-            post(move |b_fn, b_args| s.clone().baml_stream_axum2(b_fn, b_args)),
+            post(
+                move |extract::Path(b_fn): extract::Path<String>,
+                      extract::Json(b_args): extract::Json<serde_json::Value>| async move {
+                    s.clone().baml_stream_axum2(b_fn, b_args).await
+                },
+            ),
         );
         let s = self.clone();
         let app = app.route("/docs", get(move || s.clone().docs_handler()));
@@ -405,11 +414,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         }
     }
 
-    async fn baml_call_axum(
-        self: Arc<Self>,
-        extract::Path(b_fn): extract::Path<String>,
-        extract::Json(b_args): extract::Json<serde_json::Value>,
-    ) -> Response {
+    async fn baml_call_axum(self: Arc<Self>, b_fn: String, b_args: serde_json::Value) -> Response {
         let mut b_options = None;
         if let Some(options_value) = b_args.get("__baml_options__") {
             match BamlOptions::deserialize(options_value) {
@@ -541,11 +546,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
     }
 
     // newline-delimited can be implemented using axum_streams::StreamBodyAs::json_nl(self.baml_stream(path, body))
-    async fn baml_stream_axum2(
-        self: Arc<Self>,
-        extract::Path(path): extract::Path<String>,
-        extract::Json(body): extract::Json<serde_json::Value>,
-    ) -> Response {
+    async fn baml_stream_axum2(self: Arc<Self>, path: String, body: serde_json::Value) -> Response {
         let mut b_options = None;
         if let Some(options_value) = body.get("__baml_options__") {
             match BamlOptions::deserialize(options_value) {

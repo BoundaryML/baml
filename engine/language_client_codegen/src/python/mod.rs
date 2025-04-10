@@ -323,6 +323,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
                 None => base.to_type_ref(ir, _with_checked),
             },
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         }
     }
 
@@ -378,6 +379,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
                 None => base.to_partial_type_ref(ir, with_checked),
             },
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         }
     }
 }
@@ -398,6 +400,7 @@ fn default_value_for_parameter_type(field_type: &FieldType) -> Option<&'static s
         FieldType::Primitive(_) => None,
         FieldType::Union(xs) => None,
         FieldType::WithMetadata { base, .. } => default_value_for_parameter_type(base),
+        FieldType::Arrow(_) => None,
     }
 }
 

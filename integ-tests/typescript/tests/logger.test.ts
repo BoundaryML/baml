@@ -45,35 +45,35 @@ describe('Logger tests', () => {
     expect(getLogLevel()).toBe('INFO')
 
     let { result, output } = await captureStdout(() => b.TestOllama("banks using the word 'fiscal'"))
-    expect(result.toLowerCase()).toContain('fiscal')
+    expect(result?.toLowerCase()).toContain('fiscal')
     expect(output).toBe('')
 
     // Test with log level "WARN"
     setLogLevel('WARN')
     expect(getLogLevel()).toBe('WARN')
     ;({ result, output } = await captureStdout(() => b.TestOllama("banks using the word 'fiscal'")))
-    expect(result.toLowerCase()).toContain('fiscal')
+    expect(result?.toLowerCase()).toContain('fiscal')
     expect(output).toBe('')
 
     // Finally, reset to "INFO" and test again
     setLogLevel('INFO')
     expect(getLogLevel()).toBe('INFO')
     ;({ result, output } = await captureStdout(() => b.TestOllama("banks using the word 'fiscal'")))
-    expect(result.toLowerCase()).toContain('fiscal')
+    expect(result?.toLowerCase()).toContain('fiscal')
     expect(output).toBe('')
 
     // Test with log level "OFF"
     setLogLevel('OFF')
     expect(getLogLevel()).toBe('OFF')
     ;({ result, output } = await captureStdout(() => b.TestOllama("banks using the word 'fiscal'")))
-    expect(result.toLowerCase()).toContain('fiscal')
+    expect(result?.toLowerCase()).toContain('fiscal')
     expect(output).toBe('')
 
     // Finally, reset to "INFO" and test again
     setLogLevel('INFO')
     expect(getLogLevel()).toBe('INFO')
     ;({ result, output } = await captureStdout(() => b.TestOllama("banks using the word 'fiscal'")))
-    expect(result.toLowerCase()).toContain('fiscal')
+    expect(result?.toLowerCase()).toContain('fiscal')
     expect(output).toBe('')
   })
 })

@@ -160,7 +160,14 @@ pub fn parse_field_type_chain(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> 
                 }
             }
             Rule::field_operator => operators.push(current.as_str().to_string()),
-            _ => parsing_catch_all(current, "field_type_chain"),
+            _ => {
+                diagnostics.push_error(DatamodelError::new_model_validation_error(
+                    "Unexpected token in field type chain",
+                    "field_type_chain",
+                    "<unknown>",
+                    diagnostics.span(current.as_span()),
+                ));
+            }
         }
     }
 

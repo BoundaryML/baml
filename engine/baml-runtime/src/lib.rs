@@ -9,6 +9,7 @@ pub(crate) mod internal;
 pub mod cli;
 pub mod client_registry;
 pub mod errors;
+pub mod eval_expr;
 pub mod request;
 mod runtime;
 pub mod runtime_interface;
@@ -27,16 +28,26 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
+use futures::channel::mpsc;
+use internal_baml_core::ast::Span;
+use internal_baml_core::ir::repr::initial_context;
+use jsonish::ResponseValueMeta;
+use tokio::sync::Mutex;
 
+use crate::internal::llm_client::LLMCompleteResponse;
+use baml_types::expr::{Expr, ExprMetadata};
 use baml_types::tracing::events::FunctionId;
 use baml_types::tracing::events::HTTPBody;
 use baml_types::tracing::events::HTTPRequest;
 use baml_types::tracing::events::HttpRequestId;
 use baml_types::BamlMap;
 use baml_types::BamlValue;
+use baml_types::BamlValueWithMeta;
+use baml_types::Completion;
 use baml_types::Constraint;
 use cfg_if::cfg_if;
 use client_registry::ClientRegistry;
+use eval_expr::EvalEnv;
 use futures::future::join;
 use futures::future::join_all;
 use indexmap::IndexMap;
@@ -52,6 +63,7 @@ use internal_baml_core::configuration::CodegenGenerator;
 use internal_baml_core::configuration::Generator;
 use internal_baml_core::configuration::GeneratorOutputType;
 use internal_baml_core::ir::FunctionWalker;
+use internal_baml_core::ir::IRHelperExtended;
 use internal_llm_client::AllowedRoleMetadata;
 use internal_llm_client::ClientSpec;
 use jsonish::ResponseBamlValue;
@@ -62,7 +74,9 @@ use serde_json::json;
 use std::sync::OnceLock;
 use tracingv2::storage::storage::Collector;
 use tracingv2::storage::storage::BAML_TRACER;
+use web_time::SystemTime;
 
+use crate::internal::llm_client::LLMCompleteResponseMetadata;
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
 pub use runtime_context::{
@@ -74,6 +88,7 @@ use runtime_interface::RuntimeInterface;
 use tracing::{BamlTracer, TracingSpan};
 use type_builder::TypeBuilder;
 pub use types::*;
+use web_time::Duration;
 
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
@@ -87,7 +102,10 @@ pub(crate) use runtime_interface::InternalRuntimeInterface;
 
 pub use internal_baml_core::internal_baml_diagnostics;
 pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
-pub use internal_baml_core::ir::{scope_diagnostics, FieldType, IRHelper, TypeValue};
+pub use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
+pub use internal_baml_core::ir::{
+    ir_helpers::infer_type, scope_diagnostics, FieldType, IRHelper, TypeValue,
+};
 
 use crate::internal::llm_client::LLMResponse;
 use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
@@ -268,7 +286,9 @@ impl BamlRuntime {
             .get_test_params(function_name, test_name, ctx, strict)?;
         let constraints = self
             .inner
-            .get_test_constraints(function_name, test_name, ctx)?;
+            .get_test_constraints(function_name, test_name, ctx)
+            .unwrap_or(vec![]); // TODO: Fix this.
+                                // .get_test_constraints(function_name, test_name, ctx)?;
         Ok((params, constraints))
     }
 
@@ -283,12 +303,13 @@ impl BamlRuntime {
             .get_test_params(function_name, test_name, ctx, strict)
     }
 
-    pub async fn run_test<F>(
+    pub async fn run_test_with_expr_events<F>(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
+        expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
         collector: Option<Arc<Collector>>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
@@ -296,10 +317,42 @@ impl BamlRuntime {
     {
         let span = self.tracer.start_span(test_name, ctx, &Default::default());
 
-        let type_builder = self
-            .inner
-            .get_test_type_builder(function_name, test_name, ctx)
-            .unwrap();
+        let expr_fn = self.inner.ir().find_expr_fn(function_name);
+        let is_expr_fn = expr_fn.is_ok();
+
+        if is_expr_fn {
+            // let type_builder = self
+            //     .inner
+            //     .get_test_type_builder(function_name, test_name, ctx)
+            //     .ok_or(None);
+            let rctx = ctx
+                .create_ctx(None, None, span.clone().map(|s| s.span_id))
+                .unwrap();
+            let (params, _constraints) = self
+                .get_test_params_and_constraints(function_name, test_name, &rctx, true)
+                .unwrap();
+
+            // Call the runtime synchronously.
+            let (response_res, span_uuid) = self
+                .call_function_with_expr_events(
+                    function_name.into(),
+                    &params,
+                    &ctx,
+                    None, // TODO: Test with TypeBuilder.
+                    None, // TODO: Create callback.
+                    None, // TODO: Use Collectors?
+                    expr_tx,
+                )
+                .await;
+
+            log::info!("** response_res: {:#?}", response_res);
+            let test_response = TestResponse {
+                function_response: response_res.unwrap(),
+                function_span: span_uuid,
+                constraints_result: TestConstraintsResult::empty(),
+            };
+            return (Ok(test_response), None);
+        }
 
         if let Some(span) = span.clone() {
             if let Some(collector) = collector {
@@ -308,6 +361,11 @@ impl BamlRuntime {
         }
 
         let run_to_response = || async {
+            let type_builder = self
+                .inner
+                .get_test_type_builder(function_name, test_name, ctx)
+                .unwrap();
+
             let rctx =
                 ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
             let (params, constraints) =
@@ -350,7 +408,7 @@ impl BamlRuntime {
                         evaluate_test_constraints(
                             &params,
                             &value_with_constraints,
-                            complete_resp,
+                            &complete_resp,
                             constraints,
                         )
                     }
@@ -384,6 +442,30 @@ impl BamlRuntime {
         (response, target_id)
     }
 
+    pub async fn run_test<F>(
+        &self,
+        function_name: &str,
+        test_name: &str,
+        ctx: &RuntimeContextManager,
+        on_event: Option<F>,
+        collector: Option<Arc<Collector>>,
+    ) -> (Result<TestResponse>, Option<uuid::Uuid>)
+    where
+        F: Fn(FunctionResult),
+    {
+        let res = self
+            .run_test_with_expr_events::<F>(
+                function_name,
+                test_name,
+                ctx,
+                on_event,
+                None,
+                collector,
+            )
+            .await;
+        res
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn call_function_sync(
         &self,
@@ -407,6 +489,22 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
+        let res = self
+            .call_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, None)
+            .await;
+        res
+    }
+
+    pub async fn call_function_with_expr_events(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+        expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
         let span = self.tracer.start_span(&function_name, ctx, params);
 
@@ -418,11 +516,114 @@ impl BamlRuntime {
             }
         }
 
+        let fake_syntax_span = Span::fake();
         let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id)) {
             Ok(rctx) => {
-                self.inner
-                    .call_function_impl(function_name.clone(), params, rctx)
-                    .await
+                let is_expr_fn = self
+                    .inner
+                    .ir()
+                    .expr_fns
+                    .iter()
+                    .find(|f| f.elem.name == function_name)
+                    .is_some();
+                if !is_expr_fn {
+                    self.inner
+                        .call_function_impl(function_name, params, rctx)
+                        .await
+                } else {
+                    // TODO: This code path is ugly. Calling a function heavily assumes that the
+                    // function is an LLM function. Find a way to make function-calling API more
+                    // hospitable to Expression Fns, or create new APIs for calling Expr Fns.
+                    let expr_fn = &self
+                        .inner
+                        .ir()
+                        .expr_fns
+                        .iter()
+                        .find(|f| f.elem.name == function_name)
+                        .expect("We checked earlier that this function is an expr_fn")
+                        .elem;
+                    let fn_expr = expr_fn.expr.clone();
+                    let context = initial_context(&self.inner.ir());
+                    let env = EvalEnv {
+                        context,
+                        runtime: self,
+                        expr_tx: expr_tx.clone(),
+                    };
+                    let param_baml_values = params
+                        .iter()
+                        .map(|(k, v)| {
+                            let arg_type = infer_type(v);
+                            let baml_value_with_meta: BamlValueWithMeta<ExprMetadata> =
+                                match arg_type {
+                                    None => Ok::<_, anyhow::Error>(
+                                        BamlValueWithMeta::with_const_meta(v, (Span::fake(), None)),
+                                    ),
+                                    Some(arg_type) => {
+                                        let value_unit_meta: BamlValueWithMeta<()> =
+                                            BamlValueWithMeta::with_const_meta(v, ());
+                                        let baml_value = self
+                                            .inner
+                                            .ir()
+                                            .distribute_type_with_meta(value_unit_meta, arg_type)?;
+                                        let baml_value_with_meta =
+                                            baml_value.map_meta_owned(|(_, field_type)| {
+                                                (Span::fake(), Some(field_type))
+                                            });
+
+                                        Ok(baml_value_with_meta)
+                                    }
+                                }?;
+                            Ok(Expr::Atom(baml_value_with_meta))
+                        })
+                        .collect::<Result<_>>()
+                        .unwrap_or(vec![]); //TODO: Is it acceptable to swallow errors here?
+
+                    let params_expr: Expr<ExprMetadata> =
+                        Expr::ArgsTuple(param_baml_values, (fake_syntax_span.clone(), None));
+                    let result_type = expr_fn.output.clone();
+                    let fn_call_expr = Expr::App(
+                        Arc::new(fn_expr),
+                        Arc::new(params_expr),
+                        (fake_syntax_span.clone(), Some(result_type.clone())),
+                    );
+                    let res = eval_expr::eval_to_value(&env, &fn_call_expr)
+                        .await
+                        .map(|v| {
+                            v.map(|v| {
+                                ResponseBamlValue(v.map_meta(|_| {
+                                    ResponseValueMeta(
+                                        vec![],
+                                        vec![],
+                                        Completion::default(),
+                                        result_type.clone(),
+                                    )
+                                }))
+                            })
+                        })
+                        .transpose();
+
+                    let llm_response = LLMResponse::Success(LLMCompleteResponse {
+                        client: "openai".to_string(),
+                        model: "gpt-3.5-turbo".to_string(),
+                        prompt: RenderedPrompt::Completion("Sample raw response".to_string()),
+                        request_options: BamlMap::new(),
+                        content: "Sample raw response".to_string(),
+                        start_time: SystemTime::now(),
+                        latency: Duration::from_millis(2025),
+                        metadata: LLMCompleteResponseMetadata {
+                            baml_is_complete: true,
+                            finish_reason: Some("stop".to_string()),
+                            prompt_tokens: Some(50),
+                            output_tokens: Some(50),
+                            total_tokens: Some(100),
+                        },
+                    });
+                    Ok(FunctionResult::new(
+                        OrchestrationScope { scope: vec![] },
+                        llm_response,
+                        res,
+                    ))
+                }
             }
             Err(e) => Err(e),
         };

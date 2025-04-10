@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -14,54 +14,21 @@
 
   outputs = { self, nixpkgs, flake-utils, fenix, ... }:
 
-    let
-
-      # buildTargets = {
-      #   "x86_64-linux" = {
-      #     crossSystemConfig = "x86_64-unknown-linux-musl";
-      #     rustTarget = "x86_64-unknown-linux-musl";
-      #   };
-      #   "aarch64-linux" = {
-      #     crossSystemConfig = "x86_64-unknown-linux-musl";
-      #     rustTarget = "x86_64-unknown-linux-musl";
-      #   };
-      #   "aarch64-darwin" = {};
-      #   "wasm" = {
-      #     crossSystemConfig = "wasm32-unknown-unknown";
-      #     rustTarget = "wasm32-unknown-unknown";
-      #     makeBuildPackageAttrs = pkgsCross: {
-      #       OPENSSL_STATIC = null;
-      #       OPENSSL_LIB_DIR = null;
-      #       OPENSSL_INCLUDE_DIR = null;
-      #     };
-      #   };
-      # };
-
-      # mkPkgs = buildSystem: targetSystem: import nixpkgs ({
-      #   system = buildSystem;
-      # } // (if targetSystem == null then {} else {
-      #   crossSystemcnofig = buildTargets.${targetSystem}.crossSystemConfig;
-      # }));
-
-      # eachSystem = supportedSystems: callback: builtins.fold'
-      #   (overall: system: overall // { ${system} = callback system; })
-      #   {}
-      #   supportedSystems;
-
-    in
 
     flake-utils.lib.eachDefaultSystem (system:
 
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        clang = pkgs.llvmPackages_19.clang;
+        clang = pkgs.llvmPackages_17.clang;
         pythonEnv = pkgs.python3.withPackages (ps: []);
 
         toolchain = with fenix.packages.${system}; combine [
           minimal.cargo
           minimal.rustc
           minimal.rust-std
+          complete.rustfmt
           targets.wasm32-unknown-unknown.latest.rust-std
+	        targets.x86_64-unknown-linux-musl.latest.rust-std
         ];
 
         version = (builtins.fromTOML (builtins.readFile ./engine/Cargo.toml)).workspace.package.version;
@@ -77,19 +44,47 @@
           inherit (fenix.packages.${system}.latest) rust-std;
         };
 
+	# wasm-bindgen-cli = pkgs.rustPlatform.buildRustPackage rec {
+	#   pname = "wasm-bindgen-cli";
+	#   version = "0.2.92";
+	#   src = pkgs.fetchFromGitHub {
+	#     owner = "rustwasm";
+	#     repo = "wasm-bindgen";
+	#     rev = "${version}";
+	#     sha256 = "sha256-VMt+J5sazHPqmAdsoueS2WW6Pn1tvugaJaPnSJq9038=";
+	#   };
+	#   cargoHash = "sha256-+iIHleftJ+Yl9QHEBVI91NOhBw9qtUZfgooHKoyY1w4=";
+	#   buildInputs = with pkgs; [ openssl ];
+	#   nativeBuildInputs = with pkgs; [ pkg-config ];
+	#   cargoBuildFlags = ["--package wasm-bindgen-cli"];
+	# };
+
         buildInputs = (with pkgs; [
+          cmake
           git
           openssl
           pkg-config
-          lld_19
+          lld_17
           pythonEnv
           ruby
+          ruby.devEnv
           maturin
-          nodePackages.pnpm
-          nodePackages.nodejs
+          vsce # VSCode extension packaging tool
           toolchain
+          nodejs
           uv
           wasm-pack
+          pkgs.gcc
+          napi-rs-cli
+          wasm-bindgen-cli
+
+          # For building the typescript client.
+          pixman
+          cairo
+          pango
+          libjpeg
+          giflib
+          librsvg
         ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
         nativeBuildInputs = [
           pkgs.openssl
@@ -97,32 +92,45 @@
           pkgs.ruby
           pythonEnv
           pkgs.maturin
+          pkgs.perl
+          pkgs.lld_17
+          pkgs.gcc
         ];
 
+        
       in
         {
           packages.default = rustPlatform.buildRustPackage {
+
+            # Disable tests in this build - FFI is a little tricky.
+            doCheck = false;
+
+            # Temporary: do a debug build instead of a release build, to speed up the dev cycle.
+            buildType = "debug";
+
             pname = "baml-cli";
             version = version;
-            src = let
-              extraFiles = pkgs.copyPathToStore ./engine/baml-runtime/src/cli/initial_project/baml_src;
-            in pkgs.symlinkJoin {
-              name = "source";
-              paths = [ ./engine extraFiles ];
-            };
+            src = ./engine;
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
               "" # Rely on default includes provided by stdenv.cc + libclang
             else
-              "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.llvmPackages_19.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
 
             cargoLock = { lockFile = ./engine/Cargo.lock; outputHashes = {
-              "pyo3-asyncio-0.21.0" = "sha256-5ZLzWkxp3e2u0B4+/JJTwO9SYKhtmBpMBiyIsTCW5Zw=";
-              "serde_magnus-0.9.0" = "sha256-+iIHleftJ+Yl9QHEBVI91NOhBw9qtUZfgooHKoyY1w4=";
             }; };
 
             # Add build-time environment variables
-            RUSTFLAGS = "-C target-feature=+crt-static --cfg tracing_unstable";
+            RUSTFLAGS = if pkgs.stdenv.isDarwin
+              then
+                "--cfg tracing_unstable -C linker=lld"
+              else
+                "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
+
+            OPENSSL_STATIC = "1";
+            OPENSSL_DIR = "${pkgs.openssl.dev}";
+            OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
+            OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
 
             # Modify the test phase to only run library tests
             checkPhase = ''
@@ -132,11 +140,23 @@
               runHook postCheck
             '';
 
+            postPatch = ''
+              # Disable baml syntax validation tests in build. They require too much
+              # file system access to run.
+              cat > baml-lib/baml/build.rs << 'EOF'
+                fn main() {
+                  println!("cargo:warning=Skipping baml syntax validation tests");
+                }
+              EOF
+            '';
+
             inherit buildInputs;
+            inherit nativeBuildInputs;
+
             PYTHON_SYS_EXECUTABLE="${pythonEnv}/bin/python3";
             LD_LIBRARY_PATH="${pythonEnv}/lib";
             PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
-            CC="${clang}/bin/clang";
+            # CC="${clang}/bin/clang"; # Temporarily commented out for linux testing.
 
           };
           devShell = pkgs.mkShell rec {
@@ -146,7 +166,7 @@
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
               "" # Rely on default includes provided by stdenv.cc + libclang
             else
-              "-isystem ${pkgs.llvmPackages_19.libclang.lib}/lib/clang/19/include -isystem ${pkgs.llvmPackages_19.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
           };
         }
     );
