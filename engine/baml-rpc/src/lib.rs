@@ -27,6 +27,7 @@ pub use define_id::{HttpRequestId, ProjectId, SpanId, TraceBatchId, TraceEventId
 pub use trace::{TraceData, TraceEvent, TraceEventBatch};
 pub use trace_event_upload::{
     CreateTraceEventUpload, CreateTraceEventUploadRequest, CreateTraceEventUploadResponse,
+    CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
 };
 
 pub use ui_control_plane_orgs::{
