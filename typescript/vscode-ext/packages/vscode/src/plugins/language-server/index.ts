@@ -435,30 +435,30 @@ const plugin: BamlVSCodePlugin = {
 
     // TODO: If no version found, use bundled LSP else start new LSP.
     // if (version) {
-      const cliVersion = {
-        architecture: process.arch,
-        platform: process.platform,
-        version: version as string,
-      }
+    const cliVersion = {
+      architecture: process.arch,
+      platform: process.platform,
+      version: version as string,
+    }
 
-      // TODO: Send notification, loading state, etc.
-      if (!(await checkIfCliBinaryExists(cliVersion))) {
-        window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            cancellable: false,
-            title: 'Downloading BAML LSP',
-          },
-          async (progress, token) => {
-            try {
-              await downloadCli(cliVersion)
-              window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
-            } catch (error) {
-              window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
-            }
-          },
-        )
-      }
+    // TODO: Send notification, loading state, etc.
+    if (!(await checkIfCliBinaryExists(cliVersion))) {
+      window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          cancellable: false,
+          title: 'Downloading BAML LSP',
+        },
+        async (progress, token) => {
+          try {
+            await downloadCli(cliVersion)
+            window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
+          } catch (error) {
+            window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
+          }
+        },
+      )
+    }
     // }
 
     activateClient(context, serverOptions, clientOptions)

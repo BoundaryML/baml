@@ -3,12 +3,13 @@
  * correct binary based on the version.
  */
 
-import { createWriteStream } from 'fs'
-import fs from 'fs/promises'
-import path from 'path'
 import os from 'os'
-import * as tar from 'tar'
+import path from 'path'
+import fs from 'fs/promises'
+import { pipeline } from 'stream/promises'
+import { createWriteStream } from 'fs'
 import axios from 'axios'
+import * as tar from 'tar'
 import AdmZip from 'adm-zip'
 
 type CliVersion = {
@@ -121,9 +122,15 @@ export async function checkIfCliBinaryExists(cliVersion: CliVersion): Promise<bo
     .catch(() => false)
 }
 
+/**
+ * Entry point to download the CLI binary.
+ *
+ * @param cliVersion CLI metadata, platform-architecture-version.
+ */
 export async function downloadCli(cliVersion: CliVersion): Promise<void> {
   // TODO: Testing
   cliVersion.version = '0.1.0'
+  // cliVersion.platform = 'win32'
 
   // Filenames.
   const binaryFileName = cliBinaryFileName(cliVersion)
@@ -151,43 +158,48 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
     await fs.mkdir(INSTALL_PATH, { recursive: true })
   }
 
-  // Download the compressed file, extract and write the binary.
-  // TODO: Check zip vs tar.gz.
+  // Extract the compressed file to the installation path.
+  await extractFile(res.data, extension, binaryFileName, compressedFileName)
+}
+
+/**
+ * Extracts the compressed file to the installation path.
+ *
+ * @param source The source stream of the compressed file.
+ * @param extension The extension of the compressed file.
+ * @param binaryFileName The filename of the CLI binary.
+ * @param compressedFileName The filename of the compressed file.
+ *
+ * @returns A promise that resolves when the file is fully extracted and written
+ * to disk.
+ */
+async function extractFile(
+  source: ReadableStream,
+  extension: string,
+  binaryFileName: string,
+  compressedFileName: string,
+): Promise<void> {
   if (extension === 'tar.gz') {
-    res.data.pipe(
-      tar.extract(
-        {
-          cwd: INSTALL_PATH,
-          onReadEntry: (entry) => (entry.path = binaryFileName),
-        },
-        ['./baml-cli'],
-      ),
+    await pipeline(
+      source,
+      tar.extract({ cwd: INSTALL_PATH, onReadEntry: (entry) => (entry.path = binaryFileName) }, ['./baml-cli']),
     )
   } else if (extension === 'zip') {
     const compressedFilePath = path.join(INSTALL_PATH, compressedFileName)
-    const stream = res.data.pipe(createWriteStream(compressedFilePath))
+    await pipeline(source, createWriteStream(compressedFilePath))
 
-    // Due to the zip format, we can't use streaming APIs, we need the entire
-    // content to be downloaded before we can extract the binary.
-    stream.on('finish', async () => {
-      const zip = new AdmZip(compressedFilePath)
-      zip.extractEntryTo(
-        './baml-cli.exe',
-        INSTALL_PATH,
-        false,
-        true,
-        false,
-        binaryFileName,
-      )
+    // Due to the zip file format, we can't use streaming APIs, we need the
+    // entire content to be downloaded before we can extract the binary.
+    const zip = new AdmZip(compressedFilePath)
+    zip.extractEntryTo('./baml-cli.exe', INSTALL_PATH, false, true, false, binaryFileName)
 
-      // TODO: Don't know why keeping the original permissions in the call above
-      // doesn't work.
-      const binaryFilePath = path.join(INSTALL_PATH, binaryFileName)
-      await fs.chmod(binaryFilePath, 0o755)
+    // TODO: Don't know why keeping the original permissions in the call above
+    // doesn't work.
+    const binaryFilePath = path.join(INSTALL_PATH, binaryFileName)
+    await fs.chmod(binaryFilePath, 0o755)
 
-      // Remove the compressed file.
-      await fs.unlink(compressedFilePath)
-    })
+    // Remove the compressed file.
+    await fs.unlink(compressedFilePath)
   } else {
     throw new Error(`Unsupported compressed file format for LSP download: ${extension}`)
   }
