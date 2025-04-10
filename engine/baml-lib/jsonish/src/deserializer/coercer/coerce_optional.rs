@@ -28,12 +28,14 @@ pub(super) fn coerce_optional(
 
     let mut flags = DeserializerConditions::new();
     match value {
-        None | Some(crate::jsonish::Value::Null) => Ok(BamlValueWithFlags::Null(flags)),
+        None | Some(crate::jsonish::Value::Null) => {
+            Ok(BamlValueWithFlags::Null(optional_target.clone(), flags))
+        }
         Some(v) => match inner.coerce(ctx, optional_target, Some(v)) {
             Ok(v) => Ok(v),
             Err(e) => {
                 flags.add_flag(Flag::DefaultButHadUnparseableValue(e));
-                Ok(BamlValueWithFlags::Null(flags))
+                Ok(BamlValueWithFlags::Null(optional_target.clone(), flags))
             }
         },
     }

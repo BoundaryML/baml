@@ -61,7 +61,9 @@ impl TypeCoercer for Class {
         let (constraints, streaming_behavior) = ctx
             .of
             .find_class(self.name.real_name())
-            .map_or((vec![], StreamingBehavior::default()), |class| (class.constraints.clone(), class.streaming_behavior.clone()));
+            .map_or((vec![], StreamingBehavior::default()), |class| {
+                (class.constraints.clone(), class.streaming_behavior.clone())
+            });
 
         let mut optional_values = optional
             .iter()
@@ -88,7 +90,7 @@ impl TypeCoercer for Class {
                     if let Some(field) = self
                         .fields
                         .iter()
-                        .find(|(name, ..)| name.rendered_name().trim() == key)
+                        .find(|(name, ..)| name.rendered_name().trim() == key.trim())
                     {
                         let scope = ctx.enter_scope(field.0.real_name());
                         let parsed = field.1.coerce(&scope, &field.1, Some(v));
@@ -108,7 +110,10 @@ impl TypeCoercer for Class {
                         .coerce(
                             &scope,
                             &field.1,
-                            Some(&crate::jsonish::Value::Object(obj.clone(), completion.clone())),
+                            Some(&crate::jsonish::Value::Object(
+                                obj.clone(),
+                                completion.clone(),
+                            )),
                         )
                         .map(|mut v| {
                             v.add_flag(Flag::ImpliedKey(field.0.real_name().into()));
@@ -154,7 +159,15 @@ impl TypeCoercer for Class {
                     &items.iter().collect::<Vec<_>>(),
                     &|value| self.coerce(ctx, target, Some(value)),
                 )
-                .and_then(|value| apply_constraints(target, vec![], value, constraints.clone(), streaming_behavior.clone()));
+                .and_then(|value| {
+                    apply_constraints(
+                        target,
+                        vec![],
+                        value,
+                        constraints.clone(),
+                        streaming_behavior.clone(),
+                    )
+                });
                 if let Ok(option1) = option1_result {
                     completed_cls.push(Ok(option1));
                 }
@@ -194,8 +207,9 @@ impl TypeCoercer for Class {
                             }
                             // If we're missing a field, thats ok!
                             None => Some(BamlValueWithFlags::Null(
+                                t.clone(),
                                 DeserializerConditions::new()
-                                    .with_flag(Flag::OptionalDefaultFromNoValue)
+                                    .with_flag(Flag::OptionalDefaultFromNoValue),
                             )),
                         };
 
@@ -210,6 +224,7 @@ impl TypeCoercer for Class {
                         Some(Err(e)) => t.default_value(Some(e)).or_else(|| {
                             if ctx.allow_partials {
                                 Some(BamlValueWithFlags::Null(
+                                    t.clone().as_optional(),
                                     DeserializerConditions::new()
                                         .with_flag(Flag::OptionalDefaultFromNoValue)
                                         .with_flag(Flag::Pending),
@@ -221,6 +236,7 @@ impl TypeCoercer for Class {
                         None => t.default_value(None).or_else(|| {
                             if ctx.allow_partials {
                                 Some(BamlValueWithFlags::Null(
+                                    t.clone().as_optional(),
                                     DeserializerConditions::new()
                                         .with_flag(Flag::OptionalDefaultFromNoValue)
                                         .with_flag(Flag::Pending),
@@ -304,10 +320,33 @@ impl TypeCoercer for Class {
                                 // Decide if null is a better option.
                                 (k.to_string(), v)
                             }
-                            None => (k.to_string(), BamlValueWithFlags::Null(DeserializerConditions::new().with_flag(Flag::Incomplete))),
+                            None => (
+                                k.to_string(),
+                                BamlValueWithFlags::Null(
+                                    self.fields
+                                        .iter()
+                                        .find(|(name, ..)| name.real_name() == k)
+                                        .map(|f| f.1.clone().as_optional())
+                                        .expect(&format!(
+                                            "Field {} not found in class {}",
+                                            k,
+                                            self.name.real_name()
+                                        )),
+                                    DeserializerConditions::new().with_flag(Flag::Incomplete),
+                                ),
+                            ),
                             Some(Err(e)) => (
                                 k.to_string(),
                                 BamlValueWithFlags::Null(
+                                    self.fields
+                                        .iter()
+                                        .find(|(name, ..)| name.real_name() == k)
+                                        .map(|f| f.1.clone().as_optional())
+                                        .expect(&format!(
+                                            "Field {} not found in class {}",
+                                            k,
+                                            self.name.real_name()
+                                        )),
                                     DeserializerConditions::new()
                                         .with_flag(Flag::DefaultButHadUnparseableValue(e))
                                         .with_flag(Flag::Incomplete),
@@ -329,9 +368,18 @@ impl TypeCoercer for Class {
                 let completed_instance = Ok(BamlValueWithFlags::Class(
                     self.name.real_name().into(),
                     flags,
+                    target.clone(),
                     ordered_valid_fields.clone(),
                 ))
-                .and_then(|value| apply_constraints(target, vec![], value, constraints.clone(), streaming_behavior));
+                .and_then(|value| {
+                    apply_constraints(
+                        target,
+                        vec![],
+                        value,
+                        constraints.clone(),
+                        streaming_behavior,
+                    )
+                });
 
                 completed_cls.insert(0, completed_instance);
             }

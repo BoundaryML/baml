@@ -271,6 +271,7 @@ fn has_none_default(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
         FieldType::WithMetadata { .. } => {
             unreachable!("FieldType::WithMetadata is always consumed by distribute_metadata")
         }
+        FieldType::Arrow(_) => false,
     }
 }
 
@@ -361,6 +362,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 }
                 None => base.to_type_ref(ir, use_module_prefix),
             },
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         }
     }
 
@@ -458,6 +460,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             FieldType::WithMetadata { .. } => {
                 unreachable!("distribute_metadata makes this branch unreachable.")
             }
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         };
         let base_type_ref = if is_partial_type {
             base_rep

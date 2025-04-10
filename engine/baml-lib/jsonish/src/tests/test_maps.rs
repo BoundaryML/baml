@@ -128,14 +128,15 @@ fn test_union_of_class_and_map() {
     let expected = json!({"a": "1", "b": "hello"});
 
     let ir = crate::helpers::load_test_ir(file_content);
-    let target = crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
+    let target =
+        crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
     let result = from_str(&target, &target_type, llm_output, false);
 
     assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
     let value = result.unwrap();
-    assert!(matches!(value, BamlValueWithFlags::Class(_, _, _)));
+    assert!(matches!(value, BamlValueWithFlags::Class(..)));
 
     log::trace!("Score: {}", value.score());
     let value: BamlValue = value.into();
@@ -160,14 +161,15 @@ fn test_union_of_map_and_class() {
     let expected = json!({"a": "1", "b": "hello"});
 
     let ir = crate::helpers::load_test_ir(file_content);
-    let target = crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
+    let target =
+        crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
     let result = from_str(&target, &target_type, llm_output, false);
 
     assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
     let value = result.unwrap();
-    assert!(matches!(value, BamlValueWithFlags::Class(_, _, _)));
+    assert!(matches!(value, BamlValueWithFlags::Class(..)));
 
     log::trace!("Score: {}", value.score());
     let value: BamlValue = value.into();

@@ -282,7 +282,6 @@ impl UnresolvedAwsBedrock {
                 }
             };
 
-        // #[cfg(not(target_arch = "wasm32"))]
         let profile = match self.profile.as_ref() {
             Some(profile) => Some(profile.resolve(ctx)?),
             None => match ctx.get_env_var("AWS_PROFILE") {
@@ -302,8 +301,6 @@ impl UnresolvedAwsBedrock {
                 _ => None,
             },
         };
-        // #[cfg(target_arch = "wasm32")]
-        // let profile = None;
 
         #[cfg(target_arch = "wasm32")]
         {

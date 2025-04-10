@@ -188,12 +188,35 @@ pub(crate) fn parse_generator(
         }
     }
 
+    match parse_optional_key(&args, "client_package_name") {
+        Ok(Some(name)) => {
+            builder.client_package_name(Some(name.to_string()));
+        }
+        Ok(None) => {
+            builder.client_package_name(None);
+        }
+        Err(err) => {
+            errors.push(err);
+        }
+    }
+
     if !errors.is_empty() {
         return Err(errors);
     }
 
     match builder.build() {
-        Ok(generator) => Ok(Generator::Codegen(generator)),
+        Ok(generator) => {
+            if matches!(generator.output_type, GeneratorOutputType::Go) {
+                // check that the client_package_name is a valid go package name
+                if generator.client_package_name.is_none() {
+                    return Err(vec![DatamodelError::new_validation_error(
+                        "client_package_name is required for a go generator",
+                        ast_generator.span().clone(),
+                    )]);
+                }
+            }
+            Ok(Generator::Codegen(generator))
+        }
         Err(e) => Err(vec![DatamodelError::new_anyhow_error(
             anyhow::Error::from(e).context("Error parsing generator"),
             ast_generator.span().clone(),
@@ -274,6 +297,7 @@ fn check_property_allowlist<'ir>(
         "default_client_mode",
         "on_generate",
         "project",
+        "client_package_name",
     ];
 
     let mut errors = vec![];

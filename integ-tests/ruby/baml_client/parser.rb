@@ -3392,7 +3392,7 @@ module Baml
       params(
         llm_response: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
-      ).returns(String)
+      ).returns(T.nilable(String))
     }
     def TestOllama(llm_response:, baml_options: {})
       if (baml_options.keys - [:client_registry, :tb]).any?

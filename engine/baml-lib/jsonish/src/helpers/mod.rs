@@ -261,12 +261,12 @@ fn relevant_data_models<'a>(
 pub fn parsed_value_to_response(
     ir: &IntermediateRepr,
     baml_value: BamlValueWithFlags,
-    field_type: &FieldType,
     allow_partials: bool,
 ) -> Result<ResponseBamlValue> {
     let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
         baml_value.clone().into();
+    let meta_field_type: BamlValueWithMeta<FieldType> = baml_value.clone().into();
 
     let value_with_response_checks: BamlValueWithMeta<Vec<ResponseCheck>> = baml_value_with_meta
         .map_meta(|cs| {
@@ -282,9 +282,8 @@ pub fn parsed_value_to_response(
                 .collect()
         });
 
-    let baml_value_with_streaming =
-        validate_streaming_state(ir, &baml_value, field_type, allow_partials)
-            .map_err(|s| anyhow::anyhow!("{s:?}"))?;
+    let baml_value_with_streaming = validate_streaming_state(ir, &baml_value, allow_partials)
+        .map_err(|s| anyhow::anyhow!("{s:?}"))?;
 
     // Combine the baml_value, its types, the parser flags, and the streaming state
     // into a final value.
@@ -292,6 +291,9 @@ pub fn parsed_value_to_response(
     let response_value = baml_value_with_streaming
         .zip_meta(&value_with_response_checks)?
         .zip_meta(&meta_flags)?
-        .map_meta(|((x, y), z)| (z.clone(), y.clone(), x.clone()));
+        .zip_meta(&meta_field_type)?
+        .map_meta(|(((x, y), z), ft)| {
+            crate::ResponseValueMeta(z.clone(), y.clone(), x.clone(), ft.clone())
+        });
     Ok(ResponseBamlValue(response_value))
 }

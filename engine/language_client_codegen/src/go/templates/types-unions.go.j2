@@ -1,0 +1,76 @@
+package types
+
+import (
+	"fmt"
+
+    flatbuffers "github.com/google/flatbuffers/go"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+)
+
+
+{% for union in unions %}
+type {{ union.name }} struct {
+    variant string
+    {% for variant in union.variants %}
+    variant_{{ variant.0 }} *{{ variant.1.name }}
+    {% endfor %}
+}
+
+func (u *{{ union.name }}) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
+    valueHolder := holder.Value(nil)
+	switch holder.ValueTypeIndex() {
+    {% for variant in union.variants %}
+	    case {{ loop.index0 }}:
+            u.variant = "{{ variant.0 }}"
+            value := {{ crate::go::generate_types::render_value_coercion("valueHolder", variant.1) }}
+            u.variant_{{ variant.0 }} = &value
+    {% endfor %}
+	}
+}
+
+
+func (u {{ union.name }}) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+    switch u.variant {
+    {% for variant in union.variants %}
+    case "{{ variant.0 }}":
+        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_{{ variant.0 }})
+    {% endfor %}
+    case "":
+        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+    }
+
+    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+{% for variant in union.variants %}
+func (u *{{ union.name }}) Set{{ variant.0|exported_name }}(v {{ variant.1.name }}) {
+    u.variant = "{{ variant.0 }}"
+    u.variant_{{ variant.0 }} = &v
+    {% for v in union.variants %}
+    {% if v.0 != variant.0 %}
+        u.variant_{{ v.0 }} = nil
+    {% endif %}
+    {% endfor %}
+}
+
+func (u *{{ union.name }}) Is{{ variant.0|exported_name }}() bool {
+    return u.variant == "{{ variant.0 }}"
+}
+
+func (u *{{ union.name }}) {{ variant.0|exported_name }}() *{{ variant.1.name }} {
+    if !u.Is{{ variant.0|exported_name }}() {
+        return nil
+    }
+    return u.variant_{{ variant.0 }}
+}
+
+func {{ union.name }}NewWith{{ variant.0|exported_name }}(v *{{ variant.1.name }}) *{{ union.name }} {
+    return &{{ union.name }}{
+        variant: "{{ variant.0 }}",
+        variant_{{ variant.0 }}: v,
+    }
+}
+{% endfor %}
+
+{% endfor %}

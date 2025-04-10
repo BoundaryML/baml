@@ -2658,7 +2658,7 @@ export class LlmResponseParser {
   TestOllama(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): string {
+  ): string | null {
     try {
       return this.runtime.parseLlmResponse(
         "TestOllama",
@@ -2667,7 +2667,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-      ) as string
+      ) as string | null
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5724,7 +5724,7 @@ export class LlmStreamParser {
   TestOllama(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): string {
+  ): ((string | null) | null) {
     try {
       return this.runtime.parseLlmResponse(
         "TestOllama",
@@ -5733,7 +5733,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-      ) as string
+      ) as ((string | null) | null)
     } catch (error) {
       throw toBamlError(error);
     }

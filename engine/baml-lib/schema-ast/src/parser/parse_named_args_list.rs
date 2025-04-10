@@ -16,7 +16,7 @@ use super::helpers::Pair;
 pub(crate) fn parse_named_argument_list(
     pair: Pair<'_>,
     diagnostics: &mut Diagnostics,
-) -> Result<BlockArgs, DatamodelError> {
+) -> BlockArgs {
     assert!(
         pair.as_rule() == Rule::named_argument_list,
         "parse_named_argument_list called on the wrong rule: {:?}",
@@ -48,7 +48,10 @@ pub(crate) fn parse_named_argument_list(
                 }
                 Rule::colon => {}
                 Rule::field_type | Rule::field_type_chain => {
-                    r#type = Some(parse_function_arg(arg, diagnostics)?);
+                    match parse_function_arg(arg, diagnostics) {
+                        Ok(t) => r#type = Some(t),
+                        Err(e) => diagnostics.push_error(e),
+                    }
                 }
                 _ => parsing_catch_all(arg, "named_argument_list"),
             }
@@ -69,11 +72,11 @@ pub(crate) fn parse_named_argument_list(
         }
     }
 
-    Ok(BlockArgs {
+    BlockArgs {
         documentation: None,
         args,
         span,
-    })
+    }
 }
 
 pub fn parse_function_arg(

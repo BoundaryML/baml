@@ -48,7 +48,7 @@ fn handle_comment(
                     _ => 1000,
                 })
                 .sum();
-            let post_score = post
+            let post_score: u32 = post
                 .chars()
                 .map(|c| match c.to_string().as_str() {
                     " " => 1,

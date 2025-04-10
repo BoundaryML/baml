@@ -1,15 +1,16 @@
-import { History, RefreshCw } from 'lucide-react'
+import { FastForward, History, RefreshCw, Rocket } from 'lucide-react'
 
-import { useAtomValue } from 'jotai'
+import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
-import { selectedHistoryIndexAtom, testHistoryAtom, TestHistoryEntry } from '../atoms'
-import { useRunTests } from '../test-runner'
+import { isParallelTestsEnabledAtom, selectedHistoryIndexAtom, testHistoryAtom, TestHistoryEntry } from '../atoms'
+import { useRunBamlTests } from '../test-runner'
 import { ViewSelector } from './ViewSelector'
 import { Tooltip, TooltipTrigger } from '~/components/ui/tooltip'
 import { TooltipContent, TooltipProvider } from '~/components/ui/tooltip'
 import { Button } from '~/components/ui/button'
 import { Play } from 'lucide-react'
 import { getStatus } from '../testStateUtils'
+import { cn } from '@/lib/utils'
 
 const getHistoryButtonColor = (tests: TestHistoryEntry[], isSelected: boolean) => {
   const baseClasses = isSelected
@@ -74,11 +75,20 @@ const getHistoryButtonColor = (tests: TestHistoryEntry[], isSelected: boolean) =
 export const TestMenu = () => {
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useAtom(selectedHistoryIndexAtom)
   const testHistory = useAtomValue(testHistoryAtom)
-  const { setRunningTests } = useRunTests()
+  const runBamlTests = useRunBamlTests()
+  if (testHistory.length === 0) {
+    return (
+      <div className='flex justify-end items-center pr-2 mb-3 space-x-2'>
+        <ParallelTestsToggle />
+        <ViewSelector />
+      </div>
+    )
+  }
   const currentRun = testHistory[selectedHistoryIndex]
   if (!currentRun)
     return (
-      <div className='flex justify-between items-center pr-2 mb-3'>
+      <div className='flex justify-end items-center pr-2 mb-3 space-x-2'>
+        <ParallelTestsToggle />
         <ViewSelector />
       </div>
     )
@@ -107,6 +117,7 @@ export const TestMenu = () => {
         </div>
       </div>
       <div className='flex gap-2 items-center'>
+        <ParallelTestsToggle />
         <TooltipProvider>
           <Tooltip delayDuration={0}>
             <TooltipTrigger asChild>
@@ -119,7 +130,7 @@ export const TestMenu = () => {
                     functionName: test.functionName,
                     testName: test.testName,
                   }))
-                  setRunningTests(allTests)
+                  runBamlTests(allTests)
                 }}
               >
                 <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />
@@ -152,7 +163,7 @@ export const TestMenu = () => {
                       testName: test.testName,
                     }))
                   if (failedTests.length > 0) {
-                    setRunningTests(failedTests)
+                    runBamlTests(failedTests)
                   }
                 }}
               >
@@ -164,8 +175,35 @@ export const TestMenu = () => {
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+
         <ViewSelector />
       </div>
     </div>
+  )
+}
+
+const ParallelTestsToggle = () => {
+  const [isParallelTestsEnabled, setIsParallelTestsEnabled] = useAtom(isParallelTestsEnabledAtom)
+
+  return (
+    <TooltipProvider delayDuration={0}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant='ghost'
+            size='sm'
+            className={cn(
+              isParallelTestsEnabled ? 'text-purple-500 bg-muted hover:text-purple-500' : 'hover:text-purple-500',
+            )}
+            onClick={() => setIsParallelTestsEnabled(!isParallelTestsEnabled)}
+          >
+            <Rocket className='w-4 h-4' />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{isParallelTestsEnabled ? 'Disable parallel testing' : 'Enable parallel testing'}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }

@@ -20,6 +20,12 @@ let timeout: NodeJS.Timeout | undefined
 let statusBarItem: vscode.StatusBarItem
 let server: any
 
+let glowOnDecoration: vscode.TextEditorDecorationType | null = null
+let glowOffDecoration: vscode.TextEditorDecorationType | null = null
+let isGlowOn: boolean = true
+let animationTimer: NodeJS.Timeout | null = null
+let highlightRanges: vscode.Range[] = []
+
 function scheduleDiagnostics(): void {
   if (timeout) {
     clearTimeout(timeout)
@@ -163,6 +169,10 @@ export function activate(context: vscode.ExtensionContext) {
   const codeActionProvider = vscode.languages.registerCodeActionsProvider(selector, provider, {
     providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
   })
+
+  // Initialize the highlight effect.
+  createDecorations()
+  startAnimation()
 
   context.subscriptions.push(codeActionProvider)
 
@@ -323,6 +333,40 @@ export function activate(context: vscode.ExtensionContext) {
     },
   )
 
+  vscode.commands.registerCommand(
+    'baml.setFlashingRegions',
+    async (args: {
+      spans: { file_path: string; start_line: number; start: number; end_line: number; end: number }[]
+    }) => {
+      // A helpful thing to toggle on for debugging:
+      // console.log('HANDLER setFlashingRegions', args)
+      // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(args))
+
+      // Focus the editor to ensure styling updates are applied rapidly.
+      if (vscode.window.activeTextEditor) {
+        vscode.window.showTextDocument(
+          vscode.window.activeTextEditor.document,
+          vscode.window.activeTextEditor.viewColumn,
+        )
+      }
+
+      context.subscriptions.push({
+        dispose: () => {
+          stopAnimation()
+          if (glowOnDecoration) glowOnDecoration.dispose()
+          if (glowOffDecoration) glowOffDecoration.dispose()
+        },
+      })
+      const ranges = args.spans.map((span) => {
+        const start = new vscode.Position(span.start_line, span.start)
+        const end = new vscode.Position(span.end_line, span.end)
+        return new vscode.Range(start, end)
+      })
+      highlightRanges = ranges
+      updateHighlight()
+    },
+  )
+
   context.subscriptions.push(bamlPlaygroundCommand)
   console.log('pushing glooLens')
 
@@ -437,5 +481,91 @@ class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
       }
     }
     return codeActions
+  }
+}
+
+// Create our two decoration states
+function createDecorations() {
+  // Bright neon color for the glow effect (bright green)
+  const glowColor = '#00FF00'
+  const offColor = '#009900'
+
+  // Glow ON - attempt to create text glow with textDecoration property
+  glowOnDecoration = vscode.window.createTextEditorDecorationType({
+    color: glowColor,
+    fontWeight: 'bold',
+    backgroundColor: 'transparent',
+    textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+    // Try using before/after elements to reinforce the glow effect
+    before: {
+      contentText: '',
+      textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+      color: glowColor,
+    },
+    after: {
+      contentText: '',
+      textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+      color: glowColor,
+    },
+  })
+
+  // Glow OFF - text glow with textDecoration property.
+  glowOffDecoration = vscode.window.createTextEditorDecorationType({
+    color: offColor,
+    fontWeight: 'bold',
+    backgroundColor: 'transparent',
+    textDecoration: `none; `,
+    // Try using before/after elements to reinforce the glow effect
+    before: {
+      contentText: '',
+      textDecoration: `none; `,
+      color: offColor,
+    },
+    after: {
+      contentText: '',
+      textDecoration: `none; `,
+      color: offColor,
+    },
+  })
+}
+
+// Update the highlight based on current state
+function updateHighlight() {
+  // vscode.window.showWarningMessage(`updateHighlight:` +  isGlowOn)
+  const editor = vscode.window.activeTextEditor
+  if (!editor) return
+
+  // Clear both decorations
+  // Apply appropriate decoration based on state
+  if (glowOnDecoration && glowOffDecoration && isGlowOn) {
+    editor.setDecorations(glowOffDecoration, [])
+    editor.setDecorations(glowOnDecoration, highlightRanges)
+  }
+  if (glowOnDecoration && glowOffDecoration && !isGlowOn) {
+    editor.setDecorations(glowOnDecoration, [])
+    editor.setDecorations(glowOffDecoration, highlightRanges)
+  }
+}
+
+// Start the simple toggling animation
+function startAnimation() {
+  console.log('startAnimation')
+  if (animationTimer) return
+
+  // Toggle every 500ms (2 times per second)
+  animationTimer = setInterval(() => {
+    // Toggle between on and off states
+    isGlowOn = !isGlowOn
+
+    // Update the highlight
+    updateHighlight()
+  }, 500) // 500ms = half a second
+}
+
+// Stop animation
+function stopAnimation(): void {
+  if (animationTimer) {
+    clearInterval(animationTimer)
+    animationTimer = null
   }
 }

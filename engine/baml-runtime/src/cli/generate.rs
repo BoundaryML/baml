@@ -64,6 +64,9 @@ impl GenerateArgs {
                 internal_baml_core::configuration::GeneratorOutputType::TypescriptReact => {
                     GeneratorDefaultClientMode::Async
                 }
+                internal_baml_core::configuration::GeneratorOutputType::Go => {
+                    GeneratorDefaultClientMode::Sync
+                }
             };
             // Normally `baml_client` is added via the generator, but since we're not running the generator, we need to add it manually.
             let output_dir_relative_to_baml_src = PathBuf::from("..");
@@ -78,9 +81,16 @@ impl GenerateArgs {
                         version.to_string(),
                         false,
                         default_client_mode,
-                        // TODO: this should be set if user is asking for openapi
                         vec![],
                         None,
+                        if matches!(
+                            client_type,
+                            internal_baml_core::configuration::GeneratorOutputType::Go
+                        ) {
+                            todo!("Implement how to get the client package name for go projects")
+                        } else {
+                            None
+                        },
                     )
                     .context("Failed while resolving .baml paths in baml_src/")?,
                 )

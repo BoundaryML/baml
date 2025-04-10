@@ -37,7 +37,10 @@ impl TypeCoercer for FieldType {
                     self.coerce(
                         ctx,
                         target,
-                        Some(&crate::jsonish::Value::String(primitive.clone(), CompletionState::Incomplete)),
+                        Some(&crate::jsonish::Value::String(
+                            primitive.clone(),
+                            CompletionState::Incomplete,
+                        )),
                     )
                 } else {
                     array_helper::coerce_array_to_singular(
@@ -83,14 +86,21 @@ impl TypeCoercer for FieldType {
                 FieldType::Enum(e) => IrRef::Enum(e).coerce(ctx, target, value),
                 FieldType::Literal(l) => l.coerce(ctx, target, value),
                 FieldType::Class(c) => IrRef::Class(c).coerce(ctx, target, value),
-                FieldType::RecursiveTypeAlias(name) => coerce_alias(ctx, self, value),
-                FieldType::List(_) => coerce_array(ctx, self, value),
-                FieldType::Union(_) => coerce_union(ctx, self, value),
-                FieldType::Optional(_) => coerce_optional(ctx, self, value),
-                FieldType::Map(_, _) => coerce_map(ctx, self, value),
+                FieldType::RecursiveTypeAlias(name) => {
+                    coerce_alias(ctx, self, value).map(|v| v.with_target(target))
+                }
+                FieldType::List(_) => coerce_array(ctx, self, value).map(|v| v.with_target(target)),
+                FieldType::Union(_) => {
+                    coerce_union(ctx, self, value).map(|v| v.with_target(target))
+                }
+                FieldType::Optional(_) => {
+                    coerce_optional(ctx, self, value).map(|v| v.with_target(target))
+                }
+                FieldType::Map(_, _) => coerce_map(ctx, self, value).map(|v| v.with_target(target)),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
+                FieldType::Arrow(_) => Err(ctx.error_internal("Arrow type not supported")),
                 FieldType::WithMetadata { base, .. } => {
-                    let mut coerced_value = base.coerce(ctx, base, value)?;
+                    let mut coerced_value = base.coerce(ctx, target, value)?;
                     let constraint_results = run_user_checks(&coerced_value.clone().into(), self)
                         .map_err(|e| ParsingError {
                         reason: format!("Failed to evaluate constraints: {e:?}"),
@@ -174,17 +184,26 @@ impl DefaultValue for FieldType {
             FieldType::Literal(_) => None,
             FieldType::Class(_) => None,
             FieldType::RecursiveTypeAlias(_) => None,
-            FieldType::List(_) => Some(BamlValueWithFlags::List(get_flags(), Vec::new())),
+            FieldType::List(_) => Some(BamlValueWithFlags::List(
+                get_flags(),
+                self.clone(),
+                Vec::new(),
+            )),
             FieldType::Union(items) => items.iter().find_map(|i| i.default_value(error)),
             FieldType::Primitive(TypeValue::Null) | FieldType::Optional(_) => {
-                Some(BamlValueWithFlags::Null(get_flags()))
+                Some(BamlValueWithFlags::Null(self.clone(), get_flags()))
             }
-            FieldType::Map(_, _) => Some(BamlValueWithFlags::Map(get_flags(), BamlMap::new())),
+            FieldType::Map(_, _) => Some(BamlValueWithFlags::Map(
+                get_flags(),
+                self.clone(),
+                BamlMap::new(),
+            )),
             FieldType::Tuple(v) => {
                 let default_values: Vec<_> = v.iter().map(|f| f.default_value(error)).collect();
                 if default_values.iter().all(Option::is_some) {
                     Some(BamlValueWithFlags::List(
                         get_flags(),
+                        self.clone(),
                         default_values.into_iter().map(Option::unwrap).collect(),
                     ))
                 } else {
@@ -192,6 +211,7 @@ impl DefaultValue for FieldType {
                 }
             }
             FieldType::Primitive(_) => None,
+            FieldType::Arrow(_) => None,
             // If it has constraints, we can't assume our defaults meet them.
             FieldType::WithMetadata { .. } => None,
         }

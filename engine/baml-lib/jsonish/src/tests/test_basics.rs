@@ -648,6 +648,40 @@ Then would add a summary of sorts.
     }
 );
 
+test_deserializer!(
+  test_whitespace_in_keys_preserved,
+  r#"
+  class Test {
+      answer Answer
+  }
+  
+  class Answer {
+      content float
+  }
+  "#,
+  r#"{" answer ": {" content ": 78.54}}"#,
+  FieldType::string(),
+  r#"{" answer ": {" content ": 78.54}}"#
+);
+
+// This test verifies that when using class deserialization,
+// field matching happens correctly with whitespace-padded keys
+test_deserializer!(
+  test_class_with_whitespace_keys,
+  r#"
+  class Test {
+      answer Answer
+  }
+  
+  class Answer {
+      content float
+  }
+  "#,
+  r#"{" answer ": {" content ": 78.54}}"#,
+  FieldType::class("Test"),
+  {"answer": {"content": 78.54}}
+);
+
 test_partial_deserializer!(
   test_mal_formed_json_sequence,
   r#"

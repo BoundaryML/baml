@@ -37,6 +37,10 @@ impl FieldType {
         FieldType::Primitive(TypeValue::Media(BamlMediaType::Image))
     }
 
+    pub fn audio() -> Self {
+        FieldType::Primitive(TypeValue::Media(BamlMediaType::Audio))
+    }
+
     pub fn r#enum(name: &str) -> Self {
         FieldType::Enum(name.to_string())
     }

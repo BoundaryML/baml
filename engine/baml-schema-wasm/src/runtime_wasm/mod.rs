@@ -1,5 +1,6 @@
 pub mod generator;
 pub mod runtime_prompt;
+use self::runtime_prompt::WasmScope;
 use crate::aws_cred_bridge::js_fn_to_aws_cred_provider;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use anyhow::Context;
@@ -8,8 +9,10 @@ use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
 use baml_runtime::BamlSrcReader;
+use baml_runtime::FunctionResult;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
+use baml_runtime::SerializedSpan;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
@@ -18,7 +21,11 @@ use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use indexmap::IndexMap;
 use internal_baml_codegen::version_check::GeneratorType;
 use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
+use internal_baml_core::ir::repr::Walker;
 use internal_llm_client::AllowedRoleMetadata;
+
+use futures::channel::mpsc;
+use futures::StreamExt;
 use itertools::join;
 use js_sys::Promise;
 use js_sys::Uint8Array;
@@ -28,10 +35,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
-
-use self::runtime_prompt::WasmScope;
 use wasm_bindgen::JsValue;
+use wasm_bindgen_futures::JsFuture;
 
 type JsResult<T> = core::result::Result<T, JsError>;
 
@@ -56,7 +61,7 @@ pub fn on_wasm_init() {
         if #[cfg(debug_assertions)] {
             const LOG_LEVEL: log::Level = log::Level::Debug;
         } else {
-            const LOG_LEVEL: log::Level = log::Level::Debug;
+            const LOG_LEVEL: log::Level = log::Level::Info;
         }
     };
     // I dont think we need this line anymore -- seems to break logging if you add it.
@@ -391,9 +396,34 @@ pub struct WasmParam {
     pub error: Option<String>,
 }
 
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Debug, Clone)]
+pub struct WasmFunctionTestPair {
+    #[wasm_bindgen(readonly)]
+    pub function_name: String,
+    #[wasm_bindgen(readonly)]
+    pub test_name: String,
+}
+
 #[wasm_bindgen]
 pub struct WasmFunctionResponse {
     function_response: baml_runtime::FunctionResult,
+    func_test_pair: WasmFunctionTestPair,
+}
+
+#[wasm_bindgen(getter_with_clone, inspectable)]
+#[derive(Debug)]
+pub struct WasmTestResponses {
+    responses: Vec<WasmTestResponse>,
+}
+
+#[wasm_bindgen]
+impl WasmTestResponses {
+    // #[wasm_bindgen(typescript_type = "WasmTestResponse | null")]
+    #[wasm_bindgen]
+    pub fn yield_next(&mut self) -> Option<WasmTestResponse> {
+        self.responses.pop()
+    }
 }
 
 #[wasm_bindgen]
@@ -402,6 +432,7 @@ pub struct WasmTestResponse {
     test_response: anyhow::Result<baml_runtime::TestResponse>,
     span: Option<uuid::Uuid>,
     tracing_project_id: Option<String>,
+    func_test_pair: WasmFunctionTestPair,
 }
 
 #[wasm_bindgen(getter_with_clone, inspectable)]
@@ -503,6 +534,11 @@ impl WasmFunctionResponse {
             self.function_response.scope(),
         )
             .into_wasm()
+    }
+
+    #[wasm_bindgen]
+    pub fn func_test_pair(&self) -> WasmFunctionTestPair {
+        self.func_test_pair.clone()
     }
 }
 
@@ -662,6 +698,11 @@ impl WasmTestResponse {
     #[wasm_bindgen]
     pub fn trace_url(&self) -> Option<String> {
         self._trace_url().ok()
+    }
+
+    #[wasm_bindgen]
+    pub fn func_test_pair(&self) -> WasmFunctionTestPair {
+        self.func_test_pair.clone()
     }
 }
 
@@ -874,6 +915,7 @@ fn get_dummy_value(
             Some(format!("({},)", dummy))
         }
         baml_runtime::FieldType::Optional(_) => None,
+        baml_runtime::FieldType::Arrow(_) => None,
         baml_runtime::FieldType::WithMetadata { base, .. } => {
             get_dummy_value(indent, allow_multiline, base)
         }
@@ -911,6 +953,10 @@ impl WasmRuntime {
             .map(|g| g.into())
             .collect())
     }
+
+    pub fn env_vars(&self) -> &HashMap<String, String> {
+        &self.runtime.env_vars()
+    }
 }
 
 #[wasm_bindgen]
@@ -937,6 +983,17 @@ impl WasmRuntime {
             .internal()
             .ir()
             .walk_functions()
+            .chain(
+                self.runtime
+                    .internal()
+                    .ir()
+                    .expr_fns_as_functions()
+                    .iter()
+                    .map(|f| Walker {
+                        ir: &self.runtime.internal().ir(),
+                        item: f,
+                    }),
+            )
             .map(|f| {
                 let snippet = format!(
                     r#"test TestName {{
@@ -1508,7 +1565,82 @@ impl WasmRuntime {
         }
         None
     }
+
+    #[wasm_bindgen]
+    pub async fn run_tests(
+        &mut self,
+        function_test_pairs: js_sys::Array,
+        on_partial_response: js_sys::Function,
+        get_baml_src_cb: js_sys::Function,
+    ) -> Result<WasmTestResponses, JsValue> {
+        // Create a vector to store all test futures
+        let mut test_futures = Vec::new();
+
+        for i in 0..function_test_pairs.length() {
+            if let Ok(pair) = js_sys::Reflect::get(&function_test_pairs, &i.into()) {
+                if let (Ok(function_name), Ok(test_name)) = (
+                    js_sys::Reflect::get(&pair, &JsValue::from_str("functionName")),
+                    js_sys::Reflect::get(&pair, &JsValue::from_str("testName")),
+                ) {
+                    let function_name = function_name.as_string().unwrap_or_default();
+                    let test_name = test_name.as_string().unwrap_or_default();
+
+                    let fn_name_copy = function_name.clone();
+                    let test_name_copy = test_name.clone();
+
+                    // Create a closure to handle partial responses for this test
+                    let on_partial_response_clone = on_partial_response.clone();
+                    let cb = Box::new(move |r| {
+                        let this = JsValue::NULL;
+                        let res = WasmFunctionResponse {
+                            function_response: r,
+                            func_test_pair: WasmFunctionTestPair {
+                                function_name: fn_name_copy.clone(),
+                                test_name: test_name_copy.clone(),
+                            },
+                        }
+                        .into();
+                        on_partial_response_clone.call1(&this, &res).unwrap();
+                    });
+
+                    // Create evaluation context for the test
+                    let ctx = self.runtime.create_ctx_manager(
+                        BamlValue::String("wasm".to_string()),
+                        js_fn_to_baml_src_reader(get_baml_src_cb.clone()),
+                    );
+
+                    // Reference to the runtime
+                    let rt = &self.runtime;
+
+                    // Create a future for this test
+                    let future = async move {
+                        let (test_response, span) = rt
+                            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
+                            .await;
+
+                        // Return WasmTestResponse for this test
+                        WasmTestResponse {
+                            test_response,
+                            span,
+                            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
+                            func_test_pair: WasmFunctionTestPair {
+                                function_name: function_name.clone(),
+                                test_name: test_name.clone(),
+                            },
+                        }
+                    };
+
+                    test_futures.push(future);
+                }
+            }
+        }
+
+        // Run all tests in parallel
+        let results = futures::future::join_all(test_futures).await;
+        Ok(WasmTestResponses { responses: results })
+    }
 }
+
 // Define a new struct to store the important information
 #[wasm_bindgen(getter_with_clone, inspectable)]
 #[derive(Serialize, Deserialize, Debug)]
@@ -1692,6 +1824,84 @@ impl WasmFunction {
     }
 
     #[wasm_bindgen]
+    pub async fn run_test_with_expr_events(
+        &self,
+        rt: &mut WasmRuntime,
+        test_name: String,
+        env_vars: JsValue,
+        on_partial_response: js_sys::Function,
+        get_baml_src_cb: js_sys::Function,
+        load_aws_creds_cb: js_sys::Function,
+        on_expr_event: js_sys::Function,
+    ) -> Result<WasmTestResponse, JsValue> {
+        log::info!("TEST LOGGING");
+        let rt = &rt.runtime;
+        let function_name = self.name.clone();
+
+        let function_name_for_test_pair = function_name.clone();
+        let test_name_for_test_pair = test_name.clone();
+
+        // Create the closure to handle partial responses:
+        let cb = Box::new(move |r: FunctionResult| {
+            let this = JsValue::NULL;
+            let res = WasmFunctionResponse {
+                function_response: r,
+                func_test_pair: WasmFunctionTestPair {
+                    function_name: function_name_for_test_pair.clone(),
+                    test_name: test_name_for_test_pair.clone(),
+                },
+            }
+            .into();
+            on_partial_response.call1(&this, &res).unwrap();
+        });
+
+        // Create the channel for expression events
+        let (tx, mut rx) = mpsc::unbounded::<Vec<SerializedSpan>>();
+
+        // Spawn a task to handle expression events
+        let on_expr_event_clone = on_expr_event.clone();
+        wasm_bindgen_futures::spawn_local(async move {
+            while let Some(spans) = rx.next().await {
+                let this = JsValue::NULL;
+                match serde_wasm_bindgen::to_value(&spans) {
+                    Ok(res) => {
+                        on_expr_event_clone.call1(&this, &res).expect("TODO");
+                    }
+                    Err(e) => {
+                        log::error!("Error serializing spans: {e}");
+                    }
+                }
+            }
+        });
+
+        // Create your evaluation context, etc.
+        let ctx = rt.create_ctx_manager_with_env(
+            BamlValue::String("wasm".to_string()),
+            serde_wasm_bindgen::from_value::<HashMap<String, String>>(env_vars)
+                .map_err(|e| JsValue::from_str(&format!("Failed to parse env_vars: {:?}", e)))?,
+            js_fn_to_baml_src_reader(get_baml_src_cb),
+            js_fn_to_aws_cred_provider(load_aws_creds_cb),
+        );
+
+        // Pass the sender to run_test_with_expr_events
+        let (test_response, span) = rt
+            .run_test_with_expr_events(&function_name, &test_name, &ctx, Some(cb), Some(tx), None)
+            .await;
+
+        log::info!("test_response: {:#?}", test_response);
+
+        Ok(WasmTestResponse {
+            test_response,
+            span,
+            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
+            func_test_pair: WasmFunctionTestPair {
+                function_name,
+                test_name,
+            },
+        })
+    }
+
+    #[wasm_bindgen]
     pub async fn run_test(
         &self,
         rt: &mut WasmRuntime,
@@ -1704,11 +1914,18 @@ impl WasmFunction {
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
+        let function_name_for_test_pair = function_name.clone();
+        let test_name_for_test_pair = test_name.clone();
+
         // Create the closure to handle partial responses:
         let cb = Box::new(move |r| {
             let this = JsValue::NULL;
             let res = WasmFunctionResponse {
                 function_response: r,
+                func_test_pair: WasmFunctionTestPair {
+                    function_name: function_name_for_test_pair.clone(),
+                    test_name: test_name_for_test_pair.clone(),
+                },
             }
             .into();
             on_partial_response.call1(&this, &res).unwrap();
@@ -1734,6 +1951,10 @@ impl WasmFunction {
             test_response,
             span,
             tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
+            func_test_pair: WasmFunctionTestPair {
+                function_name,
+                test_name,
+            },
         })
     }
 

@@ -319,10 +319,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 Some(checks) => {
                     let base_type_ref = base.to_type_ref(ir, _with_checked);
                     let checks_type_ref = type_name_for_checks(&checks);
-                    format!("Checked[{base_type_ref},types.{checks_type_ref}]")
+                    format!("Checked[{base_type_ref}, {checks_type_ref}]")
                 }
                 None => base.to_type_ref(ir, _with_checked),
             },
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         }
     }
 
@@ -374,10 +375,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 Some(checks) => {
                     let base_type_ref = base.to_partial_type_ref(ir, with_checked);
                     let checks_type_ref = type_name_for_checks(&checks);
-                    format!("Checked[{base_type_ref},types.{checks_type_ref}]")
+                    format!("Checked[{base_type_ref}, {checks_type_ref}]")
                 }
                 None => base.to_partial_type_ref(ir, with_checked),
             },
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
         }
     }
 }
@@ -398,6 +400,7 @@ fn default_value_for_parameter_type(field_type: &FieldType) -> Option<&'static s
         FieldType::Primitive(_) => None,
         FieldType::Union(xs) => None,
         FieldType::WithMetadata { base, .. } => default_value_for_parameter_type(base),
+        FieldType::Arrow(_) => None,
     }
 }
 
@@ -456,6 +459,7 @@ class Foo {
             GeneratorDefaultClientMode::Async,
             Vec::new(),
             Some(GeneratorOutputType::PythonPydantic),
+            None,
         )
         .unwrap()
     }

@@ -3,12 +3,12 @@ use std::{
     fmt,
 };
 
-use anyhow::{Context,Result};
+use anyhow::{Context, Result};
 use indexmap::IndexMap;
 use serde::{de::Visitor, ser::SerializeMap, Deserialize, Deserializer, Serialize, Serializer};
 
-use crate::{media::BamlMediaType, ResponseCheck};
-use crate::{BamlMap, BamlMedia};
+use crate::{media::BamlMediaType, HasFieldType, LiteralValue, ResponseCheck, TypeValue};
+use crate::{BamlMap, BamlMedia, FieldType};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BamlValue {
@@ -33,9 +33,7 @@ impl serde::Serialize for BamlValue {
             BamlValue::Bool(b) => serializer.serialize_bool(*b),
             BamlValue::Map(m) => m.serialize(serializer),
             BamlValue::List(l) => l.serialize(serializer),
-            BamlValue::Media(m) => {
-                m.serialize(serializer)
-            }
+            BamlValue::Media(m) => m.serialize(serializer),
             BamlValue::Enum(_, v) => serializer.serialize_str(v),
             BamlValue::Class(_, m) => m.serialize(serializer),
             BamlValue::Null => serializer.serialize_none(),
@@ -348,10 +346,93 @@ pub enum BamlValueWithMeta<T> {
     Null(T),
 }
 
+impl<T: crate::HasFieldType> BamlValueWithMeta<T> {
+    pub fn real_type(&self) -> FieldType {
+        let field_type = self.field_type();
+        if let FieldType::Union(options) = field_type {
+            return options
+                .iter()
+                .filter(|t| self.is_type(t))
+                .next()
+                .expect("At least one type must be supported")
+                .clone();
+        }
+        field_type.clone()
+    }
+}
+
+impl<T: crate::HasFieldType> crate::HasFieldType for BamlValueWithMeta<T> {
+    fn field_type<'a>(&'a self) -> &'a crate::FieldType {
+        self.meta().field_type()
+    }
+}
+
 impl<T> BamlValueWithMeta<T> {
     pub fn r#type(&self) -> String {
         let plain_value: BamlValue = self.into();
         plain_value.r#type()
+    }
+
+    fn is_type(&self, field_type: &FieldType) -> bool {
+        let handle_composite = |field_type: &FieldType| match field_type {
+            FieldType::Optional(inner) => self.is_type(inner),
+            FieldType::Union(options) => options.iter().any(|t| self.is_type(t)),
+            _ => false,
+        };
+
+        match self {
+            BamlValueWithMeta::String(val, _) => match field_type {
+                FieldType::Literal(LiteralValue::String(lit)) => val == lit,
+                FieldType::Primitive(TypeValue::String) => true,
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Int(val, _) => match field_type {
+                FieldType::Literal(LiteralValue::Int(lit)) => val == lit,
+                FieldType::Primitive(TypeValue::Int) => true,
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Float(_, _) => match field_type {
+                FieldType::Primitive(TypeValue::Float) => true,
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Bool(val, _) => match field_type {
+                FieldType::Literal(LiteralValue::Bool(lit)) => val == lit,
+                FieldType::Primitive(TypeValue::Bool) => true,
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Map(index_map, _) => match field_type {
+                FieldType::Map(_, value_type) => {
+                    // TODO: Check key type
+                    index_map.iter().all(|(_, v)| v.is_type(value_type))
+                }
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::List(baml_value_with_metas, _) => match field_type {
+                FieldType::List(item_type) => {
+                    baml_value_with_metas.iter().all(|v| v.is_type(item_type))
+                }
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Media(baml_media, _) => match field_type {
+                FieldType::Primitive(TypeValue::Media(media_type)) => {
+                    &baml_media.media_type == media_type
+                }
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Enum(enum_name, _, _) => match field_type {
+                FieldType::Enum(enm) => enum_name == enm,
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Class(cls_name, _, _) => match field_type {
+                FieldType::Class(cls) => cls_name == cls,
+                _ => handle_composite(field_type),
+            },
+            BamlValueWithMeta::Null(_) => match field_type {
+                FieldType::Primitive(TypeValue::Null) => true,
+                FieldType::Optional(_) => true,
+                _ => handle_composite(field_type),
+            },
+        }
     }
 
     /// Iterating over a `BamlValueWithMeta` produces a depth-first traversal
@@ -413,35 +494,96 @@ impl<T> BamlValueWithMeta<T> {
 
     pub fn with_default_meta(value: &BamlValue) -> BamlValueWithMeta<T>
     where
-        T: Default,
+        T: From<FieldType> + HasFieldType,
     {
         use BamlValueWithMeta::*;
         match value {
-            BamlValue::String(s) => String(s.clone(), T::default()),
-            BamlValue::Int(i) => Int(*i, T::default()),
-            BamlValue::Float(f) => Float(*f, T::default()),
-            BamlValue::Bool(b) => Bool(*b, T::default()),
+            BamlValue::String(s) => String(s.clone(), T::from(FieldType::string())),
+            BamlValue::Int(i) => Int(*i, T::from(FieldType::int())),
+            BamlValue::Float(f) => Float(*f, T::from(FieldType::float())),
+            BamlValue::Bool(b) => Bool(*b, T::from(FieldType::bool())),
+            BamlValue::Map(entries) => {
+                let entries: BamlMap<std::string::String, BamlValueWithMeta<T>> = entries
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Self::with_default_meta(v)))
+                    .collect();
+                let value_types = entries
+                    .values()
+                    .map(|v| v.field_type())
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                let field_type =
+                    FieldType::union(value_types.into_iter().map(|v| v.to_owned()).collect());
+
+                Map(entries, T::from(field_type.simplify()))
+            }
+            BamlValue::List(items) => {
+                let items: Vec<BamlValueWithMeta<T>> =
+                    items.iter().map(|i| Self::with_default_meta(i)).collect();
+                let items_types = items
+                    .iter()
+                    .map(|i| i.field_type())
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                let field_type =
+                    FieldType::union(items_types.into_iter().map(|v| v.to_owned()).collect());
+                List(items, T::from(field_type.simplify()))
+            }
+            BamlValue::Media(m) => Media(
+                m.clone(),
+                T::from(match m.media_type {
+                    BamlMediaType::Image => FieldType::image(),
+                    BamlMediaType::Audio => FieldType::audio(),
+                }),
+            ),
+            BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), T::from(FieldType::r#enum(n))),
+            BamlValue::Class(name, items) => {
+                let items: BamlMap<std::string::String, BamlValueWithMeta<T>> = items
+                    .iter()
+                    .map(|(k, v)| (k.clone(), Self::with_default_meta(v)))
+                    .collect();
+
+                Class(name.clone(), items, T::from(FieldType::class(name)))
+            }
+            BamlValue::Null => Null(T::from(FieldType::null())),
+        }
+    }
+
+    /// Apply the same meta value to every node throughout a BamlValue.
+    pub fn with_const_meta(value: &BamlValue, meta: T) -> BamlValueWithMeta<T>
+    where
+        T: Clone,
+    {
+        use BamlValueWithMeta::*;
+        match value {
+            BamlValue::String(s) => String(s.clone(), meta),
+            BamlValue::Int(i) => Int(*i, meta),
+            BamlValue::Float(f) => Float(*f, meta),
+            BamlValue::Bool(b) => Bool(*b, meta),
             BamlValue::Map(entries) => BamlValueWithMeta::Map(
                 entries
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::with_default_meta(v)))
+                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
                     .collect(),
-                T::default(),
+                meta,
             ),
             BamlValue::List(items) => List(
-                items.iter().map(|i| Self::with_default_meta(i)).collect(),
-                T::default(),
+                items
+                    .iter()
+                    .map(|i| Self::with_const_meta(i, meta.clone()))
+                    .collect(),
+                meta,
             ),
-            BamlValue::Media(m) => Media(m.clone(), T::default()),
-            BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), T::default()),
+            BamlValue::Media(m) => Media(m.clone(), meta),
+            BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), meta),
             BamlValue::Class(_, items) => Map(
                 items
                     .iter()
-                    .map(|(k, v)| (k.clone(), Self::with_default_meta(v)))
+                    .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
                     .collect(),
-                T::default(),
+                meta,
             ),
-            BamlValue::Null => Null(T::default()),
+            BamlValue::Null => Null(meta),
         }
     }
 
@@ -484,7 +626,9 @@ impl<T> BamlValueWithMeta<T> {
             BamlValueWithMeta::Float(v, m) => BamlValueWithMeta::Float(v, f(m)),
             BamlValueWithMeta::Bool(v, m) => BamlValueWithMeta::Bool(v, f(m)),
             BamlValueWithMeta::Map(v, m) => BamlValueWithMeta::Map(
-                v.into_iter().map(|(k, v)| (k, v.map_meta_owned(f))).collect(),
+                v.into_iter()
+                    .map(|(k, v)| (k, v.map_meta_owned(f)))
+                    .collect(),
                 f(m),
             ),
             BamlValueWithMeta::List(v, m) => {
@@ -505,61 +649,88 @@ impl<T> BamlValueWithMeta<T> {
 
     /// Combine two similar shaped baml values by tupling their metadata
     /// on a node-by-node basis.
-    /// 
+    ///
     /// The baml value calling `zip_meta` is the "primary" one, whose value
     /// data will live on in the returned baml value.
-    pub fn zip_meta<U: Clone + std::fmt::Debug>(self, other: &BamlValueWithMeta<U>) -> Result<BamlValueWithMeta<(T,U)>>
-    where T: std::fmt::Debug
+    pub fn zip_meta<U: Clone + std::fmt::Debug>(
+        self,
+        other: &BamlValueWithMeta<U>,
+    ) -> Result<BamlValueWithMeta<(T, U)>>
+    where
+        T: std::fmt::Debug,
     {
         let other_meta: U = other.meta().clone();
         let error_msg = String::new(); // format!("Could not unify {:?} with {:?}.", self, other);
         let ret = match (self, other) {
             (BamlValueWithMeta::Null(meta1), _) => {
-                Result::<_,_>::Ok(BamlValueWithMeta::Null((meta1, other_meta)))
-            },
-            (BamlValueWithMeta::String(s1, meta1), BamlValueWithMeta::String(_s2, _)) if true => Ok(BamlValueWithMeta::String(s1, (meta1, other_meta))),
-            (BamlValueWithMeta::String(_,_), _) => anyhow::bail!("Unification error"),
-            (BamlValueWithMeta::Int(s1, meta1), BamlValueWithMeta::Int(_s2, _)) if true => Ok(BamlValueWithMeta::Int(s1, (meta1, other_meta))),
-            (BamlValueWithMeta::Int(_,_), _) => anyhow::bail!("Unification error"),
-            (BamlValueWithMeta::Float(s1, meta1), BamlValueWithMeta::Float(_s2, _)) if true => Ok(BamlValueWithMeta::Float(s1, (meta1, other_meta))),
-            (BamlValueWithMeta::Float(_,_), _) => anyhow::bail!("Unification error"),
-            (BamlValueWithMeta::Bool(s1, meta1), BamlValueWithMeta::Bool(_s2, _)) if true => Ok(BamlValueWithMeta::Bool(s1, (meta1, other_meta))),
-            (BamlValueWithMeta::Bool(_,_), _) => anyhow::bail!("Unification error"),
-            (BamlValueWithMeta::Map(s1, meta1), BamlValueWithMeta::Map(s2, _)) => {
-                let map_result = s1.into_iter().zip(s2).map(|((k1,v1), (_k2,v2))| {
-                    v1.zip_meta(v2).map(|res| (k1, res))
-                }).collect::<Result<IndexMap<_, _>>>()?;
-                Ok(BamlValueWithMeta::Map(map_result, (meta1, other_meta)))
-            },
-            (BamlValueWithMeta::Map(_,_), _) => anyhow::bail!("Unification error"),
-            (BamlValueWithMeta::List(l1, meta1), BamlValueWithMeta::List(l2, _)) => {
-                let list_result = l1.into_iter().zip(l2).map(|(item1, item2)| {
-                    item1.zip_meta(item2)
-                }).collect::<Result<Vec<_>>>()?;
-                Ok( BamlValueWithMeta::List(list_result, (meta1, other_meta)))
-                
+                Result::<_, _>::Ok(BamlValueWithMeta::Null((meta1, other_meta)))
             }
-            (BamlValueWithMeta::List(_,_), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::String(s1, meta1), BamlValueWithMeta::String(_s2, _)) if true => {
+                Ok(BamlValueWithMeta::String(s1, (meta1, other_meta)))
+            }
+            (BamlValueWithMeta::String(_, _), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::Int(s1, meta1), BamlValueWithMeta::Int(_s2, _)) if true => {
+                Ok(BamlValueWithMeta::Int(s1, (meta1, other_meta)))
+            }
+            (BamlValueWithMeta::Int(_, _), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::Float(s1, meta1), BamlValueWithMeta::Float(_s2, _)) if true => {
+                Ok(BamlValueWithMeta::Float(s1, (meta1, other_meta)))
+            }
+            (BamlValueWithMeta::Float(_, _), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::Bool(s1, meta1), BamlValueWithMeta::Bool(_s2, _)) if true => {
+                Ok(BamlValueWithMeta::Bool(s1, (meta1, other_meta)))
+            }
+            (BamlValueWithMeta::Bool(_, _), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::Map(s1, meta1), BamlValueWithMeta::Map(s2, _)) => {
+                let map_result = s1
+                    .into_iter()
+                    .zip(s2)
+                    .map(|((k1, v1), (_k2, v2))| v1.zip_meta(v2).map(|res| (k1, res)))
+                    .collect::<Result<IndexMap<_, _>>>()?;
+                Ok(BamlValueWithMeta::Map(map_result, (meta1, other_meta)))
+            }
+            (BamlValueWithMeta::Map(_, _), _) => anyhow::bail!("Unification error"),
+            (BamlValueWithMeta::List(l1, meta1), BamlValueWithMeta::List(l2, _)) => {
+                let list_result = l1
+                    .into_iter()
+                    .zip(l2)
+                    .map(|(item1, item2)| item1.zip_meta(item2))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(BamlValueWithMeta::List(list_result, (meta1, other_meta)))
+            }
+            (BamlValueWithMeta::List(_, _), _) => anyhow::bail!("Unification error"),
             (BamlValueWithMeta::Media(m1, meta1), BamlValueWithMeta::Media(_m2, _)) if true => {
                 Ok(BamlValueWithMeta::Media(m1, (meta1, other_meta)))
             }
             (BamlValueWithMeta::Media(_, _), _) => anyhow::bail!("Unification error"),
-            (BamlValueWithMeta::Enum(x1, y1, meta1), BamlValueWithMeta::Enum(_x2, _y2, _)) if true => {
+            (BamlValueWithMeta::Enum(x1, y1, meta1), BamlValueWithMeta::Enum(_x2, _y2, _))
+                if true =>
+            {
                 Ok(BamlValueWithMeta::Enum(x1, y1, (meta1, other_meta)))
             }
             (BamlValueWithMeta::Enum(_, _, _), _) => anyhow::bail!("Unification error"),
-            (BamlValueWithMeta::Class(name1, fields1, meta1), BamlValueWithMeta::Class(_name2, fields2, _)) if true => {
+            (
+                BamlValueWithMeta::Class(name1, fields1, meta1),
+                BamlValueWithMeta::Class(_name2, fields2, _),
+            ) if true => {
                 // TODO: We can remove a `clone` by checking that the fields
                 // are ordered the same way between the two classes, then consuming
                 // both classs' fields in parallel.
                 // let map_result = fields1.into_iter().zip(fields2).map(|((k1,v1),(_k2,v2))| {
                 //     v1.zip_meta(v2).map(|r| (k1, r))
                 // }).collect::<Result<IndexMap<_,_>>>()?;
-                let map_result = fields1.into_iter().map(|(k1, v1)| {
-                    let v2 = fields2.get(&k1).context("Missing expected key")?;
-                    v1.zip_meta(v2).map(|r| (k1, r))
-                }).collect::<Result<IndexMap<_,_>>>()?;
-                Ok(BamlValueWithMeta::Class(name1, map_result, (meta1, other_meta)))
+                let map_result = fields1
+                    .into_iter()
+                    .map(|(k1, v1)| {
+                        let v2 = fields2.get(&k1).context("Missing expected key")?;
+                        v1.zip_meta(v2).map(|r| (k1, r))
+                    })
+                    .collect::<Result<IndexMap<_, _>>>()?;
+                Ok(BamlValueWithMeta::Class(
+                    name1,
+                    map_result,
+                    (meta1, other_meta),
+                ))
             }
             (BamlValueWithMeta::Class(_, _, _), _) => anyhow::bail!("Unification error"),
         };
@@ -737,10 +908,12 @@ where
 fn add_checks<'a, S: SerializeMap>(
     map: &'a mut S,
     checks: &'a [ResponseCheck],
-) -> Result<(), S::Error>
-{
+) -> Result<(), S::Error> {
     if !checks.is_empty() {
-        let checks_map: BamlMap<_,_> = checks.iter().map(|check| (check.name.clone(), check)).collect();
+        let checks_map: BamlMap<_, _> = checks
+            .iter()
+            .map(|check| (check.name.clone(), check))
+            .collect();
         map.serialize_entry("checks", &checks_map)?;
     }
     Ok(())
