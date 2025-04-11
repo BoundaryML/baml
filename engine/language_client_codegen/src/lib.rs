@@ -179,17 +179,29 @@ impl GenerateClient for GeneratorOutputType {
         gen: &GeneratorArgs,
     ) -> Result<GenerateOutput> {
         let runtime_version = env!("CARGO_PKG_VERSION");
+        // log::info!("Generating client for {:?}", self);
 
-        if !gen.no_version_check {
+        // Version check
+        let version_check_result = if !gen.no_version_check {
+            // log::info!("Checking version");
             version_check_with_error(
                 runtime_version,
                 &gen.version,
                 GeneratorType::CLI,
                 VersionCheckMode::Strict,
                 *self,
-            )?;
+            )
+        } else {
+            Ok(())
+        };
+
+        if let Err(e) = version_check_result {
+            return Err(e);
         }
 
+        // log::info!("Generating client for {:?}", self);
+
+        // Generate files
         let files = match self {
             GeneratorOutputType::OpenApi => openapi::generate(ir, gen),
             GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
@@ -199,25 +211,44 @@ impl GenerateClient for GeneratorOutputType {
             GeneratorOutputType::Go => go::generate(ir, gen),
         }?;
 
+        // Run on_generate commands
         #[cfg(not(target_arch = "wasm32"))]
         {
+            // log::info!("Running on_generate commands");
             for cmd in gen.on_generate.iter() {
                 baml_log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
-                let status = std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
+
+                let output_result = std::process::Command::new("echo")
+                    // .arg("-c")
+                    .arg("hello")
                     .current_dir(gen.output_dir())
-                    .status()
-                    .context(format!("Failed to run on_generate command {:?}", cmd))?;
-                if !status.success() {
-                    anyhow::bail!(
-                        "on_generate command finished with {}: {:?}",
-                        match status.code() {
+                    .output()
+                    .context(format!("Failed to run on_generate command {:?}", cmd));
+
+                let output = match output_result {
+                    Ok(output) => output,
+                    Err(e) => {
+                        log::error!("Failed to execute on_generate command: {:?}", e);
+                        return Err(e);
+                    }
+                };
+
+                // log::info!("on_generate command finished");
+                if !output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    let error_msg = format!(
+                        "on_generate command finished with {}: {:?}\nStdout:\n{}\nStderr:\n{}",
+                        match output.status.code() {
                             Some(code) => format!("exit code {}", code),
                             None => "no exit code".to_string(),
                         },
                         cmd,
+                        stdout,
+                        stderr
                     );
+                    // log::error!("{}", error_msg);
+                    return Err(anyhow::anyhow!("{}", error_msg));
                 }
             }
 
@@ -225,6 +256,7 @@ impl GenerateClient for GeneratorOutputType {
                 // TODO: we should auto-suggest a command for the user to run here
                 log::warn!("No on_generate commands were provided for OpenAPI generator - skipping OpenAPI client generation");
             }
+            // log::info!("on_generate commands finished---------------");
         }
 
         Ok(GenerateOutput {

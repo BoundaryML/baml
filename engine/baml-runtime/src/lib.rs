@@ -11,7 +11,7 @@ pub mod client_registry;
 pub mod errors;
 pub mod eval_expr;
 pub mod request;
-mod runtime;
+pub mod runtime;
 pub mod runtime_interface;
 pub mod test_constraints;
 #[cfg(not(target_arch = "wasm32"))]
@@ -113,8 +113,9 @@ use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
+#[derive(Clone)]
 pub struct BamlRuntime {
-    pub(crate) inner: InternalBamlRuntime,
+    pub inner: InternalBamlRuntime,
     tracer: Arc<BamlTracer>,
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -190,7 +191,7 @@ impl BamlRuntime {
         })
     }
 
-    pub fn from_file_content<T: AsRef<str>, U: AsRef<str>>(
+    pub fn from_file_content<T: AsRef<str> + std::fmt::Debug, U: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
         env_vars: HashMap<U, U>,
@@ -200,8 +201,11 @@ impl BamlRuntime {
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
         baml_log::set_from_env(&copy)?;
+
+        let inner = InternalBamlRuntime::from_file_content(root_path, files)?;
+
         Ok(BamlRuntime {
-            inner: InternalBamlRuntime::from_file_content(root_path, files)?,
+            inner,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
@@ -847,6 +851,7 @@ impl BamlRuntime {
             })
             .collect::<Result<_>>()
             .context("Internal error: failed to collect generators")?;
+        log::info!("Generated {:?} generatorsss", client_types.len());
 
         // VSCode / WASM can't run "on_generate", so if any generator specifies on_generate,
         // we disable codegen. (This can be super surprising behavior to someone, but we'll cross
@@ -875,11 +880,14 @@ impl BamlRuntime {
                     .output_type
                     .generate_client(self.inner.ir(), args)
                     .with_context(|| {
-                        let ((line, col), _) = generator.span.line_and_column();
-                        format!(
-                            "Error while running generator defined at {}:{line}:{col}",
-                            generator.span.file.path()
-                        )
+                        let err_msg = format!(
+                            "Error while running generator defined at {}:{}:{}",
+                            generator.span.file.path(),
+                            generator.span.line_and_column().0 .0,
+                            generator.span.line_and_column().0 .1
+                        );
+                        log::error!("{}", err_msg);
+                        err_msg
                     })
             })
             .collect()

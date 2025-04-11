@@ -1,19 +1,76 @@
-name: BAML Release - Build VSCode Extension
+name: BAML Release - Build VSCode Extension (Matrix Packaging)
 
 on:
-  workflow_call: {}
-
-concurrency:
-  # suffix is important to prevent a concurrency deadlock with the calling workflow
-  group: ${{ github.workflow }}-${{ github.ref }}-build-vscode
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      is_release_build:
+        description: 'Whether this is a release build (affects --pre-release flag)'
+        type: boolean
+        default: true
+      version:
+        description: 'Version string to use for the build'
+        type: string
+        required: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-vscode-matrix:
+    runs-on: ubuntu-latest # Run the packaging matrix on a consistent OS
+    strategy:
+      fail-fast: false
+      matrix:
+        # Define the target platforms for VSCE packaging and map them to Rust targets
+        include:
+          - code-target: linux-x64
+            rust-target: x86_64-unknown-linux-gnu
+          - code-target: linux-arm64
+            rust-target: aarch64-unknown-linux-gnu
+          - code-target: darwin-x64
+            rust-target: x86_64-apple-darwin
+          - code-target: darwin-arm64
+            rust-target: aarch64-apple-darwin
+          - code-target: win32-x64
+            rust-target: x86_64-pc-windows-msvc
+          - code-target: win32-arm64
+            rust-target: aarch64-pc-windows-msvc
+          - code-target: alpine-x64
+            rust-target: x86_64-unknown-linux-musl
+          - code-target: alpine-arm64
+            rust-target: aarch64-unknown-linux-musl
     steps:
       - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 9.12.0
+
+      - name: Determine CLI Artifact Name
+        id: cli_artifact
+        run: |
+          TARGET="${{ matrix.rust-target }}" # Use rust-target from matrix
+          VERSION="${{ inputs.version }}"
+          ARTIFACT_BASE="baml-cli-${TARGET}"
+          if [[ "$TARGET" == *"windows"* ]]; then
+            ARTIFACT_NAME="${ARTIFACT_BASE}.zip"
+          else
+            ARTIFACT_NAME="${ARTIFACT_BASE}.tar.gz"
+          fi
+          echo "artifact_base=${ARTIFACT_BASE}" >> $GITHUB_OUTPUT
+          echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+          echo "Determined artifact name for ${{ matrix.code-target }}: ${ARTIFACT_NAME}"
+
+      - name: Download specific CLI artifact for ${{ matrix.code-target }}
+        uses: actions/download-artifact@v4
+        with:
+          name: baml-cli-${{ matrix.rust-target }}
+          path: cli-artifact-${{ matrix.code-target }} 
+          # Unique path per job
+        # Add error handling if the specific artifact isn't found
+
+      - name: List downloaded artifact content
+        run: |
+           echo "Contents of cli-artifact-${{ matrix.code-target }} directory:"
+           ls -R cli-artifact-${{ matrix.code-target }}
+
+      # Rust toolchain setup (only needed for WASM part)
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -21,10 +78,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Bindgen
-        run: cargo install -f wasm-bindgen-cli@0.2.92
-        working-directory: engine/baml-schema-wasm
-      # Set up Node.js
+          # Key might need adjustment if WASM build differs per matrix run, but likely not
+          key: ubuntu-latest-rust-wasm-${{ hashFiles('**/Cargo.lock') }}
+      - uses: jetli/wasm-bindgen-action@v0.2.0
+        with:
+          version: "0.2.92"
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -32,46 +91,135 @@ jobs:
           node-version: 20
           cache-dependency-path: |
             typescript/**/pnpm-lock.yaml
+
+      # This step extracts and copies ONLY the single downloaded binary for the current matrix target
+      - name: Extract and copy binary for ${{ matrix.code-target }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARGET="${{ matrix.rust-target }}"
+          CODE_TARGET="${{ matrix.code-target }}"
+          VERSION="${{ inputs.version }}" # Get version input
+          echo "Preparing server directory for target: $TARGET ($CODE_TARGET) version $VERSION"
+
+          # Setup server directories (relative to checkout root)
+          rm -rf typescript/vscode-ext/packages/vscode/server
+          mkdir -p typescript/vscode-ext/packages/vscode/server
+
+          # Determine expected binary name based on Rust target OS part
+          binary_name="baml-cli"
+          download_dir="cli-artifact-$CODE_TARGET"
+          extract_dir="tmp-extract-$CODE_TARGET"
+          archive_base_name="baml-cli-$VERSION-$TARGET" # Construct base name with version
+          actual_archive_file="" # Variable to hold the full archive file path
+
+          if [[ "$TARGET" == *"windows"* ]]; then
+            binary_name="baml-cli.exe"
+            actual_archive_file="$download_dir/${archive_base_name}.zip" # Construct full zip path
+            echo "Expecting archive file: $actual_archive_file"
+            # Add check for zip file existence
+            if [ ! -f "$actual_archive_file" ]; then
+              echo "Error: Expected archive file not found at $actual_archive_file"
+              echo "Contents of download directory ($download_dir):"
+              ls -R "$download_dir"
+              exit 1
+            fi
+            unzip -o "$actual_archive_file" -d "$extract_dir"
+          else
+            actual_archive_file="$download_dir/${archive_base_name}.tar.gz" # Construct full tar.gz path
+            echo "Expecting archive file: $actual_archive_file"
+            # Add check for tarball file existence
+            if [ ! -f "$actual_archive_file" ]; then
+               echo "Error: Expected archive file not found at $actual_archive_file"
+               echo "Contents of download directory ($download_dir):"
+               ls -R "$download_dir"
+               exit 1
+            fi
+            mkdir -p "$extract_dir"
+            tar xzf "$actual_archive_file" -C "$extract_dir"
+          fi
+
+          echo "Extracted contents:"
+          ls -R "$extract_dir"
+
+          binary_path=$(find "$extract_dir" -type f -name "$binary_name")
+
+          if [ -z "$binary_path" ]; then
+            echo "Error: Could not find binary '$binary_name' for target '$TARGET' in extracted files at '$extract_dir'"
+            exit 1
+          fi
+          binary_path=$(echo "$binary_path" | head -n 1)
+          echo "Found binary at: $binary_path"
+
+          # Destination uses the Rust target triple convention
+          dest_dir="typescript/vscode-ext/packages/vscode/server/$TARGET"
+          dest_path="$dest_dir/$binary_name"
+          mkdir -p "$dest_dir"
+
+          echo "Copying '$binary_path' to '$dest_path'"
+          cp "$binary_path" "$dest_path"
+          chmod +x "$dest_path"
+
+          rm -rf "$extract_dir"
+
+          echo "Verification: checking presence of $dest_path"
+          if [ ! -f "$dest_path" ]; then
+             echo "Error: Binary not found at destination $dest_path after copy!"
+             exit 1
+          fi
+          echo "Binary copied successfully for $CODE_TARGET."
+          ls -l "$dest_path"
+
+
       - name: Install Dependencies
+        # Install deps in the context of the specific extension package
         run: pnpm install --frozen-lockfile
-        working-directory: typescript/
-      - name: Build Typescript Project
+        working-directory: typescript/vscode-ext/packages
+
+      - name: Build Typescript Project (Common Code & WASM)
+        # This might be redundant if it doesn't change per target,
+        # but safer to run it. Consider optimizing if slow.
+        # Run from root to build dependencies correctly.
         run: pnpm run build
         working-directory: typescript/
 
-      # Build the VSCode Extension
-      - name: Build VSCode Extension
-        id: build
-        run: pnpm run vscode:package
+      - name: Create dist directory
+        run: mkdir -p typescript/vscode-ext/packages/dist
+
+      - name: Package VSCode Extension for ${{ matrix.code-target }}
+        id: package
+        run: |
+           PRE_RELEASE_FLAG=""
+           if [[ "${{ inputs.is_release_build }}" == "false" ]]; then
+             PRE_RELEASE_FLAG="--pre-release"
+           fi
+           OUTPUT_FILENAME="dist/baml-${{ matrix.code-target }}.vsix"
+           echo "Packaging for target: ${{ matrix.code-target }}"
+           # Run vsce from the directory containing the extension's package.json
+           npx @vscode/vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
+           echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
         working-directory: typescript/vscode-ext/packages
 
-      # Upload the artifact (helpful for debugging and manual downloads)
-      - name: Upload VSCode Extension Artifact
+      - name: Upload VSIX artifact for ${{ matrix.code-target }}
         uses: actions/upload-artifact@v4
         with:
-          name: baml-vscode-vsix
-          path: typescript/vscode-ext/packages/*.vsix
+          name: baml-vscode-vsix-${{ matrix.code-target }}
+          path: typescript/vscode-ext/packages/${{ steps.package.outputs.vsix_path }}
           if-no-files-found: error
 
-      # Upload the artifact (helpful for debugging and manual downloads)
-      - name: Upload VSCode Extension Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: baml-out
-          path: typescript/vscode-ext/packages/vscode/out
-          if-no-files-found: error
-
-      # upload the lang server artifact
-      - name: Upload VSCode Lang Server Extension Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: language-server
-          path: typescript/vscode-ext/packages/language-server/out
-          if-no-files-found: error
-
-      - name: VSCode Playground Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: vscode-playground
-          path: typescript/vscode-ext/packages/web-panel/dist
-          if-no-files-found: error
+      # Build/Upload Playground only once
+      # - name: Build & Upload VSCode Playground Artifact (conditional)
+      #   if: matrix.code-target == 'linux-x64' # Run only on one matrix job
+      #   run: |
+      #     echo "Building playground..."
+      #     # Ensure filter/path is correct relative to execution dir (root)
+      #     pnpm --filter @baml/playground build
+      #     echo "Uploading playground artifact..."
+      #   working-directory: typescript/
+      # - name: Upload Playground Artifact (conditional)
+      #   if: matrix.code-target == 'linux-x64'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: vscode-playground
+      #     path: typescript/vscode-ext/packages/web-panel/dist
+      #     if-no-files-found: error

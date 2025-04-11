@@ -38,8 +38,6 @@ pub(super) mod request;
 mod stream_request;
 mod vertex;
 
-// use crate::internal::llm_client::traits::ambassador_impl_WithRenderRawCurl;
-// use crate::internal::llm_client::traits::ambassador_impl_WithRetryPolicy;
 use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch(WithRetryPolicy)]

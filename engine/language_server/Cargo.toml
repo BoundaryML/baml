@@ -1,0 +1,76 @@
+[package]
+edition = "2021"
+name = "language-server"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+
+[dependencies]
+
+anyhow = { workspace = true }
+baml-types = { path = "../baml-lib/baml-types" }
+baml-runtime = { path = "../baml-runtime", features = [
+    "internal",
+], default-features = false }
+baml-lsp-types = { path = "../baml-lsp-types" }
+internal-baml-core = { path = "../baml-lib/baml-core" }
+internal-baml-diagnostics = { path = "../baml-lib/diagnostics" }
+internal-baml-codegen = { workspace = true }
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
+ignore = { version = "0.4.22" }
+indexmap = { workspace = true }
+jod-thread = { version = "0.1.2" }
+lsp-server = "0.7.6"
+lsp-types = "0.95.0"
+regex = { version = "1.10.2" }
+rustc-hash = { version = "2.0.0" }
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = { version = "1.0.113" }
+tracing-log = "0.2.0"
+shellexpand = { version = "3.0.0" }
+
+thiserror = { version = "2.0.0" }
+baml-log = { path = "../baml-lib/baml-log" }
+
+tracing = { version = "0.1.40" }
+
+tracing-subscriber = { version = "0.3.18", default-features = false, features = [
+    "env-filter",
+    "fmt",
+] }
+
+## other package dependencies that we can move out of this package (baml_*)
+
+schemars = { version = "0.8.16" }
+memchr = { version = "2.7.1" }
+log.workspace = true
+is-macro = { version = "0.3.5" }
+
+# baml_linter
+similar = { version = "2.4.0", features = ["inline"] }
+colored = "3.0.0"
+path-absolutize = { version = "3.1.1", features = [
+    "once_cell_cache",
+    "use_unix_paths_on_wasm",
+] }
+pathdiff = { version = "0.2.1" }
+
+# baml project dependency
+serde-wasm-bindgen = "0.4"
+crossbeam-channel = "0.5.14"
+filetime = "0.2.25"
+simple-logging = "2.0.2"
+itertools = "0.14.0"
+url.workspace = true
+
+
+[dev-dependencies]
+insta = { version = "1.42.1" }
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+libc = { version = "0.2.169" }
+
+# [lints]
+# workspace = true

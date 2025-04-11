@@ -12,6 +12,5 @@ fn main() -> Result<()> {
             output_type: baml_types::GeneratorOutputType::OpenApi,
         },
     )?;
-
     Ok(())
 }

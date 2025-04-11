@@ -18,6 +18,7 @@ mod defaults {
     pub const MAX_MESSAGE_LENGTH: usize = 64_000;
     pub const USE_JSON: bool = false;
     pub const COLOR_MODE: ColorMode = ColorMode::Auto;
+    pub const RUNNING_IN_LSP: bool = false;
 }
 
 /// Logging levels in order of verbosity
@@ -255,6 +256,28 @@ impl From<ColorModeConfig> for ColorMode {
     }
 }
 
+pub struct LspConfig;
+impl ConfigValue for LspConfig {
+    fn env_name() -> &'static str {
+        "BAML_LOG_LSP"
+    }
+
+    fn parse_value(_: &str) -> Option<Self> {
+        Some(LspConfig)
+    }
+
+    fn default_value() -> Self {
+        LspConfig
+    }
+}
+
+impl From<LspConfig> for bool {
+    fn from(_: LspConfig) -> Self {
+        env::var(LspConfig::env_name())
+            .map(|val| val.trim().eq_ignore_ascii_case("true") || val.trim() == "1")
+            .unwrap_or(defaults::RUNNING_IN_LSP)
+    }
+}
 pub struct MaxMessageLengthConfig;
 impl ConfigValue for MaxMessageLengthConfig {
     fn env_name() -> &'static str {
@@ -298,6 +321,8 @@ struct LogConfig {
     max_message_length: MaxMessageLength,
     /// Whether initialization has completed
     initialized: bool,
+    /// Whether we are running in the context of our LSP, which will prevent us from writing to stdout
+    running_in_lsp: bool,
 }
 
 impl LogConfig {
@@ -309,6 +334,7 @@ impl LogConfig {
             color_mode: ColorModeConfig::from_env().into(),
             max_message_length: MaxMessageLengthConfig::from_env().into(),
             initialized: false,
+            running_in_lsp: false,
         }
     }
 
@@ -318,6 +344,7 @@ impl LogConfig {
         self.use_json = JsonModeConfig::from_env().into();
         self.color_mode = ColorModeConfig::from_env().into();
         self.max_message_length = MaxMessageLengthConfig::from_env().into();
+        self.running_in_lsp = LspConfig::from_env().into();
     }
 
     /// Update config from a HashMap of environment variables
@@ -345,6 +372,7 @@ impl LogConfig {
             use_json: self.use_json,
             color_mode: self.color_mode,
             max_message_length: self.max_message_length,
+            running_in_lsp: self.running_in_lsp,
         }
     }
 }
@@ -400,6 +428,7 @@ pub struct Logger {
     use_json: bool,
     color_mode: ColorMode,
     max_message_length: MaxMessageLength,
+    running_in_lsp: bool,
 }
 
 /// Trait for creating a type-safe configuration API
@@ -547,6 +576,16 @@ pub fn set_from_env(env_vars: &HashMap<String, String>) -> Result<(), LogError> 
     }
 }
 
+pub fn set_running_in_lsp(running_in_lsp: bool) -> Result<(), LogError> {
+    match CONFIG.write() {
+        Ok(mut config) => {
+            config.running_in_lsp = running_in_lsp;
+            Ok(())
+        }
+        Err(_) => Err(LogError::LockError),
+    }
+}
+
 /// Reload all configuration from environment variables
 pub fn reload_from_env() -> Result<(), LogError> {
     match CONFIG.write() {
@@ -585,7 +624,10 @@ pub fn log_internal(
     // Create a temporary logger with the current config
     let logger = match CONFIG.read() {
         Ok(config) => config.clone(),
-        Err(_) => return, // Can't get config, skip logging
+        Err(_) => {
+            log::error!("Can't get config, skip logging");
+            return;
+        }
     }
     .to_logger();
 
@@ -613,13 +655,36 @@ impl Logger {
             ColorMode::Auto => {} // Use default detection
         }
 
-        let _ = writeln!(
-            io::stdout(),
-            "{} [BAML {}] {}",
-            now,
-            level.colored(),
-            message.trim()
-        );
+        if self.running_in_lsp {
+            // When running in the context of our LSP, we can't write to stdout since that will
+            // mess up the LSP communication protocol, which uses stdout/stderr for communication.
+            match level {
+                Level::Error => {
+                    log::error!("{} [BAML {}] {}", now, level.colored(), message.trim())
+                }
+                Level::Warn => {
+                    log::warn!("{} [BAML {}] {}", now, level.colored(), message.trim())
+                }
+                Level::Info => {
+                    log::info!("{} [BAML {}] {}", now, level.colored(), message.trim())
+                }
+                Level::Debug => {
+                    log::debug!("{} [BAML {}] {}", now, level.colored(), message.trim())
+                }
+                Level::Trace => {
+                    log::trace!("{} [BAML {}] {}", now, level.colored(), message.trim())
+                }
+                Level::Off => {}
+            }
+        } else {
+            let _ = writeln!(
+                io::stdout(),
+                "{} [BAML {}] {}",
+                now,
+                level.colored(),
+                message.trim()
+            );
+        }
     }
 }
 
@@ -698,12 +763,33 @@ pub fn log_event_internal<T: Loggable>(
             ColorMode::Auto => {} // Use default detection
         }
 
-        let _ = writeln!(
-            io::stdout(),
-            "{} [BAML {}] {}",
-            now,
-            level.colored(),
-            payload_str.trim()
-        );
+        if !config.running_in_lsp {
+            let _ = writeln!(
+                io::stdout(),
+                "{} [BAML {}] {}",
+                now,
+                level.colored(),
+                payload_str.trim()
+            );
+        } else {
+            match level {
+                Level::Error => {
+                    log::error!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                }
+                Level::Warn => {
+                    log::warn!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                }
+                Level::Info => {
+                    log::info!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                }
+                Level::Debug => {
+                    log::debug!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                }
+                Level::Trace => {
+                    log::trace!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                }
+                Level::Off => {}
+            }
+        }
     }
 }

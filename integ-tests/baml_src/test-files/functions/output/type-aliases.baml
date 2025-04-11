@@ -40,7 +40,7 @@ type Currency = int @check(gt_ten, {{ this > 10 }})
 type Amount = Currency @assert({{ this > 0 }})
 
 class MergeAttrs {
-    amount Amount @description("In USD")
+  amount Amount @description("In USD")
 }
 
 // This should be allowed.

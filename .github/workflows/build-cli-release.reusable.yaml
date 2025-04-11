@@ -1,0 +1,242 @@
+name: BAML Release - Build BAML CLI
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version'
+        required: false
+        type: string
+      package_for_release:
+        description: 'Create archives for release instead of raw binaries'
+        type: boolean
+        default: true
+        required: false
+
+env:
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+        
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-cli
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          # Always include these targets
+          - os: ubuntu-20.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+            static: true
+          - os: macos-14
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+          - os: windows-2022
+            target: aarch64-pc-windows-msvc
+          # ARM targets (will be conditionally skipped if not needed)
+          - os: ubuntu-20.04
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-20.04
+            target: aarch64-unknown-linux-musl
+
+    
+    runs-on: ${{ matrix._.os }}
+    env:
+      CROSS_VERSION: v0.2.5
+      CARGO: cargo
+      TARGET_FLAGS: ${{ matrix._.target != '' && format('--target {0}', matrix._.target) || '' }}
+      RUST_BACKTRACE: 1
+      
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix._.target }}
+      
+      # Use cross for Linux cross-compilation
+      - name: Install cross
+        if: contains(matrix._.os, 'ubuntu') && matrix._.target != 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/cross-download"
+          mkdir "$dir"
+          echo "$dir" >> $GITHUB_PATH
+          cd "$dir"
+          curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
+          tar xf cross-x86_64-unknown-linux-musl.tar.gz
+          echo "CARGO=cross" >> $GITHUB_ENV
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          prefix-key: "v1-rust"
+
+      # Build the CLI - Always use static-ssl features
+      - name: Build CLI
+        # This single step now handles all builds
+        run: >
+          ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
+          --features static-ssl
+          --no-default-features
+        working-directory: engine
+      
+      # Determine binary path and archive name
+      - name: Set binary and archive paths
+        id: paths
+        if: inputs.package_for_release
+        shell: bash
+        run: |
+          echo "version: ${{ inputs.version }}"
+          if [ "${{ matrix._.os }}" = "windows-latest" ]; then
+            bin="engine/target/${{ matrix._.target }}/release/baml-cli.exe"
+          else
+            bin="engine/target/${{ matrix._.target }}/release/baml-cli"
+          fi
+          # Ensure the binary exists before proceeding
+          if [ ! -f "$bin" ]; then
+            echo "Binary not found at $bin"
+            exit 1
+          fi
+          echo "bin=$bin" >> $GITHUB_OUTPUT
+          # Use inputs.version if provided, otherwise default to 'dev' or similar
+          version_name="${{ inputs.version || 'dev' }}"
+          archive_base="baml-cli-${version_name}-${{ matrix._.target }}"
+          echo "archive_base=$archive_base" >> $GITHUB_OUTPUT
+          echo "archive_dir=./${archive_base}" >> $GITHUB_OUTPUT # Directory to create for staging files
+
+      # Print determined paths for debugging
+      - name: Print artifact details
+        if: inputs.package_for_release
+        shell: bash
+        run: |
+          echo "Binary Path: ${{ steps.paths.outputs.bin }}"
+          echo "Archive Base Name: ${{ steps.paths.outputs.archive_base }}"
+          echo "Staging Directory: ${{ steps.paths.outputs.archive_dir }}"
+
+      # Create archives with proper format
+      - name: Create archive (Windows)
+        if: contains(matrix._.os, 'windows') && inputs.package_for_release
+        shell: bash
+        run: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+
+          staging_dir="${{ steps.paths.outputs.archive_dir }}"
+          archive_base="${{ steps.paths.outputs.archive_base }}"
+          archive_file="${archive_base}.zip"
+          checksum_file="${archive_base}.zip.sha256"
+
+          echo "Creating staging directory: $staging_dir"
+          mkdir -p "$staging_dir"
+
+          echo "Copying files to staging directory"
+          cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
+          # Use find for robust copy
+          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
+
+          echo "Creating archive: $archive_file"
+          # Use original cd logic for 7z stability, but run in subshell
+          (
+            cd "$staging_dir"
+            7z a "../${archive_file}" .
+          )
+          # Check if 7z command succeeded and file exists
+          if [ ! -f "${archive_file}" ]; then
+            echo "Archive creation failed or file not found: ${archive_file}"
+            exit 1
+          fi
+
+          echo "Creating checksum file: $checksum_file"
+          certutil -hashfile "${archive_file}" SHA256 > "${checksum_file}"
+          # Check if certutil command succeeded and file exists
+          if [ ! -f "${checksum_file}" ]; then
+            echo "Checksum creation failed or file not found: ${checksum_file}"
+            exit 1
+          fi
+          # Add check for empty checksum file
+          if [ ! -s "${checksum_file}" ]; then
+             echo "Checksum file is empty: ${checksum_file}"
+             exit 1
+          fi
+
+          echo "Archive and checksum created successfully:"
+          ls -l "${archive_base}".*
+
+      - name: Create archive (Unix)
+        if:  (! contains(matrix._.os, 'windows') && inputs.package_for_release)
+        shell: bash
+        run: |
+          set -e # Exit immediately if a command exits with a non-zero status.
+
+          staging_dir="${{ steps.paths.outputs.archive_dir }}"
+          archive_base="${{ steps.paths.outputs.archive_base }}"
+          archive_file="${archive_base}.tar.gz"
+          checksum_file="${archive_file}.sha256"
+
+          echo "Creating staging directory: $staging_dir"
+          mkdir -p "$staging_dir"
+
+          echo "Copying files to staging directory"
+          cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
+          # Use find for robust copy
+          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
+
+          echo "Creating archive: $archive_file"
+          # Create the archive in the parent directory directly using -C
+          tar czf "${archive_file}" -C "$staging_dir" .
+          # Check if tar command succeeded and file exists
+          if [ ! -f "${archive_file}" ]; then
+            echo "Archive creation failed or file not found: ${archive_file}"
+            exit 1
+          fi
+
+          echo "Creating checksum file: $checksum_file"
+          shasum -a 256 "${archive_file}" > "${checksum_file}"
+          # Check if shasum command succeeded and file exists
+          if [ ! -f "${checksum_file}" ]; then
+            echo "Checksum creation failed or file not found: ${checksum_file}"
+            exit 1
+          fi
+
+          echo "Archive and checksum created successfully:"
+          ls -l "${archive_base}".*
+
+      # Debug: List root directory contents
+      - name: List root directory contents
+        shell: bash
+        run: |
+          echo "Listing root directory contents:"
+          ls -la
+          echo "Looking for specific archive files:"
+          find . -name "${{ steps.paths.outputs.archive_base }}.*" -type f
+
+      # Upload different artifacts based on mode
+      - name: Upload CLI artifacts (Release)
+        if: inputs.package_for_release
+        uses: actions/upload-artifact@v4
+        with:
+          # Artifact name in GitHub Actions UI remains the same
+          name: baml-cli-${{ matrix._.target }}
+          path: |
+            ${{ steps.paths.outputs.archive_base }}.*
+          if-no-files-found: error
+
+      - name: Upload CLI artifacts (CI)
+        if: inputs.package_for_release == false
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-cli-${{ matrix._.target }}
+          path: |
+            ${{ matrix._.os == 'windows-latest' && format('engine/target/{0}/release/baml-cli.exe', matrix._.target) || format('engine/target/{0}/release/baml-cli', matrix._.target) }}
