@@ -98,6 +98,8 @@ export default function EnvVariablesManager() {
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
   const [envFileContent, setEnvFileContent] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const { toast } = useToast()
   const initialLoadRef = useRef(true)
 
   // Load environment variables from localStorage on initial render
@@ -232,125 +234,128 @@ export default function EnvVariablesManager() {
   }
 
   return (
-    <div className='container mx-auto py-8 max-w-4xl'>
-      <div className='flex justify-between items-center mb-6'>
-        <h1 className='text-2xl font-bold'>Environment Variables</h1>
-        <div className='flex gap-2'>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant='outline' className='flex items-center gap-2'>
-                <FileText className='h-4 w-4' />
-                Import .env
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Import from .env file</DialogTitle>
-              </DialogHeader>
-              <div className='py-4'>
-                <Label htmlFor='env-file'>Paste your .env file content below:</Label>
-                <Textarea
-                  id='env-file'
-                  className='min-h-[200px] mt-2'
-                  placeholder='KEY=value'
-                  value={envFileContent}
-                  onChange={(e) => setEnvFileContent(e.target.value)}
-                />
-              </div>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant='outline'>Cancel</Button>
-                </DialogClose>
-                <DialogClose asChild>
-                  <Button onClick={parseEnvFile}>Import</Button>
-                </DialogClose>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+    <div className='p-2 space-y-2 text-xs'>
+      <h3 className='flex gap-2 items-center font-medium text-muted-foreground'>
+        <Settings2 className='w-4 h-4' />
+        Environment Variables
+      </h3>
 
-          <Button onClick={saveEnvVars} disabled={!hasUnsavedChanges} className='flex items-center gap-2'>
-            <Save className='h-4 w-4' />
+      {hasUnsavedChanges && (
+        <div className='flex gap-2 items-center text-amber-500 bg-amber-50/50 p-2 rounded'>
+          <AlertTriangle className='h-4 w-4' />
+          <p className='text-amber-700'>You have unsaved changes</p>
+          <Button size='sm' variant='ghost' onClick={saveEnvVars} className='ml-auto'>
+            <Save className='h-4 w-4 mr-1' />
             Save Changes
           </Button>
         </div>
-      </div>
-
-      {hasUnsavedChanges && (
-        <div className='bg-amber-50 border border-amber-200 rounded-md p-3 mb-6 flex items-center gap-2'>
-          <AlertTriangle className='h-5 w-5 text-amber-500' />
-          <p className='text-amber-800'>You have unsaved changes. Click "Save Changes" to persist them.</p>
-        </div>
       )}
 
-      <div className='bg-white rounded-md border shadow-sm'>
-        <div className='grid grid-cols-[1fr_1fr_auto] gap-4 p-4 border-b bg-gray-50 font-medium'>
-          <div>Key</div>
-          <div>Value</div>
-          <div className='w-24 text-center'>Actions</div>
-        </div>
-
+      <div className='space-y-1'>
         {envVars.map((env, index) => (
-          <div key={index} className='grid grid-cols-[1fr_1fr_auto] gap-4 p-4 border-b items-center'>
-            <div className='flex items-center gap-2'>
-              <Input value={env.key} readOnly className='bg-gray-50 cursor-not-allowed' />
-              {REQUIRED_ENV_VARS.includes(env.key) && env.value === '' && (
-                <Badge variant='outline' className='text-red-500 border-red-200 bg-red-50'>
-                  &lt;unset&gt;
-                </Badge>
-              )}
-            </div>
-            <div className='flex items-center gap-2'>
-              <Input
-                type={env.hidden ? 'password' : 'text'}
-                value={env.value}
-                onChange={(e) => updateEnvVar(index, e.target.value)}
-                placeholder={REQUIRED_ENV_VARS.includes(env.key) && env.value === '' ? '<unset>' : ''}
-                className={REQUIRED_ENV_VARS.includes(env.key) && env.value === '' ? 'border-red-200' : ''}
-              />
-            </div>
-            <div className='flex items-center justify-end gap-2'>
-              <Button
-                variant='ghost'
-                size='icon'
-                onClick={() => toggleVisibility(index)}
-                title={env.hidden ? 'Show value' : 'Hide value'}
-              >
-                {env.hidden ? <Eye className='h-4 w-4' /> : <EyeOff className='h-4 w-4' />}
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant='ghost' size='icon' className='text-red-500 hover:text-red-600' title='Delete'>
-                    <Trash2 className='h-4 w-4' />
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Environment Variable</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to delete "{env.key}"? This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => deleteEnvVar(index)} className='bg-red-500 hover:bg-red-600'>
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-          </div>
-        ))}
+          <TooltipProvider key={env.key} delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.02 }}
+                  className='group relative flex items-center gap-2 rounded-sm px-1 py-0.5 transition-colors hover:bg-muted/30'
+                >
+                  <div className='flex relative gap-2 items-center w-fit'>
+                    <div className='flex gap-2 items-center group-hover:invisible'>
+                      {REQUIRED_ENV_VARS.includes(env.key) ? (
+                        <CircleDot className='w-3 h-3 text-muted-foreground' />
+                      ) : (
+                        <Circle className='w-3 h-3 text-muted-foreground' />
+                      )}
+                      {!env.value || env.value === '' ? (
+                        <AlertTriangle className='h-4 w-4 rounded-full bg-orange-400 p-0.5 text-white' />
+                      ) : (
+                        <Check className='h-4 w-4 rounded-full bg-green-500 p-0.5 text-white' />
+                      )}
+                    </div>
 
-        <div className='grid grid-cols-[1fr_1fr_auto] gap-4 p-4'>
-          <Input placeholder='Add new key' value={newKey} onChange={(e) => setNewKey(e.target.value)} />
-          <Input placeholder='Add new value' value={newValue} onChange={(e) => setNewValue(e.target.value)} />
-          <Button onClick={addEnvVar} disabled={!newKey.trim()} className='flex items-center gap-2'>
-            <Plus className='h-4 w-4' />
-            Add
-          </Button>
-        </div>
+                    <div className='hidden absolute left-0 gap-2 items-center group-hover:flex'>
+                      <Button variant='ghost' size='sm' className='p-0 w-4 h-4' onClick={() => deleteEnvVar(index)}>
+                        <XCircle className='w-4 h-4 text-muted-foreground hover:text-destructive' />
+                      </Button>
+                      <Button variant='ghost' size='sm' className='p-0 w-4 h-4' onClick={() => toggleVisibility(index)}>
+                        {env.hidden ? (
+                          <Eye className='w-4 h-4 text-muted-foreground hover:text-primary' />
+                        ) : (
+                          <EyeOff className='w-4 h-4 text-muted-foreground hover:text-primary' />
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className='flex-1 flex items-center gap-2'>
+                    <code className='font-mono text-xs transition-colors text-muted-foreground group-hover:text-foreground'>
+                      {env.key}
+                    </code>
+                    <Input
+                      type={env.hidden ? 'password' : 'text'}
+                      value={env.value}
+                      onChange={(e) => updateEnvVar(index, e.target.value)}
+                      className='h-6 text-xs'
+                      placeholder={REQUIRED_ENV_VARS.includes(env.key) && !env.value ? 'Required' : undefined}
+                    />
+                  </div>
+                </motion.div>
+              </TooltipTrigger>
+              <TooltipContent side='top' className='text-xs'>
+                {env.value ? 'Click to edit' : 'Variable needs to be set'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ))}
       </div>
+
+      <div className='flex items-center mt-4 space-x-2'>
+        <Input
+          value={newKey}
+          onChange={(e) => setNewKey(e.target.value)}
+          placeholder='New variable name'
+          className='h-8 text-xs'
+        />
+        <Button size='sm' variant='outline' onClick={addEnvVar} className='h-8'>
+          <PlusCircle className='mr-2 w-4 h-4' />
+          Add
+        </Button>
+      </div>
+
+      <Dialog>
+        <DialogTrigger asChild>
+          <Button variant='outline' size='sm' className='w-full mt-2'>
+            <FileText className='h-4 w-4 mr-2' />
+            Import from .env
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Import from .env file</DialogTitle>
+          </DialogHeader>
+          <div className='py-4'>
+            <Label htmlFor='env-file'>Paste your .env file content below:</Label>
+            <Textarea
+              id='env-file'
+              className='min-h-[200px] mt-2'
+              placeholder='KEY=value'
+              value={envFileContent}
+              onChange={(e) => setEnvFileContent(e.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant='outline'>Cancel</Button>
+            </DialogClose>
+            <DialogClose asChild>
+              <Button onClick={parseEnvFile}>Import</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
