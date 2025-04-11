@@ -3,7 +3,14 @@ import { BAML } from '@boundaryml/baml-lezer'
 import { linter } from '@codemirror/lint'
 import { tags as t } from '@lezer/highlight'
 import { vscodeDarkInit, vscodeLightInit } from '@uiw/codemirror-theme-vscode'
-import CodeMirror, { Compartment, EditorView, type Extension, type ReactCodeMirrorRef, Transaction, ChangeDesc } from '@uiw/react-codemirror'
+import CodeMirror, {
+  Compartment,
+  EditorView,
+  type Extension,
+  type ReactCodeMirrorRef,
+  Transaction,
+  ChangeDesc,
+} from '@uiw/react-codemirror'
 import { inlineCopilot } from 'codemirror-copilot'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view'
@@ -38,8 +45,8 @@ export interface GeneratedFile {
   content: string
 }
 
-const addFlashingEffect = StateEffect.define<{from: number, to: number}[]>();
-const clearFlashingEffect = StateEffect.define<void>();
+const addFlashingEffect = StateEffect.define<{ from: number; to: number }[]>()
+const clearFlashingEffect = StateEffect.define<void>()
 const flashingMark = Decoration.mark({
   attributes: {
     style: `
@@ -49,13 +56,13 @@ const flashingMark = Decoration.mark({
       text-decoration: none;
       text-shadow: 0 0 4px #00FF00, 0 0 6px #00FF00;
       animation: pulseGlow 1s ease-in-out infinite alternate;
-    `
-  }
+    `,
+  },
 })
 
 // Add the animation keyframes to the document
 if (typeof document !== 'undefined') {
-  const style = document.createElement('style');
+  const style = document.createElement('style')
   style.textContent = `
     @keyframes pulseGlow {
       from {
@@ -67,44 +74,42 @@ if (typeof document !== 'undefined') {
         text-shadow: 0 0 4px #00FF00, 0 0 6px #00FF00;
       }
     }
-  `;
-  document.head.appendChild(style);
+  `
+  document.head.appendChild(style)
 }
 
 // Create a StateField for the highlights
 const createFlashingField = () => {
   return StateField.define({
     create() {
-      return RangeSet.empty;
+      return RangeSet.empty
     },
     update(highlights, tr) {
       // Map the decorations through document changes
-      highlights = highlights.map(tr.changes);
-      
+      highlights = highlights.map(tr.changes)
+
       // Apply effects
       for (const effect of tr.effects) {
         if (effect.is(addFlashingEffect)) {
           // Create new highlight decorations
-          const decorations = effect.value.map(range => 
-            flashingMark.range(range.from, range.to)
-          );
-          
+          const decorations = effect.value.map((range) => flashingMark.range(range.from, range.to))
+
           // Add them to the set
           highlights = highlights.update({
             add: decorations,
-            sort: true
-          });
+            sort: true,
+          })
         } else if (effect.is(clearFlashingEffect)) {
           // Clear all decorations
-          highlights = RangeSet.empty;
+          highlights = RangeSet.empty
         }
       }
-      
-      return highlights;
+
+      return highlights
     },
-    provide: field => EditorView.decorations.from(field)
-  });
-};
+    provide: (field) => EditorView.decorations.from(field),
+  })
+}
 
 export const CodeMirrorViewer = ({
   lang,
@@ -131,8 +136,8 @@ export const CodeMirrorViewer = ({
 
   useEffect(() => {
     console.log('flashRanges updated: ', flashRanges)
-    if (!ref.current.view) return;
-    const view = ref.current.view;
+    if (!ref.current.view) return
+    const view = ref.current.view
     // TODO: Filter by filename?
     const convertedRanges = flashRanges.map((range) => ({
       from: view.state.doc.line(range.startLine + 1).from + range.startCol,
@@ -140,12 +145,9 @@ export const CodeMirrorViewer = ({
     }))
     console.log('convertedRanges: ', convertedRanges)
     view?.dispatch({
-      effects: [
-        clearFlashingEffect.of(),
-        addFlashingEffect.of(convertedRanges)
-      ]
+      effects: [clearFlashingEffect.of(), addFlashingEffect.of(convertedRanges)],
     })
-  }, [flashRanges]);
+  }, [flashRanges])
 
   const makeLinter = useCallback(() => {
     if (lang === 'baml') {

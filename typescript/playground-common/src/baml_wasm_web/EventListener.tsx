@@ -197,13 +197,15 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
         case 'set_flashing_regions':
           console.log('DEBUG set_flashing_regions', content)
-          setFlashRanges(content.spans.map(span => ({
-            filePath: span.file_path,
-            startLine: span.start_line,
-            startCol: span.start,
-            endLine: span.end_line,
-            endCol: span.end
-          })))
+          setFlashRanges(
+            content.spans.map((span) => ({
+              filePath: span.file_path,
+              startLine: span.start_line,
+              startCol: span.start,
+              endLine: span.end_line,
+              endCol: span.end,
+            })),
+          )
           break
 
         case 'select_function':

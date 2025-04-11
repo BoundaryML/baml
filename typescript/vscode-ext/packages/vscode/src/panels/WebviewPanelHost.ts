@@ -217,7 +217,15 @@ export class WebviewPanelHost {
             }
           | {
               command: 'set_flashing_regions'
-              content: { spans: { file_path: string; start_line: number; start_char: number; end_line: number; end_char: number }[] }
+              content: {
+                spans: {
+                  file_path: string
+                  start_line: number
+                  start_char: number
+                  end_line: number
+                  end_char: number
+                }[]
+              }
             }
           | {
               command: 'jumpToFile'

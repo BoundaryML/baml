@@ -334,39 +334,42 @@ export function activate(context: vscode.ExtensionContext) {
   )
 
   context.subscriptions.push(
-    vscode.commands.registerCommand('baml.setFlashingRegions', (params: {
-      content: {
-        spans: { file_path: string; start_line: number; start: number; end_line: number; end: number }[]
-      }
-    }) => {
-      console.log('args:', params)
-      // A helpful thing to toggle on for debugging:
-      console.log('HANDLER setFlashingRegions', params)
-      vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
+    vscode.commands.registerCommand(
+      'baml.setFlashingRegions',
+      (params: {
+        content: {
+          spans: { file_path: string; start_line: number; start: number; end_line: number; end: number }[]
+        }
+      }) => {
+        console.log('args:', params)
+        // A helpful thing to toggle on for debugging:
+        console.log('HANDLER setFlashingRegions', params)
+        vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
 
-      // Focus the editor to ensure styling updates are applied rapidly.
-      if (vscode.window.activeTextEditor) {
-        vscode.window.showTextDocument(
-          vscode.window.activeTextEditor.document,
-          vscode.window.activeTextEditor.viewColumn,
-        )
-      }
+        // Focus the editor to ensure styling updates are applied rapidly.
+        if (vscode.window.activeTextEditor) {
+          vscode.window.showTextDocument(
+            vscode.window.activeTextEditor.document,
+            vscode.window.activeTextEditor.viewColumn,
+          )
+        }
 
-      context.subscriptions.push({
-        dispose: () => {
-          stopAnimation()
-          if (glowOnDecoration) glowOnDecoration.dispose()
-          if (glowOffDecoration) glowOffDecoration.dispose()
-        },
-      })
-      const ranges = params.content.spans.map((span) => {
-        const start = new vscode.Position(span.start_line, span.start)
-        const end = new vscode.Position(span.end_line, span.end)
-        return new vscode.Range(start, end)
-      })
-      highlightRanges = ranges
-      updateHighlight()
-    }),
+        context.subscriptions.push({
+          dispose: () => {
+            stopAnimation()
+            if (glowOnDecoration) glowOnDecoration.dispose()
+            if (glowOffDecoration) glowOffDecoration.dispose()
+          },
+        })
+        const ranges = params.content.spans.map((span) => {
+          const start = new vscode.Position(span.start_line, span.start)
+          const end = new vscode.Position(span.end_line, span.end)
+          return new vscode.Range(start, end)
+        })
+        highlightRanges = ranges
+        updateHighlight()
+      },
+    ),
   )
 
   context.subscriptions.push(bamlPlaygroundCommand)
