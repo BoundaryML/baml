@@ -333,14 +333,16 @@ export function activate(context: vscode.ExtensionContext) {
     },
   )
 
-  vscode.commands.registerCommand(
-    'baml.setFlashingRegions',
-    async (args: {
-      spans: { file_path: string; start_line: number; start: number; end_line: number; end: number }[]
+  context.subscriptions.push(
+    vscode.commands.registerCommand('baml.setFlashingRegions', (params: {
+      content: {
+        spans: { file_path: string; start_line: number; start: number; end_line: number; end: number }[]
+      }
     }) => {
+      console.log('args:', params)
       // A helpful thing to toggle on for debugging:
-      // console.log('HANDLER setFlashingRegions', args)
-      // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(args))
+      console.log('HANDLER setFlashingRegions', params)
+      vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
 
       // Focus the editor to ensure styling updates are applied rapidly.
       if (vscode.window.activeTextEditor) {
@@ -357,14 +359,14 @@ export function activate(context: vscode.ExtensionContext) {
           if (glowOffDecoration) glowOffDecoration.dispose()
         },
       })
-      const ranges = args.spans.map((span) => {
+      const ranges = params.content.spans.map((span) => {
         const start = new vscode.Position(span.start_line, span.start)
         const end = new vscode.Position(span.end_line, span.end)
         return new vscode.Range(start, end)
       })
       highlightRanges = ranges
       updateHighlight()
-    },
+    }),
   )
 
   context.subscriptions.push(bamlPlaygroundCommand)

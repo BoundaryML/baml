@@ -218,7 +218,7 @@ fn RunPoemFaceoff(subject: string, length: int) -> Comparison {
 test Faceoff {
   functions [RunPoemFaceoff]
   args {
-    subejct "love"
+    subject "love"
     length 10
   }
 }
