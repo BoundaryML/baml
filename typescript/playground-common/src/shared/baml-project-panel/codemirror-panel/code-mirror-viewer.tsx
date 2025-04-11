@@ -188,6 +188,7 @@ export const CodeMirrorViewer = ({
   const [extensions, setExtensions] = useState<Extension[]>([])
 
   useEffect(() => {
+    // const interval = setInterval(() => {
     if (ref.current?.view?.contentDOM) {
       const line = ref.current.view.state.doc.lineAt(ref.current.view.state.doc.length)
       if (line) {
@@ -198,40 +199,17 @@ export const CodeMirrorViewer = ({
           })
         }
       }
+      // // Scroll to the bottom of the container
+      // containerRef.current.contentDOM.scrollIntoView({
+      //   behavior: "smooth",
+      // });
     }
+    // }, 1000); // Adjust the interval time (in milliseconds) as needed
+
+    // return () => clearInterval(interval); // Clean up the interval on component unmount
   }, [fileContent, ref, shouldScrollDown])
 
   const setUpdateCursor = useSetAtom(updateCursorAtom)
-
-  // useEffect(() => {
-  //   if (flashRanges && ref.current?.view) {
-  //     // Convert line/column positions to character positions
-  //     const doc = ref.current.view.state.doc
-  //     const charRanges = flashRanges.map(range => {
-  //       const from = doc.line(range.startLine).from + range.startCol - 1
-  //       const to = doc.line(range.endLine).from + range.endCol - 1
-  //       return { from, to }
-  //     })
-
-  //     console.log('Dispatching flash effect for ranges:', charRanges)
-  //     ref.current.view.dispatch({
-  //       effects: [flashEffect.of(charRanges)],
-  //       annotations: [Transaction.userEvent.of('flash')]
-  //     })
-
-  //     const timeout = setTimeout(() => {
-  //       if (ref.current?.view) {
-  //         console.log('Clearing flash effect')
-  //         ref.current.view.dispatch({
-  //           effects: [flashEffect.of([])],
-  //           annotations: [Transaction.userEvent.of('clear')]
-  //         })
-  //       }
-  //     }, 1000) // Fixed duration of 1 second
-
-  //     return () => clearTimeout(timeout)
-  //   }
-  // }, [flashRanges])
 
   useEffect(() => {
     async function initializeExtensions() {
