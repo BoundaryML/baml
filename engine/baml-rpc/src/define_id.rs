@@ -2,17 +2,18 @@ use type_safe_id::{StaticType, TypeSafeId};
 
 macro_rules! define_id {
     ($name:ident, $inner_name:ident, $type_str:expr) => {
-        #[derive(Default, Clone)]
+        #[derive(Default, Clone, PartialEq, Eq, Hash)]
         struct $inner_name;
 
         impl StaticType for $inner_name {
             const TYPE: &'static str = $type_str;
         }
 
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
         pub struct $name(TypeSafeId<$inner_name>);
 
         impl $name {
+            #[allow(dead_code)]
             pub fn new() -> Self {
                 Self(TypeSafeId::<$inner_name>::new())
             }
@@ -53,3 +54,4 @@ define_id!(SpanId, Span_, "bspan");
 define_id!(TraceEventId, TraceEvent_, "bevent");
 define_id!(HttpRequestId, HttpRequest_, "breq");
 define_id!(ProjectId, Project_, "proj");
+define_id!(TraceBatchId, TraceBatch_, "tracebatch");

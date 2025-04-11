@@ -239,3 +239,13 @@ export const testCaseResponseAtom = atomFamily((params: { functionName: string; 
 export const areTestsRunningAtom = atom(false)
 // TODO: this is never set.
 export const runningTestsAtom = atom<{ functionName: string; testName: string; state: TestState }[]>([])
+
+export interface FlashRange {
+  filePath: string
+  startLine: number
+  startCol: number
+  endLine: number
+  endCol: number
+}
+
+export const flashRangesAtom = atom<FlashRange[]>([])

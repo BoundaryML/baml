@@ -217,7 +217,15 @@ export class WebviewPanelHost {
             }
           | {
               command: 'set_flashing_regions'
-              spans: { file_path: string; start_line: number; start_char: number; end_line: number; end_char: number }[]
+              content: {
+                spans: {
+                  file_path: string
+                  start_line: number
+                  start_char: number
+                  end_line: number
+                  end_char: number
+                }[]
+              }
             }
           | {
               command: 'jumpToFile'
@@ -269,8 +277,8 @@ export class WebviewPanelHost {
             }
             case 'set_flashing_regions': {
               // Call the command handler with the spans
-              console.log('WEBPANELVIEW set_flashing_regions', message.spans)
-              vscode.commands.executeCommand('baml.setFlashingRegions', { spans: message.spans })
+              console.log('WEBPANELVIEW set_flashing_regions', message.content.spans)
+              vscode.commands.executeCommand('baml.setFlashingRegions', { content: message.content })
               return
             }
           }

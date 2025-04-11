@@ -128,7 +128,7 @@ const useRunTests = (maxBatchSize = 5) => {
                 try {
                   vscode.postMessage({
                     command: 'set_flashing_regions',
-                    spans: spans_to_send,
+                    content: { spans: spans_to_send },
                   })
                 } catch (e) {
                   console.error('Failed to send spans to VSCode:', e)
