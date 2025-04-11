@@ -7,5 +7,6 @@ export { default as CustomErrorBoundary } from './utils/ErrorFallback'
 export { CodeMirrorViewer } from './shared/baml-project-panel/codemirror-panel/code-mirror-viewer'
 export { JotaiProvider } from './baml_wasm_web/JotaiProvider'
 export { PromptPreview }
+export { default as EnvVars } from './shared/baml-project-panel/playground-panel/side-bar/env-vars'
 //wasm
 // export { default as lint, type LinterSourceFile, type LinterError, type LinterInput } from "./wasm/lint";

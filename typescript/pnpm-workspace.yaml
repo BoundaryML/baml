@@ -8,3 +8,4 @@ packages:
   - 'playground-common'
   - 'fiddle-frontend'
   - 'codemirror-lang-baml'
+  - 'storybook'

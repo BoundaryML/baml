@@ -28,6 +28,7 @@ import { Switch } from '@radix-ui/react-switch'
 import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
 import { Checkbox } from '@/components/ui/checkbox'
 import { vscode } from '../../vscode'
+
 const renderedEnvVarsAtom = atom((get) => {
   const envVars = get(envVarsAtom)
   const requiredEnvVars = get(requiredEnvVarsAtom)

@@ -18,6 +18,7 @@ import { Dialog, DialogTrigger, DialogContent } from './components/ui/dialog'
 import { useFeedbackWidget } from './lib/feedback_widget'
 import PromptPreview from './shared/baml-project-panel/playground-panel/prompt-preview'
 import { ThemeProvider } from 'next-themes'
+
 function App() {
   useFeedbackWidget()
   return (
