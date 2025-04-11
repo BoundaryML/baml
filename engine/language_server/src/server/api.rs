@@ -57,10 +57,10 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     .unwrap_or(())
             });
         }
-        // request::Completion::METHOD => local_request_task::<request::Completion>(req),
-        // request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
-        // request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
-        // request::Rename::METHOD => local_request_task::<request::Rename>(req),
+        request::Completion::METHOD => local_request_task::<request::Completion>(req),
+        request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
+        request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
+        request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
             tracing::info!("diagnostic notif");
             background_request_task::<request::DocumentDiagnosticRequestHandler>(
@@ -70,18 +70,24 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         }
         "requestDiagnostics" => {
             tracing::info!("requestDiagnostics");
-            return Task::local(move |session, _, _, responder| {
+            return Task::local(move |session, notifier, requester, responder| {
                 let result: anyhow::Result<()> = (|| {
+                    tracing::info!("requestDiagnostics: {:?}", req.params);
+
                     let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
                     let url = Url::parse(&params.project_id)
                         .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
                     session.ensure_project_db_for_baml_file(&url)?;
+                    tracing::info!("url: {:?}", url);
                     let project = session
                         .project_db_for_path(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
-                    let diagnostics = project_diagnostics(project, Some(&url));
+                    project.lock().unwrap().update_runtime(Some(notifier));
 
+                    tracing::info!("project:");
+                    let diagnostics = project_diagnostics(project.clone(), Some(&url));
+                    tracing::info!("diagnostics: ");
                     let report = Ok(DocumentDiagnosticReportResult::Report(
                         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                             related_documents: None,
@@ -91,8 +97,9 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                             },
                         }),
                     ));
-                    responder.respond(id, report)?;
-                    Ok(())
+                    tracing::info!("report: {:?}", report);
+                    let res = responder.respond(id, report)?;
+                    Ok(res)
                 })();
                 result.unwrap_or_else(|e| {
                     tracing::error!("Failed to send response: {e}");
@@ -118,7 +125,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         request::DocumentFormatting::METHOD => {
             local_request_task::<request::DocumentFormatting>(req)
         }
-        // request::Hover::METHOD => local_request_task::<request::Hover>(req),
+        request::Hover::METHOD => local_request_task::<request::Hover>(req),
         method => {
             // tracing::warn!("Received request {method} which does not have a handler");
             return Task::nothing();
@@ -177,7 +184,10 @@ pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Vec<Task<'a>>
         // --- DidSaveTextDocument now uses the simple local task helper ---
         notification::DidSaveTextDocument::METHOD => {
             handle_notification_result_error::<notification::DidSaveTextDocument>(
-                local_notification_task::<notification::DidSaveTextDocument>(notif),
+                background_notification_task::<notification::DidSaveTextDocument>(
+                    notif,
+                    BackgroundSchedule::LatencySensitive,
+                ),
             )
         }
 

@@ -15,7 +15,9 @@ function AaaSamOutputFormat(recipe: string) -> Recipe {
 
     {{ctx.output_format(map_style='angle')}}
   "#
-}
+} 
+ 
+ 
 
 test MyOutput {
     functions [AaaSamOutputFormat]

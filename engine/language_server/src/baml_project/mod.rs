@@ -745,12 +745,11 @@ impl Project {
                 )))?;
         }
 
-        // let runtime = self.runtime();
-        // let runtime = self.baml_project.runtime(fake_env_vars);
-        // self.current_runtime = runtime.clone().ok();
-        // if runtime.is_ok() {
-        //     self.last_successful_runtime = runtime.ok();
-        // }
+        let runtime = self.baml_project.runtime(fake_env_vars);
+        self.current_runtime = runtime.clone().ok();
+        if runtime.is_ok() {
+            self.last_successful_runtime = runtime.ok();
+        }
 
         // let diagnostics = self
         //     .baml_project
