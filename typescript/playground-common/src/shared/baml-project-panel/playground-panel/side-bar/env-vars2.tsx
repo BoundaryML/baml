@@ -15,44 +15,17 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { useToast } from '@/components/hooks/use-toast'
 import { motion } from 'motion/react'
 import { atom, useAtomValue, useSetAtom } from 'jotai'
-import {
-  AlertTriangle,
-  Check,
-  ChevronRight,
-  Circle,
-  CircleDot,
-  Edit2,
-  Eye,
-  EyeOff,
-  Info,
-  PlusCircle,
-  Settings2,
-  XCircle,
-} from 'lucide-react'
+import { AlertTriangle, Check, Circle, CircleDot, Eye, EyeOff, PlusCircle, Settings2, Trash2 } from 'lucide-react'
+import { QuestionMarkCircledIcon } from '@radix-ui/react-icons'
 import { useState } from 'react'
-import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom } from '../../atoms'
-import { cn } from '@/lib/utils'
-import { Switch } from '@radix-ui/react-switch'
-import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
-import { Checkbox } from '@/components/ui/checkbox'
-import { vscode } from '../../vscode'
-
+import { envVarsAtom, requiredEnvVarsAtom, proxyUrlAtom } from '../../atoms'
 import { useEffect, useRef } from 'react'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
-import { Trash2, Plus, Save, FileText } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { Save, FileText } from 'lucide-react'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import { vscode } from '../../vscode'
+import { sortBy } from 'lodash'
 
 const renderedEnvVarsAtom = atom((get) => {
   const envVars = get(envVarsAtom)
@@ -83,9 +56,6 @@ const renderedEnvVarsAtom = atom((get) => {
   return vars
 })
 
-// Required environment variables that must be set
-const REQUIRED_ENV_VARS = ['STRIPE_API_KEY', 'GOOGLE_API_KEY', 'AWS_API_KEY']
-
 interface EnvVar {
   key: string
   value: string
@@ -99,6 +69,8 @@ export default function EnvVariablesManager() {
   const [newValue, setNewValue] = useState('')
   const [envFileContent, setEnvFileContent] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const requiredEnvVars = useAtomValue(requiredEnvVarsAtom)
+  const proxySettings = useAtomValue(proxyUrlAtom)
   const { toast } = useToast()
   const initialLoadRef = useRef(true)
 
@@ -107,15 +79,17 @@ export default function EnvVariablesManager() {
     const storedEnvVars = localStorage.getItem('envVars')
     if (storedEnvVars) {
       const parsedVars = JSON.parse(storedEnvVars)
-      setEnvVars(parsedVars.sort((a, b) => a.key.localeCompare(b.key)))
+      setEnvVars(sortBy(parsedVars, (v: EnvVar) => v.key))
     } else {
       // Initialize with required env vars as unset
       setEnvVars(
-        REQUIRED_ENV_VARS.map((key) => ({
-          key,
-          value: '',
-          hidden: true,
-        })).sort((a, b) => a.key.localeCompare(b.key)),
+        requiredEnvVars
+          .map((key) => ({
+            key,
+            value: '',
+            hidden: true,
+          }))
+          .sort((a, b) => a.key.localeCompare(b.key)),
       )
     }
     initialLoadRef.current = false
@@ -239,7 +213,49 @@ export default function EnvVariablesManager() {
         <Settings2 className='w-4 h-4' />
         Environment Variables
       </h3>
-
+      <div className='text-left text-muted-foreground'>
+        <p>Set your own API Keys here.</p>
+        <a
+          href='https://docs.boundaryml.com/ref/llm-client-providers/openai-generic'
+          target='_blank'
+          rel='noopener noreferrer'
+          className='text-blue-500 hover:underline'
+        >
+          See supported LLMs
+        </a>
+      </div>
+      <div className='text-left text-muted-foreground'>
+        <div className='flex gap-2 items-center'>
+          <p className='flex gap-2 items-center'>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <QuestionMarkCircledIcon className='w-4 h-4' />
+                </TooltipTrigger>
+                <TooltipContent side='top' className='text-xs w-80'>
+                  The BAML playground directly calls the LLM provider's API. Some providers make it difficult for
+                  browsers to call their API due to CORS restrictions.
+                  <br />
+                  <br />
+                  To get around this, the BAML VSCode extension includes a <b>localhost proxy</b> that sits between your
+                  browser and the LLM provider's API.
+                  <br />
+                  <br />
+                  <b>BAML MAKES NO NETWORK CALLS BEYOND THE LLM PROVIDER'S API YOU SPECIFY.</b>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            VSCode proxy is <b>{proxySettings.proxyEnabled ? 'enabled' : 'disabled'}</b>
+            <Checkbox
+              checked={proxySettings.proxyEnabled}
+              onCheckedChange={() => {
+                vscode.setProxySettings(!proxySettings.proxyEnabled)
+              }}
+            />
+          </p>
+          <p>{proxySettings.proxyUrl}</p>
+        </div>
+      </div>
       {hasUnsavedChanges && (
         <div className='flex gap-2 items-center text-amber-500 bg-amber-50/50 p-2 rounded'>
           <AlertTriangle className='h-4 w-4' />
@@ -260,11 +276,11 @@ export default function EnvVariablesManager() {
                   initial={{ opacity: 0, y: 5 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.02 }}
-                  className='group relative flex items-center gap-2 rounded-sm px-1 py-0.5 transition-colors hover:bg-muted/30'
+                  className='relative flex items-center gap-2 rounded-sm px-1 py-0.5'
                 >
                   <div className='flex relative gap-2 items-center w-fit'>
-                    <div className='flex gap-2 items-center group-hover:invisible'>
-                      {REQUIRED_ENV_VARS.includes(env.key) ? (
+                    <div className='flex gap-2 items-center'>
+                      {requiredEnvVars.includes(env.key) ? (
                         <CircleDot className='w-3 h-3 text-muted-foreground' />
                       ) : (
                         <Circle className='w-3 h-3 text-muted-foreground' />
@@ -275,11 +291,18 @@ export default function EnvVariablesManager() {
                         <Check className='h-4 w-4 rounded-full bg-green-500 p-0.5 text-white' />
                       )}
                     </div>
+                  </div>
 
-                    <div className='hidden absolute left-0 gap-2 items-center group-hover:flex'>
-                      <Button variant='ghost' size='sm' className='p-0 w-4 h-4' onClick={() => deleteEnvVar(index)}>
-                        <XCircle className='w-4 h-4 text-muted-foreground hover:text-destructive' />
-                      </Button>
+                  <div className='flex-1 flex items-center gap-2'>
+                    <code className='font-mono text-xs text-muted-foreground'>{env.key}</code>
+                    <Input
+                      type={env.hidden ? 'password' : 'text'}
+                      value={env.value}
+                      onChange={(e) => updateEnvVar(index, e.target.value)}
+                      className='h-6 text-xs'
+                      placeholder={requiredEnvVars.includes(env.key) && !env.value ? 'Required' : undefined}
+                    />
+                    <div className='flex gap-1'>
                       <Button variant='ghost' size='sm' className='p-0 w-4 h-4' onClick={() => toggleVisibility(index)}>
                         {env.hidden ? (
                           <Eye className='w-4 h-4 text-muted-foreground hover:text-primary' />
@@ -287,20 +310,10 @@ export default function EnvVariablesManager() {
                           <EyeOff className='w-4 h-4 text-muted-foreground hover:text-primary' />
                         )}
                       </Button>
+                      <Button variant='ghost' size='sm' className='p-0 w-4 h-4' onClick={() => deleteEnvVar(index)}>
+                        <Trash2 className='w-4 h-4 text-muted-foreground hover:text-destructive' />
+                      </Button>
                     </div>
-                  </div>
-
-                  <div className='flex-1 flex items-center gap-2'>
-                    <code className='font-mono text-xs transition-colors text-muted-foreground group-hover:text-foreground'>
-                      {env.key}
-                    </code>
-                    <Input
-                      type={env.hidden ? 'password' : 'text'}
-                      value={env.value}
-                      onChange={(e) => updateEnvVar(index, e.target.value)}
-                      className='h-6 text-xs'
-                      placeholder={REQUIRED_ENV_VARS.includes(env.key) && !env.value ? 'Required' : undefined}
-                    />
                   </div>
                 </motion.div>
               </TooltipTrigger>
@@ -317,6 +330,12 @@ export default function EnvVariablesManager() {
           value={newKey}
           onChange={(e) => setNewKey(e.target.value)}
           placeholder='New variable name'
+          className='h-8 text-xs'
+        />
+        <Input
+          value={newValue}
+          onChange={(e) => setNewValue(e.target.value)}
+          placeholder='Value'
           className='h-8 text-xs'
         />
         <Button size='sm' variant='outline' onClick={addEnvVar} className='h-8'>

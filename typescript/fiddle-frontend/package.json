@@ -40,6 +40,7 @@
     "@radix-ui/react-tooltip": "^1.0.7",
     "@shikijs/core": "^1.24.4",
     "@tanstack/react-virtual": "^3.4.0",
+    "@types/lodash": "^4.14.200",
     "@uiw/codemirror-theme-vscode": "^4.21.25",
     "@uiw/react-codemirror": "^4.21.25",
     "@valtown/codemirror-ts": "^2.3.1",

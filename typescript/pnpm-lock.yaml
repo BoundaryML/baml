@@ -238,6 +238,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.4.0
         version: 3.11.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/lodash':
+        specifier: ^4.14.200
+        version: 4.17.14
       '@uiw/codemirror-theme-vscode':
         specifier: ^4.21.25
         version: 4.23.7(@codemirror/language@6.10.8)(@codemirror/state@6.5.0)(@codemirror/view@6.36.1)
@@ -525,6 +528,9 @@ importers:
       '@types/he':
         specifier: ^1.2.3
         version: 1.2.3
+      '@types/lodash':
+        specifier: ^4.14.200
+        version: 4.17.14
       '@types/react-slick':
         specifier: ^0.23.13
         version: 0.23.13
@@ -603,6 +609,9 @@ importers:
       json-schema-faker:
         specifier: ^0.5.6
         version: 0.5.8
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
       lucide-react:
         specifier: ^0.294.0
         version: 0.294.0(react@18.3.1)
@@ -1157,6 +1166,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.4.0
         version: 3.11.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/lodash':
+        specifier: ^4.14.200
+        version: 4.17.14
       '@typescript/vfs':
         specifier: ^1.6.0
         version: 1.6.0(typescript@5.7.3)
@@ -1235,6 +1247,9 @@ importers:
       json-schema-faker:
         specifier: ^0.5.6
         version: 0.5.8
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
       lucide-react:
         specifier: ^0.294.0
         version: 0.294.0(react@18.3.1)
