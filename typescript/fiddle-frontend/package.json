@@ -47,6 +47,7 @@
     "@vercel/kv": "^3.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "dotenv": "^16.4.7",
     "http-proxy": "^1.18.1",
     "jotai": "^2.8.0",
     "jotai-location": "^0.5.4",

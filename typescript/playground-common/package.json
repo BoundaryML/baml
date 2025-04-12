@@ -120,6 +120,7 @@
     "clsx": "^2.0.0",
     "cmdk": "^1.0.0",
     "codemirror-copilot": "^0.0.7",
+    "dotenv": "^16.4.7",
     "hast": "^1.0.0",
     "hast-util-has-property": "^3.0.0",
     "he": "^1.2.0",

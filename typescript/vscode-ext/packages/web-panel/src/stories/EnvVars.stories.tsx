@@ -38,7 +38,35 @@ export default {
 }
 
 // More on component testing: https://storybook.js.org/docs/writing-tests/component-testing
-export const WithFilledVariables = {
+export const WithNoRequired = {
+  decorators: [
+    (Story: React.FC) => (
+      <JotaiStorybookProvider envVars={{}}>
+        <Story />
+      </JotaiStorybookProvider>
+    ),
+  ],
+}
+
+// ANTHROPIC_API_KEY and OPENAI_API_KEY are required by default
+export const WithSomeRequiredAndMore = {
+  decorators: [
+    (Story: React.FC) => (
+      <JotaiStorybookProvider
+        envVars={{
+          ANTHROPIC_API_KEY: 'sk-ant456',
+          COHERE_API_KEY: 'sk-coh789',
+          OPENAI_API_KEY: '',
+        }}
+      >
+        <Story />
+      </JotaiStorybookProvider>
+    ),
+  ],
+}
+
+// ANTHROPIC_API_KEY and OPENAI_API_KEY are required by default
+export const WithAllRequiredAndMore = {
   decorators: [
     (Story: React.FC) => (
       <JotaiStorybookProvider
@@ -54,14 +82,16 @@ export const WithFilledVariables = {
   ],
 }
 
-export const WithMissingRequired = {
+// ANTHROPIC_API_KEY and OPENAI_API_KEY are required by default
+export const With100EnvVars = {
   decorators: [
     (Story: React.FC) => (
       <JotaiStorybookProvider
         envVars={{
           ANTHROPIC_API_KEY: 'sk-ant456',
           COHERE_API_KEY: 'sk-coh789',
-          OPENAI_API_KEY: '',
+          OPENAI_API_KEY: 'sk-test123',
+          ...Object.fromEntries(Array.from({ length: 100 }, (_, i) => `VAR_${i}`).map((key) => [key, `value_${key}`])),
         }}
       >
         <Story />
