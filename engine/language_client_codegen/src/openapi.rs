@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::{Context, Result};
 use baml_types::{BamlMediaType, FieldType, LiteralValue, TypeValue};
@@ -558,7 +558,9 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                     r#const: None,
                     nullable: false,
                 },
-                type_spec: TypeSpec::AnyValue { any_of: vec![] },
+                type_spec: TypeSpec::AnyValue {
+                    any_value: HashMap::new(),
+                },
             },
             FieldType::Literal(v) => TypeSpecWithMeta {
                 meta: TypeMetadata {
@@ -682,7 +684,9 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
                 }
                 None => base.to_type_spec(_ir)?,
             },
-            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
+            FieldType::Arrow(_) => {
+                todo!("Arrow types should not be used in generated type definitions")
+            }
         })
     }
 }
@@ -732,9 +736,11 @@ enum TypeSpec {
         #[serde(rename = "oneOf", alias = "oneOf")]
         one_of: Vec<TypeSpecWithMeta>,
     },
+    // Any Type in OpenAPI version 3.
+    // https://swagger.io/docs/specification/v3_0/data-models/data-types/#any-type
     AnyValue {
-        #[serde(rename = "anyOf", alias = "anyOf")]
-        any_of: Vec<TypeSpecWithMeta>,
+        #[serde(rename = "AnyValue", alias = "AnyValue")]
+        any_value: HashMap<String, TypeSpecWithMeta>,
     },
 }
 
