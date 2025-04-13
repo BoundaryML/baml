@@ -1,3 +1,4 @@
+use serde::de::{self, Deserializer};
 use serde::{Deserialize, Serialize};
 
 pub type CompletionResponse = ChatCompletionGeneric<CompletionChoice>;
@@ -13,6 +14,7 @@ pub struct ChatCompletionGeneric<C> {
     /// A list of chat completion choices. Can be more than one if `n` is greater than 1.s
     pub choices: Vec<C>,
     /// The Unix timestamp (in seconds) of when the chat completion was created.
+    #[serde(deserialize_with = "deserialize_float_to_u32")]
     pub created: Option<u32>,
     /// The model used for the chat completion.
     pub model: String,
@@ -24,6 +26,24 @@ pub struct ChatCompletionGeneric<C> {
     /// The object type, which is `chat.completion` for non-streaming chat completion, `chat.completion.chunk` for streaming chat completion.
     pub object: Option<String>,
     pub usage: Option<CompletionUsage>,
+}
+
+fn deserialize_float_to_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum FloatOrInt {
+        Int(u32),
+        Float(f64),
+    }
+
+    match Option::<FloatOrInt>::deserialize(deserializer)? {
+        Some(FloatOrInt::Int(i)) => Ok(Some(i)),
+        Some(FloatOrInt::Float(f)) => Ok(Some(f.floor() as u32)),
+        None => Ok(None),
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]

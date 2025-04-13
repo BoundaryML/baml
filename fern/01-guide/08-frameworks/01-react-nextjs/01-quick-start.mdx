@@ -31,6 +31,14 @@ function WriteMeAStory(input: string) -> Story {
 
 ```bash title="Generate BAML client"
 npx baml-cli generate
+
+pnpm exec baml-cli generate
+
+yarn baml-cli generate
+
+bun baml-cli generate
+
+deno run --unstable-sloppy-imports -A npm:@boundaryml/baml/baml-cli generate
 ```
 
 ```tsx title="app/components/story-form.tsx" {8,10,15-16}
@@ -84,6 +92,15 @@ pnpm create next-app my-baml-app
 ```bash yarn
 yarn create next-app my-baml-app
 ```
+
+```bash bun
+bun create next-app my-baml-app
+```
+
+```bash deno
+deno create next-app my-baml-app
+```
+
 </CodeBlocks>
 
 When prompted, make sure to:
@@ -107,6 +124,15 @@ pnpm add @boundaryml/baml @boundaryml/baml-nextjs-plugin
 ```bash yarn
 yarn add @boundaryml/baml @boundaryml/baml-nextjs-plugin
 ```
+
+```bash bun
+bun add @boundaryml/baml @boundaryml/baml-nextjs-plugin
+```
+
+```bash deno
+deno add @boundaryml/baml @boundaryml/baml-nextjs-plugin
+```
+
 </CodeBlocks>
 
 ### Configure Next.js

@@ -18,3 +18,4 @@ export interface TestHistoryRun {
 // TODO: make this persistent, but make sure to serialize the wasm objects properly
 export const testHistoryAtom = atom<TestHistoryRun[]>([])
 export const selectedHistoryIndexAtom = atom<number>(0)
+export const isParallelTestsEnabledAtom = atomWithStorage<boolean>('runTestsInParallel', false)

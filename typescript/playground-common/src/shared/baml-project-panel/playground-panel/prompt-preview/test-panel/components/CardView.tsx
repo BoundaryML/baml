@@ -8,7 +8,7 @@ import { cn } from '~/lib/utils'
 import { selectedItemAtom, testCaseResponseAtom, type TestState } from '../../../atoms'
 import { FunctionTestName } from '../../../function-test-name'
 import { type TestHistoryRun } from '../atoms'
-import { useRunTests } from '../test-runner'
+import { useRunBamlTests } from '../test-runner'
 import { getStatus } from '../testStateUtils'
 import { ResponseRenderer } from './ResponseRenderer'
 import { TestStatus } from './TestStatus'
@@ -37,7 +37,7 @@ interface TestId {
 const TestResult = ({ testId, historicalResponse }: { testId: TestId; historicalResponse?: TestState }) => {
   const response = useAtomValue(testCaseResponseAtom(testId))
   const displayResponse = historicalResponse || response
-  const { setRunningTests } = useRunTests()
+  const runBamlTests = useRunBamlTests()
   const setSelectedItem = useSetAtom(selectedItemAtom)
   const selectedItem = useAtomValue(selectedItemAtom)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -77,7 +77,7 @@ const TestResult = ({ testId, historicalResponse }: { testId: TestId; historical
                   size='icon'
                   className='w-6 h-6 shrink-0'
                   onClick={() => {
-                    setRunningTests([testId])
+                    runBamlTests([testId])
                   }}
                 >
                   <Play className='w-4 h-4' fill='#a855f7' stroke='#a855f7' />

@@ -88,7 +88,7 @@ impl TypeCoercer for Class {
                     if let Some(field) = self
                         .fields
                         .iter()
-                        .find(|(name, ..)| name.rendered_name().trim() == key)
+                        .find(|(name, ..)| name.rendered_name().trim() == key.trim())
                     {
                         let scope = ctx.enter_scope(field.0.real_name());
                         let parsed = field.1.coerce(&scope, &field.1, Some(v));

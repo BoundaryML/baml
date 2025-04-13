@@ -8,7 +8,7 @@ import React from 'react'
 import { ThemeToggle } from '../theme/ThemeToggle'
 import { areTestsRunningAtom, selectedItemAtom, showEnvDialogAtom } from './atoms'
 import { FunctionTestName } from './function-test-name'
-import { useRunTests } from './prompt-preview/test-panel/test-runner'
+import { useRunBamlTests } from './prompt-preview/test-panel/test-runner'
 import { cn } from '@/lib/utils'
 import { areEnvVarsMissingAtom } from './atoms'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -17,7 +17,7 @@ import { renderedPromptAtom } from './prompt-preview/prompt-preview-content'
 export const renderModeAtom = atom<'prompt' | 'curl' | 'tokens'>('prompt')
 
 const RunButton: React.FC = () => {
-  const { setRunningTests } = useRunTests()
+  const runBamlTests = useRunBamlTests()
   const isRunning = useAtomValue(areTestsRunningAtom)
   const selected = useAtomValue(selectedItemAtom)
   return (
@@ -28,7 +28,7 @@ const RunButton: React.FC = () => {
       disabled={isRunning || selected === undefined}
       onClick={() => {
         if (selected) {
-          void setRunningTests([{ functionName: selected[0], testName: selected[1] }])
+          void runBamlTests([{ functionName: selected[0], testName: selected[1] }])
         }
       }}
     >

@@ -26,6 +26,7 @@ import type { partial_types }from "../partial_types";
 export type StreamingServerTypes = {
   AaaSamOutputFormat: partial_types.Recipe,
   AliasThatPointsToRecursiveType: partial_types.LinkedListAliasNode,
+  AliasWithMultipleAttrs: Checked<number,"gt_ten">,
   AliasedInputClass: string,
   AliasedInputClass2: string,
   AliasedInputClassNested: string,
@@ -112,6 +113,7 @@ export type StreamingServerTypes = {
   PromptTestStreaming: string,
   RecursiveAliasCycle: RecAliasOne,
   RecursiveClassWithAliasIndirection: partial_types.NodeWithAliasIndirection,
+  ReturnAliasWithMergedAttributes: Checked<number,"gt_ten">,
   ReturnFailingAssert: number,
   ReturnJsonEntry: JsonTemplate,
   ReturnMalformedConstraints: partial_types.MalformedConstraints,

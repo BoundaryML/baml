@@ -452,6 +452,54 @@ export function useAliasThatPointsToRecursiveType(
   return useBamlAction(action, props)
 }
 /**
+ * A specialized hook for the AliasWithMultipleAttrs BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - money: number
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** Checked<number,"gt_ten">
+ * - **Streaming Partial:** Checked<number,"gt_ten">
+ * - **Streaming Final:** Checked<number,"gt_ten">
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useAliasWithMultipleAttrs({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useAliasWithMultipleAttrs({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useAliasWithMultipleAttrs(props: HookInput<'AliasWithMultipleAttrs', { stream: false }>): HookOutput<'AliasWithMultipleAttrs', { stream: false }>
+export function useAliasWithMultipleAttrs(props?: HookInput<'AliasWithMultipleAttrs', { stream?: true }>): HookOutput<'AliasWithMultipleAttrs', { stream: true }>
+export function useAliasWithMultipleAttrs(
+  props: HookInput<'AliasWithMultipleAttrs', { stream?: boolean }> = {},
+): HookOutput<'AliasWithMultipleAttrs', { stream: true }> | HookOutput<'AliasWithMultipleAttrs', { stream: false }> {
+  let action = Actions.AliasWithMultipleAttrs;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.AliasWithMultipleAttrs;
+  }
+  return useBamlAction(action, props)
+}
+/**
  * A specialized hook for the AliasedInputClass BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -4588,6 +4636,54 @@ export function useRecursiveClassWithAliasIndirection(
   let action = Actions.RecursiveClassWithAliasIndirection;
   if (isStreamingProps(props)) {
     action = StreamingActions.RecursiveClassWithAliasIndirection;
+  }
+  return useBamlAction(action, props)
+}
+/**
+ * A specialized hook for the ReturnAliasWithMergedAttributes BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - money: number
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** Checked<number,"gt_ten">
+ * - **Streaming Partial:** Checked<number,"gt_ten">
+ * - **Streaming Final:** Checked<number,"gt_ten">
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useReturnAliasWithMergedAttributes({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useReturnAliasWithMergedAttributes({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useReturnAliasWithMergedAttributes(props: HookInput<'ReturnAliasWithMergedAttributes', { stream: false }>): HookOutput<'ReturnAliasWithMergedAttributes', { stream: false }>
+export function useReturnAliasWithMergedAttributes(props?: HookInput<'ReturnAliasWithMergedAttributes', { stream?: true }>): HookOutput<'ReturnAliasWithMergedAttributes', { stream: true }>
+export function useReturnAliasWithMergedAttributes(
+  props: HookInput<'ReturnAliasWithMergedAttributes', { stream?: boolean }> = {},
+): HookOutput<'ReturnAliasWithMergedAttributes', { stream: true }> | HookOutput<'ReturnAliasWithMergedAttributes', { stream: false }> {
+  let action = Actions.ReturnAliasWithMergedAttributes;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.ReturnAliasWithMergedAttributes;
   }
   return useBamlAction(action, props)
 }

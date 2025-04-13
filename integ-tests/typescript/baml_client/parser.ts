@@ -63,6 +63,24 @@ export class LlmResponseParser {
     }
   }
   
+  AliasWithMultipleAttrs(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Checked<number,"gt_ten"> {
+    try {
+      return this.runtime.parseLlmResponse(
+        "AliasWithMultipleAttrs",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as Checked<number,"gt_ten">
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   AliasedInputClass(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -1611,6 +1629,24 @@ export class LlmResponseParser {
     }
   }
   
+  ReturnAliasWithMergedAttributes(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Checked<number,"gt_ten"> {
+    try {
+      return this.runtime.parseLlmResponse(
+        "ReturnAliasWithMergedAttributes",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as Checked<number,"gt_ten">
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   ReturnFailingAssert(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -3088,6 +3124,24 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.LinkedListAliasNode
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  AliasWithMultipleAttrs(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Checked<number,"gt_ten"> {
+    try {
+      return this.runtime.parseLlmResponse(
+        "AliasWithMultipleAttrs",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as Checked<number,"gt_ten">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4636,6 +4690,24 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as partial_types.NodeWithAliasIndirection
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  ReturnAliasWithMergedAttributes(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): Checked<number,"gt_ten"> {
+    try {
+      return this.runtime.parseLlmResponse(
+        "ReturnAliasWithMergedAttributes",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as Checked<number,"gt_ten">
     } catch (error) {
       throw toBamlError(error);
     }

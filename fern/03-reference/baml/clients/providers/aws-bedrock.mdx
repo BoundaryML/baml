@@ -22,63 +22,49 @@ client<llm> MyClient {
 
 ## Authentication
 
-AWS Bedrock uses standard AWS authentication methods. Choose the one that best fits your environment:
+AWS Bedrock uses standard AWS authentication methods. We recommend using AWS profiles in development and AWS services' IAM roles in production, but all of the following are supported:
 
 <Tabs>
-<Tab title="Environment Variables">
-
-The simplest way to authenticate. Set these environment variables:
-
-```bash
-export AWS_ACCESS_KEY_ID="your_key"
-export AWS_SECRET_ACCESS_KEY="your_secret"
-export AWS_REGION="us-east-1"
-```
-
-```baml BAML
-client<llm> MyClient {
-  provider aws-bedrock
-  options {
-    // No need to specify credentials - they'll be picked up from environment
-    model "anthropic.claude-3-sonnet-20240229-v1:0"
-  }
-}
-```
-
-</Tab>
-
 <Tab title="AWS Profile">
 
-Use AWS profiles to manage multiple sets of credentials:
+When developing locally, you can use the AWS CLI in combination with profiles to manage your credentials.
 
-```ini
-# ~/.aws/config
-[profile my-profile]
-region = us-east-1
-aws_access_key_id = your_key
-aws_secret_access_key = your_secret
+For example, if you run `aws sso login` with a default profile, BAML will automatically pick up those credentials:
+
+```ini ~/.aws/config
+[default]
+sso_start_url = https://your-sso-start-url.awsapps.com/start
+sso_region = us-west-2
+sso_account_id = 123456789012
+sso_role_name = YourSSORole
+region = us-west-2
+output = json
 ```
 
-```baml BAML
-client<llm> MyClient {
-  provider aws-bedrock
-  options {
-    profile "my-profile"
-    model "anthropic.claude-3-sonnet-20240229-v1:0"
-  }
-}
+You can also choose a specific profile by setting the `AWS_PROFILE` environment variable.
+
+In the BAML playground, you can set this by clicking the "API Keys" button in
+the top right (you'll also need to set `AWS_REGION` to the same region as your
+profile).
+
+The BAML-generated clients will also respect `AWS_PROFILE` if it is set:
+
+```bash
+export AWS_PROFILE=staging-profile
 ```
 
-You can also use AWS SSO profiles:
+Alternatively, you can also explicitly specify the profile directly in the BAML config itself
+(this will take precedence over the environment variable):
+
 ```bash
 # First, login with SSO
-aws sso login --profile my-sso-profile
+aws sso login --profile staging-profile
 
 # Then use the profile in your BAML config
 client<llm> MyClient {
   provider aws-bedrock
   options {
-    profile "my-sso-profile"
+    profile "staging-profile"
     model "anthropic.claude-3-sonnet-20240229-v1:0"
   }
 }
@@ -106,6 +92,28 @@ client<llm> MyClient {
 - Use instance profiles in EC2
 - Never hardcode credentials in AWS environments
 - See [IAM Permissions](#iam-permissions) section for required permissions
+
+</Tab>
+
+<Tab title="Environment Variables">
+
+The simplest way to authenticate. Set these environment variables:
+
+```bash
+export AWS_ACCESS_KEY_ID="your_key"
+export AWS_SECRET_ACCESS_KEY="your_secret"
+export AWS_REGION="us-east-1"
+```
+
+```baml BAML
+client<llm> MyClient {
+  provider aws-bedrock
+  options {
+    // No need to specify credentials - they'll be picked up from environment
+    model "anthropic.claude-3-sonnet-20240229-v1:0"
+  }
+}
+```
 
 </Tab>
 

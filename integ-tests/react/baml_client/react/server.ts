@@ -66,6 +66,24 @@ export const AliasThatPointsToRecursiveType = async (
 };
 
 /**
+ * Executes the "AliasWithMultipleAttrs" BAML action.
+ *
+ * This server action calls the underlying BAML function "AliasWithMultipleAttrs"
+ * with the specified parameters.
+ *
+ * @param { number } money - Input parameter.
+ *
+ * @returns {Promise<Checked<number,"gt_ten">>} A promise that resolves with the result of the action.
+ */
+export const AliasWithMultipleAttrs = async (
+  money: number,
+): Promise<Checked<number,"gt_ten">> => {
+  return b.AliasWithMultipleAttrs(
+    money,
+  );
+};
+
+/**
  * Executes the "AliasedInputClass" BAML action.
  *
  * This server action calls the underlying BAML function "AliasedInputClass"
@@ -1628,6 +1646,24 @@ export const RecursiveClassWithAliasIndirection = async (
 ): Promise<NodeWithAliasIndirection> => {
   return b.RecursiveClassWithAliasIndirection(
     cls,
+  );
+};
+
+/**
+ * Executes the "ReturnAliasWithMergedAttributes" BAML action.
+ *
+ * This server action calls the underlying BAML function "ReturnAliasWithMergedAttributes"
+ * with the specified parameters.
+ *
+ * @param { number } money - Input parameter.
+ *
+ * @returns {Promise<Checked<number,"gt_ten">>} A promise that resolves with the result of the action.
+ */
+export const ReturnAliasWithMergedAttributes = async (
+  money: number,
+): Promise<Checked<number,"gt_ten">> => {
+  return b.ReturnAliasWithMergedAttributes(
+    money,
   );
 };
 

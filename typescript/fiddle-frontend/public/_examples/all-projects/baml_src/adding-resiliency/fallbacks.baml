@@ -1,4 +1,4 @@
-// You can use the fallback provider to add more resilliancy to your application.
+// You can use the fallback provider to add more resilience to your application.
 
 // A fallback will attempt to use the first client, and if it fails, it will try the second client, and so on.
 

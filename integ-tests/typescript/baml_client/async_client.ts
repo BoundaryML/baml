@@ -129,6 +129,29 @@ export class BamlAsyncClient {
     }
   }
   
+  async AliasWithMultipleAttrs(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<Checked<number,"gt_ten">> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = await this.runtime.callFunction(
+        "AliasWithMultipleAttrs",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as Checked<number,"gt_ten">
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async AliasedInputClass(
       input: InputClass,
       __baml_options__?: BamlCallOptions
@@ -2107,6 +2130,29 @@ export class BamlAsyncClient {
     }
   }
   
+  async ReturnAliasWithMergedAttributes(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<Checked<number,"gt_ten">> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = await this.runtime.callFunction(
+        "ReturnAliasWithMergedAttributes",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as Checked<number,"gt_ten">
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async ReturnFailingAssert(
       inp: number,
       __baml_options__?: BamlCallOptions
@@ -4012,6 +4058,35 @@ class BamlStreamClient {
         raw,
         (a): partial_types.LinkedListAliasNode => a,
         (a): LinkedListAliasNode => a,
+        this.ctxManager.cloneContext(),
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  AliasWithMultipleAttrs(
+      money: number,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+  ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.streamFunction(
+        "AliasWithMultipleAttrs",
+        {
+          "money": money
+        },
+        undefined,
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return new BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">>(
+        raw,
+        (a): Checked<number,"gt_ten"> => a,
+        (a): Checked<number,"gt_ten"> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6506,6 +6581,35 @@ class BamlStreamClient {
         raw,
         (a): partial_types.NodeWithAliasIndirection => a,
         (a): NodeWithAliasIndirection => a,
+        this.ctxManager.cloneContext(),
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  ReturnAliasWithMergedAttributes(
+      money: number,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+  ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.streamFunction(
+        "ReturnAliasWithMergedAttributes",
+        {
+          "money": money
+        },
+        undefined,
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return new BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">>(
+        raw,
+        (a): Checked<number,"gt_ten"> => a,
+        (a): Checked<number,"gt_ten"> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
