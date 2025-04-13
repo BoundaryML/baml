@@ -275,7 +275,6 @@ impl Session {
             text_document.contents().to_string()
         };
         let elapsed = start_time.elapsed();
-        tracing::info!("update_text_document took {:?}ms", elapsed.as_millis());
 
         let start_time = Instant::now();
         self.projects_by_workspace_folder
@@ -299,9 +298,6 @@ impl Session {
                         .unsaved_files
                         .insert(doc_key.clone(), text_document);
                     let elapsed = start_time.elapsed();
-                    tracing::info!("set_unsaved_file took {:?}ms", elapsed.as_millis());
-
-                    let start_time = Instant::now();
 
                     project
                         .lock()
@@ -309,7 +305,6 @@ impl Session {
                         .update_runtime(notifier.clone())
                         .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
                     let elapsed = start_time.elapsed();
-                    tracing::info!("update_runtime took {:?}ms", elapsed.as_millis());
                 }
                 Ok::<(), anyhow::Error>(())
             })?;

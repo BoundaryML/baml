@@ -206,12 +206,13 @@ const activateClient = (
         }
       })
 
-      client.onRequest('runtime_diagnostics', ({ errors, warnings }: { errors: number; warnings: number }) => {
+      client.onNotification('runtime_diagnostics', (params: { errors: number; warnings: number }) => {
+        console.log('runtime_diagnostics', params)
         try {
-          if (errors > 0) {
-            StatusBarPanel.instance.setStatus({ status: 'fail', count: errors })
-          } else if (warnings > 0) {
-            StatusBarPanel.instance.setStatus({ status: 'warn', count: warnings })
+          if (params.errors > 0) {
+            StatusBarPanel.instance.setStatus({ status: 'fail', count: params.errors })
+          } else if (params.warnings > 0) {
+            StatusBarPanel.instance.setStatus({ status: 'warn', count: params.warnings })
           } else {
             StatusBarPanel.instance.setStatus('pass')
           }

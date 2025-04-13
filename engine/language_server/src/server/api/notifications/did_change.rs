@@ -24,7 +24,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         _requester: &mut Requester,
         params: DidChangeTextDocumentParams,
     ) -> Result<()> {
-        tracing::info!("------- DidChangeTextDocumentHandlerrrr");
+        tracing::debug!("------- DidChangeTextDocumentHandler");
         let start_time_total = Instant::now();
 
         let url = params.text_document.uri;
@@ -34,22 +34,13 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         session
             .ensure_project_db_for_baml_file(&url)
             .internal_error()?;
-        let elapsed = start_time_total.elapsed();
-        // tracing::info!(
-        //     "ensure_project_db_for_baml_file took {:?}ms",
-        //     elapsed.as_millis()
-        // );
 
-        let start_time = Instant::now();
         let project = session
             .project_db_for_path_mut(path)
             .expect("We ensured above that the project exists");
         let document_key =
             DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
-        let elapsed = start_time.elapsed();
-        // tracing::info!("project_db_for_path_mut took {:?}ms", elapsed.as_millis());
 
-        let start_time = Instant::now();
         session
             .update_text_document(
                 &document_key,
@@ -58,14 +49,12 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 Some(notifier.clone()),
             )
             .internal_error()?;
-        let elapsed = start_time.elapsed();
-        // tracing::info!("update_text_document took {:?}ms", elapsed.as_millis());
 
         publish_diagnostics(
             &notifier,
             project.clone(),
             Some(params.text_document.version),
-        );
+        )?;
 
         let elapsed = start_time_total.elapsed();
         tracing::info!("didchange total took {:?}ms", elapsed.as_millis());

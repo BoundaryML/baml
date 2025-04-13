@@ -1,5 +1,5 @@
 use baml_runtime::InternalRuntimeInterface;
-use lsp_server::ErrorCode;
+use lsp_server::{ErrorCode, Notification, Request};
 use lsp_types::DiagnosticSeverity;
 use lsp_types::{notification::PublishDiagnostics, PublishDiagnosticsParams, Url};
 use std::collections::HashMap;
@@ -32,13 +32,36 @@ pub fn publish_diagnostics(
     version: Option<i32>,
 ) -> Result<()> {
     let diagnostics = project_diagnostics(project);
-    for (uri, diagnostics) in diagnostics {
-        notifier.notify::<PublishDiagnostics>(PublishDiagnosticsParams {
-            uri: uri.clone(),
-            diagnostics,
-            version,
-        });
+    for (uri, diagnostics) in diagnostics.clone() {
+        notifier
+            .notify::<PublishDiagnostics>(PublishDiagnosticsParams {
+                uri: uri.clone(),
+                diagnostics,
+                version,
+            })
+            .internal_error()?;
     }
+
+    tracing::info!("sending status bar diagnostics");
+    // Update status bar
+    notifier
+        .0
+        .send(lsp_server::Message::Notification(Notification::new(
+            "runtime_diagnostics".to_string(),
+            serde_json::json!({
+                "errors": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::ERROR))).count(),
+                "warnings": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::WARNING))).count(),
+            }),
+        )))
+        .internal_error()?;
+    // notifier.0.send(lsp_server::Message::Request(Request::new(
+    //     "runtime_diagnostics".to_string(),
+    //     serde_json::json!({
+    //         "errors": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::ERROR))).count(),
+    //         "warnings": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::WARNING))).count(),
+    //     }),
+    // )));
+
     Ok(())
 }
 
@@ -87,7 +110,7 @@ pub fn project_diagnostics(
         }
         Err(err) => err,
     };
-    tracing::info!("baml_project_diagnostics: {:?}", baml_diagnostics);
+    tracing::debug!("baml_project_diagnostics: {:?}", baml_diagnostics);
 
     // Initialize the map with an entry for every file in the project.
     // This is important as we want to CLEAR existing error diagnostics we pushed if errors got fixed.
@@ -162,7 +185,6 @@ pub fn project_diagnostics(
         }
     }
 
-    tracing::info!("Grouped diagnostics: {:?}", diagnostics_map);
     diagnostics_map
 }
 

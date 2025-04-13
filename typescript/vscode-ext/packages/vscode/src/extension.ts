@@ -20,15 +20,15 @@ let timeout: NodeJS.Timeout | undefined
 let statusBarItem: vscode.StatusBarItem
 let server: any
 
-function scheduleDiagnostics(): void {
-  if (timeout) {
-    clearTimeout(timeout)
-  }
-  timeout = setTimeout(() => {
-    statusBarItem.show()
-    runDiagnostics()
-  }, 1000) // 1 second after the last keystroke
-}
+// function scheduleDiagnostics(): void {
+//   if (timeout) {
+//     clearTimeout(timeout)
+//   }
+//   timeout = setTimeout(() => {
+//     statusBarItem.show()
+//     runDiagnostics()
+//   }, 1000) // 1 second after the last keystroke
+// }
 
 interface LintRequest {
   lintingRules: string[]
@@ -50,100 +50,100 @@ interface LinterRuleOutput {
   ruleName: string
 }
 
-async function runDiagnostics(): Promise<void> {
-  const editor = vscode.window.activeTextEditor
-  if (!editor) {
-    statusBarItem.hide()
-    return
-  }
+// async function runDiagnostics(): Promise<void> {
+//   const editor = vscode.window.activeTextEditor
+//   if (!editor) {
+//     statusBarItem.hide()
+//     return
+//   }
 
-  console.log('Running diagnostics')
+//   console.log('Running diagnostics')
 
-  statusBarItem.text = `$(sync~spin) Running AI Linter...`
-  statusBarItem.backgroundColor = '##9333ea'
-  statusBarItem.color = '#ffffff'
-  const text = editor.document.getText()
+//   statusBarItem.text = `$(sync~spin) Running AI Linter...`
+//   statusBarItem.backgroundColor = '##9333ea'
+//   statusBarItem.color = '#ffffff'
+//   const text = editor.document.getText()
 
-  const lintRequest: LintRequest = {
-    lintingRules: ['Rule1', 'Rule2'],
-    promptTemplate: text,
-    promptVariables: {},
-  }
-  const diagnostics: vscode.Diagnostic[] = []
+//   const lintRequest: LintRequest = {
+//     lintingRules: ['Rule1', 'Rule2'],
+//     promptTemplate: text,
+//     promptVariables: {},
+//   }
+//   const diagnostics: vscode.Diagnostic[] = []
 
-  try {
-    const response = await axios.post<LinterRuleOutput[]>('http://localhost:8000/lint', lintRequest)
-    console.log('Got response:', response.data)
-    const results = response.data
+//   try {
+//     const response = await axios.post<LinterRuleOutput[]>('http://localhost:8000/lint', lintRequest)
+//     console.log('Got response:', response.data)
+//     const results = response.data
 
-    results.forEach((rule) => {
-      let found = false
+//     results.forEach((rule) => {
+//       let found = false
 
-      rule.diagnostics.forEach((output) => {
-        const escapedPhrase = output.exactPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const phrase = output.exactPhrase
-        let index = 0
-        // Find all occurrences of the phrase
-        while ((index = text.indexOf(phrase, index)) !== -1) {
-          found = true
-          const startPos = editor.document.positionAt(index)
-          const endPos = editor.document.positionAt(index + phrase.length)
-          const range = new vscode.Range(startPos, endPos)
+//       rule.diagnostics.forEach((output) => {
+//         const escapedPhrase = output.exactPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+//         const phrase = output.exactPhrase
+//         let index = 0
+//         // Find all occurrences of the phrase
+//         while ((index = text.indexOf(phrase, index)) !== -1) {
+//           found = true
+//           const startPos = editor.document.positionAt(index)
+//           const endPos = editor.document.positionAt(index + phrase.length)
+//           const range = new vscode.Range(startPos, endPos)
 
-          const diagnostic = new vscode.Diagnostic(
-            range,
-            `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
-            output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
-          )
+//           const diagnostic = new vscode.Diagnostic(
+//             range,
+//             `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
+//             output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
+//           )
 
-          if (output.fix) {
-            diagnostic.code = '[linter]' + output.fix
-          }
-          diagnostic.source = rule.ruleName
+//           if (output.fix) {
+//             diagnostic.code = '[linter]' + output.fix
+//           }
+//           diagnostic.source = rule.ruleName
 
-          diagnostics.push(diagnostic)
-          index += phrase.length // Move index to the end of the current found phrase to continue searching
-        }
+//           diagnostics.push(diagnostic)
+//           index += phrase.length // Move index to the end of the current found phrase to continue searching
+//         }
 
-        if (!found && phrase.length > 100) {
-          const subPhrase = phrase.substring(0, 100)
-          index = 0 // Reset index for new search
-          while ((index = text.indexOf(subPhrase, index)) !== -1) {
-            const startPos = editor.document.positionAt(index)
-            const endPos = editor.document.positionAt(index + subPhrase.length)
-            const range = new vscode.Range(startPos, endPos)
+//         if (!found && phrase.length > 100) {
+//           const subPhrase = phrase.substring(0, 100)
+//           index = 0 // Reset index for new search
+//           while ((index = text.indexOf(subPhrase, index)) !== -1) {
+//             const startPos = editor.document.positionAt(index)
+//             const endPos = editor.document.positionAt(index + subPhrase.length)
+//             const range = new vscode.Range(startPos, endPos)
 
-            const diagnostic = new vscode.Diagnostic(
-              range,
-              `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
-              output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
-            )
+//             const diagnostic = new vscode.Diagnostic(
+//               range,
+//               `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
+//               output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
+//             )
 
-            if (output.fix) {
-              diagnostic.code = '[linter]' + output.fix
-            }
-            diagnostic.source = rule.ruleName
+//             if (output.fix) {
+//               diagnostic.code = '[linter]' + output.fix
+//             }
+//             diagnostic.source = rule.ruleName
 
-            diagnostics.push(diagnostic)
-            index += subPhrase.length // Move index to the end of the current found phrase to continue searching
-          }
-        }
+//             diagnostics.push(diagnostic)
+//             index += subPhrase.length // Move index to the end of the current found phrase to continue searching
+//           }
+//         }
 
-        // const newRegex = new RegExp(`\\b${}\\b`, 'gi');
-      })
-    })
-    console.log('Pushing test errorrrr')
+//         // const newRegex = new RegExp(`\\b${}\\b`, 'gi');
+//       })
+//     })
+//     console.log('Pushing test errorrrr')
 
-    console.log('Diagnostics:', diagnostics)
-    diagnosticsCollection.clear()
-    diagnosticsCollection.set(editor.document.uri, diagnostics)
-  } catch (error) {
-    console.error('Failed to run diagnostics:', error)
-    vscode.window.showErrorMessage('Failed to run diagnostics')
-  }
-  statusBarItem.text = 'AI Linter Ready'
-  statusBarItem.hide()
-}
+//     console.log('Diagnostics:', diagnostics)
+//     diagnosticsCollection.clear()
+//     diagnosticsCollection.set(editor.document.uri, diagnostics)
+//   } catch (error) {
+//     console.error('Failed to run diagnostics:', error)
+//     vscode.window.showErrorMessage('Failed to run diagnostics')
+//   }
+//   statusBarItem.text = 'AI Linter Ready'
+//   statusBarItem.hide()
+// }
 
 import type { Express } from 'express'
 import StatusBarPanel from './panels/StatusBarPanel'
@@ -158,21 +158,19 @@ export function activate(context: vscode.ExtensionContext) {
   // statusBarItem.show()
   context.subscriptions.push(StatusBarPanel.instance)
 
-  const provider = new DiagnosticCodeActionProvider()
-  const selector: vscode.DocumentSelector = { scheme: 'file', language: 'baml' } // Adjust language as necessary
-  const codeActionProvider = vscode.languages.registerCodeActionsProvider(selector, provider, {
-    providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
-  })
+  // const selector: vscode.DocumentSelector = { scheme: 'file', language: 'baml' } // Adjust language as necessary
+  // const codeActionProvider = vscode.languages.registerCodeActionsProvider(selector, provider, {
+  //   providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
+  // })
 
-  context.subscriptions.push(codeActionProvider)
+  // context.subscriptions.push(codeActionProvider)
 
   const app: Express = require('express')()
   app.use(cors())
-  let port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
     WebviewPanelHost.currentPanel?.postMessage('port_number', {
-      port: port,
+      port: getPort(),
     })
   })
 
@@ -409,7 +407,6 @@ export function deactivate(): void {
   diagnosticsCollection.clear()
   diagnosticsCollection.dispose()
   StatusBarPanel.instance.dispose()
-  statusBarItem.dispose()
   for (const plugin of plugins) {
     if (plugin.deactivate) {
       void plugin.deactivate()
@@ -417,29 +414,29 @@ export function deactivate(): void {
   }
   server?.close()
 }
-class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
-  public provideCodeActions(
-    document: vscode.TextDocument,
-    range: vscode.Range,
-    context: vscode.CodeActionContext,
-    token: vscode.CancellationToken,
-  ): vscode.ProviderResult<vscode.CodeAction[]> {
-    const codeActions: vscode.CodeAction[] = []
+// class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
+//   public provideCodeActions(
+//     document: vscode.TextDocument,
+//     range: vscode.Range,
+//     context: vscode.CodeActionContext,
+//     token: vscode.CancellationToken,
+//   ): vscode.ProviderResult<vscode.CodeAction[]> {
+//     const codeActions: vscode.CodeAction[] = []
 
-    for (const diagnostic of context.diagnostics) {
-      if (diagnostic.code?.toString().startsWith('[linter]')) {
-        const fixString = diagnostic.code.toString().replace('[linter]', '')
-        const fixAction = new vscode.CodeAction(`Apply fix: ${fixString}`, vscode.CodeActionKind.QuickFix)
-        fixAction.edit = new vscode.WorkspaceEdit()
-        fixAction.diagnostics = [diagnostic]
-        fixAction.isPreferred = true
+//     for (const diagnostic of context.diagnostics) {
+//       if (diagnostic.code?.toString().startsWith('[linter]')) {
+//         const fixString = diagnostic.code.toString().replace('[linter]', '')
+//         const fixAction = new vscode.CodeAction(`Apply fix: ${fixString}`, vscode.CodeActionKind.QuickFix)
+//         fixAction.edit = new vscode.WorkspaceEdit()
+//         fixAction.diagnostics = [diagnostic]
+//         fixAction.isPreferred = true
 
-        const edit = new vscode.TextEdit(diagnostic.range, fixString)
-        fixAction.edit.set(document.uri, [edit])
+//         const edit = new vscode.TextEdit(diagnostic.range, fixString)
+//         fixAction.edit.set(document.uri, [edit])
 
-        codeActions.push(fixAction)
-      }
-    }
-    return codeActions
-  }
-}
+//         codeActions.push(fixAction)
+//       }
+//     }
+//     return codeActions
+//   }
+// }

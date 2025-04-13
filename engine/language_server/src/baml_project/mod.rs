@@ -223,7 +223,7 @@ impl BamlProject {
         let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
 
         log::info!(
-            "Runtime files: {:#?}, Unsaved files: {:#?}",
+            "Baml Project saved files: {:#?}, Unsaved files: {:#?}",
             all_files_for_hash.len(),
             self.unsaved_files.len()
         );
@@ -245,7 +245,7 @@ impl BamlProject {
 
         if let Some((cached_hash, cached_result)) = &self.cached_runtime {
             if *cached_hash == current_hash {
-                tracing::info!("Runtime cache hit ({})", current_hash);
+                tracing::debug!("Runtime cache hit ({})", current_hash);
                 return cached_result.clone();
             }
             tracing::info!(
