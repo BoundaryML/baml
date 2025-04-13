@@ -263,6 +263,7 @@ impl WithJsonSchema for FieldType {
                 }
             }
             FieldType::WithMetadata { base, .. } => base.json_schema(),
+            FieldType::Arrow(_) => json!({}), // TODO: Make this function partial - it should not return for Arrow.
         }
     }
 }

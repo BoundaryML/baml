@@ -1,5 +1,5 @@
 use baml_types::{BamlValueWithMeta, ResponseCheck};
-use jsonish::ResponseBamlValue;
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::types::{PyAnyMethods, PyDict, PyModule, PyTuple, PyType};
 use pyo3::{Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python};
@@ -251,7 +251,7 @@ pub(crate) fn pythonize_strict(
         BamlValueWithMeta::Null(_) => Ok(py.None()),
     }?;
 
-    let (_, checks, completion_state) = meta;
+    let ResponseValueMeta(_, checks, completion_state, _) = meta;
     if checks.is_empty() && !completion_state.display {
         return Ok(py_value_without_constraints);
     }

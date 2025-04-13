@@ -1220,6 +1220,7 @@ fn get_dummy_value(
         baml_runtime::FieldType::WithMetadata { base, .. } => {
             get_dummy_value(indent, allow_multiline, base)
         }
+        baml_runtime::FieldType::Arrow(_) => None,
     }
 }
 

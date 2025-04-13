@@ -25,10 +25,7 @@ pub(crate) fn parse_template_string(
             Rule::TEMPLATE_KEYWORD => {}
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::assignment => {}
-            Rule::named_argument_list => match parse_named_argument_list(current, diagnostics) {
-                Ok(arg) => input = Some(arg),
-                Err(err) => diagnostics.push_error(err),
-            },
+            Rule::named_argument_list => { input = Some(parse_named_argument_list(current, diagnostics))},
             Rule::raw_string_literal => {
                 value = Some(Expression::RawStringValue(parse_raw_string(
                     current,

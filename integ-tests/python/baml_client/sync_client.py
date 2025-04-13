@@ -4044,7 +4044,7 @@ class BamlSyncClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -4065,7 +4065,7 @@ class BamlSyncClient:
         __cr__,
         collectors,
       )
-      return cast(str, raw.cast_to(types, types, partial_types, False))
+      return cast(Optional[str], raw.cast_to(types, types, partial_types, False))
     
     def TestOllamaHaiku(
         self,
@@ -9677,7 +9677,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[Optional[str], Optional[str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9700,10 +9700,10 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[Optional[str], Optional[str]](
         raw,
         lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
-        lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
+        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     

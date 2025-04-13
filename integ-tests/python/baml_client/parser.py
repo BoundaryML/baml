@@ -3837,7 +3837,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3857,7 +3857,7 @@ class LlmResponseParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOllamaHaiku(
         self,

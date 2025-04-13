@@ -55,6 +55,7 @@ macro_rules! test_deserializer {
 
             let value = result.unwrap();
             log::trace!("Score: {}", value.score());
+            assert_eq!(value.field_type(), &$target_type);
             let value: BamlValue = value.into();
             log::info!("{}", value);
             let json_value = json!(value);
@@ -80,6 +81,7 @@ macro_rules! test_deserializer_with_expected_score {
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
             let value = result.unwrap();
+            assert_eq!(value.field_type(), &$target_type);
             dbg!(&value);
             log::trace!("Score: {}", value.score());
             assert_eq!(value.score(), $target_score);
@@ -136,7 +138,7 @@ macro_rules! test_partial_deserializer_streaming {
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 
-            let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap(), &$target_type, true).unwrap();
+            let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap(), true).unwrap();
 
             dbg!(&result);
 
@@ -167,8 +169,7 @@ macro_rules! test_partial_deserializer_streaming_failure {
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 
-            let result =
-                crate::helpers::parsed_value_to_response(&ir, parsed.unwrap(), &$target_type, true);
+            let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap(), true);
 
             assert!(
                 result.is_err(),

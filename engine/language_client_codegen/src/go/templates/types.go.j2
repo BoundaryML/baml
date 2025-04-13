@@ -1,0 +1,77 @@
+package types
+
+import (
+	"fmt"
+
+	flatbuffers "github.com/google/flatbuffers/go"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+)
+
+type Checked[T any] baml.Checked[T]
+
+
+{% for class in classes %}
+{%- if let Some(docstring) = class.docstring %}
+{{ docstring }}
+{%- endif %}
+type {{ class.name }} struct {
+{% for field in class.fields %}
+	{%- if let Some(docstring) = field.docstring -%}
+	{{ docstring }}
+	{%- endif %}
+	{{ field.name|exported_name }} {{ field.go_type.name }} `json:"{{ field.name }}"`
+{% endfor %}
+{% if class.dynamic %}
+	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
+{% endif %}
+}
+
+func (c *{{ class.name }}) Decode(holder cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	if string(holder.Name()) != "{{ class.name }}" {
+		panic(fmt.Sprintf("expected {{ class.name }}, got %s", string(holder.Name())))
+	}
+
+
+	{% if class.fields|length > 0 %}
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+				{% for field in class.fields %}
+				case "{{ field.name }}":
+					c.{{ field.name|exported_name }} = {{ crate::go::generate_types::render_value_coercion("valueHolder", field.go_type) }}
+				{% endfor %}
+			}
+		}
+	}
+{% endif %}
+
+{% if class.dynamic %}
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder, typeMap)
+		}
+	}
+{% endif %}
+}
+
+func (c {{ class.name }}) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	fields := map[string]any{}
+	{% for field in class.fields %}
+	fields["{{ field.name }}"] = c.{{ field.name|exported_name }}
+	{% endfor %}
+	return baml.EncodeClass(builder, typeMap, "{{ class.name }}", fields, {% if class.dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
+}
+
+{% endfor %}
+
+{#- Type Aliases -#}
+{% for alias in structural_recursive_alias_cycles %}
+type {{alias.name}} {{alias.target}}
+{% endfor %}

@@ -87,6 +87,7 @@ def main(
     ts: bool = typer.Option(False, "--ts", help="Bump patch for typescript"),
     python: bool = typer.Option(False, "--python", help="Bump patch for python"),
     ruby: bool = typer.Option(False, "--ruby", help="Bump patch for ruby"),
+    go: bool = typer.Option(False, "--go", help="Bump patch for go"),
     vscode: bool = typer.Option(False, "--vscode", help="Bump patch for vscode"),
     bump_all: bool = typer.Option(False, "--all", help="Bump all versions"),
     allow_dirty: bool = typer.Option(
@@ -94,7 +95,7 @@ def main(
     ),
 ) -> None:
     # Replace VersionBumpArgs with direct flag access
-    modes = [ts, python, ruby, vscode, bump_all]
+    modes = [ts, python, ruby, go, vscode, bump_all]
     if sum(modes) > 1:
         c.print("Error: Only one mode can be enabled.", style="red")
         sys.exit(1)
@@ -176,6 +177,7 @@ def main(
         ts,
         python,
         ruby,
+        go,
         vscode,
         bump_all,
         allow_dirty,
@@ -301,6 +303,7 @@ def perform_version_bumps(
     ts: bool,
     python: bool,
     ruby: bool,
+    go: bool,
     vscode: bool,
     all: bool,
     allow_dirty: bool,
@@ -316,12 +319,12 @@ def perform_version_bumps(
             user_confirmation,
             "--allow-dirty" if allow_dirty else "",
         )
-        for config in ["python", "typescript", "ruby", "vscode", "integ-tests"]:
+        for config in ["python", "typescript", "ruby", "go", "vscode", "integ-tests"]:
             bump2version(
                 "--config-file",
                 f"./versions/{config}.cfg",
                 user_confirmation,
-                "--allow-dirty", # always true since the first run of this dirties the git tree
+                "--allow-dirty",  # always true since the first run of this dirties the git tree
             )
     elif ts:
         bump2version("--config-file", "./versions/typescript.cfg", "patch")
@@ -329,6 +332,8 @@ def perform_version_bumps(
         bump2version("--config-file", "./versions/python.cfg", "patch")
     elif ruby:
         bump2version("--config-file", "./versions/ruby.cfg", "patch")
+    elif go:
+        bump2version("--config-file", "./versions/go.cfg", "patch")
     elif vscode:
         bump2version("--config-file", "./versions/vscode.cfg", "patch")
 

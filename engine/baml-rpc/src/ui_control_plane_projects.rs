@@ -1,11 +1,12 @@
-use crate::rpc::ApiEndpoint;
+use crate::{rpc::ApiEndpoint, ProjectId};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Project {
-    pub project_id: String,
+    #[ts(type = "string")]
+    pub project_id: ProjectId,
     pub project_slug: String,
     pub org_id: String,
     pub environments: Vec<String>,
@@ -60,7 +61,8 @@ impl ApiEndpoint for CreateProject {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct UpdateProjectRequest {
-    pub project_id: String,
+    #[ts(type = "string")]
+    pub project_id: ProjectId,
     pub project_slug: Option<String>,
     pub environments: Option<Vec<String>>,
 }

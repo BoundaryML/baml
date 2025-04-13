@@ -10,6 +10,7 @@ pub struct Organization {
     pub org_display_name: String,
     pub stripe_customer_id: Option<String>,
     pub stripe_subscription_id: Option<String>,
+    pub stripe_subscription_status: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -43,6 +44,7 @@ pub struct UpdateOrganizationRequest {
     pub org_display_name: Option<String>,
     pub stripe_customer_id: Option<String>,
     pub stripe_subscription_id: Option<String>,
+    pub stripe_subscription_status: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

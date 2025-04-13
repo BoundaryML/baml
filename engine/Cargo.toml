@@ -12,6 +12,7 @@ members = [
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
   "language_server",
+  "language_client_cffi",
   "sandbox",
   "baml-lsp-types"
 ]
@@ -31,7 +32,8 @@ default-members = [
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
   "language_server",
-  "baml-lsp-types"
+  "baml-lsp-types",
+  "language_client_cffi",
 ]
 
 [workspace.dependencies]
@@ -57,12 +59,12 @@ http = "1.1.0"
 http-body = "1.0.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
 indoc = "2.0.5"
-jsonish = { path = "baml-lib/jsonish" }
 internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
 internal-llm-client = { path = "baml-lib/llm-client" }
 baml-lsp-types = { path = "baml-lsp-types" }
+jsonish = { path = "baml-lib/jsonish" }
 log = "0.4.20"
 # TODO: disable imports, etc
 minijinja = { version = "1.0.16", default-features = false, features = [

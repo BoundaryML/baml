@@ -74,9 +74,11 @@ where
                             let response_value = partial_parse_fn(&s.content);
                             // Flags seem to use a ton of memory, so we strip them here.
                             let response_value_without_flags = match response_value {
-                                Ok(baml_value) => Ok(ResponseBamlValue(
-                                    baml_value.0.map_meta_owned(|m| (vec![], m.1, m.2)),
-                                )),
+                                Ok(baml_value) => {
+                                    Ok(ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                                        jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
+                                    })))
+                                }
                                 Err(e) => Err(e),
                             };
                             on_event(FunctionResult::new(
@@ -164,9 +166,11 @@ where
         // Don't include flags in final resopnse either until we
         // figure out how to reduce memory usage.
         let response_value_without_flags = match response_value {
-            Some(Ok(baml_value)) => Some(Ok(ResponseBamlValue(
-                baml_value.0.map_meta_owned(|m| (vec![], m.1, m.2)),
-            ))),
+            Some(Ok(baml_value)) => {
+                Some(Ok(ResponseBamlValue(baml_value.0.map_meta_owned(|m| {
+                    jsonish::ResponseValueMeta(vec![], m.1, m.2, m.3)
+                }))))
+            }
             Some(Err(e)) => Some(Err(e)),
             None => None,
         };

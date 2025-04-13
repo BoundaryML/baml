@@ -7388,9 +7388,9 @@ export function useTestNamedArgsLiteralString(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** string
- * - **Streaming Partial:** string
- * - **Streaming Final:** string
+ * - **Non‑streaming:** string | null
+ * - **Streaming Partial:** ((string | null) | null)
+ * - **Streaming Final:** string | null
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**

@@ -8,142 +8,17 @@ import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-se
 import { telemetry } from './plugins/language-server'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
-import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
-
-let client: LanguageClient
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
 const LANG_NAME = 'Baml'
 
-let timeout: NodeJS.Timeout | undefined
-let statusBarItem: vscode.StatusBarItem
 let server: any
-
-// function scheduleDiagnostics(): void {
-//   if (timeout) {
-//     clearTimeout(timeout)
-//   }
-//   timeout = setTimeout(() => {
-//     statusBarItem.show()
-//     runDiagnostics()
-//   }, 1000) // 1 second after the last keystroke
-// }
-
-interface LintRequest {
-  lintingRules: string[]
-  promptTemplate: string
-  promptVariables: { [key: string]: string }
-}
-
-interface LinterOutput {
-  exactPhrase: string
-  reason: string
-  severity: string
-  recommendation?: string
-  recommendation_reason?: string
-  fix?: string
-}
-
-interface LinterRuleOutput {
-  diagnostics: LinterOutput[]
-  ruleName: string
-}
-
-// async function runDiagnostics(): Promise<void> {
-//   const editor = vscode.window.activeTextEditor
-//   if (!editor) {
-//     statusBarItem.hide()
-//     return
-//   }
-
-//   console.log('Running diagnostics')
-
-//   statusBarItem.text = `$(sync~spin) Running AI Linter...`
-//   statusBarItem.backgroundColor = '##9333ea'
-//   statusBarItem.color = '#ffffff'
-//   const text = editor.document.getText()
-
-//   const lintRequest: LintRequest = {
-//     lintingRules: ['Rule1', 'Rule2'],
-//     promptTemplate: text,
-//     promptVariables: {},
-//   }
-//   const diagnostics: vscode.Diagnostic[] = []
-
-//   try {
-//     const response = await axios.post<LinterRuleOutput[]>('http://localhost:8000/lint', lintRequest)
-//     console.log('Got response:', response.data)
-//     const results = response.data
-
-//     results.forEach((rule) => {
-//       let found = false
-
-//       rule.diagnostics.forEach((output) => {
-//         const escapedPhrase = output.exactPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-//         const phrase = output.exactPhrase
-//         let index = 0
-//         // Find all occurrences of the phrase
-//         while ((index = text.indexOf(phrase, index)) !== -1) {
-//           found = true
-//           const startPos = editor.document.positionAt(index)
-//           const endPos = editor.document.positionAt(index + phrase.length)
-//           const range = new vscode.Range(startPos, endPos)
-
-//           const diagnostic = new vscode.Diagnostic(
-//             range,
-//             `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
-//             output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
-//           )
-
-//           if (output.fix) {
-//             diagnostic.code = '[linter]' + output.fix
-//           }
-//           diagnostic.source = rule.ruleName
-
-//           diagnostics.push(diagnostic)
-//           index += phrase.length // Move index to the end of the current found phrase to continue searching
-//         }
-
-//         if (!found && phrase.length > 100) {
-//           const subPhrase = phrase.substring(0, 100)
-//           index = 0 // Reset index for new search
-//           while ((index = text.indexOf(subPhrase, index)) !== -1) {
-//             const startPos = editor.document.positionAt(index)
-//             const endPos = editor.document.positionAt(index + subPhrase.length)
-//             const range = new vscode.Range(startPos, endPos)
-
-//             const diagnostic = new vscode.Diagnostic(
-//               range,
-//               `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
-//               output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
-//             )
-
-//             if (output.fix) {
-//               diagnostic.code = '[linter]' + output.fix
-//             }
-//             diagnostic.source = rule.ruleName
-
-//             diagnostics.push(diagnostic)
-//             index += subPhrase.length // Move index to the end of the current found phrase to continue searching
-//           }
-//         }
-
-//         // const newRegex = new RegExp(`\\b${}\\b`, 'gi');
-//       })
-//     })
-//     console.log('Pushing test errorrrr')
-
-//     console.log('Diagnostics:', diagnostics)
-//     diagnosticsCollection.clear()
-//     diagnosticsCollection.set(editor.document.uri, diagnostics)
-//   } catch (error) {
-//     console.error('Failed to run diagnostics:', error)
-//     vscode.window.showErrorMessage('Failed to run diagnostics')
-//   }
-//   statusBarItem.text = 'AI Linter Ready'
-//   statusBarItem.hide()
-// }
+let glowOnDecoration: vscode.TextEditorDecorationType | null = null
+let glowOffDecoration: vscode.TextEditorDecorationType | null = null
+let isGlowOn: boolean = true
+let animationTimer: NodeJS.Timeout | null = null
+let highlightRanges: vscode.Range[] = []
 
 import type { Express } from 'express'
 import StatusBarPanel from './panels/StatusBarPanel'
@@ -152,18 +27,12 @@ export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
 
   vscode.workspace.getConfiguration('baml')
-  // TODO: Reactivate linter.
-  // statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
-  // statusBarItem.text = `AI Linter Ready`
-  // statusBarItem.show()
+
   context.subscriptions.push(StatusBarPanel.instance)
 
-  // const selector: vscode.DocumentSelector = { scheme: 'file', language: 'baml' } // Adjust language as necessary
-  // const codeActionProvider = vscode.languages.registerCodeActionsProvider(selector, provider, {
-  //   providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
-  // })
-
-  // context.subscriptions.push(codeActionProvider)
+  // Initialize the highlight effect.
+  createDecorations()
+  startAnimation()
 
   const app: Express = require('express')()
   app.use(cors())
@@ -287,38 +156,43 @@ export function activate(context: vscode.ExtensionContext) {
     },
   )
 
-  const bamlTestcaseCommand = vscode.commands.registerCommand(
-    'baml.runBamlTest',
-    (args?: {
-      projectId: string
-      functionName?: string
-      implName?: string
-      showTests?: boolean
-      testCaseName?: string
-    }) => {
-      WebviewPanelHost.render(context.extensionUri, getPort, telemetry)
-      if (telemetry) {
-        telemetry.sendTelemetryEvent({
-          event: 'baml.runBamlTest',
-          properties: {},
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'baml.setFlashingRegions',
+      (params: {
+        content: {
+          spans: { file_path: string; start_line: number; start: number; end_line: number; end: number }[]
+        }
+      }) => {
+        console.log('args:', params)
+        // A helpful thing to toggle on for debugging:
+        console.log('HANDLER setFlashingRegions', params)
+        vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
+
+        // Focus the editor to ensure styling updates are applied rapidly.
+        if (vscode.window.activeTextEditor) {
+          vscode.window.showTextDocument(
+            vscode.window.activeTextEditor.document,
+            vscode.window.activeTextEditor.viewColumn,
+          )
+        }
+
+        context.subscriptions.push({
+          dispose: () => {
+            stopAnimation()
+            if (glowOnDecoration) glowOnDecoration.dispose()
+            if (glowOffDecoration) glowOffDecoration.dispose()
+          },
         })
-      }
-
-      // sends project files as well to webview
-      requestDiagnostics()
-
-      openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
-      WebviewPanelHost.currentPanel?.postMessage('select_function', {
-        root_path: 'default',
-        function_name: args?.functionName ?? 'default',
-      })
-
-      WebviewPanelHost.currentPanel?.postMessage('run_test', {
-        test_name: args?.testCaseName ?? 'default',
-      })
-
-      console.info('Opening BAML panel')
-    },
+        const ranges = params.content.spans.map((span) => {
+          const start = new vscode.Position(span.start_line, span.start)
+          const end = new vscode.Position(span.end_line, span.end)
+          return new vscode.Range(start, end)
+        })
+        highlightRanges = ranges
+        updateHighlight()
+      },
+    ),
   )
 
   context.subscriptions.push(bamlPlaygroundCommand)
@@ -414,29 +288,89 @@ export function deactivate(): void {
   }
   server?.close()
 }
-// class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
-//   public provideCodeActions(
-//     document: vscode.TextDocument,
-//     range: vscode.Range,
-//     context: vscode.CodeActionContext,
-//     token: vscode.CancellationToken,
-//   ): vscode.ProviderResult<vscode.CodeAction[]> {
-//     const codeActions: vscode.CodeAction[] = []
 
-//     for (const diagnostic of context.diagnostics) {
-//       if (diagnostic.code?.toString().startsWith('[linter]')) {
-//         const fixString = diagnostic.code.toString().replace('[linter]', '')
-//         const fixAction = new vscode.CodeAction(`Apply fix: ${fixString}`, vscode.CodeActionKind.QuickFix)
-//         fixAction.edit = new vscode.WorkspaceEdit()
-//         fixAction.diagnostics = [diagnostic]
-//         fixAction.isPreferred = true
+// Create our two decoration states
+function createDecorations() {
+  // Bright neon color for the glow effect (bright green)
+  const glowColor = '#00FF00'
+  const offColor = '#009900'
 
-//         const edit = new vscode.TextEdit(diagnostic.range, fixString)
-//         fixAction.edit.set(document.uri, [edit])
+  // Glow ON - attempt to create text glow with textDecoration property
+  glowOnDecoration = vscode.window.createTextEditorDecorationType({
+    color: glowColor,
+    fontWeight: 'bold',
+    backgroundColor: 'transparent',
+    textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+    // Try using before/after elements to reinforce the glow effect
+    before: {
+      contentText: '',
+      textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+      color: glowColor,
+    },
+    after: {
+      contentText: '',
+      textDecoration: `none; text-shadow: 0 0 4px ${glowColor}, 0 0 6px ${glowColor}`,
+      color: glowColor,
+    },
+  })
 
-//         codeActions.push(fixAction)
-//       }
-//     }
-//     return codeActions
-//   }
-// }
+  // Glow OFF - text glow with textDecoration property.
+  glowOffDecoration = vscode.window.createTextEditorDecorationType({
+    color: offColor,
+    fontWeight: 'bold',
+    backgroundColor: 'transparent',
+    textDecoration: `none; `,
+    // Try using before/after elements to reinforce the glow effect
+    before: {
+      contentText: '',
+      textDecoration: `none; `,
+      color: offColor,
+    },
+    after: {
+      contentText: '',
+      textDecoration: `none; `,
+      color: offColor,
+    },
+  })
+}
+
+// Update the highlight based on current state
+function updateHighlight() {
+  // vscode.window.showWarningMessage(`updateHighlight:` +  isGlowOn)
+  const editor = vscode.window.activeTextEditor
+  if (!editor) return
+
+  // Clear both decorations
+  // Apply appropriate decoration based on state
+  if (glowOnDecoration && glowOffDecoration && isGlowOn) {
+    editor.setDecorations(glowOffDecoration, [])
+    editor.setDecorations(glowOnDecoration, highlightRanges)
+  }
+  if (glowOnDecoration && glowOffDecoration && !isGlowOn) {
+    editor.setDecorations(glowOnDecoration, [])
+    editor.setDecorations(glowOffDecoration, highlightRanges)
+  }
+}
+
+// Start the simple toggling animation
+function startAnimation() {
+  console.log('startAnimation')
+  if (animationTimer) return
+
+  // Toggle every 500ms (2 times per second)
+  animationTimer = setInterval(() => {
+    // Toggle between on and off states
+    isGlowOn = !isGlowOn
+
+    // Update the highlight
+    updateHighlight()
+  }, 500) // 500ms = half a second
+}
+
+// Stop animation
+function stopAnimation(): void {
+  if (animationTimer) {
+    clearInterval(animationTimer)
+    animationTimer = null
+  }
+}

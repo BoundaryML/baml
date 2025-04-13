@@ -1,11 +1,11 @@
 class Recipe {
-    ingredients map<string, Quantity>
-    recipe_type "breakfast" | "dinner"
+  ingredients map<string, Quantity>
+  recipe_type "breakfast" | "dinner"
 }
 
 class Quantity {
-    amount int | float
-    unit string?
+  amount int | float
+  unit string?
 }
 
 function AaaSamOutputFormat(recipe: string) -> Recipe {

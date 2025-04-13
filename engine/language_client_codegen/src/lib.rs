@@ -9,9 +9,11 @@ use std::{
     collections::{BTreeMap, HashSet},
     path::{Path, PathBuf},
 };
+use sugar_path::SugarPath;
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 
 mod dir_writer;
+mod go;
 pub mod openapi;
 mod python;
 mod ruby;
@@ -36,6 +38,7 @@ pub struct GeneratorArgs {
 
     // The type of client to generate
     client_type: Option<GeneratorOutputType>,
+    client_package_name: Option<String>,
 }
 
 fn relative_path_to_baml_src(path: &Path, baml_src: &Path) -> Result<PathBuf> {
@@ -58,6 +61,7 @@ impl GeneratorArgs {
         default_client_mode: GeneratorDefaultClientMode,
         on_generate: Vec<String>,
         client_type: Option<GeneratorOutputType>,
+        client_package_name: Option<String>,
     ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
         let input_file_map: BTreeMap<PathBuf, String> = input_files
@@ -75,6 +79,7 @@ impl GeneratorArgs {
             default_client_mode,
             on_generate,
             client_type,
+            client_package_name,
         })
     }
 
@@ -197,24 +202,14 @@ impl GenerateClient for GeneratorOutputType {
         // log::info!("Generating client for {:?}", self);
 
         // Generate files
-        let files_result = match self {
+        let files = match self {
             GeneratorOutputType::OpenApi => openapi::generate(ir, gen),
             GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
             GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
             GeneratorOutputType::Typescript => typescript::generate(ir, gen),
             GeneratorOutputType::TypescriptReact => typescript::generate(ir, gen),
-        };
-
-        let files = match files_result {
-            Ok(files) => {
-                // log::info!("Generated files: {:?}", files.len());
-                files
-            }
-            Err(e) => {
-                // log::error!("Failed to generate files: {:?}", e);
-                return Err(e);
-            }
-        };
+            GeneratorOutputType::Go => go::generate(ir, gen),
+        }?;
 
         // Run on_generate commands
         #[cfg(not(target_arch = "wasm32"))]

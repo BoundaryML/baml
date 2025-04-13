@@ -3,6 +3,7 @@ dirs = [
   "src/python/templates",
   "src/ruby/templates",
   "src/typescript/templates",
+  "src/go/templates",
 ]
 # whitespace can be either preserve, suppress, or minimize
 # suppress and minimize are both too aggressive for us

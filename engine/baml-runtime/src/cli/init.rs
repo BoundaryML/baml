@@ -92,6 +92,7 @@ impl InitArgs {
                     None => "REST clients".to_string(),
                 },
                 GeneratorOutputType::TypescriptReact => "TypeScript React clients".to_string(),
+                GeneratorOutputType::Go => "Go clients".to_string(),
             }
         );
         baml_log::info!(
@@ -102,6 +103,7 @@ impl InitArgs {
                 GeneratorOutputType::RubySorbet => "ruby",
                 GeneratorOutputType::OpenApi => "openapi",
                 GeneratorOutputType::TypescriptReact => "typescript-react",
+                GeneratorOutputType::Go => "go",
             }
         );
 
@@ -115,7 +117,9 @@ fn generate_main_baml_content(
     openapi_client_type: Option<&str>,
 ) -> String {
     let default_client_mode = match output_type {
-        GeneratorOutputType::OpenApi | GeneratorOutputType::RubySorbet => "".to_string(),
+        GeneratorOutputType::OpenApi
+        | GeneratorOutputType::RubySorbet
+        | GeneratorOutputType::Go => "".to_string(),
         GeneratorOutputType::PythonPydantic
         | GeneratorOutputType::Typescript
         | GeneratorOutputType::TypescriptReact => format!(
@@ -127,7 +131,7 @@ fn generate_main_baml_content(
             output_type.recommended_default_client_mode()
         ),
     };
-    let openapi_generate_command = if matches!(output_type, GeneratorOutputType::OpenApi) {
+    let generate_command = if matches!(output_type, GeneratorOutputType::OpenApi) {
         let path = openapi_generator_path.unwrap_or("npx @openapitools/openapi-generator-cli");
 
         let cmd = format!(
@@ -176,8 +180,47 @@ fn generate_main_baml_content(
     {}"#,
             openapi_generate_command.trim_start()
         )
+    } else if matches!(output_type, GeneratorOutputType::Go) {
+        format!(
+            r#"
+    // 'baml-cli generate' will run this after generating go code
+    // This command will be run from within $output_dir/baml_client
+    on_generate "gofmt -w . && goimports -w ."
+    "#
+        )
     } else {
         "".to_string()
+    };
+    let go_client_package_name = if matches!(output_type, GeneratorOutputType::Go) {
+        // Find the package name in the go.mod file
+        if let Ok(go_mod) = std::fs::read_to_string("go.mod") {
+            if let Some(package_name) = go_mod.lines().find_map(|line| line.strip_prefix("module "))
+            {
+                Some(package_name.to_string())
+            } else {
+                Some("YOUR_PACKAGE_NAME".to_string())
+            }
+        } else {
+            Some("YOUR_PACKAGE_NAME".to_string())
+        }
+    } else {
+        None
+    };
+
+    let go_client_package_name = match go_client_package_name {
+        Some(package_name) => {
+            if package_name == "YOUR_PACKAGE_NAME" {
+                baml_log::warn!("Failed to find go.mod file, please update the client_package_name in your generators.baml file");
+            }
+            format!(
+                r#"
+    // Your Go packages name as specified in go.mod
+    // We need this to generate correct imports in the generated baml_client
+    client_package_name "{}""#,
+                package_name
+            )
+        }
+        None => "".to_string(),
     };
 
     [
@@ -199,7 +242,8 @@ generator target {{
             env!("CARGO_PKG_VERSION"),
         ),
         default_client_mode,
-        openapi_generate_command,
+        generate_command,
+        go_client_package_name,
     ]
     .iter()
     .filter_map(|s| if s.is_empty() { None } else { Some(s.as_str().trim_end()) })

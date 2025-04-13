@@ -13,6 +13,7 @@ import {
   selectedFunctionAtom,
   selectedTestcaseAtom,
   updateCursorAtom,
+  flashRangesAtom,
 } from '@/shared/baml-project-panel/playground-panel/atoms'
 import { useRunBamlTests } from '@/shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner'
 import { orchIndexAtom } from '@/shared/baml-project-panel/playground-panel/atoms-orch-graph'
@@ -82,6 +83,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateCursor = useSetAtom(updateCursorAtom)
   const setFiles = useSetAtom(filesAtom)
   const debouncedSetFiles = useDebounceCallback(setFiles, 50, true)
+  const setFlashRanges = useSetAtom(flashRangesAtom)
 
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
@@ -136,6 +138,18 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
             }
           }
         | {
+            command: 'set_flashing_regions'
+            content: {
+              spans: {
+                file_path: string
+                start_line: number
+                start: number
+                end_line: number
+                end: number
+              }[]
+            }
+          }
+        | {
             command: 'select_function'
             content: {
               root_path: string
@@ -179,6 +193,19 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
               Object.fromEntries(Object.entries(content.files).map(([name, content]) => [name, content])),
             )
           }
+          break
+
+        case 'set_flashing_regions':
+          console.log('DEBUG set_flashing_regions', content)
+          setFlashRanges(
+            content.spans.map((span) => ({
+              filePath: span.file_path,
+              startLine: span.start_line,
+              startCol: span.start,
+              endLine: span.end_line,
+              endCol: span.end,
+            })),
+          )
           break
 
         case 'select_function':

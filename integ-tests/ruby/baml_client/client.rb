@@ -8112,7 +8112,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(String)
+      ).returns(T.nilable(String))
     }
     def TestOllama(
         *varargs,
@@ -16020,7 +16020,7 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(Baml::BamlStream[String])
+      ).returns(Baml::BamlStream[T.nilable(String)])
     }
     def TestOllama(
         *varargs,
@@ -16054,7 +16054,7 @@ module Baml
         baml_options[:client_registry],
         collector,
       )
-      Baml::BamlStream[T.nilable(String), String].new(
+      Baml::BamlStream[T.nilable(String), T.nilable(String)].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

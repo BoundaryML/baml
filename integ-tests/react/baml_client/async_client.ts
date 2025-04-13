@@ -3444,7 +3444,7 @@ export class BamlAsyncClient {
   async TestOllama(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<string> {
+  ): Promise<string | null> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -3458,7 +3458,7 @@ export class BamlAsyncClient {
         options.clientRegistry,
         collector,
       )
-      return raw.parsed(false) as string
+      return raw.parsed(false) as string | null
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8244,7 +8244,7 @@ class BamlStreamClient {
   TestOllama(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
-  ): BamlStream<string, string> {
+  ): BamlStream<((string | null) | null), string | null> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -8259,10 +8259,10 @@ class BamlStreamClient {
         options.clientRegistry,
         collector,
       )
-      return new BamlStream<string, string>(
+      return new BamlStream<((string | null) | null), string | null>(
         raw,
-        (a): string => a,
-        (a): string => a,
+        (a): ((string | null) | null) => a,
+        (a): string | null => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {

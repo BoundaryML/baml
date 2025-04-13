@@ -17,16 +17,16 @@ impl WithScore for BamlValueWithFlags {
             BamlValueWithFlags::Int(s) => s.score(),
             BamlValueWithFlags::Float(s) => s.score(),
             BamlValueWithFlags::Bool(s) => s.score(),
-            BamlValueWithFlags::List(s, items) => {
+            BamlValueWithFlags::List(s, _, items) => {
                 s.score() + 10 * items.iter().map(WithScore::score).sum::<i32>()
             }
-            BamlValueWithFlags::Map(s, _) => s.score(),
-            BamlValueWithFlags::Enum(_, s) => s.score(),
-            BamlValueWithFlags::Class(_, s, kv) => {
+            BamlValueWithFlags::Map(s, _, _) => s.score(),
+            BamlValueWithFlags::Enum(_, _, s) => s.score(),
+            BamlValueWithFlags::Class(_, s, _, kv) => {
                 s.score() + 10 * kv.iter().map(|(_, v)| v.score()).sum::<i32>()
             }
-            BamlValueWithFlags::Null(s) => s.score(),
-            BamlValueWithFlags::Media(s) => s.score(),
+            BamlValueWithFlags::Null(_, s) => s.score(),
+            BamlValueWithFlags::Media(_, s) => s.score(),
         }
     }
 }

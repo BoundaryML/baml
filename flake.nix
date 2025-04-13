@@ -26,8 +26,9 @@
           minimal.cargo
           minimal.rustc
           minimal.rust-std
+          complete.rustfmt
           targets.wasm32-unknown-unknown.latest.rust-std
-	  targets.x86_64-unknown-linux-musl.latest.rust-std
+	        targets.x86_64-unknown-linux-musl.latest.rust-std
         ];
 
         version = (builtins.fromTOML (builtins.readFile ./engine/Cargo.toml)).workspace.package.version;
@@ -59,6 +60,7 @@
 	# };
 
         buildInputs = (with pkgs; [
+          cmake
           git
           openssl
           pkg-config
@@ -74,15 +76,15 @@
           wasm-pack
           pkgs.gcc
           napi-rs-cli
-	  wasm-bindgen-cli
+          wasm-bindgen-cli
 
-	  # For building the typescript client.
-	  pixman
-	  cairo
-	  pango
-	  libjpeg
-	  giflib
-	  librsvg
+          # For building the typescript client.
+          pixman
+          cairo
+          pango
+          libjpeg
+          giflib
+          librsvg
         ]) ++ (if pkgs.stdenv.isDarwin then appleDeps else []);
         nativeBuildInputs = [
           pkgs.openssl
@@ -96,16 +98,6 @@
         ];
 
         
-        bamlCliInitData = pkgs.runCommand "baml-cli-init-data" {} ''
-          mkdir -p $out
-          cp -r ${./engine/baml-runtime/src/cli/initial_project/baml_src}/* $out
-        '';
-
-        promptFiddleExampleData = pkgs.runCommand "prompt-fiddle-example-data" {} ''
-          mkdir -p $out
-          cp -r ${./engine/baml-runtime/src/cli/initial_project/baml_src}/* $out
-        '';
-
       in
         {
           packages.default = rustPlatform.buildRustPackage {
@@ -123,12 +115,9 @@
             BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
               "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
             else
-              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.glibc.dev}/include";
-
-            cargoBuildFlags = "--bin baml-cli";
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
 
             cargoLock = { lockFile = ./engine/Cargo.lock; outputHashes = {
-              "serde_magnus-0.9.0" = "sha256-+iIHleftJ+Yl9QHEBVI91NOhBw9qtUZfgooHKoyY1w4=";
             }; };
 
             # Add build-time environment variables
@@ -164,9 +153,6 @@
             inherit buildInputs;
             inherit nativeBuildInputs;
 
-            BAML_CLI_INIT_DATA_DIR = bamlCliInitData;
-            PROMPT_FIDDLE_EXAMPLE_DIR = promptFiddleExampleData;
-
             PYTHON_SYS_EXECUTABLE="${pythonEnv}/bin/python3";
             LD_LIBRARY_PATH="${pythonEnv}/lib";
             PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
@@ -177,7 +163,10 @@
             inherit buildInputs;
             PATH="${clang}/bin:$PATH";
             LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
-            RUSTFLAGS = "--cfg tracing_unstable";
+            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
+              "" # Rely on default includes provided by stdenv.cc + libclang
+            else
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
           };
         }
     );

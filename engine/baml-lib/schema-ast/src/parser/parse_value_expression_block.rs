@@ -39,10 +39,7 @@ pub(crate) fn parse_value_expression_block(
             },
             Rule::ARROW => has_arrow = true,
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
-            Rule::named_argument_list => match parse_named_argument_list(current, diagnostics) {
-                Ok(arg) => input = Some(arg),
-                Err(err) => diagnostics.push_error(err),
-            },
+            Rule::named_argument_list => { input = Some(parse_named_argument_list(current, diagnostics))},
             Rule::field_type | Rule::field_type_chain => {
                 match parse_function_arg(current, diagnostics) {
                     Ok(arg) => output = Some(arg),
