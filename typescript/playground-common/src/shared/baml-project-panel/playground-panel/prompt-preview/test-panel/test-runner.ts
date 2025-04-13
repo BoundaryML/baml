@@ -96,13 +96,9 @@ const useRunTests = (maxBatchSize = 5) => {
           try {
             const testCase = get(testCaseAtom(test))
             if (!rt || !ctx || !testCase || !wasm) {
-<<<<<<< HEAD
-              setState(test, { status: 'error', message: 'Missing required dependencies' })
-=======
               setState(test, { status: 'error', message: 'Missing required dependencies.' })
               console.error('Missing required dependencies')
               clearHighlights() // Clear highlights on error
->>>>>>> canary
               return
             }
 
