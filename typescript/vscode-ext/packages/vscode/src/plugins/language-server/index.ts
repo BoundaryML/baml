@@ -338,6 +338,7 @@ const plugin: BamlVSCodePlugin = {
       execArgv: ['--nolazy', '--inspect=6009'],
       env: {
         DEBUG: true,
+        // This will show stack traces in VSCODE notifications in debug mode.
         RUST_BACKTRACE: 'full',
         ...process.env,
       },

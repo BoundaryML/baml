@@ -221,16 +221,12 @@ impl BamlProject {
         env_vars: HashMap<String, String>,
     ) -> Result<BamlRuntime, Diagnostics> {
         let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
-        // for (key, doc) in &all_files_for_hash {
-        //     tracing::info!(
-        //         "Project {}\n\tfile: {} - {}",
-        //         self.root_dir_name.display(),
-        //         key.path().display(),
-        //         doc.contents.len()
-        //     );
-        // }
-        log::info!("Runtime files: {:#?}", all_files_for_hash.len());
-        log::info!("Unsaved files keys: {:#?}", self.unsaved_files.keys());
+
+        log::info!(
+            "Runtime files: {:#?}, Unsaved files: {:#?}",
+            all_files_for_hash.len(),
+            self.unsaved_files.len()
+        );
         all_files_for_hash.extend(self.unsaved_files.iter());
         all_files_for_hash.sort_by_key(|(k, _)| k.path());
 
@@ -268,8 +264,6 @@ impl BamlProject {
             .map(|(k, v)| (k.unchecked_to_string(), v.contents.clone()))
             .collect::<HashMap<_, _>>();
 
-        tracing::info!("Files for runtime: {:#?}", files_for_runtime.len());
-
         let result = BamlRuntime::from_file_content(
             &self.root_dir_name.to_string_lossy(),
             &files_for_runtime,
@@ -282,10 +276,6 @@ impl BamlProject {
                 Diagnostics::new(self.root_dir_name.clone())
             }
         });
-        tracing::info!(
-            "Runtime result: {:?}",
-            result.as_ref().map_err(|r| r.errors()).map(|_| "Ok")
-        );
 
         self.cached_runtime = Some((current_hash, result.clone()));
 
@@ -322,6 +312,8 @@ pub trait BamlRuntimeExt {
 
     fn search_for_symbol(&self, symbol: &str) -> Option<SymbolLocation>;
     fn search_for_class_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
+    fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
+    fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation>;
     fn list_functions(&self) -> Vec<BamlFunction>;
     fn list_generators(&self) -> Vec<BamlGeneratorConfig>;
     fn is_valid_class(&self, symbol: &str) -> bool;
@@ -367,6 +359,44 @@ impl BamlRuntimeExt for BamlRuntime {
         self.inner
             .ir
             .find_class_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    fn search_for_enum_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.inner
+            .ir
+            .find_enum_locations(symbol)
+            .into_iter()
+            .map(|span| {
+                let ((start_line, start_character), (end_line, end_character)) =
+                    span.line_and_column();
+                SymbolLocation {
+                    uri: span.file.path().to_string(),
+                    start_line,
+                    start_character,
+                    end_line,
+                    end_character,
+                }
+            })
+            .collect()
+    }
+
+    fn search_for_type_alias_locations(&self, symbol: &str) -> Vec<SymbolLocation> {
+        self.inner
+            .ir
+            .find_type_alias_locations(symbol)
             .into_iter()
             .map(|span| {
                 let ((start_line, start_character), (end_line, end_character)) =
