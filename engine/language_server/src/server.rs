@@ -209,6 +209,8 @@ impl Server {
         .join()
     }
 
+    // Note, we can undo all these changes in here and in scheduler.rs and use what red_knot_server (from ruff) does,
+    // which has no debouncer.
     #[allow(clippy::needless_pass_by_value)] // this is because we aren't using `next_request_id` yet.
     fn event_loop(
         connection: &Connection,
@@ -219,92 +221,24 @@ impl Server {
         // Ensure we have a notifier for reload operations
         let client = client::Client::new(connection.make_sender());
         let notifier = client.notifier();
-
         // Make sure the session is properly loaded after initialization
         session.reload(Some(notifier.clone()))?;
-
         let mut scheduler =
             schedule::Scheduler::new(&mut session, worker_threads, connection.make_sender());
-
-        // Add state to scheduler conceptually (actual implementation depends on schedule.rs)
-        // scheduler.init_debouncer(api::DID_CHANGE_DEBOUNCE_DURATION);
-
         Self::try_register_capabilities(&_client_capabilities, &mut scheduler);
-
-        // Timer for checking debounced changes
-        let mut last_debounce_check = Instant::now();
-
-        loop {
-            // Use loop instead of for msg in connection.incoming() to allow non-blocking checks
-            // 1. Check for ready debounced changes periodically
-            if last_debounce_check.elapsed() >= std::time::Duration::from_millis(50) {
-                // Check every 50ms
-                // Conceptual call to the scheduler to process ready changes
-                // This method would internally generate and dispatch tasks.
-                scheduler.process_ready_changes();
-                last_debounce_check = Instant::now();
+        for msg in connection.incoming() {
+            if connection.handle_shutdown(&msg)? {
+                break;
             }
+            let tasks = match msg {
+                Message::Request(req) => vec![api::request(req)],
+                Message::Notification(notification) => api::notification(notification),
+                Message::Response(response) => vec![scheduler.response(response)],
+            };
 
-            // 2. Process incoming messages non-blockingly
-            match connection
-                .receiver()
-                .recv_timeout(std::time::Duration::from_millis(10))
-            {
-                // Short timeout
-                Ok(msg) => {
-                    if connection.handle_shutdown(&msg)? {
-                        break; // Exit loop on shutdown
-                    }
-
-                    let tasks = match msg {
-                        Message::Request(req) => vec![api::request(req)],
-                        Message::Notification(notif) => {
-                            // --- Intercept DidChangeTextDocument ---
-                            if notif.method == "textDocument/didChange" {
-                                match api::cast_notification::<
-                                    crate::server::api::notifications::DidChangeTextDocumentHandler,
-                                >(notif)
-                                {
-                                    Ok((_, params)) => {
-                                        let url = params.text_document.uri.clone();
-                                        // Conceptual call to scheduler to register the change for debouncing
-                                        scheduler.register_pending_change(url.clone(), params);
-                                        tracing::info!("Registered debounced change for {}", url);
-                                        // Don't generate tasks immediately
-                                        vec![]
-                                    }
-                                    Err(err) => {
-                                        tracing::error!(
-                                            "Failed to parse DidChangeTextDocument params: {}",
-                                            err
-                                        );
-                                        show_err_msg!(
-                                            "BAML failed to handle a document change notification."
-                                        );
-                                        vec![Task::nothing()]
-                                    }
-                                }
-                            } else {
-                                // Handle other notifications as before
-                                api::notification(notif)
-                            }
-                        }
-                        Message::Response(response) => vec![scheduler.response(response)],
-                    };
-
-                    // Dispatch tasks generated from requests, other notifications, or responses
-                    for task in tasks {
-                        scheduler.dispatch(task);
-                    }
-                }
-                Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
-                    // No message received, continue loop to check debouncer again
-                    continue;
-                }
-                Err(crossbeam::channel::RecvTimeoutError::Disconnected) => {
-                    tracing::warn!("Client connection disconnected.");
-                    break; // Exit loop if channel disconnected
-                }
+            // Dispatch each task in the vector
+            for task in tasks {
+                scheduler.dispatch(task);
             }
         }
 

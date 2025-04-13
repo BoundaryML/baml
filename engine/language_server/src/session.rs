@@ -78,6 +78,7 @@ impl Session {
                     root_dir_name: workspace_path,
                     files: HashMap::new(),
                     unsaved_files: HashMap::new(),
+                    cached_runtime: None,
                 }))),
             );
         }
@@ -135,6 +136,7 @@ impl Session {
                         root_dir_name: baml_src,
                         files: HashMap::new(),
                         unsaved_files: HashMap::new(),
+                        cached_runtime: None,
                     }))),
                 );
                 Ok(())
@@ -143,7 +145,7 @@ impl Session {
     }
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
-        tracing::info!("Reloading session");
+        tracing::info!("---- Reloading session");
         let project_updates: Vec<HashMap<_, _>> = self
             .projects_by_workspace_folder
             .lock()
@@ -173,8 +175,6 @@ impl Session {
             .flatten()
             .collect();
 
-        log::info!("file length: {:?}", files.len());
-
         // Index all the files, except for the ones with unsaved changes.
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
@@ -193,6 +193,7 @@ impl Session {
                 self.open_text_document(file_url.clone(), text_document);
             }
         });
+        log::info!("--- Reloaded {} files", files.len());
 
         Ok(())
     }

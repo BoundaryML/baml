@@ -8,7 +8,7 @@ use lsp_types::{
 };
 
 use crate::baml_project::Project;
-use crate::server::api::diagnostics::project_diagnostics;
+use crate::server::api::diagnostics::{file_diagnostics, project_diagnostics};
 use crate::server::api::traits::{
     BackgroundDocumentRequestHandler, RequestHandler, SyncRequestHandler,
 };
@@ -59,7 +59,7 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
             .project_db_for_path_mut(path)
             .expect("Just ensured it exists");
 
-        let diagnostics = project_diagnostics(project, Some(&url));
+        let diagnostics = file_diagnostics(project, &url);
         // diagnostics
 
         Ok(DocumentDiagnosticReportResult::Report(
@@ -78,7 +78,7 @@ fn diagnostics_report(
     project: Arc<Mutex<Project>>,
     url: &Url,
 ) -> Result<DocumentDiagnosticReportResult> {
-    let diagnostics = project_diagnostics(project, Some(url));
+    let diagnostics = file_diagnostics(project, url);
     Ok(DocumentDiagnosticReportResult::Report(
         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
             related_documents: None,

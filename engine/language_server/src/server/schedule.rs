@@ -1,8 +1,4 @@
-use crate::server::api;
-use lsp_types::{DidChangeTextDocumentParams, Url};
-use std::collections::HashMap;
 use std::num::NonZeroUsize;
-use std::time::{Duration, Instant};
 
 use crate::session::Session;
 
@@ -41,8 +37,6 @@ pub(crate) struct Scheduler<'s> {
     client: Client<'s>,
     fmt_pool: thread::Pool,
     background_pool: thread::Pool,
-    pending_changes: HashMap<Url, (Instant, DidChangeTextDocumentParams)>,
-    debounce_duration: Duration,
 }
 
 impl<'s> Scheduler<'s> {
@@ -57,8 +51,6 @@ impl<'s> Scheduler<'s> {
             fmt_pool: thread::Pool::new(NonZeroUsize::try_from(FMT_THREADS).unwrap()),
             background_pool: thread::Pool::new(worker_threads),
             client: Client::new(sender),
-            pending_changes: HashMap::new(),
-            debounce_duration: Duration::from_millis(50),
         }
     }
 
@@ -113,49 +105,6 @@ impl<'s> Scheduler<'s> {
                     BackgroundSchedule::Fmt => {
                         self.fmt_pool.spawn(ThreadPriority::LatencySensitive, task);
                     }
-                }
-            }
-        }
-    }
-
-    /// Registers a document change, resetting the debounce timer for the given URL.
-    pub(crate) fn register_pending_change(
-        &mut self,
-        url: Url,
-        params: DidChangeTextDocumentParams,
-    ) {
-        let now = Instant::now();
-        self.pending_changes.insert(url.clone(), (now, params));
-        tracing::trace!("Registered pending change for {}", url.clone().as_str());
-    }
-
-    /// Checks for pending changes whose debounce timers have expired and dispatches tasks for them.
-    pub(crate) fn process_ready_changes(&mut self) {
-        let now = Instant::now();
-        let ready_urls: Vec<Url> = self
-            .pending_changes
-            .iter()
-            .filter_map(|(url, (timestamp, _))| {
-                if now.duration_since(*timestamp) > self.debounce_duration {
-                    Some(url.clone())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        if !ready_urls.is_empty() {
-            tracing::debug!("Processing {} debounced changes", ready_urls.len());
-        }
-
-        for url in ready_urls {
-            if let Some((_timestamp, params)) = self.pending_changes.remove(&url) {
-                tracing::debug!("Dispatching debounced change for {}", url.as_str());
-                // Use the function from api.rs to create the necessary tasks
-                let tasks = api::create_did_change_tasks(params);
-                for task in tasks {
-                    // Dispatch the task using the scheduler's existing dispatch logic
-                    self.dispatch(task);
                 }
             }
         }

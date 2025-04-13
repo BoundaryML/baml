@@ -6,8 +6,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use crate::baml_project::Project;
+use crate::baml_project::{self, Project};
 use crate::baml_text_size::TextSize;
+use crate::server::api::ResultExt;
 use crate::server::client::Notifier;
 use crate::server::Result;
 use crate::{DocumentKey, Session};
@@ -25,10 +26,29 @@ pub(super) fn clear_diagnostics(uri: &Url, notifier: &Notifier) -> Result<()> {
     Ok(())
 }
 
-pub fn session_lsp_diagnostics(
+pub fn publish_diagnostics(
+    notifier: &Notifier,
+    project: Arc<Mutex<Project>>,
+    version: Option<i32>,
+) -> Result<()> {
+    let diagnostics = project_diagnostics(project);
+    for (uri, diagnostics) in diagnostics {
+        notifier.notify::<PublishDiagnostics>(PublishDiagnosticsParams {
+            uri: uri.clone(),
+            diagnostics,
+            version,
+        });
+    }
+    Ok(())
+}
+
+// If any file changed in the workspace, publish new diagnostics for the baml project
+// that file belongs to.
+pub fn publish_session_lsp_diagnostics(
+    notifier: &Notifier,
     session: &mut Session,
     file_url: &Url,
-) -> Vec<lsp_types::Diagnostic> {
+) -> Result<()> {
     // let keys = session.index().documents.keys();
     let path = file_url.to_file_path().unwrap_or(PathBuf::new());
     let _ = session
@@ -40,14 +60,24 @@ pub fn session_lsp_diagnostics(
         .project_db_for_path_mut(path)
         .expect("We just ensured the session is valid");
 
-    project_diagnostics(project, Some(file_url))
+    let diagnostics = project_diagnostics(project);
+    for (uri, diagnostics) in diagnostics {
+        notifier
+            .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
+                uri: uri.clone(),
+                version: None,
+                diagnostics,
+            })
+            .map_err(|e| anyhow::anyhow!("did_change err: {}", e))
+            .internal_error()?;
+    }
+    Ok(())
 }
 
 pub fn project_diagnostics(
     project: Arc<Mutex<Project>>,
-    file_url: Option<&Url>,
-) -> Vec<lsp_types::Diagnostic> {
-    let guard = project.lock().unwrap();
+) -> HashMap<Url, Vec<lsp_types::Diagnostic>> {
+    let mut guard = project.lock().unwrap();
     let root_path = PathBuf::from(guard.root_path());
     let fake_env = HashMap::new();
     let baml_diagnostics = match guard.baml_project.runtime(fake_env) {
@@ -57,11 +87,102 @@ pub fn project_diagnostics(
         }
         Err(err) => err,
     };
+    tracing::info!("baml_project_diagnostics: {:?}", baml_diagnostics);
+
+    // Initialize the map with an entry for every file in the project.
+    // This is important as we want to CLEAR existing error diagnostics we pushed if errors got fixed.
+    let mut diagnostics_map: HashMap<Url, Vec<lsp_types::Diagnostic>> = guard
+        .baml_project
+        .files // Use the files map from the project
+        .keys()
+        .filter_map(|doc_key| {
+            let path = doc_key.path();
+            match Url::from_file_path(path) {
+                Ok(url) => Some((url, Vec::new())), // Initialize with empty diagnostics
+                Err(_) => {
+                    tracing::warn!(
+                        "Failed to convert path {:?} to URL for initial diagnostics map",
+                        path
+                    );
+                    None
+                }
+            }
+        })
+        .collect();
+
+    for error in baml_diagnostics.errors().iter() {
+        let span_path = ensure_absolute(&root_path, &PathBuf::from(error.span().file.path()));
+        let url = match Url::from_file_path(&span_path) {
+            Ok(url) => url,
+            Err(_) => {
+                tracing::warn!(
+                    "Failed to convert path {:?} to URL for diagnostic",
+                    span_path
+                );
+                continue;
+            }
+        };
+        if let Some(range) = span_to_range(&guard, &root_path, error.span()) {
+            let diag = lsp_types::Diagnostic::new(
+                range,
+                Some(DiagnosticSeverity::ERROR),
+                None,
+                None,
+                error.message().to_string(),
+                None,
+                None,
+            );
+            diagnostics_map.entry(url).or_default().push(diag);
+        }
+    }
+
+    for warning in baml_diagnostics.warnings().iter() {
+        let span_path = ensure_absolute(&root_path, &PathBuf::from(warning.span().file.path()));
+        let url = match Url::from_file_path(&span_path) {
+            Ok(url) => url,
+            Err(_) => {
+                tracing::warn!(
+                    "Failed to convert path {:?} to URL for diagnostic",
+                    span_path
+                );
+                continue;
+            }
+        };
+        if let Some(range) = span_to_range(&guard, &root_path, warning.span()) {
+            let diag = lsp_types::Diagnostic::new(
+                range,
+                Some(DiagnosticSeverity::WARNING),
+                None,
+                None,
+                warning.message().to_string(),
+                None,
+                None,
+            );
+            diagnostics_map.entry(url).or_default().push(diag);
+        }
+    }
+
+    tracing::info!("Grouped diagnostics: {:?}", diagnostics_map);
+    diagnostics_map
+}
+
+/// Returns diagnostics only for the specified file URL.
+pub fn file_diagnostics(
+    project: Arc<Mutex<Project>>,
+    file_url: &Url,
+) -> Vec<lsp_types::Diagnostic> {
+    let mut guard = project.lock().unwrap();
+    let root_path = PathBuf::from(guard.root_path());
+    let fake_env = HashMap::new();
+    let baml_diagnostics = match guard.baml_project.runtime(fake_env) {
+        Ok(runtime) => runtime.internal().diagnostics().clone(),
+        Err(err) => err,
+    };
 
     let errors = baml_diagnostics
         .errors()
         .iter()
-        .filter(|e| file_url.map_or(true, |url| matches_target(&root_path, &url, &e.span())))
+        .filter(|e| matches_target(&root_path, file_url, e.span()))
         .filter_map(|error| {
             Some(lsp_types::Diagnostic::new(
                 span_to_range(&guard, &root_path, error.span())?,
@@ -73,10 +194,11 @@ pub fn project_diagnostics(
                 None,
             ))
         });
+
     let warnings = baml_diagnostics
         .warnings()
         .iter()
-        .filter(|w| file_url.map_or(true, |url| matches_target(&root_path, &url, &w.span())))
+        .filter(|w| matches_target(&root_path, file_url, w.span()))
         .filter_map(|warning| {
             Some(lsp_types::Diagnostic::new(
                 span_to_range(&guard, &root_path, warning.span())?,
@@ -88,15 +210,17 @@ pub fn project_diagnostics(
                 None,
             ))
         });
+
     errors.chain(warnings).collect()
 }
 
+/// Checks if the diagnostic span's file path matches the target URL's path.
 fn matches_target(
     project_root: &Path,
-    target: &Url,
+    target_url: &Url,
     span: &internal_baml_diagnostics::Span,
 ) -> bool {
-    let absolute_file = DocumentKey::from_url(project_root, target);
+    let absolute_file = DocumentKey::from_url(project_root, target_url);
     let absolute_target = DocumentKey::from_path(project_root, &PathBuf::from(span.file.path()));
     match (&absolute_file, &absolute_target) {
         (Ok(file), Ok(target)) => file.path() == target.path(),

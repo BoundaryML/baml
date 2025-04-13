@@ -1,7 +1,7 @@
 use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::{DidOpenTextDocumentParams, PublishDiagnosticsParams};
 
-use crate::server::api::diagnostics::session_lsp_diagnostics;
+use crate::server::api::diagnostics::publish_session_lsp_diagnostics;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
 use crate::server::api::ResultExt;
 use crate::server::client::{Notifier, Requester};
@@ -9,7 +9,6 @@ use crate::server::Result;
 use crate::session::Session;
 
 pub(crate) struct DidOpenTextDocumentHandler;
-
 
 impl NotificationHandler for DidOpenTextDocumentHandler {
     type NotificationType = DidOpenTextDocument;
@@ -30,15 +29,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .internal_error()?;
         session.reload(Some(notifier.clone())).internal_error()?;
 
-        let diagnostics = session_lsp_diagnostics(session, &url);
-
-        notifier
-            .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
-                uri: url,
-                version: Some(params.text_document.version),
-                diagnostics,
-            })
-            .expect("TODO");
+        publish_session_lsp_diagnostics(&notifier, session, &url)?;
 
         Ok(())
     }

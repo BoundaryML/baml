@@ -3,7 +3,7 @@ use std::time::Instant;
 use lsp_types::notification::DidChangeTextDocument;
 use lsp_types::{DidChangeTextDocumentParams, PublishDiagnosticsParams};
 
-use crate::server::api::diagnostics::session_lsp_diagnostics;
+use crate::server::api::diagnostics::publish_diagnostics;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
 use crate::server::api::ResultExt;
 use crate::server::client::{Notifier, Requester};
@@ -35,10 +35,10 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             .ensure_project_db_for_baml_file(&url)
             .internal_error()?;
         let elapsed = start_time_total.elapsed();
-        tracing::info!(
-            "ensure_project_db_for_baml_file took {:?}ms",
-            elapsed.as_millis()
-        );
+        // tracing::info!(
+        //     "ensure_project_db_for_baml_file took {:?}ms",
+        //     elapsed.as_millis()
+        // );
 
         let start_time = Instant::now();
         let project = session
@@ -47,7 +47,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         let document_key =
             DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
         let elapsed = start_time.elapsed();
-        tracing::info!("project_db_for_path_mut took {:?}ms", elapsed.as_millis());
+        // tracing::info!("project_db_for_path_mut took {:?}ms", elapsed.as_millis());
 
         let start_time = Instant::now();
         session
@@ -59,19 +59,16 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             )
             .internal_error()?;
         let elapsed = start_time.elapsed();
-        tracing::info!("update_text_document took {:?}ms", elapsed.as_millis());
+        // tracing::info!("update_text_document took {:?}ms", elapsed.as_millis());
 
-        let diagnostics: Vec<lsp_types::Diagnostic> = session_lsp_diagnostics(session, &url);
-        notifier
-            .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
-                uri: url,
-                version: Some(params.text_document.version),
-                diagnostics,
-            })
-            .map_err(|e| anyhow::anyhow!("did_change err: {}", e))
-            .internal_error()?;
+        publish_diagnostics(
+            &notifier,
+            project.clone(),
+            Some(params.text_document.version),
+        );
+
         let elapsed = start_time_total.elapsed();
-        tracing::info!("total took {:?}ms", elapsed.as_millis());
+        tracing::info!("didchange total took {:?}ms", elapsed.as_millis());
         Ok(())
     }
 }

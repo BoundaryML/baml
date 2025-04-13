@@ -74,7 +74,7 @@ pub fn gather_files(root_path: &Path, debug: bool) -> io::Result<Vec<PathBuf>> {
     while let Some(current_dir) = dir_stack.pop() {
         if iterations > max_dirs {
             if debug {
-                eprintln!("Max directory limit reached ({})", max_dirs);
+                tracing::error!("Max directory limit reached ({})", max_dirs);
             }
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -98,8 +98,7 @@ pub fn gather_files(root_path: &Path, debug: bool) -> io::Result<Vec<PathBuf>> {
                         }
                     } else if metadata.is_file() {
                         if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                            if ext.eq_ignore_ascii_case("baml")
-                            {
+                            if ext.eq_ignore_ascii_case("baml") {
                                 file_list.push(path);
                             }
                         }
@@ -108,7 +107,7 @@ pub fn gather_files(root_path: &Path, debug: bool) -> io::Result<Vec<PathBuf>> {
             }
             Err(e) => {
                 if debug {
-                    eprintln!("Error reading directory {}: {}", current_dir.display(), e);
+                    tracing::error!("Error reading directory {}: {}", current_dir.display(), e);
                 }
                 return Err(e);
             }

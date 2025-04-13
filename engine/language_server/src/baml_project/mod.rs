@@ -29,7 +29,7 @@ use lsp_types::{
 };
 use position_utils::get_word_at_position;
 // use rustc_hash::FxHashSet;
-use std::collections::HashMap;
+use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
 // use std::sync::Arc;
@@ -37,6 +37,8 @@ use std::time::Instant;
 
 use crate::server::client::Notifier;
 use crate::{DocumentKey, TextDocument};
+
+use std::hash::{Hash, Hasher};
 
 pub mod file_utils;
 pub mod position_utils;
@@ -51,7 +53,6 @@ pub fn trim_line(s: &str) -> String {
     res
 }
 
-#[derive(Clone, Debug)]
 pub struct BamlProject {
     pub root_dir_name: PathBuf,
     // This is the version of the file on disk
@@ -59,11 +60,42 @@ pub struct BamlProject {
     // This is the version of the file that is currently being edited
     // (unsaved changes)
     pub unsaved_files: HashMap<DocumentKey, TextDocument>,
+    pub cached_runtime: Option<(u64, Result<BamlRuntime, Diagnostics>)>,
+}
+
+impl Drop for BamlProject {
+    fn drop(&mut self) {
+        tracing::info!("Dropping BamlProject");
+    }
+}
+
+impl std::fmt::Debug for BamlProject {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BamlProject")
+            .field("root_dir_name", &self.root_dir_name)
+            .field("files", &self.files.keys())
+            .field("unsaved_files", &self.unsaved_files.keys())
+            .field(
+                "cached_runtime_hash",
+                &self.cached_runtime.as_ref().map(|(hash, _)| hash),
+            )
+            .finish()
+    }
 }
 
 impl BamlProject {
+    pub fn new(root_dir: PathBuf) -> Self {
+        tracing::info!("Creating BamlProject for {}", root_dir.display());
+        Self {
+            root_dir_name: root_dir,
+            files: HashMap::new(),
+            unsaved_files: HashMap::new(),
+            cached_runtime: None,
+        }
+    }
+
     pub fn run_generators_native(
-        &self,
+        &mut self,
         no_version_check: Option<bool>,
     ) -> Result<Vec<GenerateOutput>, anyhow::Error> {
         let env = std::env::vars().collect();
@@ -75,11 +107,9 @@ impl BamlProject {
                 (PathBuf::from(path_buf), text_document.contents.clone())
             })
             .collect();
-        tracing::info!("Running generators");
         let start_time = Instant::now();
 
         let runtime = self.runtime(env)?;
-        tracing::info!("Runtime loaded in {:?}ms", start_time.elapsed().as_millis());
 
         let generated = match runtime.run_codegen(&all_files, no_version_check.unwrap_or(false)) {
             Ok(gen) => {
@@ -102,7 +132,6 @@ impl BamlProject {
                 return Err(e);
             }
         };
-        tracing::info!("Generated {:?} baml_clients", generated.len());
 
         match generated.len() {
             1 => tracing::info!(
@@ -122,6 +151,11 @@ impl BamlProject {
     }
 
     pub fn set_unsaved_file(&mut self, document_key: &DocumentKey, content: Option<String>) {
+        tracing::info!(
+            "Setting unsaved file: {}, {}",
+            document_key.path().display(),
+            content.clone().unwrap_or("None".to_string())
+        );
         if let Some(content) = content {
             let text_document = TextDocument::new(content, 0);
             self.unsaved_files
@@ -129,20 +163,37 @@ impl BamlProject {
         } else {
             self.unsaved_files.remove(document_key);
         }
+        self.cached_runtime = None;
+    }
+    pub fn remove_unsaved_file(&mut self, document_key: &DocumentKey) {
+        self.unsaved_files.remove(document_key);
+        self.cached_runtime = None;
     }
     pub fn save_file(&mut self, document_key: &DocumentKey, content: &str) {
+        tracing::info!(
+            "Saving file: {}, {}",
+            document_key.path().display(),
+            content
+        );
         let text_document = TextDocument::new(content.to_string(), 0);
         self.files.insert(document_key.clone(), text_document);
         self.unsaved_files.remove(document_key);
+        self.cached_runtime = None;
     }
 
     pub fn update_file(&mut self, document_key: &DocumentKey, content: Option<String>) {
+        tracing::info!(
+            "Updating file: {}, {}",
+            document_key.path().display(),
+            content.clone().unwrap_or("None".to_string())
+        );
         if let Some(content) = content {
             let text_document = TextDocument::new(content, 0);
             self.files.insert(document_key.clone(), text_document);
         } else {
             self.files.remove(document_key);
         }
+        self.cached_runtime = None;
     }
 
     /// Load files into the current state. Also return the newly loaded files.
@@ -165,22 +216,61 @@ impl BamlProject {
         Ok(workspace_files)
     }
 
-    pub fn runtime(&self, env_vars: HashMap<String, String>) -> Result<BamlRuntime, Diagnostics> {
-        let mut hm = self.files.iter().collect::<HashMap<_, _>>();
-        hm.extend(self.unsaved_files.iter());
+    pub fn runtime(
+        &mut self,
+        env_vars: HashMap<String, String>,
+    ) -> Result<BamlRuntime, Diagnostics> {
+        let mut all_files_for_hash = self.files.iter().collect::<Vec<_>>();
+        // for (key, doc) in &all_files_for_hash {
+        //     tracing::info!(
+        //         "Project {}\n\tfile: {} - {}",
+        //         self.root_dir_name.display(),
+        //         key.path().display(),
+        //         doc.contents.len()
+        //     );
+        // }
+        log::info!("Runtime files: {:#?}", all_files_for_hash.len());
+        log::info!("Unsaved files keys: {:#?}", self.unsaved_files.keys());
+        all_files_for_hash.extend(self.unsaved_files.iter());
+        all_files_for_hash.sort_by_key(|(k, _)| k.path());
 
-        let start_time = Instant::now();
-        let elapsed = start_time.elapsed();
+        let mut hasher = DefaultHasher::new();
+        for (key, doc) in &all_files_for_hash {
+            key.path().hash(&mut hasher);
+            doc.contents.hash(&mut hasher);
+        }
+        let mut sorted_env_vars = env_vars.iter().collect::<Vec<_>>();
+        sorted_env_vars.sort_by_key(|(k, _)| *k);
+        for (k, v) in &sorted_env_vars {
+            k.hash(&mut hasher);
+            v.hash(&mut hasher);
+        }
+        let current_hash = hasher.finish();
 
-        let start_time = Instant::now();
+        if let Some((cached_hash, cached_result)) = &self.cached_runtime {
+            if *cached_hash == current_hash {
+                tracing::info!("Runtime cache hit ({})", current_hash);
+                return cached_result.clone();
+            }
+            tracing::info!(
+                "Runtime cache miss (hash mismatch: {} != {})",
+                *cached_hash,
+                current_hash
+            );
+        } else {
+            tracing::info!("Runtime cache miss (no cache entry)");
+        }
 
-        let files_for_runtime = hm
-            .into_iter()
+        let files_for_runtime = self
+            .files
+            .iter()
+            .chain(self.unsaved_files.iter())
             .map(|(k, v)| (k.unchecked_to_string(), v.contents.clone()))
             .collect::<HashMap<_, _>>();
-        let elapsed = start_time.elapsed();
 
-        BamlRuntime::from_file_content(
+        tracing::info!("Files for runtime: {:#?}", files_for_runtime.len());
+
+        let result = BamlRuntime::from_file_content(
             &self.root_dir_name.to_string_lossy(),
             &files_for_runtime,
             env_vars,
@@ -189,9 +279,17 @@ impl BamlProject {
             Ok(e) => e,
             Err(e) => {
                 log::debug!("Error: {:#?}", e);
-                return Diagnostics::new(self.root_dir_name.clone());
+                Diagnostics::new(self.root_dir_name.clone())
             }
-        })
+        });
+        tracing::info!(
+            "Runtime result: {:?}",
+            result.as_ref().map_err(|r| r.errors()).map(|_| "Ok")
+        );
+
+        self.cached_runtime = Some((current_hash, result.clone()));
+
+        result
     }
 
     pub fn files(&self) -> Vec<String> {
@@ -696,7 +794,7 @@ impl Project {
                     if first_error_message.is_none() {
                         first_error_message = Some(message.clone());
                     }
-                    eprintln!("{}", message);
+                    tracing::error!("{}", message);
                 }
             }
         }
@@ -751,11 +849,6 @@ impl Project {
             self.last_successful_runtime = runtime.ok();
         }
 
-        // let diagnostics = self
-        //     .baml_project
-        //     .diagnostics(self.current_runtime.as_ref().unwrap());
-        // (self.on_success)(diagnostics, file_map);
-        // todo!()
         let elapsed = start_time.elapsed();
         tracing::info!("update_runtime took {:?}ms", elapsed.as_millis());
         Ok(())
@@ -971,11 +1064,9 @@ impl Project {
         F: Fn(String) + Send,
         E: Fn(String) + Send,
     {
-        tracing::info!("Running generators without debounce");
         let start = Instant::now();
         match self.baml_project.run_generators_native(None) {
             Ok(generators) => {
-                tracing::info!("Generators generated");
                 let mut generated_file_count = 0;
                 for gen in generators {
                     // Process each generator and simulate file generation.
@@ -991,7 +1082,7 @@ impl Project {
                 }
             }
             Err(e) => {
-                eprintln!("Failed to generate BAML client: {:?}", e);
+                tracing::error!("Failed to generate BAML client: {:?}", e);
                 on_error(format!("Failed to generate BAML client: {:?}", e));
             }
         }

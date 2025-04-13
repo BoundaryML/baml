@@ -35,7 +35,7 @@ impl SyncRequestHandler for Rename {
         let project = session
             .project_db_for_path(path)
             .expect("Ensured that a project db exists");
-        let guard = project.lock().unwrap();
+        let mut guard = project.lock().unwrap();
         let document_key =
             DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;
 

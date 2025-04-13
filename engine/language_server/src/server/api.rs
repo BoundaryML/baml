@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::{server::schedule::Task, session::Session};
-use diagnostics::project_diagnostics;
+use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
 use lsp_server;
 use lsp_types::{
@@ -69,25 +69,25 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
             )
         }
         "requestDiagnostics" => {
-            tracing::info!("requestDiagnostics");
+            tracing::info!("---- requestDiagnostics");
             return Task::local(move |session, notifier, requester, responder| {
                 let result: anyhow::Result<()> = (|| {
-                    tracing::info!("requestDiagnostics: {:?}", req.params);
+                    // tracing::info!("requestDiagnostics: {:?}", req.params);
 
                     let params = serde_json::from_value::<DiagnosticRequestParams>(req.params)
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
                     let url = Url::parse(&params.project_id)
                         .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
                     session.ensure_project_db_for_baml_file(&url)?;
-                    tracing::info!("url: {:?}", url);
+                    // tracing::info!("url: {:?}", url);
                     let project = session
                         .project_db_for_path(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
                     project.lock().unwrap().update_runtime(Some(notifier));
 
-                    tracing::info!("project:");
-                    let diagnostics = project_diagnostics(project.clone(), Some(&url));
-                    tracing::info!("diagnostics: ");
+                    // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
+                    let diagnostics = file_diagnostics(project.clone(), &url);
+                    tracing::info!("---- diagnostics Returned: ");
                     let report = Ok(DocumentDiagnosticReportResult::Report(
                         DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
                             related_documents: None,
@@ -97,7 +97,6 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                             },
                         }),
                     ));
-                    tracing::info!("report: {:?}", report);
                     let res = responder.respond(id, report)?;
                     Ok(res)
                 })();
@@ -160,10 +159,11 @@ fn handle_notification_result_error<N: traits::NotificationHandler>(
 
 pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Vec<Task<'a>> {
     match notif.method.as_str() {
-        // --- Remove DidChangeTextDocumentHandler case ---
-        // notification::DidChangeTextDocumentHandler::METHOD => {
-        //     // ... existing logic removed ...
-        // }
+        notification::DidChangeTextDocumentHandler::METHOD => {
+            handle_notification_result_error::<notification::DidChangeTextDocumentHandler>(
+                local_notification_task::<notification::DidChangeTextDocumentHandler>(notif),
+            )
+        }
 
         // --- Use local_notification_task helper for these ---
         notification::DidChangeWatchedFiles::METHOD => {
@@ -431,58 +431,4 @@ impl<T> ResultExt<T> for std::result::Result<T, ()> {
             code: lsp_server::ErrorCode::InternalError,
         })
     }
-}
-
-// Placeholder function to encapsulate task creation for DidChangeTextDocument
-// This logic was moved from the `api::notification` function.
-// The actual implementation would likely live within the Scheduler or be called by it.
-pub(super) fn create_did_change_tasks(
-    params: lsp_types::DidChangeTextDocumentParams,
-    // We might need access to Session or other resources depending on the final implementation
-    // For now, we'll recreate the basic structure
-) -> Vec<Task<'static>> {
-    let mut tasks = Vec::new();
-
-    // --- Recreate Local Task ---
-    let params_local = params.clone();
-    tasks.push(Task::local(move |session, notifier, requester, _| {
-        if let Err(err) = notification::DidChangeTextDocumentHandler::run(
-            session,
-            notifier,
-            requester,
-            params_local,
-        ) {
-            tracing::error!(
-                "An error occurred while running debounced local DidChangeTextDocument: {err}"
-            );
-            show_err_msg!(
-                "BAML encountered a problem processing document change (local). Check the logs."
-            );
-        }
-    }));
-
-    // --- Recreate Background Task (if needed/enabled later) ---
-    let url = params.text_document.uri.clone();
-    let schedule = BackgroundSchedule::LatencySensitive;
-    // tasks.push(Task::background(schedule, move |session: &Session| {
-    //     // ... snapshot logic ...
-    //     let project_db = match session.project_db_for_path(url.to_file_path().unwrap()) {
-    //         Some(db) => db,
-    //         None => {
-    //             tracing::error!("Could not find project for path");
-    //             return Box::new(|_, _| {});
-    //         }
-    //     };
-    //     Box::new(move |notifier: Notifier, _| {
-    //         match project_db.lock().unwrap().update_runtime(Some(notifier)) {
-    //             Ok(_) => (),
-    //             Err(err) => {
-    //                 tracing::error!("An error occurred while running background DidChangeTextDocument: {err}");
-    //                 show_err_msg!("BAML encountered a problem processing document change (background). Check the logs.");
-    //             }
-    //         }
-    //     })
-    // }));
-
-    tasks
 }
