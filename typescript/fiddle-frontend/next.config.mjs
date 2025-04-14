@@ -14,11 +14,6 @@ const nextConfig = {
       topLevelAwait: true,
     }
 
-    config.module.rules.push({
-      test: /\.wasm$/,
-      type: 'asset/resource',
-    })
-
     if (dev) {
       // config.devtool = 'eval-source-map'
     }

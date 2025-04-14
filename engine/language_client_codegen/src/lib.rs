@@ -179,7 +179,6 @@ impl GenerateClient for GeneratorOutputType {
         gen: &GeneratorArgs,
     ) -> Result<GenerateOutput> {
         let runtime_version = env!("CARGO_PKG_VERSION");
-        // log::info!("Generating client for {:?}", self);
 
         // Version check
         let version_check_result = if !gen.no_version_check {
@@ -199,8 +198,6 @@ impl GenerateClient for GeneratorOutputType {
             return Err(e);
         }
 
-        // log::info!("Generating client for {:?}", self);
-
         // Generate files
         let files = match self {
             GeneratorOutputType::OpenApi => openapi::generate(ir, gen),
@@ -219,8 +216,8 @@ impl GenerateClient for GeneratorOutputType {
                 baml_log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
 
                 let output_result = std::process::Command::new("echo")
-                    // .arg("-c")
-                    .arg("hello")
+                    .arg("-c")
+                    .arg(cmd)
                     .current_dir(gen.output_dir())
                     .output()
                     .context(format!("Failed to run on_generate command {:?}", cmd));
@@ -247,7 +244,6 @@ impl GenerateClient for GeneratorOutputType {
                         stdout,
                         stderr
                     );
-                    // log::error!("{}", error_msg);
                     return Err(anyhow::anyhow!("{}", error_msg));
                 }
             }
@@ -256,7 +252,6 @@ impl GenerateClient for GeneratorOutputType {
                 // TODO: we should auto-suggest a command for the user to run here
                 log::warn!("No on_generate commands were provided for OpenAPI generator - skipping OpenAPI client generation");
             }
-            // log::info!("on_generate commands finished---------------");
         }
 
         Ok(GenerateOutput {
