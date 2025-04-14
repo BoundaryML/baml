@@ -156,6 +156,40 @@ export function activate(context: vscode.ExtensionContext) {
     },
   )
 
+  const bamlTestcaseCommand = vscode.commands.registerCommand(
+    'baml.runBamlTest',
+    (args?: {
+      projectId: string
+      functionName?: string
+      implName?: string
+      showTests?: boolean
+      testCaseName?: string
+    }) => {
+      WebviewPanelHost.render(context.extensionUri, getPort, telemetry)
+      if (telemetry) {
+        telemetry.sendTelemetryEvent({
+          event: 'baml.runBamlTest',
+          properties: {},
+        })
+      }
+
+      // sends project files as well to webview
+      requestDiagnostics()
+
+      openPlaygroundConfig.lastOpenedFunction = args?.functionName ?? 'default'
+      WebviewPanelHost.currentPanel?.postMessage('select_function', {
+        root_path: 'default',
+        function_name: args?.functionName ?? 'default',
+      })
+
+      WebviewPanelHost.currentPanel?.postMessage('run_test', {
+        test_name: args?.testCaseName ?? 'default',
+      })
+
+      console.info('Opening BAML panel')
+    },
+  )
+
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'baml.setFlashingRegions',
