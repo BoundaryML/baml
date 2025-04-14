@@ -59,6 +59,36 @@ const renderedEnvVarsAtom = atom((get) => {
   return sortBy(vars, [(v) => v.key])
 })
 
+const escapeValue = (value: string): string => {
+  return value.replace(/[\n\r\t]/g, (match) => {
+    switch (match) {
+      case '\n':
+        return '\\n'
+      case '\r':
+        return '\\r'
+      case '\t':
+        return '\\t'
+      default:
+        return match
+    }
+  })
+}
+
+const unescapeValue = (value: string): string => {
+  return value.replace(/\\[nrt]/g, (match) => {
+    switch (match) {
+      case '\\n':
+        return '\n'
+      case '\\r':
+        return '\r'
+      case '\\t':
+        return '\t'
+      default:
+        return match
+    }
+  })
+}
+
 export default function EnvVariablesManager() {
   const envVars = useAtomValue(renderedEnvVarsAtom)
   const setEnvVars = useSetAtom(envVarsAtom)
@@ -221,8 +251,8 @@ export default function EnvVariablesManager() {
                       <TooltipTrigger asChild>
                         <Input
                           type={env.hidden ? 'password' : 'text'}
-                          value={typeof env.value === 'string' ? env.value : ''}
-                          onChange={(e) => updateEnvVar(index, e.target.value)}
+                          value={typeof env.value === 'string' ? escapeValue(env.value) : ''}
+                          onChange={(e) => updateEnvVar(index, unescapeValue(e.target.value))}
                           className='h-6 text-xs font-mono placeholder:font-sans'
                           placeholder={env.required && !env.value ? '<unset>' : undefined}
                           autoComplete='off'
