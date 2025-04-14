@@ -27,8 +27,9 @@
     "esbuild-watch": "pnpm run esbuild-base --sourcemap --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "watch": "esbuild --bundle --watch --sourcemap --external:vscode --format=cjs --platform=node ./src/extension.ts --outfile=out/extension.js --watch",
-    "build": "npx tsc --noEmit && pnpm run esbuild-base --sourcemap && pnpm run server:build",
-    "clean": "rimraf out"
+    "build": "pnpm run client:build && pnpm run server:build",
+    "clean": "rimraf out",
+    "client:build": "npx tsc --noEmit && pnpm run esbuild-base --sourcemap"
   },
   "dependencies": {
     "@aws-sdk/credential-providers": "^3.750.0",

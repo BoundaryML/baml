@@ -256,14 +256,16 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             let test = self.ir().find_test(&func, test_name)?;
             let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
             let inputs = func.inputs().clone();
-            Ok((test_case_params, inputs))
+            let span = test.span().clone();
+            Ok((test_case_params, inputs, span.cloned()))
         });
         let maybe_expr_test_and_params =
             self.get_expr_function(function_name, ctx).and_then(|func| {
                 let test = self.ir().find_expr_fn_test(&func, test_name)?;
                 let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
                 let inputs = func.inputs().clone();
-                Ok((test_case_params, inputs))
+                let span = test.span().clone();
+                Ok((test_case_params, inputs, span.cloned()))
             });
 
         let maybe_params = maybe_test_and_params.or(maybe_expr_test_and_params);
@@ -271,7 +273,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let eval_ctx = ctx.eval_ctx(strict);
 
         match maybe_params {
-            Ok((params, function_params)) => {
+            Ok((params, function_params, span)) => {
                 // Collect all errors and return them as a single error.
                 let mut errors = Vec::new();
                 let params = params
@@ -296,7 +298,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                     &function_params,
                     &params,
                     ArgCoercer {
-                        span_path: None,
+                        span_path: span.map(|s| s.file.path_buf().clone()),
                         allow_implicit_cast_to_string: true,
                     },
                 )?;
