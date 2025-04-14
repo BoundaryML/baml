@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+  "baml-ids",
   "baml-lib/*",
   "baml-rpc",
   "baml-runtime",
@@ -17,6 +18,7 @@ members = [
   "baml-lsp-types"
 ]
 default-members = [
+  "baml-ids",
   "baml-lib/*",
   "baml-rpc",
   "baml-runtime",
@@ -42,8 +44,9 @@ lsp-types = { version = "0.95.0" }
 anyhow = "1.0"
 askama = "0.12.1"
 baml-cli = { path = "cli" }
-baml-types = { path = "baml-lib/baml-types" }
+baml-ids = { path = "baml-ids" }
 baml-log = { path = "baml-lib/baml-log" }
+baml-types = { path = "baml-lib/baml-types" }
 base64 = "0.22.1"
 bstd = { path = "bstd" }
 bytes = "1.6.0"

@@ -943,6 +943,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-ids"
+version = "0.83.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "type-safe-id",
+ "uuid",
+]
+
+[[package]]
 name = "baml-lib"
 version = "0.83.0"
 dependencies = [
