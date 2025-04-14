@@ -917,7 +917,7 @@ paths:
             application/json:
               schema:
                 title: JsonTypeAliasCycleResponse
-                anyOf: []
+                AnyValue: {}
       operationId: JsonTypeAliasCycle
   /call/LiteralUnionsTest:
     post:
@@ -1259,7 +1259,7 @@ paths:
             application/json:
               schema:
                 title: RecursiveAliasCycleResponse
-                anyOf: []
+                AnyValue: {}
       operationId: RecursiveAliasCycle
   /call/RecursiveClassWithAliasIndirection:
     post:
@@ -1326,7 +1326,7 @@ paths:
             application/json:
               schema:
                 title: ReturnJsonEntryResponse
-                anyOf: []
+                AnyValue: {}
       operationId: ReturnJsonEntry
   /call/ReturnMalformedConstraints:
     post:
@@ -1365,7 +1365,7 @@ paths:
             application/json:
               schema:
                 title: SimpleRecursiveListAliasResponse
-                anyOf: []
+                AnyValue: {}
       operationId: SimpleRecursiveListAlias
   /call/SimpleRecursiveMapAlias:
     post:
@@ -1378,7 +1378,7 @@ paths:
             application/json:
               schema:
                 title: SimpleRecursiveMapAliasResponse
-                anyOf: []
+                AnyValue: {}
       operationId: SimpleRecursiveMapAlias
   /call/StreamBigNumbers:
     post:
@@ -3452,7 +3452,7 @@ components:
             type: object
             properties:
               input:
-                anyOf: []
+                AnyValue: {}
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -3816,7 +3816,7 @@ components:
             type: object
             properties:
               input:
-                anyOf: []
+                AnyValue: {}
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -3928,7 +3928,7 @@ components:
             type: object
             properties:
               input:
-                anyOf: []
+                AnyValue: {}
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -3944,7 +3944,7 @@ components:
             type: object
             properties:
               input:
-                anyOf: []
+                AnyValue: {}
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -6345,7 +6345,7 @@ components:
       type: object
       properties:
         value:
-          anyOf: []
+          AnyValue: {}
       required:
       - value
       additionalProperties: false
