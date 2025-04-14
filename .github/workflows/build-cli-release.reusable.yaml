@@ -129,7 +129,7 @@ jobs:
         if: contains(matrix._.os, 'windows') && inputs.package_for_release
         shell: bash
         run: |
-          set -e # Exit immediately if a command exits with a non-zero status.
+          set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
 
           staging_dir="${{ steps.paths.outputs.archive_dir }}"
           archive_base="${{ steps.paths.outputs.archive_base }}"
