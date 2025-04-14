@@ -305,6 +305,7 @@ export class WebviewPanelHost {
             config.update('baml.enablePlaygroundProxy', proxyEnabled, vscode.ConfigurationTarget.Workspace)
             return
           case 'GET_WEBVIEW_URI':
+            console.log('GET_WEBVIEW_URI', vscodeMessage)
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,
             // relpath will be 'baml_src://path/to-image.png'
             const relpath = vscodeMessage.path

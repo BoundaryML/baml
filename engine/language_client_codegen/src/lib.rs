@@ -215,7 +215,7 @@ impl GenerateClient for GeneratorOutputType {
             for cmd in gen.on_generate.iter() {
                 baml_log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
 
-                let output_result = std::process::Command::new("echo")
+                let output_result = std::process::Command::new("sh")
                     .arg("-c")
                     .arg(cmd)
                     .current_dir(gen.output_dir())
