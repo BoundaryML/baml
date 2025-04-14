@@ -3117,6 +3117,7 @@ dependencies = [
  "colored 2.1.0",
  "either",
  "env_logger",
+ "filetime",
  "indexmap 2.8.0",
  "internal-baml-core",
  "itertools 0.13.0",

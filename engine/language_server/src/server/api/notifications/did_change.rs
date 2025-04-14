@@ -24,7 +24,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         _requester: &mut Requester,
         params: DidChangeTextDocumentParams,
     ) -> Result<()> {
-        tracing::debug!("------- DidChangeTextDocumentHandler");
+        tracing::info!("------- DidChangeTextDocumentHandler");
         let start_time_total = Instant::now();
 
         let url = params.text_document.uri;
@@ -49,6 +49,8 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 Some(notifier.clone()),
             )
             .internal_error()?;
+
+        tracing::info!("publishing diagnostics");
 
         publish_diagnostics(
             &notifier,

@@ -246,6 +246,22 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
                 self.remove_dir_safe(output_path)?;
                 std::fs::rename(&temp_path, output_path)?;
 
+                // Update file modification times to trigger file watchers
+                // Note we maay not have to do this now that we use Rust always to
+                // generate files. But we'll keep it for now.
+                let now = filetime::FileTime::now();
+                for relative_file_path in self.files.keys() {
+                    let full_file_path = output_path.join(relative_file_path);
+                    if let Err(e) = filetime::set_file_mtime(&full_file_path, now) {
+                        // Log a warning but don't fail the whole process if touching fails
+                        log::warn!(
+                            "Failed to update modification time for {}: {}",
+                            full_file_path.display(),
+                            e
+                        );
+                    }
+                }
+
                 log::debug!(
                     "Wrote {} files to {}",
                     self.files.len(),

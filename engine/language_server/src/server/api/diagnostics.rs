@@ -1,7 +1,9 @@
 use baml_runtime::InternalRuntimeInterface;
+use internal_baml_diagnostics::{SourceFile, Span};
 use lsp_server::{ErrorCode, Notification, Request};
-use lsp_types::DiagnosticSeverity;
-use lsp_types::{notification::PublishDiagnostics, PublishDiagnosticsParams, Url};
+use lsp_types::{
+    notification::PublishDiagnostics, Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url,
+};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -31,7 +33,25 @@ pub fn publish_diagnostics(
     project: Arc<Mutex<Project>>,
     version: Option<i32>,
 ) -> Result<()> {
-    let diagnostics = project_diagnostics(project);
+    let diagnostics = project_diagnostics(project.clone());
+    // Calculate counts *after* all diagnostics (including generator) are collected.
+    let error_count = diagnostics
+        .iter()
+        .filter(|(_, diags)| {
+            diags
+                .iter()
+                .any(|d| d.severity == Some(DiagnosticSeverity::ERROR))
+        })
+        .count();
+    let warning_count = diagnostics
+        .iter()
+        .filter(|(_, diags)| {
+            diags
+                .iter()
+                .any(|d| d.severity == Some(DiagnosticSeverity::WARNING))
+        })
+        .count();
+
     for (uri, diagnostics) in diagnostics.clone() {
         notifier
             .notify::<PublishDiagnostics>(PublishDiagnosticsParams {
@@ -49,18 +69,11 @@ pub fn publish_diagnostics(
         .send(lsp_server::Message::Notification(Notification::new(
             "runtime_diagnostics".to_string(),
             serde_json::json!({
-                "errors": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::ERROR))).count(),
-                "warnings": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::WARNING))).count(),
+                "errors": error_count,
+                "warnings": warning_count,
             }),
         )))
         .internal_error()?;
-    // notifier.0.send(lsp_server::Message::Request(Request::new(
-    //     "runtime_diagnostics".to_string(),
-    //     serde_json::json!({
-    //         "errors": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::ERROR))).count(),
-    //         "warnings": diagnostics.iter().filter(|d| d.1.iter().any(|d| d.severity == Some(DiagnosticSeverity::WARNING))).count(),
-    //     }),
-    // )));
 
     Ok(())
 }
@@ -83,7 +96,7 @@ pub fn publish_session_lsp_diagnostics(
         .project_db_for_path_mut(path)
         .expect("We just ensured the session is valid");
 
-    let diagnostics = project_diagnostics(project);
+    let diagnostics = project_diagnostics(project.clone());
     for (uri, diagnostics) in diagnostics {
         notifier
             .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
@@ -133,6 +146,7 @@ pub fn project_diagnostics(
         })
         .collect();
 
+    // Add regular BAML diagnostics
     for error in baml_diagnostics.errors().iter() {
         let span_path = ensure_absolute(&root_path, &PathBuf::from(error.span().file.path()));
         let url = match Url::from_file_path(&span_path) {
@@ -182,6 +196,56 @@ pub fn project_diagnostics(
                 None,
             );
             diagnostics_map.entry(url).or_default().push(diag);
+        }
+    }
+
+    // Add generator version diagnostics
+    if let Ok(generators) = guard.baml_project.list_generators() {
+        for gen in generators.into_iter() {
+            if let Some(message) = guard.baml_project.check_version(&gen, false) {
+                if let Some(range) = span_to_range(
+                    &guard,
+                    &root_path,
+                    &Span {
+                        file: SourceFile::new_static(
+                            PathBuf::from(gen.span.file_path.clone()),
+                            &"",
+                        ),
+                        start: gen.span.start,
+                        end: gen.span.end,
+                    },
+                ) {
+                    let diagnostic = Diagnostic {
+                        range,
+                        message,
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        source: Some("baml".to_string()),
+                        ..Default::default()
+                    };
+
+                    let span_path =
+                        ensure_absolute(&root_path, &PathBuf::from(gen.span.file_path.clone()));
+                    match Url::from_file_path(span_path) {
+                        Ok(uri) => {
+                            diagnostics_map
+                                .entry(uri)
+                                .or_insert_with(Vec::new)
+                                .push(diagnostic);
+                        }
+                        Err(_) => {
+                            tracing::error!(
+                                "Failed to parse URI for generator diagnostic: {}",
+                                gen.span.file_path
+                            );
+                        }
+                    }
+                } else {
+                    tracing::warn!(
+                        "Could not get range for generator diagnostic span in file {}",
+                        gen.span.file_path
+                    );
+                }
+            }
         }
     }
 

@@ -142,7 +142,7 @@ const activateClient = (
     .then(() => {
       console.log('client ready')
       client.createDefaultErrorHandler(2)
-      client.outputChannel.show()
+      requestDiagnostics()
       client.onNotification('baml/showLanguageServerOutput', () => {
         // need to append line for the show to work for some reason.
         // dont delete this.

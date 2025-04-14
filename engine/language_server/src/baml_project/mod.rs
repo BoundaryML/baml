@@ -7,9 +7,10 @@ use baml_runtime::{
     // RenderedPrompt,
     // runtime::InternalBamlRuntime
 };
-use baml_types::BamlValue;
 use baml_types::{BamlMediaType, TypeValue};
+use baml_types::{BamlValue, GeneratorOutputType};
 use file_utils::gather_files;
+use internal_baml_codegen::version_check::{check_version, GeneratorType, VersionCheckMode};
 use internal_baml_codegen::GenerateOutput;
 use internal_baml_diagnostics::Diagnostics;
 use lsp_server::Notification;
@@ -19,13 +20,7 @@ use baml_lsp_types::{
     SymbolLocation,
 };
 use lsp_types::{
-    Hover,
-    HoverContents,
-    // HoverParams,
-    // LocationLink,
-    Position,
-    Range,
-    TextDocumentItem,
+    Diagnostic, DiagnosticSeverity, Hover, HoverContents, Position, Range, TextDocumentItem,
 };
 use position_utils::get_word_at_position;
 // use rustc_hash::FxHashSet;
@@ -36,7 +31,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crate::server::client::Notifier;
-use crate::{DocumentKey, TextDocument};
+use crate::{version, DocumentKey, TextDocument};
+use std::str::FromStr;
 
 use std::hash::{Hash, Hasher};
 
@@ -92,6 +88,47 @@ impl BamlProject {
             unsaved_files: HashMap::new(),
             cached_runtime: None,
         }
+    }
+
+    pub fn check_version(
+        &self,
+        generator_config: &BamlGeneratorConfig,
+        is_diagnostic: bool,
+    ) -> Option<String> {
+        // Convert string parameters to enums
+        // let generator_type = match generator_config.output_type.as_str() {
+        //     "VSCodeCLI" => GeneratorType::VSCodeCLI,
+        //     "VSCode" => GeneratorType::VSCode,
+        //     "CLI" => GeneratorType::CLI,
+        //     other => return Some(format!("Invalid generator type: {:?}", other)),
+        // };
+        let generator_type = GeneratorType::VSCode;
+
+        // let version_check_mode = match version_check_mode {
+        //     "Strict" => VersionCheckMode::Strict,
+        //     "None" => VersionCheckMode::None,
+        //     other => return Some(format!("Invalid version check mode: {:?}", other)),
+        // };
+        let version_check_mode = VersionCheckMode::Strict;
+
+        let Ok(generator_language) =
+            GeneratorOutputType::from_str(generator_config.output_type.as_str())
+        else {
+            return Some(format!(
+                "Invalid generator language: {:?}",
+                generator_config.output_type
+            ));
+        };
+
+        check_version(
+            &generator_config.version,
+            &version(),
+            generator_type,
+            version_check_mode,
+            generator_language,
+            is_diagnostic,
+        )
+        .map(|error| error.msg())
     }
 
     pub fn run_generators_native(
@@ -216,6 +253,15 @@ impl BamlProject {
         Ok(workspace_files)
     }
 
+    pub fn list_generators(&mut self) -> Result<Vec<BamlGeneratorConfig>, &str> {
+        let runtime = self.runtime(HashMap::new());
+        if let Ok(runtime) = runtime {
+            Ok(runtime.list_generators())
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub fn runtime(
         &mut self,
         env_vars: HashMap<String, String>,
@@ -320,9 +366,57 @@ pub trait BamlRuntimeExt {
     fn is_valid_enum(&self, symbol: &str) -> bool;
     fn is_valid_type_alias(&self, symbol: &str) -> bool;
     fn is_valid_function(&self, symbol: &str) -> bool;
+    // fn check_version(
+    //     generator_version: &str,
+    //     current_version: &str,
+    //     generator_type: &str,
+    //     version_check_mode: &str,
+    //     generator_language: &str,
+    //     is_diagnostic: bool,
+    // ) -> Option<String>;
 }
 
 impl BamlRuntimeExt for BamlRuntime {
+    // fn check_version(
+    //     generator_version: &str,
+    //     current_version: &str,
+    //     generator_type: &str,
+    //     version_check_mode: &str,
+    //     generator_language: &str,
+    //     is_diagnostic: bool,
+    // ) -> Option<String> {
+    //     // Convert string parameters to enums
+    //     let generator_type = match generator_type {
+    //         "VSCodeCLI" => GeneratorType::VSCodeCLI,
+    //         "VSCode" => GeneratorType::VSCode,
+    //         "CLI" => GeneratorType::CLI,
+    //         other => return Some(format!("Invalid generator type: {:?}", other)),
+    //     };
+
+    //     let version_check_mode = match version_check_mode {
+    //         "Strict" => VersionCheckMode::Strict,
+    //         "None" => VersionCheckMode::None,
+    //         other => return Some(format!("Invalid version check mode: {:?}", other)),
+    //     };
+
+    //     let Ok(generator_language) = GeneratorOutputType::from_str(generator_language) else {
+    //         return Some(format!(
+    //             "Invalid generator language: {:?}",
+    //             generator_language
+    //         ));
+    //     };
+
+    //     check_version(
+    //         generator_version,
+    //         current_version,
+    //         generator_type,
+    //         version_check_mode,
+    //         generator_language,
+    //         is_diagnostic,
+    //     )
+    //     .map(|error| error.msg())
+    // }
+
     fn list_generators(&self) -> Vec<BamlGeneratorConfig> {
         self.codegen_generators()
             .map(|generator| BamlGeneratorConfig {
