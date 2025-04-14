@@ -70,25 +70,6 @@ export default function EnvVariablesManager() {
   const [envFileContent, setEnvFileContent] = useState('')
   const { toast } = useToast()
 
-  // Local state for environment variables
-  const [inMemoryEnvVars, setInMemoryEnvVars] = useState<Record<string, string>>(currentEnvVars)
-
-  // // Sync local state with atom on mount and when atom changes
-  // useEffect(() => {
-  //   setInMemoryEnvVars(currentEnvVars)
-  // }, [currentEnvVars])
-
-  // Sync atom with local state whenever local state changes
-  useEffect(() => {
-    // Schedule the update to run on the next animation frame
-    const timeoutId = requestAnimationFrame(() => {
-      setEnvVars(inMemoryEnvVars)
-    })
-
-    // Cleanup the scheduled update if the effect re-runs before it executes
-    return () => cancelAnimationFrame(timeoutId)
-  }, [inMemoryEnvVars, setEnvVars])
-
   // Toggle visibility of an environment variable
   const toggleVisibility = (index: number) => {
     const envVar = envVars[index]
@@ -101,30 +82,26 @@ export default function EnvVariablesManager() {
   // Update an environment variable immediately
   const updateEnvVar = (index: number, value: string) => {
     const envVar = envVars[index]
-    setInMemoryEnvVars((prev) => ({
-      ...prev,
-      [envVar.key]: value,
-    }))
+    const newVars = { ...currentEnvVars }
+    newVars[envVar.key] = value
+    setEnvVars(newVars)
   }
 
   // Delete an environment variable
   const deleteEnvVar = (index: number) => {
     const { key } = envVars[index]
-    setInMemoryEnvVars((prev) => {
-      const newVars = { ...prev }
-      delete newVars[key]
-      return newVars
-    })
+    const newVars = { ...currentEnvVars }
+    delete newVars[key]
+    setEnvVars(newVars)
   }
 
   // Add a new environment variable
   const addEnvVar = () => {
     if (newKey.trim() === '') return
 
-    setInMemoryEnvVars((prev) => ({
-      ...prev,
-      [newKey]: newValue,
-    }))
+    const newVars = { ...currentEnvVars }
+    newVars[newKey] = newValue
+    setEnvVars(newVars)
 
     // Reset form
     setNewKey('')
@@ -132,13 +109,14 @@ export default function EnvVariablesManager() {
   }
 
   // Parse and import environment variables from .env file
-  const parseEnvFile = () => {
+  const parseAndSaveEnvFile = () => {
     try {
       const parsed = parseDotenv(envFileContent)
-      setInMemoryEnvVars((prev) => ({
-        ...prev,
-        ...parsed,
-      }))
+      const newVars = { ...currentEnvVars }
+      Object.entries(parsed).forEach(([key, value]) => {
+        newVars[key] = value
+      })
+      setEnvVars(newVars)
       setEnvFileContent('')
       toast({
         title: 'Environment variables imported',
@@ -360,7 +338,7 @@ export default function EnvVariablesManager() {
               <Button variant='outline'>Cancel</Button>
             </DialogClose>
             <DialogClose asChild>
-              <Button onClick={parseEnvFile}>Import</Button>
+              <Button onClick={parseAndSaveEnvFile}>Import</Button>
             </DialogClose>
           </DialogFooter>
         </DialogContent>
