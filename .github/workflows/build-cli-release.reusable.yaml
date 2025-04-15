@@ -50,7 +50,7 @@ jobs:
 
     # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
     # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
-    container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'quay.io/pypa/manylinux_2_28_aarch64') || '' }}
+    container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
     env:
       CROSS_VERSION: v0.2.5
