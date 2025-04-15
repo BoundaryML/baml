@@ -89,6 +89,40 @@ const unescapeValue = (value: string): string => {
   })
 }
 
+function EnvVarStatus({ value, required }: { value?: string; required: boolean }) {
+  if (!value || value === '') {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <AlertTriangle className='h-4 w-4 text-orange-500 flex-shrink-0' />
+          </TooltipTrigger>
+          <TooltipContent side='top' className='text-xs'>
+            {value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  if (required) {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Check className='h-4 w-4 text-green-500 flex-shrink-0' />
+          </TooltipTrigger>
+          <TooltipContent side='top' className='text-xs'>
+            Required by one of your BAML clients
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  return <div />
+}
+
 export default function EnvVariablesManager() {
   const envVars = useAtomValue(renderedEnvVarsAtom)
   const setEnvVars = useSetAtom(envVarsAtom)
@@ -229,20 +263,7 @@ export default function EnvVariablesManager() {
                 <td className='pl-2 pr-0.5 py-0.5'>
                   <div className='flex items-center gap-2 justify-between'>
                     <code className='font-mono text-xs text-muted-foreground'>{env.key}</code>
-                    {!env.value || env.value === '' ? (
-                      <TooltipProvider key={env.key} delayDuration={300}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <AlertTriangle className='h-4 w-4 text-orange-500 flex-shrink-0' />
-                          </TooltipTrigger>
-                          <TooltipContent side='top' className='text-xs'>
-                            {env.value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : (
-                      <div />
-                    )}
+                    <EnvVarStatus value={env.value} required={env.required} />
                   </div>
                 </td>
                 <td className='px-0.5 py-0.5'>
