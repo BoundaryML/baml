@@ -369,7 +369,7 @@ mod tests {
         .unwrap()
     }
 
-    #[tokio::test] // Uncomment to run.
+    // #[tokio::test] // Uncomment to run.
     async fn test_eval_expr() {
         let rt = runtime(
             r##"
