@@ -87,15 +87,19 @@ export const runtimeAtom = atom<{
     const wasm = get(wasmAtom)
     const project = get(projectAtom)
     const envVars = get(envVarsAtom)
+    console.log('---ENVVARSDEBUG runtimeAtom envVars', envVars)
+
     if (wasm === undefined || project === undefined) {
-      let previousState: {
+      const previousState: {
         rt: WasmRuntime | undefined
         diags: WasmDiagnosticError | undefined
         lastValidRt: WasmRuntime | undefined
       } = get(runtimeAtom)
+      console.log('---ENVVARSDEBUG runtimeAtom previousState', previousState)
       return { rt: undefined, diags: undefined, lastValidRt: previousState.lastValidRt }
     }
     const selectedEnvVars = Object.fromEntries(Object.entries(envVars).filter(([key, value]) => value !== undefined))
+    console.log('---ENVVARSDEBUG runtimeAtom selectedEnvVars', selectedEnvVars)
     const rt = project.runtime(selectedEnvVars)
     const diags = project.diagnostics(rt)
     return { rt, diags, lastValidRt: rt }
@@ -105,7 +109,7 @@ export const runtimeAtom = atom<{
     if (wasm) {
       const WasmDiagnosticError = wasm.WasmDiagnosticError
       if (e instanceof WasmDiagnosticError) {
-        let previousState: {
+        const previousState: {
           rt: WasmRuntime | undefined
           diags: WasmDiagnosticError | undefined
           lastValidRt: WasmRuntime | undefined
@@ -208,7 +212,9 @@ export const resetEnvKeyValuesAtom = atom(null, (get, set) => {
 })
 export const envKeyValuesAtom = atom(
   (get) => {
-    return get(envKeyValueStorage).map(([k, v], idx): [string, string, number] => [k, v, idx])
+    const envKeyValues = get(envKeyValueStorage)
+    console.log('---ENVVARSDEBUG envKeyValues', envKeyValues)
+    return envKeyValues.map(([k, v], idx): [string, string, number] => [k, v, idx])
   },
   (
     get,
@@ -235,7 +241,7 @@ export const envKeyValuesAtom = atom(
       } else if ('remove' in update) {
         keyValues.splice(update.itemIndex, 1)
       }
-      console.log('Setting env key values', keyValues)
+      console.log('---ENVVARSDEBUG Setting env key values', keyValues)
       set(envKeyValueStorage, keyValues)
     } else {
       set(envKeyValueStorage, (prev) => [...prev, [update.key, update.value ?? '']])
@@ -252,8 +258,10 @@ export const envVarsAtom = atom(
       return Object.fromEntries(defaultEnvKeyValues.map(([k, v]) => [k, v]))
     } else {
       const { proxyEnabled, proxyUrl } = get(proxyUrlAtom)
+      console.log('---ENVVARSDEBUG proxyUrl', proxyUrl)
+      console.log('---ENVVARSDEBUG proxyEnabled', proxyEnabled)
       if (!proxyEnabled) {
-        // filter it out
+        // if proxy is not enabled, remove the BOUNDARY_PROXY_URL
         const envKeyValues = get(envKeyValuesAtom)
         return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
       }
@@ -283,7 +291,7 @@ export const requiredEnvVarsAtom = atom((get) => {
     return []
   }
   const requiredEnvVars = rt.required_env_vars()
-
+  console.log('---ENVVARSDEBUG rt requiredEnvVars', requiredEnvVars)
   const defaultEnvVars = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY']
   defaultEnvVars.forEach((e) => {
     if (!requiredEnvVars.find((envVar) => e === envVar)) {

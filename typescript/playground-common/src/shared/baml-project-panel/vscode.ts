@@ -9,8 +9,6 @@ import {
   InitializedResponse,
   InitializedRequest,
   SetProxySettingsRequest,
-  LoadEnvRequest,
-  LoadEnvResponse,
   LoadAwsCredsRequest,
   LoadAwsCredsResponse,
 } from './vscode-rpc'
@@ -113,13 +111,6 @@ class VSCodeAPIWrapper {
       vscodeCommand: 'SET_PROXY_SETTINGS',
       proxyEnabled,
     })
-  }
-
-  public async loadEnv() {
-    const resp = await this.rpc<LoadEnvRequest, LoadEnvResponse>({
-      vscodeCommand: 'LOAD_ENV',
-    })
-    return resp
   }
 
   public loadAwsCreds = async (profile: string | null) => {

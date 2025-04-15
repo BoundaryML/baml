@@ -101,6 +101,7 @@ const useRunTests = (maxBatchSize = 5) => {
               clearHighlights() // Clear highlights on error
               return
             }
+            console.log('---ENVVARSDEBUG rt', rt)
 
             const startTime = performance.now()
             setState(test, { status: 'running' })
@@ -108,7 +109,6 @@ const useRunTests = (maxBatchSize = 5) => {
             const result = await testCase.fn.run_test_with_expr_events(
               rt,
               testCase.tc.name,
-              vscode.loadEnv(),
               (partial: WasmFunctionResponse) => {
                 setState(test, { status: 'running', response: partial })
               },
@@ -325,6 +325,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                 )
               },
               findMediaFile,
+              vscode.loadAwsCreds.bind(vscode),
             )
 
             const endTime = performance.now()

@@ -342,20 +342,6 @@ export class WebviewPanelHost {
             }
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: response })
             return
-          case 'LOAD_ENV':
-            ;(async () => {
-              try {
-                const envVars = await loadEnv(vscodeMessage)
-                this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: envVars })
-              } catch (error) {
-                this._panel.webview.postMessage({
-                  rpcId: message.rpcId,
-                  rpcMethod: vscodeCommand,
-                  data: { error: error },
-                })
-              }
-            })()
-            return
           case 'LOAD_AWS_CREDS':
             ;(async () => {
               try {
@@ -405,56 +391,4 @@ export class WebviewPanelHost {
       this._disposables,
     )
   }
-}
-
-const getActiveWorkspacePath = (): string | undefined => {
-  const activeDocument = window.activeTextEditor?.document.uri
-  if (activeDocument) {
-    const activeWorkspace = workspace.getWorkspaceFolder(activeDocument)
-    if (activeWorkspace) {
-      return activeWorkspace.uri.fsPath
-    }
-  }
-  return workspace.workspaceFolders?.[0]?.uri.fsPath
-}
-
-const getEnvVarBlob = async ({ activeWorkspacePath }: { activeWorkspacePath: string }): Promise<string> => {
-  const envVarFile: string | undefined = workspace.getConfiguration('baml').get('envVarFile')
-  const envVarCommand: string | undefined = workspace.getConfiguration('baml').get('envVarCommand')
-
-  if (envVarFile) {
-    return await readFileAsync(join(activeWorkspacePath, envVarFile), 'utf-8')
-  }
-  if (envVarCommand) {
-    const { stdout, stderr } = await execAsync(envVarCommand, {
-      cwd: activeWorkspacePath,
-      env: {
-        workspaceFolder: activeWorkspacePath,
-        fileWorkspaceFolder: activeWorkspacePath,
-        ...process.env,
-      },
-      timeout: 10_000, // milliseconds
-      windowsHide: true,
-    })
-    if (stderr) {
-      throw new Error(stderr)
-    }
-    return stdout
-  }
-  return ''
-}
-
-const loadEnv = async (req: LoadEnvRequest): Promise<LoadEnvResponse> => {
-  const activeWorkspacePath = getActiveWorkspacePath()
-  if (!activeWorkspacePath) {
-    console.warn('Failed to choose workspace for resolving env vars')
-    return { envVars: {} }
-  }
-
-  const envVarBlob = await getEnvVarBlob({ activeWorkspacePath })
-  const envVars = dotenv.parse(envVarBlob)
-
-  console.log('env vars loaded', { time: Date.now(), envVars })
-
-  return { envVars }
 }

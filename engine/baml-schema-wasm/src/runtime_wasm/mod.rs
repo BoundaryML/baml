@@ -1573,6 +1573,7 @@ impl WasmRuntime {
         function_test_pairs: js_sys::Array,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
+        load_aws_creds_cb: js_sys::Function,
     ) -> Result<WasmTestResponses, JsValue> {
         // Create a vector to store all test futures
         let mut test_futures = Vec::new();
@@ -1605,9 +1606,10 @@ impl WasmRuntime {
                     });
 
                     // Create evaluation context for the test
-                    let ctx = self.runtime.create_ctx_manager(
+                    let ctx = self.runtime.create_ctx_manager_with_env_var_loaders(
                         BamlValue::String("wasm".to_string()),
                         js_fn_to_baml_src_reader(get_baml_src_cb.clone()),
+                        js_fn_to_aws_cred_provider(load_aws_creds_cb.clone()),
                     );
 
                     // Reference to the runtime
@@ -1835,13 +1837,11 @@ impl WasmFunction {
         &self,
         rt: &mut WasmRuntime,
         test_name: String,
-        env_vars: JsValue,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
         load_aws_creds_cb: js_sys::Function,
         on_expr_event: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
-        log::info!("TEST LOGGING");
         let rt = &rt.runtime;
         let function_name = self.name.clone();
 
@@ -1882,10 +1882,8 @@ impl WasmFunction {
         });
 
         // Create your evaluation context, etc.
-        let ctx = rt.create_ctx_manager_with_env(
+        let ctx = rt.create_ctx_manager_with_env_var_loaders(
             BamlValue::String("wasm".to_string()),
-            serde_wasm_bindgen::from_value::<HashMap<String, String>>(env_vars)
-                .map_err(|e| JsValue::from_str(&format!("Failed to parse env_vars: {:?}", e)))?,
             js_fn_to_baml_src_reader(get_baml_src_cb),
             js_fn_to_aws_cred_provider(load_aws_creds_cb),
         );
@@ -1913,7 +1911,6 @@ impl WasmFunction {
         &self,
         rt: &mut WasmRuntime,
         test_name: String,
-        env_vars: JsValue,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
         load_aws_creds_cb: js_sys::Function,
@@ -1939,10 +1936,8 @@ impl WasmFunction {
         });
 
         // Create your evaluation context, etc.
-        let ctx = rt.create_ctx_manager_with_env(
+        let ctx = rt.create_ctx_manager_with_env_var_loaders(
             BamlValue::String("wasm".to_string()),
-            serde_wasm_bindgen::from_value::<HashMap<String, String>>(env_vars)
-                .map_err(|e| JsValue::from_str(&format!("Failed to parse env_vars: {:?}", e)))?,
             js_fn_to_baml_src_reader(get_baml_src_cb),
             js_fn_to_aws_cred_provider(load_aws_creds_cb),
         );

@@ -19,7 +19,7 @@ function TestOpenAILegacyProvider(input: string) -> string {
 }
 
 function TestOpenAIShorthand(input: string) -> string {
-  client GPT35
+  client "openai/gpt-4o"
   prompt #"
     {{ _.role("user") }}
     Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
