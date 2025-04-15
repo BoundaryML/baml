@@ -48,7 +48,8 @@ jobs:
           - os: ubuntu-22.04
             target: aarch64-unknown-linux-musl
 
-    
+    # Run Linux builds inside a manylinux container for better GLIBC compatibility
+    container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux2014_x86_64' || 'quay.io/pypa/manylinux2014_aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
     env:
       CROSS_VERSION: v0.2.5
@@ -131,7 +132,7 @@ jobs:
 
       # Create archives with proper format
       - name: Create archive (Windows)
-        if: contains(matrix._.os, 'windows') && inputs.package_for_release
+        if: ${{ contains(matrix._.os, 'windows') && inputs.package_for_release }}
         shell: bash
         run: |
           set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
@@ -179,10 +180,10 @@ jobs:
           ls -l "${archive_base}".*
 
       - name: Create archive (Unix)
-        if: ! contains(matrix._.os , 'windows') && inputs.package_for_release
+        if: ${{ !contains(matrix._.os, 'windows') && inputs.package_for_release }}
         shell: bash
         run: |
-          set -e # Exit immediately if a command exits with a non-zero status.
+          set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
 
           staging_dir="${{ steps.paths.outputs.archive_dir }}"
           archive_base="${{ steps.paths.outputs.archive_base }}"
