@@ -46,7 +46,7 @@ const PromptPreview = ({ isEmbed = false }: { isEmbed?: boolean }) => {
         style={{ minHeight: '530px' }}
       >
         <Dialog open={showEnvDialog} onOpenChange={setShowEnvDialog}>
-          <DialogContent className='mt-12 sm:max-w-[825px]'>
+          <DialogContent className='mt-12 max-h-[80vh] overflow-y-auto sm:max-w-none w-fit'>
             <EnvVars />
           </DialogContent>
         </Dialog>

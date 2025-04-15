@@ -8,6 +8,7 @@ import { ThemeProvider } from 'next-themes'
 import '../App.css'
 import { envVarsAtom } from '../shared/baml-project-panel/atoms'
 import { useState } from 'react'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 
 interface JotaiProviderProps {
   envVars: Record<string, string>
@@ -133,6 +134,27 @@ export const TableWith100EnvVars = {
         }}
       >
         <Story />
+      </JotaiStorybookProvider>
+    ),
+  ],
+}
+
+export const TableWith100EnvVarsInDialog = {
+  decorators: [
+    (Story: React.FC) => (
+      <JotaiStorybookProvider
+        envVars={{
+          ANTHROPIC_API_KEY: 'sk-ant456',
+          COHERE_API_KEY: 'sk-coh789',
+          OPENAI_API_KEY: 'sk-test123',
+          ...Object.fromEntries(Array.from({ length: 100 }, (_, i) => `VAR_${i}`).map((key) => [key, `value_${key}`])),
+        }}
+      >
+        <Dialog open={true} onOpenChange={() => {}}>
+          <DialogContent className='mt-12 max-h-[80vh] overflow-y-auto sm:max-w-none w-fit'>
+            <Story />
+          </DialogContent>
+        </Dialog>
       </JotaiStorybookProvider>
     ),
   ],
