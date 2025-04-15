@@ -101,7 +101,6 @@ const useRunTests = (maxBatchSize = 5) => {
               clearHighlights() // Clear highlights on error
               return
             }
-            console.log('---ENVVARSDEBUG rt', rt)
 
             const startTime = performance.now()
             setState(test, { status: 'running' })
