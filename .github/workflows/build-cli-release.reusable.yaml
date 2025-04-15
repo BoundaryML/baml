@@ -58,6 +58,16 @@ jobs:
       RUST_BACKTRACE: 1
       
     steps:
+      - name: Install node.js for GitHub Actions
+        if: contains(matrix._.os, 'ubuntu')
+        run: |
+          apt-get install -y curl ca-certificates &&
+          # Install a Node.js version that works in older Ubuntu containers (read: does not require very recent glibc)
+          NODE_VERSION=v20.18.1 &&
+          NODE_TAR_FILE=node-$NODE_VERSION-linux-x64-glibc-217.tar.gz &&
+          NODE_URL=https://unofficial-builds.nodejs.org/download/release/$NODE_VERSION/$NODE_TAR_FILE &&
+          curl -Lo /tmp/$NODE_TAR_FILE $NODE_URL &&
+          tar -C /__e/node20 -x --strip-components=1 -f /tmp/$NODE_TAR_FILE
       - uses: actions/checkout@v4
       
       - uses: dtolnay/rust-toolchain@stable
@@ -104,7 +114,7 @@ jobs:
         shell: bash
         run: |
           echo "version: ${{ inputs.version }}"
-          if [ "${{ matrix._.os }}" = "windows-latest" ]; then
+          if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
             bin="engine/target/${{ matrix._.target }}/release/baml-cli.exe"
           else
             bin="engine/target/${{ matrix._.target }}/release/baml-cli"
@@ -119,7 +129,8 @@ jobs:
           version_name="${{ inputs.version || 'dev' }}"
           archive_base="baml-cli-${version_name}-${{ matrix._.target }}"
           echo "archive_base=$archive_base" >> $GITHUB_OUTPUT
-          echo "archive_dir=./${archive_base}" >> $GITHUB_OUTPUT # Directory to create for staging files
+          # Directory to create for staging files
+          echo "archive_dir=./${archive_base}" >> $GITHUB_OUTPUT 
 
       # Print determined paths for debugging
       - name: Print artifact details
