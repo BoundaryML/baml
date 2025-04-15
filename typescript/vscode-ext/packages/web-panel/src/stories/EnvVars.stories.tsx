@@ -158,3 +158,19 @@ export const TableWith100EnvVarsInDialog = {
     ),
   ],
 }
+
+export const VeryLongEnvVarNameInDialog = {
+  decorators: [
+    (Story: React.FC) => (
+      <JotaiStorybookProvider
+        envVars={{
+          ANTHROPIC_API_KEY: 'line1\nline2\nline3',
+          LONG_ENV_VAR_NAME_THAT_EXCEEDS_MAX_WIDTH_OF_THE_TABLE_CELL: 'sk-test123',
+          OPENAI_API_KEY: 'sk-test123',
+        }}
+      >
+        <EnvironmentVariablesDialog showEnvDialog={true} setShowEnvDialog={() => {}} />
+      </JotaiStorybookProvider>
+    ),
+  ],
+}

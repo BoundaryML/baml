@@ -281,7 +281,7 @@ export const EnvironmentVariablesPanel: React.FC = () => {
                           type={env.hidden ? 'password' : 'text'}
                           value={typeof env.value === 'string' ? escapeValue(env.value) : ''}
                           onChange={(e) => updateEnvVar(index, unescapeValue(e.target.value))}
-                          className='h-6 text-xs font-mono placeholder:font-sans'
+                          className='h-6 text-xs font-mono placeholder:font-sans min-w-32'
                           placeholder={env.required && !env.value ? '<unset>' : undefined}
                           autoComplete='off'
                           data-1p-ignore
