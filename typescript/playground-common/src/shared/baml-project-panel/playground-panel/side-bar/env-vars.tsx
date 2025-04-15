@@ -29,14 +29,21 @@ import { motion } from 'motion/react'
 
 const envVarVisibilityAtom = atom<Record<string, boolean>>({})
 
-const REQUIRED_ENV_VAR_UNSET_WARNING = 'Clients may fail if this is not set'
+const REQUIRED_ENV_VAR_UNSET_WARNING = 'Your BAML clients may fail if this is not set'
 
-const renderedEnvVarsAtom = atom((get) => {
-  const envVars = get(envVarsAtom)
+interface EnvVarEntry {
+  key: string
+  value: string | undefined
+  required: boolean
+  hidden: boolean
+}
+
+const renderedEnvVarsAtom = atom<EnvVarEntry[]>((get) => {
+  const envVars = get(envVarsAtom) as Record<string, string>
   const requiredEnvVars = get(requiredEnvVarsAtom)
   const visibility = get(envVarVisibilityAtom)
 
-  const vars = Object.entries(envVars)
+  const vars: EnvVarEntry[] = Object.entries(envVars)
     .filter(([key]) => key !== 'BOUNDARY_PROXY_URL')
     .map(([key, value]) => ({
       key,
@@ -113,7 +120,7 @@ function EnvVarStatus({ value, required }: { value?: string; required: boolean }
             <Check className='h-4 w-4 text-green-500 flex-shrink-0' />
           </TooltipTrigger>
           <TooltipContent side='top' className='text-xs'>
-            Required by one of your BAML clients
+            Used by one of your BAML clients
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
