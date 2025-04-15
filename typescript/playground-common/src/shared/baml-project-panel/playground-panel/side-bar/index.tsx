@@ -1,9 +1,7 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
 import { cn } from '@/lib/utils'
-import { Dialog, DialogContent } from '@radix-ui/react-dialog'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import {
   AlertTriangle,
@@ -13,7 +11,6 @@ import {
   FlaskConical,
   Play,
   Search,
-  Settings,
   XCircle,
 } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -38,10 +35,6 @@ interface FunctionData {
   tests: string[]
 }
 
-interface SidepanelProps {
-  functions: FunctionData[]
-  searchTerm: string
-}
 const functionsAtom = atom((get) => {
   const runtimeState = get(runtimeStateAtom)
   if (runtimeState === undefined) {
@@ -150,12 +143,6 @@ export default function CustomSidebar({ isEmbed = false }: { isEmbed?: boolean }
               </div>
             </ScrollArea>
           </ResizablePanel>
-          {/* <ResizableHandle withHandle />
-          <ResizablePanel defaultSize={25}>
-            <ScrollArea className="h-full" type="always">
-              <EnvVars />
-            </ScrollArea>
-          </ResizablePanel> */}
         </ResizablePanelGroup>
       </div>
     </div>
