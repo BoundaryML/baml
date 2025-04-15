@@ -27,7 +27,7 @@ import {
 } from '../prompt-preview/test-panel/atoms'
 import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner'
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils'
-import EnvVars from './env-vars'
+import { EnvironmentVariablesDialog, EnvironmentVariablesPanel } from './env-vars'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { atomWithStorage } from 'jotai/utils'
 import { vscode } from '../../vscode'

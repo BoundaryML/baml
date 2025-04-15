@@ -130,7 +130,7 @@ function EnvVarStatus({ value, required }: { value?: string; required: boolean }
   return <div />
 }
 
-export default function EnvVariablesManager() {
+export const EnvironmentVariablesPanel: React.FC = () => {
   const envVars = useAtomValue(renderedEnvVarsAtom)
   const setEnvVars = useSetAtom(envVarsAtom)
   const setVisibility = useSetAtom(envVarVisibilityAtom)
@@ -402,5 +402,18 @@ export default function EnvVariablesManager() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export const EnvironmentVariablesDialog: React.FC<{
+  showEnvDialog: boolean
+  setShowEnvDialog: (show: boolean) => void
+}> = ({ showEnvDialog, setShowEnvDialog }) => {
+  return (
+    <Dialog open={showEnvDialog} onOpenChange={setShowEnvDialog}>
+      <DialogContent className='mt-12 max-h-[80vh] overflow-y-auto sm:max-w-none w-fit'>
+        <EnvironmentVariablesPanel />
+      </DialogContent>
+    </Dialog>
   )
 }

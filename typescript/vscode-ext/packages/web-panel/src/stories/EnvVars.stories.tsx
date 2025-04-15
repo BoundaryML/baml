@@ -2,7 +2,10 @@ import { expect } from '@storybook/test'
 import { DevTools } from 'jotai-devtools'
 import 'jotai-devtools/styles.css'
 import { atom, createStore, useAtomValue, useSetAtom } from 'jotai'
-import { default as EnvVars } from '../shared/baml-project-panel/playground-panel/side-bar/env-vars'
+import {
+  EnvironmentVariablesDialog,
+  EnvironmentVariablesPanel,
+} from '../shared/baml-project-panel/playground-panel/side-bar/env-vars'
 import { Provider as JotaiProvider } from 'jotai'
 import { ThemeProvider } from 'next-themes'
 import '../App.css'
@@ -27,7 +30,7 @@ const WrappedEnvVars: React.FC = () => {
     <div>
       <ThemeProvider attribute='class' defaultTheme='dark' enableSystem={false} disableTransitionOnChange={true}>
         <div className='flex gap-8 items-start'>
-          <EnvVars />
+          <EnvironmentVariablesPanel />
           <div className='p-4 bg-[#1e1e1e] rounded-lg min-w-[300px]'>
             <h3 className='mb-2 text-sm font-mono'>JSON.stringify(useAtomValue(envVarsAtom))</h3>
             <pre className='text-xs'>{JSON.stringify(envVars, null, 2)}</pre>
@@ -150,11 +153,7 @@ export const TableWith100EnvVarsInDialog = {
           ...Object.fromEntries(Array.from({ length: 100 }, (_, i) => `VAR_${i}`).map((key) => [key, `value_${key}`])),
         }}
       >
-        <Dialog open={true} onOpenChange={() => {}}>
-          <DialogContent className='mt-12 max-h-[80vh] overflow-y-auto sm:max-w-none w-fit'>
-            <Story />
-          </DialogContent>
-        </Dialog>
+        <EnvironmentVariablesDialog showEnvDialog={true} setShowEnvDialog={() => {}} />
       </JotaiStorybookProvider>
     ),
   ],
