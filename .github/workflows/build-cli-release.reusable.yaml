@@ -29,9 +29,9 @@ jobs:
       matrix:
         _:
           # Always include these targets
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-musl
             static: true
           - os: macos-14
@@ -43,9 +43,9 @@ jobs:
           - os: windows-2022
             target: aarch64-pc-windows-msvc
           # ARM targets (will be conditionally skipped if not needed)
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             target: aarch64-unknown-linux-musl
 
     
@@ -76,6 +76,11 @@ jobs:
           curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
           tar xf cross-x86_64-unknown-linux-musl.tar.gz
           echo "CARGO=cross" >> $GITHUB_ENV
+
+      - name: Check GLIBC version
+        if: contains(matrix._.target, 'linux')
+        run: |
+          ldd --version
 
       - uses: Swatinem/rust-cache@v2
         with:
