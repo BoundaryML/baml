@@ -48,8 +48,9 @@ jobs:
           - os: ubuntu-22.04
             target: aarch64-unknown-linux-musl
 
-    # Run Linux builds inside a manylinux container for better GLIBC compatibility
-    container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux2014_x86_64' || 'quay.io/pypa/manylinux2014_aarch64') || '' }}
+    # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
+    # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
+    container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'quay.io/pypa/manylinux_2_28_aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
     env:
       CROSS_VERSION: v0.2.5
@@ -58,16 +59,6 @@ jobs:
       RUST_BACKTRACE: 1
       
     steps:
-      - name: Install node.js for GitHub Actions
-        if: contains(matrix._.os, 'ubuntu')
-        run: |
-          apt-get install -y curl ca-certificates &&
-          # Install a Node.js version that works in older Ubuntu containers (read: does not require very recent glibc)
-          NODE_VERSION=v20.18.1 &&
-          NODE_TAR_FILE=node-$NODE_VERSION-linux-x64-glibc-217.tar.gz &&
-          NODE_URL=https://unofficial-builds.nodejs.org/download/release/$NODE_VERSION/$NODE_TAR_FILE &&
-          curl -Lo /tmp/$NODE_TAR_FILE $NODE_URL &&
-          tar -C /__e/node20 -x --strip-components=1 -f /tmp/$NODE_TAR_FILE
       - uses: actions/checkout@v4
       
       - uses: dtolnay/rust-toolchain@stable
