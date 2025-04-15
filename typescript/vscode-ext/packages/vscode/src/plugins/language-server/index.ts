@@ -396,6 +396,7 @@ const plugin: BamlVSCodePlugin = {
     let serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', targetTriple, serverExecutableName))
     // account for windows
     const devServerPath = context.asAbsolutePath(path.join('vscode', 'server', serverExecutableName)) // Adjust dev path if necessary
+    console.log('devServerPath', devServerPath)
 
     // If the dev server file exists, overwrite serverAbsolutePath with it for local development.
     if (fs.existsSync(devServerPath)) {
