@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.84.0](https://github.com/boundaryml/baml/compare/0.83.0..0.84.0) - 2025-04-16
+
+### Documentation
+
+- document `aws sso login` support (#1753) - ([ea0ddd1](https://github.com/boundaryml/baml/commit/ea0ddd1f800ca445de0be2a250fe0d37863d4ac7)) - Samuel Lijin
+
+### Features
+- New LSP Rust server (#1465) - ([bab6cc9](https://github.com/boundaryml/baml/commit/bab6cc9a8c692c0e02ecfaab6a1b983795d51875)) - Greg Hale
+- Add BETA support for go (#1744) - ([b623e76](https://github.com/boundaryml/baml/commit/b623e76973a2788fcf2930408ad399975d46db0c)) - hellovai
+- add stripe and propel webhook types (#1762) - ([e018d10](https://github.com/boundaryml/baml/commit/e018d10c6d821a3e937adae3ef295f63eb5960f0)) - Samuel Lijin
+- allow copy-pasting a .env file into vscode (#1770) - ([bd449f0](https://github.com/boundaryml/baml/commit/bd449f096bc3c30281544716cf9fd1cb606e0e94)) - Samuel Lijin
+- add explicit handling for newlines in env vars (#1775) - ([b2dc8d0](https://github.com/boundaryml/baml/commit/b2dc8d054429ad4663648dd72561793264e36cc0)) - Samuel Lijin
+- handle edge cases in env var rendering (#1786) - ([427a6db](https://github.com/boundaryml/baml/commit/427a6db3ee63f4d9a9e2cfce5f171bda32e6d19e)) - Samuel Lijin
+- LLM function composition (#1722) - ([63b4e44](https://github.com/boundaryml/baml/commit/63b4e44695d51b14d3cf18218d2815bca49c73c9)) - Greg Hale
+
+### Bugfixes
+- Use `AnyValue: {}` for the `any` type in OpenAPI (#1773) - ([145e887](https://github.com/boundaryml/baml/commit/145e88708eafe0437b58305d85ff6cb9fb6be42d)) - Antonio Sarosi
+- [bug-fix] Fixed issue with enums not rendering in the prompt for some types (#1769) - ([857de40](https://github.com/boundaryml/baml/commit/857de4008186101bcd87d50f8776075455b22f9d)) - hellovai
+- Parser for openai must have `created` as an optional field (#1778) - ([db2a0dc](https://github.com/boundaryml/baml/commit/db2a0dc02b1bb73aaf81ab9f16e522a6dbfe578b)) - hellovai
+- Fix issue where shorthand clients always had missing api keys (#1787) - ([39b7959](https://github.com/boundaryml/baml/commit/39b7959f4223cbea26f6dbfb461697dcac43771b)) - aaronvg
+
+
 ## [0.83.0](https://github.com/boundaryml/baml/compare/0.82.0..0.83.0) - 2025-04-09
 
 
