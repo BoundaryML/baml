@@ -117,7 +117,7 @@ tokio = { version = "1", default-features = false, features = [
 ] }
 
 [workspace.package]
-version = "0.84.2"
+version = "0.84.3"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"
