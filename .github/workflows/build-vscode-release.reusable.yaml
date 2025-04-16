@@ -60,7 +60,7 @@ jobs:
       - name: Download specific CLI artifact for ${{ matrix.code-target }}
         uses: actions/download-artifact@v4
         with:
-          name: ${{ steps.cli_artifact.outputs.artifact_name }}
+          name: baml-cli-${{ matrix.rust-target }}
           path: cli-artifact-${{ matrix.code-target }} 
           # Unique path per job
         # Add error handling if the specific artifact isn't found
