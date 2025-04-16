@@ -154,7 +154,7 @@ jobs:
           # Create a unique artifact name based on OS (e.g., libbaml-cffi-linux)
           name: libbaml-cffi-${{ steps.cffi_info.outputs.artifact_suffix }}
           # Path to the built library file within the target directory
-          path: engine/target/release/${{ steps.cffi_info.outputs.lib_name }}
+          path: engine/target/${{ matrix._.target }}/release/${{ steps.cffi_info.outputs.lib_name }}
           if-no-files-found: error # Fail if the library file doesn't exist
       
       # Determine binary path and archive name
