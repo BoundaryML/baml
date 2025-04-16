@@ -29,9 +29,9 @@ jobs:
       matrix:
         _:
           # Always include these targets
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-musl
             static: true
           - os: macos-14
@@ -43,14 +43,14 @@ jobs:
           - os: windows-2022
             target: aarch64-pc-windows-msvc
           # ARM targets (will be conditionally skipped if not needed)
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: aarch64-unknown-linux-musl
 
     # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
     # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
-    container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
+    # container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
     
     env:
@@ -148,7 +148,7 @@ jobs:
 
       # Create archives with proper format
       - name: Create archive (Windows)
-        if: matrix._.os == 'windows-latest'
+        if: matrix._.os == 'windows-2022'
         shell: bash
         run: |
           set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
@@ -196,7 +196,7 @@ jobs:
           ls -l "${archive_base}".*
 
       - name: Create archive (Unix)
-        if: matrix._.os != 'windows-latest'
+        if: matrix._.os != 'windows-2022'
         shell: bash
         run: |
           set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
@@ -261,4 +261,4 @@ jobs:
         with:
           name: baml-cli-${{ matrix._.target }}
           path: |
-            ${{ matrix._.os == 'windows-latest' && format('engine/target/{0}/release/baml-cli.exe', matrix._.target) || format('engine/target/{0}/release/baml-cli', matrix._.target) }}
+            ${{ matrix._.os == 'windows-2022' && format('engine/target/{0}/release/baml-cli.exe', matrix._.target) || format('engine/target/{0}/release/baml-cli', matrix._.target) }}
