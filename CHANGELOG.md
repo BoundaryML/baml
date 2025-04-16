@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.84.1](https://github.com/boundaryml/baml/compare/0.84.0..0.84.1) - 2025-04-16
+
+
+### Bugfixes
+- [LSP] Fix issue where vscode-generated baml_client would have stale data (#1791) - ([93eb192](https://github.com/boundaryml/baml/commit/93eb192aa5ef1ed821393606c2f9b97dff552fbb)) - aaronvg
+- Bump version to 0.84.1 - ([074a517](https://github.com/boundaryml/baml/commit/074a5171c2bd350133abe047766dbd057bc00d0b)) - Aaron Villalpando
+
 ## [0.84.0](https://github.com/boundaryml/baml/compare/0.83.0..0.84.0) - 2025-04-16
 
 ### Documentation
