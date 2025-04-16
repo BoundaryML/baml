@@ -117,10 +117,14 @@ jobs:
         run: >
           ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
 
       # Determine CFFI library name and artifact suffix based on OS
       - name: Set CFFI Lib Info
         id: cffi_info
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
         shell: bash
         run: |
           if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
@@ -150,6 +154,8 @@ jobs:
       # Upload the CFFI library for this specific target
       - name: Upload CFFI Library Artifact
         uses: actions/upload-artifact@v4
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
         with:
           # Create a unique artifact name based on OS (e.g., libbaml-cffi-linux)
           name: libbaml-cffi-${{ matrix._.target }}-${{ steps.cffi_info.outputs.artifact_suffix }}
