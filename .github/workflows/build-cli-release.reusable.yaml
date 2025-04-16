@@ -127,16 +127,28 @@ jobs:
         if: matrix._.os != 'windows-2022'
         shell: bash
         run: |
+          target="${{ matrix._.target }}"
           if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
-            echo "lib_name=libbaml_cffi.dll" >> $GITHUB_OUTPUT
-            echo "artifact_suffix=windows" >> $GITHUB_OUTPUT
+            # This case is currently excluded by the 'if' condition, but kept for completeness
+            base_name="libbaml_cffi.dll"
+            suffix="windows"
           elif [[ "${{ matrix._.os }}" == *"macos"* ]]; then
-            echo "lib_name=libbaml_cffi.dylib" >> $GITHUB_OUTPUT
-            echo "artifact_suffix=darwin" >> $GITHUB_OUTPUT
+            base_name="libbaml_cffi.dylib"
+            suffix="darwin"
           else # Linux
-            echo "lib_name=libbaml_cffi.so" >> $GITHUB_OUTPUT
-            echo "artifact_suffix=linux" >> $GITHUB_OUTPUT
+            base_name="libbaml_cffi.so"
+            suffix="linux"
           fi
+          # Extract extension
+          extension="${base_name##*.}"
+          # Construct new name: libbaml_cffi-${target}.${extension}
+          new_name="libbaml_cffi-${target}.${extension}"
+
+          echo "lib_name=${base_name}" >> $GITHUB_OUTPUT
+          echo "new_lib_name=${new_name}" >> $GITHUB_OUTPUT
+          echo "artifact_suffix=${suffix}" >> $GITHUB_OUTPUT
+          echo "Original Filename: ${base_name}"
+          echo "New Filename: ${new_name}"
 
 
       # List target directories to debug build outputs
@@ -151,16 +163,48 @@ jobs:
           
           echo "Listing target/${{ matrix._.target }}/release directory:"
           ls -la engine/target/${{ matrix._.target }}/release/
+
+      # Rename the CFFI library file
+      - name: Rename CFFI Library
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
+        shell: bash
+        run: |
+          set -x # enable debug printing
+          release_dir="engine/target/${{ matrix._.target }}/release"
+          original_file="${release_dir}/${{ steps.cffi_info.outputs.lib_name }}"
+          new_file="${release_dir}/${{ steps.cffi_info.outputs.new_lib_name }}"
+
+          echo "Checking if original file exists: ${original_file}"
+          if [ ! -f "$original_file" ]; then
+            echo "Error: CFFI library file not found at ${original_file}"
+            # List directory contents again for debugging
+            ls -la "$release_dir"
+            exit 1
+          fi
+
+          echo "Renaming ${original_file} to ${new_file}"
+          mv "$original_file" "$new_file"
+
+          echo "Checking if new file exists: ${new_file}"
+          if [ ! -f "$new_file" ]; then
+             echo "Error: Failed to rename CFFI library file. New file not found at ${new_file}"
+             ls -la "$release_dir"
+             exit 1
+          fi
+          echo "Rename successful. New listing:"
+          ls -la "$release_dir"
+
       # Upload the CFFI library for this specific target
       - name: Upload CFFI Library Artifact
         uses: actions/upload-artifact@v4
         # Skip this step on Windows runners
         if: matrix._.os != 'windows-2022'
         with:
-          # Create a unique artifact name based on OS (e.g., libbaml-cffi-linux)
-          name: libbaml-cffi-${{ matrix._.target }}-${{ steps.cffi_info.outputs.artifact_suffix }}
-          # Path to the built library file within the target directory
-          path: engine/target/${{ matrix._.target }}/release/${{ steps.cffi_info.outputs.lib_name }}
+          # Artifact name uses the target name for uniqueness (as decided previously)
+          name: libbaml-cffi-${{ matrix._.target }}
+          # Path now points to the *renamed* library file
+          path: engine/target/${{ matrix._.target }}/release/${{ steps.cffi_info.outputs.new_lib_name }}
           if-no-files-found: error # Fail if the library file doesn't exist
       
       # Determine binary path and archive name

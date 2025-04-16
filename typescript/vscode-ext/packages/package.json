@@ -1,6 +1,6 @@
 {
-  "name": "test-extension-preview",
-  "displayName": "Test - development",
+  "name": "baml-extension",
+  "displayName": "Baml",
   "description": "BAML is a DSL for AI applications.",
   "version": "0.83.0",
   "publisher": "Boundary",
