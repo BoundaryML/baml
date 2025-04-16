@@ -75,20 +75,25 @@ jobs:
           target: ${{ matrix._.target }}
       
       # Use cross for Linux cross-compilation
+      # - name: Use Cross
+      #   if: matrix._.os == 'ubuntu-latest' && matrix._.target != ''
+      #   shell: bash
+      #   run: |
+      #     # In the past, new releases of 'cross' have broken CI. So for now, we
+      #     # pin it. We also use their pre-compiled binary releases because cross
+      #     # has over 100 dependencies and takes a bit to compile.
+      #     dir="$RUNNER_TEMP/cross-download"
+      #     mkdir "$dir"
+      #     echo "$dir" >> $GITHUB_PATH
+      #     cd "$dir"
+      #     curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
+      #     tar xf cross-x86_64-unknown-linux-musl.tar.gz
+      #     echo "CARGO=cross" >> $GITHUB_ENV
       - name: Use Cross
-        if: matrix._.os == 'ubuntu-latest' && matrix._.target != ''
-        shell: bash
+        if: matrix._.os == 'ubuntu-latest'
         run: |
-          # In the past, new releases of 'cross' have broken CI. So for now, we
-          # pin it. We also use their pre-compiled binary releases because cross
-          # has over 100 dependencies and takes a bit to compile.
-          dir="$RUNNER_TEMP/cross-download"
-          mkdir "$dir"
-          echo "$dir" >> $GITHUB_PATH
-          cd "$dir"
-          curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
-          tar xf cross-x86_64-unknown-linux-musl.tar.gz
-          echo "CARGO=cross" >> $GITHUB_ENV
+          cargo install cross
+          echo 'CARGO=cross' >> "$GITHUB_ENV"
       
       - name: Set target variables
         shell: bash
@@ -111,7 +116,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: "v2-rust"
+          prefix-key: "v3-rust"
 
       # Build the CLI - Always use static-ssl features
       - name: Build CLI Binary
