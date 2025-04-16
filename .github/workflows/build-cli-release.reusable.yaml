@@ -112,6 +112,32 @@ jobs:
           --features static-ssl
           --no-default-features
         working-directory: engine
+
+      # Determine CFFI library name and artifact suffix based on OS
+      - name: Set CFFI Lib Info
+        id: cffi_info
+        shell: bash
+        run: |
+          if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
+            echo "lib_name=libbaml_cffi.dll" >> $GITHUB_OUTPUT
+            echo "artifact_suffix=windows" >> $GITHUB_OUTPUT
+          elif [[ "${{ matrix._.os }}" == *"macos"* ]]; then
+            echo "lib_name=libbaml_cffi.dylib" >> $GITHUB_OUTPUT
+            echo "artifact_suffix=darwin" >> $GITHUB_OUTPUT
+          else # Linux
+            echo "lib_name=libbaml_cffi.so" >> $GITHUB_OUTPUT
+            echo "artifact_suffix=linux" >> $GITHUB_OUTPUT
+          fi
+
+      # Upload the CFFI library for this specific target
+      - name: Upload CFFI Library Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          # Create a unique artifact name based on OS (e.g., libbaml-cffi-linux)
+          name: libbaml-cffi-${{ steps.cffi_info.outputs.artifact_suffix }}
+          # Path to the built library file within the target directory
+          path: engine/target/${{ matrix._.target }}/release/${{ steps.cffi_info.outputs.lib_name }}
+          if-no-files-found: error # Fail if the library file doesn't exist
       
       # Determine binary path and archive name
       - name: Set binary and archive paths

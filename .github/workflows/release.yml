@@ -306,16 +306,27 @@ jobs:
           # Download into this directory
           path: cli-artifacts 
           merge-multiple: true # Merge artifacts from different OS/arch into the path
-      # - name: Create fake CLI artifacts for testing
-      #   run: |
-      #     mkdir -p cli-artifacts/fake-target
-      #     echo "This is a fake artifact" > cli-artifacts/fake-target/baml-cli-fake-artifact.txt
-        
+
+      # Download all CFFI library artifacts produced by the build-cli job
+      - name: Download all libbaml-cffi artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Match artifacts starting with 'libbaml-cffi-'
+          pattern: libbaml-cffi-* 
+          # Download into a separate directory
+          path: cffi-artifacts 
+          merge-multiple: true # Merge artifacts from different OS into the path
 
       - name: List downloaded CLI artifacts
         run: |
           echo "Downloaded CLI artifacts:"
           ls -R cli-artifacts/
+
+      # Add step to list downloaded CFFI artifacts for verification
+      - name: List downloaded CFFI artifacts
+        run: |
+          echo "Downloaded CFFI artifacts:"
+          ls -R cffi-artifacts/
 
       # Always create the changelog file, it will be empty for non-releases
       - name: Initialize Changelog File
@@ -344,8 +355,10 @@ jobs:
           # Set draft and prerelease based on whether it's a release tag
           draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
           prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
-          # Upload all files from the cli-artifacts directory and its subdirectories
-          files: cli-artifacts/**/*
+          # Upload all files from the cli-artifacts and cffi-artifacts directories
+          files: |
+            cli-artifacts/**/*
+            cffi-artifacts/**/*
           fail_on_unmatched_files: true
           # Use default GITHUB_TOKEN
           token: ${{ secrets.GITHUB_TOKEN }}
