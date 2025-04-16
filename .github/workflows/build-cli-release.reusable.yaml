@@ -113,6 +113,11 @@ jobs:
           --no-default-features
         working-directory: engine
 
+      - name: Build CFFI Library
+        run: >
+          ${{ env.CARGO }} build --release -p baml-cffi ${{ env.TARGET_FLAGS }}
+        working-directory: engine
+
       # Determine CFFI library name and artifact suffix based on OS
       - name: Set CFFI Lib Info
         id: cffi_info
