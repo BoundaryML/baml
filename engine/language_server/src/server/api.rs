@@ -83,7 +83,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     let project = session
                         .project_db_for_path(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
-                    project.lock().unwrap().update_runtime(Some(notifier));
+                    project.lock().unwrap().update_runtime(Some(notifier))?;
 
                     // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
                     let diagnostics = file_diagnostics(project.clone(), &url);
@@ -183,11 +183,15 @@ pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Vec<Task<'a>>
         }
         // --- DidSaveTextDocument now uses the simple local task helper ---
         notification::DidSaveTextDocument::METHOD => {
+            tracing::info!("Did save text document---------");
             handle_notification_result_error::<notification::DidSaveTextDocument>(
-                background_notification_task::<notification::DidSaveTextDocument>(
-                    notif,
-                    BackgroundSchedule::LatencySensitive,
-                ),
+                // Do not use background notifs yet, as baml_client may not have an updated view of the project files
+                // See the did_save_text_document.rs file for more details
+                // background_notification_task::<notification::DidSaveTextDocument>(
+                //     notif,
+                //     BackgroundSchedule::LatencySensitive,
+                // ),
+                local_notification_task::<notification::DidSaveTextDocument>(notif),
             )
         }
 

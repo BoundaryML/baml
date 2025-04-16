@@ -27,6 +27,7 @@ import { bamlConfig, getConfig } from './bamlConfig'
 
 export { bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line
+let clientReady = false
 
 let client: LanguageClient
 let serverModule: string
@@ -44,6 +45,10 @@ export const requestDiagnostics = async () => {
   }
   // if not a baml file return
   if (!currentFile.endsWith('.baml')) {
+    return
+  }
+  if (!clientReady) {
+    console.warn('client not ready')
     return
   }
   await client?.sendRequest('requestDiagnostics', { projectId: currentFile })
@@ -141,6 +146,7 @@ const activateClient = (
     .onReady()
     .then(() => {
       console.log('client ready')
+      clientReady = true
       client.createDefaultErrorHandler(2)
       requestDiagnostics()
       client.onNotification('baml/showLanguageServerOutput', () => {

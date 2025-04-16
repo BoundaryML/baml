@@ -111,7 +111,7 @@ impl<S> tracing_subscriber::layer::Filter<S> for LogLevelFilter {
         meta: &tracing::Metadata<'_>,
         _: &tracing_subscriber::layer::Context<'_, S>,
     ) -> bool {
-        let filter = if meta.target().starts_with("ruff") {
+        let filter = if meta.target().starts_with("baml") {
             self.filter.trace_level()
         } else {
             tracing::Level::INFO

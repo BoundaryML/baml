@@ -197,6 +197,12 @@ impl Session {
 
         Ok(())
     }
+    pub fn clear_unsaved_files(&mut self) {
+        tracing::info!("Clearing unsaved files");
+        for (_folder, project) in self.projects_by_workspace_folder.lock().unwrap().iter_mut() {
+            project.lock().unwrap().baml_project.unsaved_files.clear();
+        }
+    }
 
     /// Creates a document snapshot with the URL referencing the document to snapshot.
     pub fn take_snapshot(&self, url: Url) -> Option<DocumentSnapshot> {
