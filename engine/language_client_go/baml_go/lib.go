@@ -34,7 +34,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.84.1"
+	VERSION            = "0.84.2"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
