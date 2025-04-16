@@ -1,3 +1,4 @@
+#[cfg(target_arch = "wasm32")]
 pub(crate) mod aws_cred_bridge;
 
 #[cfg(target_arch = "wasm32")]
