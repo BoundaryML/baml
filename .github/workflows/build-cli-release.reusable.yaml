@@ -63,11 +63,11 @@ jobs:
       
     steps:
       - uses: actions/checkout@v4
-      - name: Install packages (Ubuntu)
-        if: matrix._.os == 'ubuntu-latest'
-        shell: bash
-        run: |
-          ci/ubuntu-install-packages
+      # - name: Install packages (Ubuntu)
+      #   if: matrix._.os == 'ubuntu-latest'
+      #   shell: bash
+      #   run: |
+      #     ci/ubuntu-install-packages
       
       - uses: dtolnay/rust-toolchain@stable
         with:
