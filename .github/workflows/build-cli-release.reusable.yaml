@@ -50,7 +50,7 @@ jobs:
 
     # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
     # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
-    # container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
+    container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
     
     env:
@@ -74,21 +74,6 @@ jobs:
           toolchain: stable
           target: ${{ matrix._.target }}
       
-      # Use cross for Linux cross-compilation
-      # - name: Use Cross
-      #   if: matrix._.os == 'ubuntu-latest' && matrix._.target != ''
-      #   shell: bash
-      #   run: |
-      #     # In the past, new releases of 'cross' have broken CI. So for now, we
-      #     # pin it. We also use their pre-compiled binary releases because cross
-      #     # has over 100 dependencies and takes a bit to compile.
-      #     dir="$RUNNER_TEMP/cross-download"
-      #     mkdir "$dir"
-      #     echo "$dir" >> $GITHUB_PATH
-      #     cd "$dir"
-      #     curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
-      #     tar xf cross-x86_64-unknown-linux-musl.tar.gz
-      #     echo "CARGO=cross" >> $GITHUB_ENV
       - name: Use Cross
         if: matrix._.os == 'ubuntu-latest'
         run: |
