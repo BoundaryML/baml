@@ -29,11 +29,8 @@ impl SyncRequestHandler for Rename {
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        session
-            .ensure_project_db_for_baml_file(&url)
-            .internal_error()?;
         let project = session
-            .project_db_for_path(path)
+            .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
 
         let res = {

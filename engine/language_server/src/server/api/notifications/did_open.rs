@@ -24,9 +24,14 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
         tracing::info!("DidOpenTextDocumentHandler");
 
         let url = params.text_document.uri;
-        session
-            .ensure_project_db_for_baml_file(&url)
-            .internal_error()?;
+        let file_path = url.to_file_path().internal_error()?;
+
+        let project = session.get_or_create_project(&file_path);
+        if project.is_none() {
+            tracing::error!("Failed to get or create project for path: {:?}", file_path);
+            show_err_msg!("Failed to get or create project for path: {:?}", file_path);
+        }
+
         session.reload(Some(notifier.clone())).internal_error()?;
 
         publish_session_lsp_diagnostics(&notifier, session, &url)?;

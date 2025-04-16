@@ -24,22 +24,24 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
         _requester: &mut Requester,
         params: DidChangeTextDocumentParams,
     ) -> Result<()> {
-        tracing::info!("------- DidChangeTextDocumentHandler");
+        tracing::info!("DidChangeTextDocumentHandler");
         let start_time_total = Instant::now();
 
         let url = params.text_document.uri;
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        session
-            .ensure_project_db_for_baml_file(&url)
-            .internal_error()?;
 
-        let project = session
-            .project_db_for_path_mut(path)
-            .expect("We ensured above that the project exists");
+        // Get or create the project using the unified method
+        let project = session.get_or_create_project(&path);
+        if project.is_none() {
+            tracing::error!("Failed to get or create project for path: {:?}", path);
+            show_err_msg!("Failed to get or create project for path: {:?}", path);
+        }
+
+        let project = project.unwrap();
         let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
+            DocumentKey::from_url(&project.lock().unwrap().root_path(), &url).internal_error()?;
 
         session
             .update_text_document(
@@ -52,11 +54,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
 
         tracing::info!("publishing diagnostics");
 
-        publish_diagnostics(
-            &notifier,
-            project.clone(),
-            Some(params.text_document.version),
-        )?;
+        publish_diagnostics(&notifier, project, Some(params.text_document.version))?;
 
         let elapsed = start_time_total.elapsed();
         tracing::info!("didchange total took {:?}ms", elapsed.as_millis());

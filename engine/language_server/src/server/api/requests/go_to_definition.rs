@@ -32,13 +32,8 @@ impl SyncRequestHandler for GotoDefinition {
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        session
-            .ensure_project_db_for_baml_file(
-                &params.text_document_position_params.text_document.uri,
-            )
-            .internal_error()?;
         let project = session
-            .project_db_for_path_mut(path)
+            .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
         project
             .lock()

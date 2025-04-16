@@ -19,6 +19,11 @@ use lsp_types::{TextDocumentItem, Url};
 ///   or `None` otherwise.
 pub fn find_top_level_parent(file_path: &Path) -> Option<PathBuf> {
     let mut current = file_path;
+    if let Some(file_name) = current.file_name() {
+        if file_name == "baml_src" {
+            return Some(current.to_path_buf());
+        }
+    }
     while let Some(parent) = current.parent() {
         if let Some(dir_name) = parent.file_name() {
             if dir_name == "baml_src" {

@@ -9,7 +9,7 @@ use lsp_types::{
     DidChangeTextDocumentParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
     FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use url::Url;
 
 mod diagnostics;
@@ -32,6 +32,19 @@ use super::{
     Result,
 };
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BamlFunctionSpan {
+    file_path: String,
+    start: usize,
+    end: usize,
+}
+#[derive(serde::Serialize, serde::Deserialize)]
+struct BamlFunctionResult {
+    name: String,
+    span: BamlFunctionSpan,
+}
+
+struct BamlFunctionArg {}
 // --- Add debounce duration constant ---
 const DID_CHANGE_DEBOUNCE_DURATION: Duration = Duration::from_millis(250);
 
@@ -68,6 +81,51 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                 BackgroundSchedule::LatencySensitive,
             )
         }
+        "getBAMLFunctions" => {
+            tracing::info!("getBAMLFunctions");
+            return Task::local(move |session, notifier, requester, responder| {
+                let result: anyhow::Result<(serde_json::Value,)> = (|| {
+                    let mut all_functions = Vec::new();
+                    let projects = session.baml_src_projects.lock().unwrap();
+
+                    for (_, project) in projects.iter() {
+                        let functions = project
+                            .lock()
+                            .unwrap()
+                            .baml_project
+                            .list_functions()
+                            .iter()
+                            .map(|f| BamlFunctionResult {
+                                name: f.name.clone(),
+                                span: BamlFunctionSpan {
+                                    file_path: f.span.file_path.clone(),
+                                    start: f.span.start,
+                                    end: f.span.end,
+                                },
+                            })
+                            .collect::<Vec<BamlFunctionResult>>();
+
+                        all_functions.extend(functions);
+                    }
+
+                    let result = serde_json::to_value(all_functions);
+                    if let Ok(result) = result {
+                        Ok((result,))
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "Failed to serialize functions: {:?}",
+                            result
+                        ))
+                    }
+                })();
+                if let Ok((result,)) = result {
+                    responder.respond(id, Ok(result)).unwrap();
+                } else {
+                    // no action
+                    // responder.respond(id, Err(result.unwrap_err())).unwrap();
+                }
+            });
+        }
         "requestDiagnostics" => {
             tracing::info!("---- requestDiagnostics");
             return Task::local(move |session, notifier, requester, responder| {
@@ -78,10 +136,8 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
                     let url = Url::parse(&params.project_id)
                         .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
-                    session.ensure_project_db_for_baml_file(&url)?;
-                    // tracing::info!("url: {:?}", url);
                     let project = session
-                        .project_db_for_path(url.to_file_path().unwrap())
+                        .get_or_create_project(&url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
                     project.lock().unwrap().update_runtime(Some(notifier))?;
 
@@ -228,9 +284,9 @@ fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
         };
         info!(
             "session.projects.len(): {:?}",
-            session.projects_by_workspace_folder.lock().unwrap().len()
+            session.baml_src_projects.lock().unwrap().len()
         );
-        let _db = session.project_db_for_path(path).clone();
+        let _db = session.get_or_create_project(&path).clone();
         if _db.is_none() {
             tracing::error!("Could not find project for path");
             return Box::new(|_, _| {});

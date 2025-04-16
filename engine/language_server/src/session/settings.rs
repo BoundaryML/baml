@@ -75,7 +75,7 @@ impl AllSettings {
             serde_json::from_value(options)
                 .map_err(|err| {
                     tracing::error!("Failed to deserialize initialization options: {err}. Falling back to default client settings...");
-                    show_err_msg!("Ruff received invalid client settings - falling back to default client settings.");
+                    show_err_msg!("Baml received invalid client settings - falling back to default client settings.");
                 })
                 .unwrap_or_default(),
         )
@@ -89,6 +89,8 @@ impl AllSettings {
                 workspace_settings,
             } => (global_settings, Some(workspace_settings)),
         };
+
+        tracing::info!("--- workspace_settings: {:?}", workspace_settings);
 
         Self {
             global_settings,

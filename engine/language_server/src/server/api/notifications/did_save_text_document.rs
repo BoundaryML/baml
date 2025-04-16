@@ -28,10 +28,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         session.reload(Some(notifier.clone())).internal_error()?;
         tracing::info!("About to run generator. URL path: {:?}", path);
         session
-            .ensure_project_db_for_baml_file(&url)
-            .internal_error()?;
-        session
-            .project_db_for_path_mut(path)
+            .get_or_create_project(&path)
             .expect("Ensured that a project db exists")
             .lock()
             .unwrap()

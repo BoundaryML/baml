@@ -24,12 +24,12 @@ impl SyncRequestHandler for Completion {
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        session
-            .ensure_project_db_for_baml_file(&url)
-            .internal_error()?;
+
+        // Use the unified method to get or create the project
         let project = session
-            .project_db_for_path(path)
-            .expect("Ensured that a project db exists");
+            .get_or_create_project(&path)
+            .expect("Failed to get or create project");
+
         let guard = project.lock().unwrap();
         let document_key =
             DocumentKey::from_url(&PathBuf::from(guard.root_path()), &url).internal_error()?;

@@ -3,7 +3,7 @@
 use anyhow::Context;
 use index::DocumentController;
 use itertools::any;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -37,8 +37,8 @@ pub struct Session {
     /// Used to retrieve information about open documents and settings.
     pub index: Arc<Mutex<index::Index>>,
 
-    /// Maps workspace folders to their respective project databases.
-    pub projects_by_workspace_folder: Arc<Mutex<BTreeMap<PathBuf, Arc<Mutex<Project>>>>>,
+    /// Maps baml_src directories to their respective project databases.
+    pub baml_src_projects: Arc<Mutex<HashMap<PathBuf, Arc<Mutex<Project>>>>>,
 
     /// The global position encoding, negotiated during LSP initialization.
     pub position_encoding: PositionEncoding,
@@ -50,7 +50,7 @@ impl Clone for Session {
     fn clone(&self) -> Self {
         Self {
             index: self.index.clone(),
-            projects_by_workspace_folder: self.projects_by_workspace_folder.clone(),
+            baml_src_projects: self.baml_src_projects.clone(),
             position_encoding: self.position_encoding.clone(),
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
         }
@@ -64,7 +64,7 @@ impl Session {
         global_settings: ClientSettings,
         workspace_folders: &[(Url, ClientSettings)],
     ) -> anyhow::Result<Self> {
-        let mut workspaces = BTreeMap::new();
+        let mut projects = HashMap::new();
         let index = index::Index::new(global_settings);
 
         for (url, _) in workspace_folders {
@@ -72,20 +72,29 @@ impl Session {
                 .to_file_path()
                 .map_err(|()| anyhow!("Workspace URL is not a file or directory: {:?}", url))?;
 
-            workspaces.insert(
-                workspace_path.clone(),
-                Arc::new(Mutex::new(Project::new(BamlProject {
-                    root_dir_name: workspace_path,
-                    files: HashMap::new(),
-                    unsaved_files: HashMap::new(),
-                    cached_runtime: None,
-                }))),
-            );
+            // Try to find the baml_src directory
+            if let Some(baml_src) = find_top_level_parent(&workspace_path) {
+                projects.insert(
+                    baml_src.clone(),
+                    Arc::new(Mutex::new(Project::new(BamlProject {
+                        root_dir_name: baml_src.clone(),
+                        files: HashMap::new(),
+                        unsaved_files: HashMap::new(),
+                        cached_runtime: None,
+                    }))),
+                );
+                tracing::info!(
+                    "Session::new: Added initial project for baml_src path: {:?}",
+                    baml_src
+                );
+            } else {
+                tracing::info!("Session::new: No baml_src found yet {:?}", workspace_path);
+            }
         }
 
         Ok(Self {
             position_encoding,
-            projects_by_workspace_folder: Arc::new(Mutex::new(workspaces)),
+            baml_src_projects: Arc::new(Mutex::new(projects)),
             index: Arc::new(Mutex::new(index)),
             resolved_client_capabilities: Arc::new(ResolvedClientCapabilities::new(
                 client_capabilities,
@@ -93,65 +102,73 @@ impl Session {
         })
     }
 
-    /// Returns a reference to the project's [`ProjectDatabase`] corresponding to the given path, if
-    /// any.
-    pub(crate) fn project_db_for_path(
+    /// Gets or creates a project for the given path.
+    ///
+    /// This is the primary method for working with projects, replacing the multiple
+    /// previous methods. It handles both lookup and creation in a single method.
+    ///
+    /// Returns:
+    /// - Some(Arc<Mutex<Project>>) if a project was found or created
+    /// - None if no baml_src directory could be found for the path
+    pub fn get_or_create_project(
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
     ) -> Option<Arc<Mutex<Project>>> {
-        let guard = self.projects_by_workspace_folder.lock().unwrap();
-        guard
-            .range(..=path.as_ref().to_path_buf())
-            .next_back()
-            .map(|(_, db)| db.clone())
-    }
+        // Try to find the baml_src directory
+        let baml_src = find_top_level_parent(path.as_ref())?;
 
-    /// Returns a mutable reference to the project [`ProjectDatabase`] corresponding to the given
-    /// path, if any.
-    pub(crate) fn project_db_for_path_mut(
-        &mut self,
-        path: impl AsRef<Path> + std::fmt::Debug,
-    ) -> Option<Arc<Mutex<Project>>> {
-        let guard = self.projects_by_workspace_folder.lock().unwrap();
-        guard
-            .range(..=path.as_ref().to_path_buf())
-            .next_back()
-            .map(|(_, db)| db.clone())
-    }
+        // Lock once and perform all operations within this scope
+        let mut projects = self.baml_src_projects.lock().unwrap();
 
-    /// Ensures that a project database exists for the given BAML file,
-    /// creating one if it doesn't exist.
-    pub fn ensure_project_db_for_baml_file(&mut self, url: &Url) -> anyhow::Result<()> {
-        let baml_src = find_top_level_parent(&PathBuf::from(
-            url.to_file_path()
-                .map_err(|_| anyhow::anyhow!("Failed to convert URL to path"))?,
-        ))
-        .context("Failed to find top level parent 2")?;
-        match self.project_db_for_path(&baml_src) {
-            Some(_) => Ok(()),
-            None => {
-                self.projects_by_workspace_folder.lock().unwrap().insert(
-                    baml_src.clone(),
-                    Arc::new(Mutex::new(Project::new(BamlProject {
-                        root_dir_name: baml_src,
-                        files: HashMap::new(),
-                        unsaved_files: HashMap::new(),
-                        cached_runtime: None,
-                    }))),
-                );
-                Ok(())
-            }
+        // If project exists, return it
+        if let Some(project) = projects.get(&baml_src) {
+            return Some(project.clone());
         }
+
+        // Create a new project if needed
+        tracing::info!("Creating new project for baml_src path: {:?}", baml_src);
+        let new_project = Arc::new(Mutex::new(Project::new(BamlProject {
+            root_dir_name: baml_src.clone(),
+            files: HashMap::new(),
+            unsaved_files: HashMap::new(),
+            cached_runtime: None,
+        })));
+
+        // Insert and return the new project
+        projects.insert(baml_src, new_project.clone());
+        Some(new_project)
+    }
+
+    pub fn print_baml_projects(&self) {
+        let projects = self.baml_src_projects.lock().unwrap();
+
+        let info_string = projects
+            .iter()
+            .map(|(key, project)| {
+                format!(
+                    "{}: {:?}",
+                    key.display(),
+                    project.lock().unwrap().root_path()
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        tracing::info!(
+            "{} projects_by_workspace_folder: {:?}",
+            projects.len(),
+            info_string
+        );
     }
 
     pub fn reload(&mut self, notifier: Option<Notifier>) -> anyhow::Result<()> {
-        tracing::info!("---- Reloading session");
+        tracing::info!("Reloading session");
         let project_updates: Vec<HashMap<_, _>> = self
-            .projects_by_workspace_folder
+            .baml_src_projects
             .lock()
             .unwrap()
             .iter_mut()
-            .map(|(_projet_root, project)| {
+            .map(|(_project_root, project)| {
                 let files_map = project.lock().unwrap().baml_project.load_files()?;
                 project
                     .lock()
@@ -164,22 +181,22 @@ impl Session {
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+
         let files: Vec<(DocumentKey, String)> = project_updates
             .into_iter()
-            .map(|project_files| {
+            .flat_map(|project_files| {
                 project_files
                     .into_iter()
                     .map(|(key, text_document)| (key, text_document.contents))
                     .collect::<Vec<_>>()
             })
-            .flatten()
             .collect();
 
         // Index all the files, except for the ones with unsaved changes.
         files.iter().for_each(|(file_url, file_contents)| {
             let text_document = TextDocument::new(file_contents.clone(), 0);
             let document_is_unsaved = any(
-                self.projects_by_workspace_folder.lock().unwrap().iter(),
+                self.baml_src_projects.lock().unwrap().iter(),
                 |(_, project)| {
                     project
                         .lock()
@@ -193,26 +210,29 @@ impl Session {
                 self.open_text_document(file_url.clone(), text_document);
             }
         });
-        log::info!("--- Reloaded {} files", files.len());
+        log::info!("Reloaded {} files", files.len());
 
         Ok(())
     }
+
     pub fn clear_unsaved_files(&mut self) {
         tracing::info!("Clearing unsaved files");
-        for (_folder, project) in self.projects_by_workspace_folder.lock().unwrap().iter_mut() {
+        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
             project.lock().unwrap().baml_project.unsaved_files.clear();
         }
     }
 
     /// Creates a document snapshot with the URL referencing the document to snapshot.
     pub fn take_snapshot(&self, url: Url) -> Option<DocumentSnapshot> {
-        // let key = self.key_from_url(url);
-        let project = self.project_db_for_path(url.to_file_path().ok()?)?;
+        let file_path = url.to_file_path().ok()?;
+        let project = self.get_or_create_project(&file_path)?;
+
         let document_key = DocumentKey::from_url(
             &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
             &url,
         )
         .ok()?;
+
         Some(DocumentSnapshot {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
             document_ref: self.index.lock().unwrap().make_document_ref(document_key)?,
@@ -241,7 +261,7 @@ impl Session {
                 )
             }
         };
-        for (_folder, project) in self.projects_by_workspace_folder.lock().unwrap().iter_mut() {
+        for (_folder, project) in self.baml_src_projects.lock().unwrap().iter_mut() {
             let text_document = TextDocument::new(new_contents.clone(), 0);
             project
                 .lock()
@@ -280,10 +300,10 @@ impl Session {
             };
             text_document.contents().to_string()
         };
-        let elapsed = start_time.elapsed();
+        let _elapsed = start_time.elapsed();
 
         let start_time = Instant::now();
-        self.projects_by_workspace_folder
+        self.baml_src_projects
             .lock()
             .unwrap()
             .iter_mut()
@@ -303,14 +323,14 @@ impl Session {
                         .baml_project
                         .unsaved_files
                         .insert(doc_key.clone(), text_document);
-                    let elapsed = start_time.elapsed();
+                    let _elapsed = start_time.elapsed();
 
                     project
                         .lock()
                         .unwrap()
                         .update_runtime(notifier.clone())
                         .map_err(|e| anyhow::anyhow!("Could not update runtime: {e}"))?;
-                    let elapsed = start_time.elapsed();
+                    let _elapsed = start_time.elapsed();
                 }
                 Ok::<(), anyhow::Error>(())
             })?;
@@ -355,7 +375,83 @@ impl DocumentSnapshot {
     }
 
     pub(crate) fn project(&self) -> Option<Arc<Mutex<Project>>> {
-        self.session
-            .project_db_for_path(self.document_ref.file_url().to_file_path().unwrap())
+        let file_path = self.document_ref.file_url().to_file_path().ok()?;
+        self.session.get_or_create_project(&file_path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Import items from outer module (Session, Project, etc.)
+    use crate::baml_project::{BamlProject, Project};
+    use crate::logging::{init_logging, LogLevel};
+    use crate::session::settings::ClientSettings;
+    use crate::PositionEncoding;
+    use lsp_types::ClientCapabilities;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    // Minimal setup for Session::new
+    fn create_test_session() -> Session {
+        // Use default/empty capabilities and settings for simplicity
+        let client_capabilities = ClientCapabilities::default();
+        // Assuming UTF8 is a valid variant or default for PositionEncoding
+        let position_encoding = PositionEncoding::UTF8;
+        let global_settings = ClientSettings::default();
+        let workspace_folders = vec![]; // Start with empty workspace
+
+        Session::new(
+            &client_capabilities,
+            position_encoding,
+            global_settings,
+            &workspace_folders,
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn test_get_or_create_project() {
+        init_logging(LogLevel::Info, None);
+
+        let mut session = create_test_session();
+
+        // Using paths similar to the logs
+        let path_str1 = "/Users/aaronvillalpando/Projects/baml-examples/ruby-starter/baml_src";
+        let path_str2 = "/Users/aaronvillalpando/Projects/next-app/my-app/baml_src";
+
+        let key1 = PathBuf::from(path_str1);
+        let key2 = PathBuf::from(path_str2);
+
+        // Create a project for key1
+        let project1 = session.get_or_create_project(&key1);
+        assert!(project1.is_some(), "Project should be created for key1");
+
+        // Verify that get_or_create_project returns the same project when called again
+        let project1_again = session.get_or_create_project(&key1);
+        assert!(project1_again.is_some(), "Project should be found for key1");
+
+        // Create a project for key2
+        let project2 = session.get_or_create_project(&key2);
+        assert!(project2.is_some(), "Project should be created for key2");
+
+        // Test with a file path inside key2
+        let file_path_in_key2 = key2.join("chat.baml");
+        let found_project = session.get_or_create_project(&file_path_in_key2);
+        assert!(
+            found_project.is_some(),
+            "Project should be found for file path within key2"
+        );
+
+        // Verify it's the same project
+        {
+            let unwrapped_project = found_project.unwrap();
+            let project_guard = unwrapped_project.lock().unwrap();
+            let found_root = project_guard.root_path();
+            assert_eq!(
+                found_root, key2,
+                "Expected root: {:?}, Found root: {:?}",
+                key2, found_root
+            );
+        }
     }
 }

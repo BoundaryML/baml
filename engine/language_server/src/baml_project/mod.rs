@@ -90,6 +90,15 @@ impl BamlProject {
         }
     }
 
+    pub fn list_functions(&mut self) -> Vec<BamlFunction> {
+        let runtime = self.runtime(HashMap::new());
+        if let Ok(runtime) = runtime {
+            runtime.list_functions()
+        } else {
+            vec![]
+        }
+    }
+
     pub fn check_version(
         &self,
         generator_config: &BamlGeneratorConfig,

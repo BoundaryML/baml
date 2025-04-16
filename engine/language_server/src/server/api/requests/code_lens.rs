@@ -30,12 +30,9 @@ impl SyncRequestHandler for CodeLens {
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
-        session
-            .ensure_project_db_for_baml_file(&params.text_document.uri)
-            .internal_error()?;
         // session.reload(Some(notifier)).internal_error()?;
         let project = session
-            .project_db_for_path_mut(path)
+            .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
         let fake_env = HashMap::new();
         let baml_diagnostics = match project.lock().unwrap().baml_project.runtime(fake_env) {

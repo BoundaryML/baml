@@ -1,6 +1,9 @@
 //! Scheduling, I/O, and API endpoints.
 
 use log::info;
+use lsp_types::{
+    WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
+};
 use std::num::NonZeroUsize;
 // The new PanicInfoHook name requires MSRV >= 1.82
 #[allow(deprecated)]
@@ -98,6 +101,10 @@ impl Server {
             });
             (url, settings)
         };
+        tracing::info!(
+            "--- workspace folders: {:?}",
+            init_params.workspace_folders.clone()
+        );
 
         let workspaces = init_params
             .workspace_folders
@@ -123,10 +130,6 @@ impl Server {
                 anyhow::anyhow!("Failed to get the current working directory while creating a default workspace.")
             })?;
 
-        if workspaces.len() > 1 {
-            // TODO(dhruvmanila): Support multi-root workspaces
-            anyhow::bail!("Multi-root workspaces are not supported yet");
-        }
         // for some reason tracing logs are not available before this point
         tracing::info!("Starting server with {} worker threads", worker_threads);
 
@@ -337,6 +340,13 @@ impl Server {
                     ..Default::default()
                 },
             )),
+            workspace: Some(WorkspaceServerCapabilities {
+                workspace_folders: Some(WorkspaceFoldersServerCapabilities {
+                    supported: Some(true),
+                    change_notifications: Some(lsp_types::OneOf::Left(true)),
+                }),
+                ..Default::default()
+            }),
             ..Default::default()
         }
     }

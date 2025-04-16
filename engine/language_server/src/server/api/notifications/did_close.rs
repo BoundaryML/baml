@@ -33,7 +33,7 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
-        match session.project_db_for_path(path) {
+        match session.get_or_create_project(&path) {
             None => {}
             Some(project) => {
                 let document_key = DocumentKey::from_url(

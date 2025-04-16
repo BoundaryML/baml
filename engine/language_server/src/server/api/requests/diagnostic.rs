@@ -52,12 +52,9 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
-        session
-            .ensure_project_db_for_baml_file(&params.text_document.uri)
-            .internal_error()?;
         let project = session
-            .project_db_for_path_mut(path)
-            .expect("Just ensured it exists");
+            .get_or_create_project(&path)
+            .expect("Project should exist");
 
         let diagnostics = file_diagnostics(project, &url);
         // diagnostics
