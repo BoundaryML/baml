@@ -29,9 +29,9 @@ jobs:
       matrix:
         _:
           # Always include these targets
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             static: true
           - os: macos-14
@@ -43,34 +43,45 @@ jobs:
           - os: windows-2022
             target: aarch64-pc-windows-msvc
           # ARM targets (will be conditionally skipped if not needed)
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             target: aarch64-unknown-linux-musl
 
     # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
     # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
     container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
     runs-on: ${{ matrix._.os }}
+    
     env:
       CROSS_VERSION: v0.2.5
       CARGO: cargo
       TARGET_FLAGS: ${{ matrix._.target != '' && format('--target {0}', matrix._.target) || '' }}
       RUST_BACKTRACE: 1
+      # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
+      TARGET_DIR: ./engine/target
       
     steps:
       - uses: actions/checkout@v4
+      - name: Install packages (Ubuntu)
+        if: matrix._.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          ci/ubuntu-install-packages
       
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          targets: ${{ matrix._.target }}
+          target: ${{ matrix._.target }}
       
       # Use cross for Linux cross-compilation
-      - name: Install cross
-        if: contains(matrix._.os, 'ubuntu') && matrix._.target != 'x86_64-unknown-linux-gnu'
+      - name: Use Cross
+        if: matrix._.os == 'ubuntu-latest' && matrix._.target != ''
         shell: bash
         run: |
+          # In the past, new releases of 'cross' have broken CI. So for now, we
+          # pin it. We also use their pre-compiled binary releases because cross
+          # has over 100 dependencies and takes a bit to compile.
           dir="$RUNNER_TEMP/cross-download"
           mkdir "$dir"
           echo "$dir" >> $GITHUB_PATH
@@ -78,11 +89,24 @@ jobs:
           curl -LO "https://github.com/cross-rs/cross/releases/download/$CROSS_VERSION/cross-x86_64-unknown-linux-musl.tar.gz"
           tar xf cross-x86_64-unknown-linux-musl.tar.gz
           echo "CARGO=cross" >> $GITHUB_ENV
+      
+      - name: Set target variables
+        shell: bash
+        run: |
+          echo "TARGET_FLAGS=--target ${{ matrix._.target }}" >> $GITHUB_ENV
+          echo "TARGET_DIR=./engine/target/${{ matrix._.target }}" >> $GITHUB_ENV
 
       - name: Check GLIBC version
         if: contains(matrix._.target, 'linux')
         run: |
           ldd --version
+      
+      - name: Show command used for Cargo
+        shell: bash
+        run: |
+          echo "cargo command is: ${{ env.CARGO }}"
+          echo "target flag is: ${{ env.TARGET_FLAGS }}"
+          echo "target dir is: ${{ env.TARGET_DIR }}"
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -90,7 +114,7 @@ jobs:
           prefix-key: "v2-rust"
 
       # Build the CLI - Always use static-ssl features
-      - name: Build CLI
+      - name: Build CLI Binary
         # This single step now handles all builds
         run: >
           ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
@@ -134,7 +158,7 @@ jobs:
 
       # Create archives with proper format
       - name: Create archive (Windows)
-        if: ${{ contains(matrix._.os, 'windows') && inputs.package_for_release }}
+        if: matrix._.os == 'windows-latest'
         shell: bash
         run: |
           set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
@@ -182,7 +206,7 @@ jobs:
           ls -l "${archive_base}".*
 
       - name: Create archive (Unix)
-        if: ${{ !contains(matrix._.os, 'windows') && inputs.package_for_release }}
+        if: matrix._.os != 'windows-latest'
         shell: bash
         run: |
           set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
