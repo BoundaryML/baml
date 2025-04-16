@@ -102,7 +102,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: "v4-rust"
+          prefix-key: "v5-rust"
 
       # Build the CLI - Always use static-ssl features
       - name: Build CLI Binary
@@ -129,6 +129,19 @@ jobs:
             echo "artifact_suffix=linux" >> $GITHUB_OUTPUT
           fi
 
+
+      # List target directories to debug build outputs
+      - name: List target directories
+        shell: bash
+        run: |
+          echo "Listing target/ directory:"
+          ls -la engine/target/
+          
+          echo "Listing target/${{ matrix._.target }} directory:"
+          ls -la engine/target/${{ matrix._.target }}/
+          
+          echo "Listing target/${{ matrix._.target }}/release directory:"
+          ls -la engine/target/${{ matrix._.target }}/release/
       # Upload the CFFI library for this specific target
       - name: Upload CFFI Library Artifact
         uses: actions/upload-artifact@v4
@@ -136,7 +149,7 @@ jobs:
           # Create a unique artifact name based on OS (e.g., libbaml-cffi-linux)
           name: libbaml-cffi-${{ steps.cffi_info.outputs.artifact_suffix }}
           # Path to the built library file within the target directory
-          path: engine/target/${{ matrix._.target }}/release/${{ steps.cffi_info.outputs.lib_name }}
+          path: engine/target/release/${{ steps.cffi_info.outputs.lib_name }}
           if-no-files-found: error # Fail if the library file doesn't exist
       
       # Determine binary path and archive name
