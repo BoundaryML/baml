@@ -75,7 +75,7 @@ jobs:
           target: ${{ matrix._.target }}
       
       - name: Use Cross
-        if: matrix._.os == 'ubuntu-latest'
+        if: contains(matrix._.os, 'ubuntu')
         run: |
           cargo install cross
           echo 'CARGO=cross' >> "$GITHUB_ENV"
