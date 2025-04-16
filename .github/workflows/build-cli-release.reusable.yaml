@@ -101,7 +101,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-          prefix-key: "v3-rust"
+          prefix-key: "v4-rust"
 
       # Build the CLI - Always use static-ssl features
       - name: Build CLI Binary
