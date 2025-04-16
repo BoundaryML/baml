@@ -115,7 +115,7 @@ jobs:
 
       - name: Build CFFI Library
         run: >
-          ${{ env.CARGO }} build --release -p baml-cffi ${{ env.TARGET_FLAGS }}
+          ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
         working-directory: engine
 
       # Determine CFFI library name and artifact suffix based on OS
