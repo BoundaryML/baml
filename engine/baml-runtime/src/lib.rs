@@ -560,6 +560,7 @@ impl BamlRuntime {
                         context,
                         runtime: self,
                         expr_tx: expr_tx.clone(),
+                        evaluated_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
                     };
                     let param_baml_values = params
                         .iter()
