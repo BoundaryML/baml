@@ -29,14 +29,21 @@ import { motion } from 'motion/react'
 
 const envVarVisibilityAtom = atom<Record<string, boolean>>({})
 
-const REQUIRED_ENV_VAR_UNSET_WARNING = 'Clients may fail if this is not set'
+const REQUIRED_ENV_VAR_UNSET_WARNING = 'Your BAML clients may fail if this is not set'
 
-const renderedEnvVarsAtom = atom((get) => {
-  const envVars = get(envVarsAtom)
+interface EnvVarEntry {
+  key: string
+  value: string | undefined
+  required: boolean
+  hidden: boolean
+}
+
+const renderedEnvVarsAtom = atom<EnvVarEntry[]>((get) => {
+  const envVars = get(envVarsAtom) as Record<string, string>
   const requiredEnvVars = get(requiredEnvVarsAtom)
   const visibility = get(envVarVisibilityAtom)
 
-  const vars = Object.entries(envVars).map(([key, value]) => ({
+  const vars: EnvVarEntry[] = Object.entries(envVars).map(([key, value]) => ({
     key,
     value,
     required: requiredEnvVars.includes(key),
@@ -87,7 +94,41 @@ const unescapeValue = (value: string): string => {
   })
 }
 
-export default function EnvVariablesManager() {
+function EnvVarStatus({ value, required }: { value?: string; required: boolean }) {
+  if (!value || value === '') {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <AlertTriangle className='h-4 w-4 text-orange-500 flex-shrink-0' />
+          </TooltipTrigger>
+          <TooltipContent side='top' className='text-xs'>
+            {value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  if (required) {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Check className='h-4 w-4 text-green-500 flex-shrink-0' />
+          </TooltipTrigger>
+          <TooltipContent side='top' className='text-xs'>
+            Used by one of your BAML clients
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  return <div />
+}
+
+export const EnvironmentVariablesPanel: React.FC = () => {
   const envVars = useAtomValue(renderedEnvVarsAtom)
   const setEnvVars = useSetAtom(envVarsAtom)
   const setVisibility = useSetAtom(envVarVisibilityAtom)
@@ -203,9 +244,6 @@ export default function EnvVariablesManager() {
               VSCode proxy is <b>{proxySettings.proxyEnabled ? 'enabled' : 'disabled'}</b>
             </p>
             <Checkbox
-              // This is, under the hood, powered by a DAG of atoms derived from bamlConfig
-              // vscode.setProxySettings eventually updates the workspace setting baml.enablePlaygroundProxy
-              // In WebviewPanelHost, we listen for changes to baml settings and push them into the bamlConfig atom
               checked={proxySettings.proxyEnabled}
               onCheckedChange={() => {
                 vscode.setProxySettings(!proxySettings.proxyEnabled)
@@ -232,20 +270,7 @@ export default function EnvVariablesManager() {
                   <td className='pl-2 pr-0.5 py-0.5'>
                     <div className='flex items-center gap-2 justify-between'>
                       <code className='font-mono text-xs text-muted-foreground'>{env.key}</code>
-                      {!env.value || env.value === '' ? (
-                        <TooltipProvider key={env.key} delayDuration={300}>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <AlertTriangle className='h-4 w-4 text-orange-500 flex-shrink-0' />
-                            </TooltipTrigger>
-                            <TooltipContent side='top' className='text-xs'>
-                              {env.value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      ) : (
-                        <div />
-                      )}
+                      <EnvVarStatus value={env.value} required={env.required} />
                     </div>
                   </td>
                   <td className='px-0.5 py-0.5'>
@@ -256,7 +281,7 @@ export default function EnvVariablesManager() {
                             type={env.hidden ? 'password' : 'text'}
                             value={typeof env.value === 'string' ? escapeValue(env.value) : ''}
                             onChange={(e) => updateEnvVar(index, unescapeValue(e.target.value))}
-                            className='h-6 text-xs font-mono placeholder:font-sans'
+                            className='h-6 text-xs font-mono placeholder:font-sans min-w-32'
                             placeholder={env.required && !env.value ? '<unset>' : undefined}
                             autoComplete='off'
                             data-1p-ignore
@@ -377,5 +402,18 @@ export default function EnvVariablesManager() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export const EnvironmentVariablesDialog: React.FC<{
+  showEnvDialog: boolean
+  setShowEnvDialog: (show: boolean) => void
+}> = ({ showEnvDialog, setShowEnvDialog }) => {
+  return (
+    <Dialog open={showEnvDialog} onOpenChange={setShowEnvDialog}>
+      <DialogContent className='mt-12 max-h-[80vh] overflow-y-auto sm:max-w-none w-fit'>
+        <EnvironmentVariablesPanel />
+      </DialogContent>
+    </Dialog>
   )
 }
