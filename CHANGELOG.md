@@ -7,9 +7,6 @@ All notable changes to this project will be documented in this file. See [conven
 ### Bug Fixes
 
 - make vscode proxy work again (#1806) - ([667851d](https://github.com/boundaryml/baml/commit/667851d2902c2eec26db3db7e98855ec3657ff8f)) - Samuel Lijin
-
-### Features
-
 - BAML gem supports ruby 3.4 (#1804) - ([eae1cec](https://github.com/boundaryml/baml/commit/eae1cec03c5993ee6aff3dfe50a0202483b26412)) - Dimitri Roche
 
 
