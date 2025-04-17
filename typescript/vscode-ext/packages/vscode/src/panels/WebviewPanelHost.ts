@@ -355,7 +355,9 @@ export class WebviewPanelHost {
             ;(async () => {
               try {
                 const profile = vscodeMessage.profile
-                const credentialProvider = fromIni({ profile: profile ?? undefined })
+                const credentialProvider = fromIni({
+                  profile: profile ?? undefined,
+                })
                 const awsCreds = await credentialProvider()
                 this._panel.webview.postMessage({
                   rpcId: message.rpcId,
