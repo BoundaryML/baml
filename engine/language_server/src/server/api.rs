@@ -162,13 +162,6 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                 })
             });
         }
-        // request::DocumentDiagnosticRequestHandler::METHOD => {
-        //     tracing::info!("DocumentDiagnosticRequestHandler");
-        //     background_request_task::<request::DocumentDiagnosticRequestHandler>(
-        //         req,
-        //         BackgroundSchedule::LatencySensitive,
-        //     )
-        // }
 
         // request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
         // request::Format::METHOD => {
