@@ -23,9 +23,9 @@ import type { BamlVSCodePlugin } from '../types'
 import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 import { getCurrentOpenedFile } from '../../helpers/get-open-file'
-import { bamlConfig, getConfig } from './bamlConfig'
+import { BAML_CONFIG_SINGLETON, refreshBamlConfigSingleton } from './bamlConfig'
 
-export { bamlConfig }
+export { BAML_CONFIG_SINGLETON as bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line
 let clientReady = false
 
@@ -62,7 +62,7 @@ export const requestBamlCLIVersion = async () => {
       return
     }
     console.log('Got BAML CLI version', version)
-    bamlConfig.cliVersion = version as string
+    BAML_CONFIG_SINGLETON.cliVersion = version as string
   } catch (e) {
     console.error('Failed to get BAML CLI version', e)
   }
@@ -136,7 +136,7 @@ const activateClient = (
   serverOptions: ServerOptions,
   clientOptions: LanguageClientOptions,
 ) => {
-  getConfig()
+  refreshBamlConfigSingleton()
   console.log('Starting language server with options', JSON.stringify(serverOptions, null, 2))
 
   // Create the language client
@@ -236,11 +236,11 @@ const activateClient = (
         }
       })
 
-      client.onRequest('baml_settings_updated', (config: typeof bamlConfig) => {
+      client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
         console.log('baml_settings_updated', config)
-        bamlConfig.config = config.config
-        bamlConfig.cliVersion = config.cliVersion
-        WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
+        BAML_CONFIG_SINGLETON.config = config.config
+        BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
+        WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
       })
 
       // Handler for both notifications and requests of type "runtime_updated".
@@ -279,11 +279,11 @@ const activateClient = (
         handleRuntimeUpdated(params)
       })
 
-      client.onRequest('baml_settings_updated', (config: typeof bamlConfig) => {
+      client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
         console.log('baml_settings_updated', config)
-        bamlConfig.config = config.config
-        bamlConfig.cliVersion = config.cliVersion
-        WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', bamlConfig)
+        BAML_CONFIG_SINGLETON.config = config.config
+        BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
+        WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
       })
 
       // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.

@@ -18,17 +18,18 @@ export const bamlConfigSchema = z
   .partial()
 type BamlConfig = z.infer<typeof bamlConfigSchema>
 
-export const bamlConfig: { config: BamlConfig | null; cliVersion: string | null } = {
+export const BAML_CONFIG_SINGLETON: { config: BamlConfig | null; cliVersion: string | null } = {
   config: null,
   cliVersion: null,
 }
 
-export const getConfig = () => {
+export const refreshBamlConfigSingleton = () => {
   try {
     console.log('getting config')
     const configResponse = workspace.getConfiguration('baml')
     console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
-    bamlConfig.config = bamlConfigSchema.parse(configResponse)
+    BAML_CONFIG_SINGLETON.config = bamlConfigSchema.parse(configResponse)
+    return BAML_CONFIG_SINGLETON
   } catch (e: any) {
     if (e instanceof Error) {
       console.log('Error getting config' + e.message + ' ' + e.stack)
