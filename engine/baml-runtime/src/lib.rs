@@ -28,9 +28,11 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
+use eval_expr::ExprEvalResult;
 use futures::channel::mpsc;
 use internal_baml_core::ast::Span;
 use internal_baml_core::ir::repr::initial_context;
+use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::ResponseValueMeta;
 use tokio::sync::Mutex;
 
@@ -332,56 +334,95 @@ impl BamlRuntime {
         let expr_fn = self.inner.ir().find_expr_fn(function_name);
         let is_expr_fn = expr_fn.is_ok();
 
-        if is_expr_fn {
-            // let type_builder = self
-            //     .inner
-            //     .get_test_type_builder(function_name, test_name, ctx)
-            //     .ok_or(None);
-            let rctx = ctx
-                .create_ctx(None, None, span.clone().map(|s| s.span_id))
-                .unwrap();
-            let (params, _constraints) = self
-                .get_test_params_and_constraints(function_name, test_name, &rctx, true)
-                .unwrap();
-
-            // Call the runtime synchronously.
-            let (response_res, span_uuid) = self
-                .call_function_with_expr_events(
-                    function_name.into(),
-                    &params,
-                    &ctx,
-                    None, // TODO: Test with TypeBuilder.
-                    None, // TODO: Create callback.
-                    None, // TODO: Use Collectors?
-                    expr_tx,
-                )
-                .await;
-
-            log::info!("** response_res: {:#?}", response_res);
-            let test_response = TestResponse {
-                function_response: response_res.unwrap(),
-                function_span: span_uuid,
-                constraints_result: TestConstraintsResult::empty(),
-            };
-            return (Ok(test_response), None);
-        }
-
         if let Some(span) = span.clone() {
-            if let Some(collector) = collector {
+            if let Some(collector) = collector.clone() {
                 collector.track_function(FunctionId(span.clone().span_id.to_string()));
             }
         }
 
         let run_to_response = || async {
-            let type_builder = self
-                .inner
-                .get_test_type_builder(function_name, test_name, ctx)
-                .unwrap();
+            let rctx_no_tb = ctx.create_ctx(None, None, span.clone().map(|s| s.span_id))?;
+            let (params, constraints) =
+                self.get_test_params_and_constraints(function_name, test_name, &rctx_no_tb, true)?;
+
+            // Run the expression to either a value or a final LLM call.
+            // (If it's not an expr fn, it'll be a final LLM call.)
+            let expr_eval_result = expr_eval_result(
+                self,
+                ctx,
+                expr_tx.clone(),
+                collector.clone(),
+                self.tracer.clone(),
+                None,
+                None,
+                function_name,
+                &params,
+            )
+            .await?;
+
+            // If the expression evaluates to an LLM call, shadow the old function_name and params (of
+            // the test function) with the new function_name and params (of the LLM call).
+            let (function_name, params): (String, BamlMap<String, BamlValue>) =
+                match &expr_eval_result {
+                    ExprEvalResult::Value { value, field_type } => {
+                        (function_name.to_string(), params.clone())
+                    }
+                    ExprEvalResult::LLMCall { name, args } => (name.to_string(), args.clone()),
+                };
+
+            let type_builder = if is_expr_fn {
+                None
+            } else {
+                self.inner
+                    .get_test_type_builder(&function_name, test_name, ctx)
+                    .unwrap()
+            };
 
             let rctx =
                 ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
-            let (params, constraints) =
-                self.get_test_params_and_constraints(function_name, test_name, &rctx, true)?;
+
+            let (function_name, params) = match expr_eval_result {
+                ExprEvalResult::Value { value, field_type } => {
+                    let fake_syntax_span = Span::fake();
+                    return Ok(TestResponse {
+                        // TODO: Factor out fake response data.
+                        function_response: FunctionResult::new(
+                            OrchestrationScope { scope: vec![] },
+                            LLMResponse::Success(LLMCompleteResponse {
+                                client: "openai".to_string(),
+                                model: "gpt-3.5-turbo".to_string(),
+                                prompt: RenderedPrompt::Completion(
+                                    "Sample raw response".to_string(),
+                                ),
+                                request_options: BamlMap::new(),
+                                content: "Sample raw response".to_string(),
+                                start_time: SystemTime::now(),
+                                latency: Duration::from_millis(2025),
+                                metadata: LLMCompleteResponseMetadata {
+                                    baml_is_complete: true,
+                                    finish_reason: Some("stop".to_string()),
+                                    prompt_tokens: Some(50),
+                                    output_tokens: Some(50),
+                                    total_tokens: Some(100),
+                                },
+                            }),
+                            // TODO: Run checks and asserts.
+                            Some(Ok(ResponseBamlValue(value.map_meta(|_| {
+                                ResponseValueMeta(
+                                    vec![],
+                                    vec![],
+                                    Completion::default(),
+                                    field_type.clone(),
+                                )
+                            })))),
+                        ),
+                        function_span: None,
+                        constraints_result: TestConstraintsResult::empty(),
+                    });
+                }
+                ExprEvalResult::LLMCall { name, args } => (name, args),
+            };
+
             let mut stream = self.inner.stream_function_impl(
                 function_name.into(),
                 &params,
@@ -400,6 +441,9 @@ impl BamlRuntime {
                 .iter()
                 .last()
                 .context("Expected non-empty event chain")?;
+            if let Some(expr_tx) = expr_tx {
+                expr_tx.unbounded_send(vec![]).unwrap();
+            }
             let complete_resp = match llm_resp {
                 LLMResponse::Success(complete_llm_response) => Ok(complete_llm_response),
                 LLMResponse::InternalFailure(e) => Err(anyhow::anyhow!("{}", e)),
@@ -501,9 +545,16 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let res = self
-            .call_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, None)
-            .await;
+        let res = Box::pin(self.call_function_with_expr_events(
+            function_name,
+            params,
+            ctx,
+            tb,
+            cb,
+            collectors,
+            None,
+        ))
+        .await;
         res
     }
 
@@ -657,7 +708,7 @@ impl BamlRuntime {
         (response, target_id)
     }
 
-    pub fn stream_function(
+    pub fn stream_function_with_expr_events(
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
@@ -665,6 +716,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
+        expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,
@@ -675,6 +727,18 @@ impl BamlRuntime {
             self.async_runtime.clone(),
             collectors.unwrap_or_else(|| vec![]),
         )
+    }
+
+    pub fn stream_function(
+        &self,
+        function_name: String,
+        params: &BamlMap<String, BamlValue>,
+        ctx: &RuntimeContextManager,
+        tb: Option<&TypeBuilder>,
+        cb: Option<&ClientRegistry>,
+        collectors: Option<Vec<Arc<Collector>>>,
+    ) -> Result<FunctionResultStream> {
+        self.stream_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, None)
     }
 
     pub async fn build_request(
@@ -1052,4 +1116,90 @@ pub fn baml_src_files(dir: &std::path::PathBuf) -> Result<Vec<PathBuf>> {
     }
 
     Ok(src_files)
+}
+
+/// The function name requested by the user may be an expression function or an LLM function.
+///
+/// If it's an LLM function, just return the function name and params.
+///
+/// If it's an expression function, determine whether it evaluates to an LLM function,
+/// and if so, return that function and its params. Not all expr functios evaluate to
+/// a (single) LLM function. So in those cases, just return the final value. (for example,
+/// some expression functions compute a list of values that are each the result of an LLM
+/// function - this can't be streamed, it can only be returned as a whole list).
+async fn expr_eval_result(
+    runtime: &BamlRuntime,
+    mgr: &RuntimeContextManager,
+    expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
+    collector: Option<Arc<Collector>>,
+    tracer: Arc<BamlTracer>,
+    tb: Option<&TypeBuilder>,
+    cb: Option<&ClientRegistry>,
+    function_name: &str,
+    params: &BamlMap<String, BamlValue>,
+) -> Result<ExprEvalResult> {
+    let fake_syntax_span = Span::fake();
+    let ir = runtime.inner.ir();
+    let is_expr_fn = ir.find_expr_fn(function_name).is_ok();
+    let maybe_expr_f = ir.find_expr_fn(function_name);
+    match maybe_expr_f {
+        Ok(expr_fn) => {
+            log::trace!("Calling function: {}", function_name);
+            let span = tracer.start_span(&function_name, mgr, params);
+
+            if let Some(span) = span.clone() {
+                if let Some(collector) = collector {
+                    collector.track_function(FunctionId(span.clone().span_id.to_string()));
+                }
+            }
+            let ctx = mgr.create_ctx(tb, cb, span.clone().map(|s| s.span_id))?;
+            let env = EvalEnv {
+                context: initial_context(ir),
+                runtime,
+                expr_tx: expr_tx.clone(),
+                evaluated_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
+            };
+
+            let param_baml_values = params
+                .iter()
+                .map(|(k, v)| {
+                    let arg_type = infer_type(v);
+                    let baml_value_with_meta: BamlValueWithMeta<ExprMetadata> = match arg_type {
+                        None => Ok::<_, anyhow::Error>(BamlValueWithMeta::with_const_meta(
+                            v,
+                            (Span::fake(), None),
+                        )),
+                        Some(arg_type) => {
+                            let value_unit_meta: BamlValueWithMeta<()> =
+                                BamlValueWithMeta::with_const_meta(v, ());
+                            let baml_value = runtime
+                                .inner
+                                .ir()
+                                .distribute_type_with_meta(value_unit_meta, arg_type)?;
+                            let baml_value_with_meta = baml_value
+                                .map_meta_owned(|(_, field_type)| (Span::fake(), Some(field_type)));
+
+                            Ok(baml_value_with_meta)
+                        }
+                    }?;
+                    Ok(Expr::Atom(baml_value_with_meta))
+                })
+                .collect::<Result<_>>()
+                .unwrap_or(vec![]); //TODO: Is it acceptable to swallow errors here?
+            let params_expr: Expr<ExprMetadata> =
+                Expr::ArgsTuple(param_baml_values, (fake_syntax_span.clone(), None));
+            let result_type = expr_fn.elem().output.clone();
+            let fn_call_expr = Expr::App(
+                Arc::new(expr_fn.elem().expr.clone()),
+                Arc::new(params_expr),
+                (fake_syntax_span.clone(), Some(result_type.clone())),
+            );
+            let res = eval_expr::eval_to_value_or_llm_call(&env, &fn_call_expr).await?;
+            Ok(res)
+        }
+        Err(e) => Ok(ExprEvalResult::LLMCall {
+            name: function_name.to_string(),
+            args: params.clone(),
+        }),
+    }
 }
