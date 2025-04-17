@@ -48,7 +48,7 @@ jobs:
       - uses: oxidize-rb/actions/setup-ruby-and-rust@main
         with:
           rubygems: latest
-          ruby-version: "3.3"
+          ruby-version: "3.4"
           bundler-cache: false
           cargo-cache: false
           cargo-vendor: false
@@ -105,7 +105,7 @@ jobs:
             --platform ${{ matrix._.platform }} \
             --mount-toolchains \
             --directory language_client_ruby \
-            --ruby-versions 3.3,3.2,3.1 \
+            --ruby-versions 3.4,3.3,3.2,3.1 \
             --build \
             -- ${{ matrix._.rb-sys-dock-setup }}
 
