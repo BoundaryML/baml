@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "baml-lib/*",
+  "baml-lsp-types",
   "baml-rpc",
   "baml-runtime",
   "baml-schema-wasm",
@@ -14,9 +15,9 @@ members = [
   "language_server",
   "language_client_cffi",
   "sandbox",
-  "baml-lsp-types"
 ]
 default-members = [
+  "baml-lsp-types",
   "baml-lib/*",
   "baml-rpc",
   "baml-runtime",
@@ -27,13 +28,12 @@ default-members = [
   # "baml-schema-wasm",
   "bstd",
   "cli",
+  "language_client_cffi",
   "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
   "language_server",
-  "baml-lsp-types",
-  "language_client_cffi",
 ]
 
 [workspace.dependencies]

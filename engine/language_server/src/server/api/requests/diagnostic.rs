@@ -31,9 +31,9 @@ impl BackgroundDocumentRequestHandler for DocumentDiagnosticRequestHandler {
     }
 
     fn run_with_snapshot(
-        snapshot: DocumentSnapshot,
+        _snapshot: DocumentSnapshot,
         db: Arc<Mutex<Project>>,
-        notifier: Notifier,
+        _notifier: Notifier,
         params: DocumentDiagnosticParams,
     ) -> Result<DocumentDiagnosticReportResult> {
         diagnostics_report(db, &params.text_document.uri)
