@@ -569,3 +569,14 @@ async def test_collector_claude():
     assert isinstance(response_body, dict)
     assert "content" in response_body
     assert len(response_body["content"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_groq():
+    collector = Collector(name="my-collector")
+    res = await b.TestGroq("hi there", baml_options={"collector": collector})
+    assert len(res) > 0, "Expected non-empty result but got empty."
+    assert collector.usage.input_tokens is not None
+    assert collector.usage.output_tokens is not None
+    assert collector.usage.input_tokens > 0
+    assert collector.usage.output_tokens > 0

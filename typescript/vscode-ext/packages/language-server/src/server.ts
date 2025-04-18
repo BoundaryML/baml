@@ -52,7 +52,8 @@ try {
   // only required on vscode versions 1.89 and below.
   ;(globalThis as any).crypto = require('node:crypto').webcrypto
 } catch (e) {
-  console.log('cant load webcrypto', e)
+  console.log('webcrypto not available. Ignoring')
+  // console.log('cant load webcrypto', e)
 }
 
 const packageJson = require('../../package.json') // eslint-disable-line

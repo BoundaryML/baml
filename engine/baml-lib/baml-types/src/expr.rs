@@ -1,11 +1,10 @@
 // use moniker::{Binder, BoundTerm, Scope, Var};
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::{field_type::FieldType, BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 use itertools::join;
-
-pub type Name = String;
 
 /// A BAML expression term.
 /// T is the type of the metadata.
@@ -22,11 +21,42 @@ pub enum Expr<T> {
     },
 
     LLMFunction(Name, Vec<Name>, T),
-    Var(Name, T),
-    Lambda(Vec<Name>, Arc<Expr<T>>, T),
+    // A free variable, not bound by a lambda.
+    FreeVar(Name, T),
+    // The DeBruijn index of a bound variable.
+    BoundVar(VarIndex, T),
+    Lambda(usize, Arc<Expr<T>>, T), // number of parameters, body, metadata
     App(Arc<Expr<T>>, Arc<Expr<T>>, T),
     Let(Name, Arc<Expr<T>>, Arc<Expr<T>>, T), // let name = expr in body
     ArgsTuple(Vec<Expr<T>>, T),
+}
+
+pub type Name = String;
+
+/// The locally-nameless index of a bound variable.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VarIndex {
+    /// Locally nameless De Bruijn index of a variable.
+    /// This is related to the number of lambda binders under
+    /// which the variable is located.
+    pub de_bruijn: u32,
+
+    /// Our functions all take tuples of arguments, so the index of
+    /// a bound variable must specify the tuple index in addition
+    /// to the De Bruijn index.
+    pub tuple: u32,
+}
+
+impl VarIndex {
+    pub fn dump_str(&self) -> String {
+        format!("({}.{})", self.de_bruijn, self.tuple)
+    }
+    pub fn deeper(&self) -> Self {
+        VarIndex {
+            de_bruijn: self.de_bruijn + 1,
+            tuple: self.tuple,
+        }
+    }
 }
 
 /// The metadata used during parsing, typechecking and evaluation of BAML expressions.
@@ -40,7 +70,8 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Map(_, meta) => meta,
             Expr::ClassConstructor { meta, .. } => meta,
             Expr::LLMFunction(_, _, meta) => meta,
-            Expr::Var(_, meta) => meta,
+            Expr::BoundVar(_, meta) => meta,
+            Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
             Expr::App(_, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
@@ -55,7 +86,8 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Map(_, meta) => meta,
             Expr::ClassConstructor { meta, .. } => meta,
             Expr::LLMFunction(_, _, meta) => meta,
-            Expr::Var(_, meta) => meta,
+            Expr::BoundVar(_, meta) => meta,
+            Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
             Expr::App(_, _, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
@@ -70,7 +102,8 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Map(_, meta) => meta,
             Expr::ClassConstructor { meta, .. } => meta,
             Expr::LLMFunction(_, _, meta) => meta,
-            Expr::Var(_, meta) => meta,
+            Expr::BoundVar(_, meta) => meta,
+            Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
             Expr::App(_, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
@@ -85,8 +118,9 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
         match self {
             Expr::Atom(atom) => atom.clone().value().to_string(),
             Expr::LLMFunction(name, _, _) => name.clone(),
-            Expr::Var(name, _) => name.clone(),
-            Expr::Lambda(args, body, _) => format!("\\{:?} -> {}", args, body.dump_str()),
+            Expr::BoundVar(ind, _) => ind.dump_str(),
+            Expr::FreeVar(name, _) => name.clone(),
+            Expr::Lambda(_, body, _) => format!("\\. -> {}", body.dump_str()),
             Expr::App(func, args, _) => {
                 let args_str = match args.as_ref() {
                     Expr::ArgsTuple(args, _) => args
@@ -98,7 +132,8 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 };
                 let func_str = match func.as_ref() {
                     Expr::LLMFunction(name, _, _) => name.clone(),
-                    Expr::Var(name, _) => name.clone(),
+                    Expr::BoundVar(ind, _) => ind.dump_str(),
+                    Expr::FreeVar(name, _) => name.clone(),
                     _ => format!("({})", func.dump_str()),
                 };
                 format!("{}({})", func_str, args_str)
@@ -156,11 +191,14 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             (Expr::LLMFunction(n1, _, _), Expr::LLMFunction(n2, _, _)) => n1 == n2,
             (Expr::LLMFunction(_, _, _), _) => false,
 
-            (Expr::Var(n1, _), Expr::Var(n2, _)) => n1 == n2,
-            (Expr::Var(_, _), _) => false,
+            (Expr::BoundVar(n1, _), Expr::BoundVar(n2, _)) => n1 == n2,
+            (Expr::BoundVar(_, _), _) => false,
 
-            (Expr::Lambda(args1, body1, _), Expr::Lambda(args2, body2, _)) => {
-                args1 == args2 && body1.temporary_same_state(body2)
+            (Expr::FreeVar(n1, _), Expr::FreeVar(n2, _)) => n1 == n2,
+            (Expr::FreeVar(_, _), _) => false,
+
+            (Expr::Lambda(arity1, body1, _), Expr::Lambda(arity2, body2, _)) => {
+                arity1 == arity2 && body1.temporary_same_state(body2)
             }
             (Expr::Lambda(_, _, _), _) => false,
 
@@ -281,6 +319,188 @@ impl Expr<ExprMetadata> {
                 }
             }
             _ => None,
+        }
+    }
+
+    pub fn free_vars(&self) -> HashSet<Name> {
+        match self {
+            Expr::Atom(_) => HashSet::new(),
+            Expr::List(items, _) => items.iter().flat_map(|item| item.free_vars()).collect(),
+            Expr::Map(entries, _) => entries
+                .iter()
+                .flat_map(|(_, value)| value.free_vars())
+                .collect(),
+            Expr::ClassConstructor { fields, spread, .. } => {
+                let mut field_vars = fields
+                    .iter()
+                    .flat_map(|(_, value)| value.free_vars())
+                    .collect::<HashSet<_>>();
+                if let Some(spread) = spread {
+                    field_vars.extend(spread.free_vars());
+                }
+                field_vars
+            }
+            Expr::LLMFunction(_, _, _) => HashSet::new(),
+            Expr::FreeVar(name, _) => HashSet::from([name.clone()]),
+            Expr::BoundVar(_, _) => HashSet::new(),
+            Expr::Lambda(_, body, _) => body.free_vars(),
+            Expr::App(func, args, _) => {
+                let mut free_vars = func.free_vars();
+                free_vars.extend(args.free_vars());
+                free_vars
+            }
+            Expr::Let(_, expr, body, _) => {
+                let mut free_vars = expr.free_vars();
+                free_vars.extend(body.free_vars());
+                free_vars
+            }
+            Expr::ArgsTuple(args, _) => args.iter().flat_map(|a| a.free_vars()).collect(),
+        }
+    }
+
+    pub fn fresh_names(&self, arity: usize) -> Vec<Name> {
+        let free_vars = self.free_vars();
+        let mut i = 0;
+        let mut names = Vec::new();
+        while names.len() < arity {
+            let candidate = format!("x_{}", i);
+            if !free_vars.contains(&candidate) {
+                names.push(candidate);
+            }
+            i += 1;
+        }
+        names
+    }
+
+    pub fn fresh_name(&self) -> Name {
+        self.fresh_names(1)[0].clone()
+    }
+}
+
+impl<T: Clone> Expr<T> {
+    /// Opens a term by replacing the bound variable with index k by a free variable.
+    /// This operation is used when going under a binder.
+    pub fn open(&self, target: &VarIndex, new_name: &str) -> Expr<T> {
+        match self {
+            Expr::Atom(v) => Expr::Atom(v.clone()),
+            Expr::List(items, m) => Expr::List(
+                items.iter().map(|e| e.open(target, new_name)).collect(),
+                m.clone(),
+            ),
+            Expr::Map(entries, m) => Expr::Map(
+                entries
+                    .iter()
+                    .map(|(key, val)| (key.clone(), val.open(target, new_name)))
+                    .collect(),
+                m.clone(),
+            ),
+            Expr::ClassConstructor {
+                name: class_name,
+                fields,
+                spread,
+                meta: m,
+            } => Expr::ClassConstructor {
+                name: class_name.clone(),
+                fields: fields
+                    .iter()
+                    .map(|(key, val)| (key.clone(), val.open(target, new_name)))
+                    .collect(),
+                spread: spread.as_ref().map(|s| Box::new(s.open(target, new_name))),
+                meta: m.clone(),
+            },
+            Expr::LLMFunction(n, args, m) => Expr::LLMFunction(n.clone(), args.clone(), m.clone()),
+            Expr::FreeVar(n, m) => Expr::FreeVar(n.clone(), m.clone()),
+            Expr::BoundVar(i, m) => {
+                if i == target {
+                    Expr::FreeVar(new_name.to_string(), m.clone())
+                } else {
+                    Expr::BoundVar(i.clone(), m.clone())
+                }
+            }
+            Expr::Lambda(arity, body, m) => Expr::Lambda(
+                *arity,
+                Arc::new(body.open(&target.deeper(), new_name)),
+                m.clone(),
+            ),
+            Expr::App(f, x, m) => Expr::App(
+                Arc::new(f.open(target, new_name)),
+                Arc::new(x.open(target, new_name)),
+                m.clone(),
+            ),
+            Expr::Let(n, e, body, m) => Expr::Let(
+                n.clone(),
+                Arc::new(e.open(target, new_name)),
+                Arc::new(body.open(target, new_name)),
+                m.clone(),
+            ),
+            Expr::ArgsTuple(args, m) => Expr::ArgsTuple(
+                args.iter().map(|e| e.open(target, new_name)).collect(),
+                m.clone(),
+            ),
+        }
+    }
+
+    /// Closes a term by replacing the free variable with name by a bound variable with index k.
+    /// This is the inverse operation of open.
+    pub fn close(&self, new_index: &VarIndex, target: &str) -> Expr<T> {
+        match self {
+            Expr::Atom(v) => Expr::Atom(v.clone()),
+            Expr::List(items, m) => Expr::List(
+                items.iter().map(|e| e.close(new_index, target)).collect(),
+                m.clone(),
+            ),
+            Expr::Map(entries, m) => Expr::Map(
+                entries
+                    .iter()
+                    .map(|(key, val)| (key.clone(), val.close(new_index, target)))
+                    .collect(),
+                m.clone(),
+            ),
+            Expr::ClassConstructor {
+                name: class_name,
+                fields,
+                spread,
+                meta: m,
+            } => Expr::ClassConstructor {
+                name: class_name.clone(),
+                fields: fields
+                    .iter()
+                    .map(|(key, val)| (key.clone(), val.close(new_index, target)))
+                    .collect(),
+                spread: spread
+                    .as_ref()
+                    .map(|s| Box::new(s.close(new_index, target))),
+                meta: m.clone(),
+            },
+            Expr::LLMFunction(n, args, m) => Expr::LLMFunction(n.clone(), args.clone(), m.clone()),
+            Expr::FreeVar(n, m) => {
+                if n == target {
+                    Expr::BoundVar(new_index.clone(), m.clone())
+                } else {
+                    Expr::FreeVar(n.clone(), m.clone())
+                }
+            }
+            Expr::BoundVar(i, m) => Expr::BoundVar(i.clone(), m.clone()),
+            Expr::Lambda(arity, body, m) => Expr::Lambda(
+                *arity,
+                Arc::new(body.close(&new_index.deeper(), target)),
+                m.clone(),
+            ),
+            Expr::App(f, x, m) => Expr::App(
+                Arc::new(f.close(new_index, target)),
+                Arc::new(x.close(new_index, target)),
+                m.clone(),
+            ),
+            Expr::Let(n, e, body, m) => Expr::Let(
+                n.clone(),
+                Arc::new(e.close(new_index, target)),
+                Arc::new(body.close(new_index, target)),
+                m.clone(),
+            ),
+            Expr::ArgsTuple(args, m) => Expr::ArgsTuple(
+                args.iter().map(|e| e.close(new_index, target)).collect(),
+                m.clone(),
+            ),
         }
     }
 }

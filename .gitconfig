@@ -1,3 +1,10 @@
 [merge "baml_client"]
         driver = true
+[checkout]
+        defaultRemote = origin
+[push]
+        autoSetupRemote = true
+[pull]
+        ff = only
+        rebase = true
 

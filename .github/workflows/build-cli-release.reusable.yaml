@@ -1,0 +1,359 @@
+name: BAML Release - Build BAML CLI
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release version'
+        required: false
+        type: string
+      package_for_release:
+        description: 'Create archives for release instead of raw binaries'
+        type: boolean
+        default: true
+        required: false
+
+env:
+  MACOSX_DEPLOYMENT_TARGET: "10.13"
+        
+
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-cli
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          # Always include these targets
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-musl
+            static: true
+          - os: macos-14
+            target: x86_64-apple-darwin
+          - os: macos-14
+            target: aarch64-apple-darwin
+            # If you change the windows version, change the rest of the script to match
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+          - os: windows-2022
+            target: aarch64-pc-windows-msvc
+          # ARM targets (will be conditionally skipped if not needed)
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-musl
+
+    # Run Linux builds inside a more modern manylinux container (AlmaLinux 8 based)
+    # with a newer GLIBC version compatible with Node20 used by actions/checkout@v4
+    # container: ${{ contains(matrix._.os, 'ubuntu') && (contains(matrix._.target, 'x86_64') && 'quay.io/pypa/manylinux_2_28_x86_64' || 'ghcr.io/rust-cross/manylinux_2_28-cross:aarch64') || '' }}
+    runs-on: ${{ matrix._.os }}
+    
+    env:
+      CROSS_VERSION: v0.2.5
+      CARGO: cargo
+      TARGET_FLAGS: ${{ matrix._.target != '' && format('--target {0}', matrix._.target) || '' }}
+      RUST_BACKTRACE: 1
+      # When CARGO is set to CROSS, TARGET_DIR includes matrix.target.
+      TARGET_DIR: ./engine/target
+      
+    steps:
+      - uses: actions/checkout@v4
+      # - name: Install packages (Ubuntu)
+      #   if: matrix._.os == 'ubuntu-latest'
+      #   shell: bash
+      #   run: |
+      #     ci/ubuntu-install-packages
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          target: ${{ matrix._.target }}
+      
+      - name: Use Cross
+        if: contains(matrix._.os, 'ubuntu')
+        run: |
+          cargo install cross
+          echo 'CARGO=cross' >> "$GITHUB_ENV"
+      
+      - name: Set target variables
+        shell: bash
+        run: |
+          echo "TARGET_FLAGS=--target ${{ matrix._.target }}" >> $GITHUB_ENV
+          echo "TARGET_DIR=./engine/target/${{ matrix._.target }}" >> $GITHUB_ENV
+
+      - name: Check GLIBC version
+        if: contains(matrix._.target, 'linux')
+        run: |
+          ldd --version
+      
+      - name: Show command used for Cargo
+        shell: bash
+        run: |
+          echo "cargo command is: ${{ env.CARGO }}"
+          echo "target flag is: ${{ env.TARGET_FLAGS }}"
+          echo "target dir is: ${{ env.TARGET_DIR }}"
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          prefix-key: "v5-rust-${{ matrix._.target }}"
+
+      # Build the CLI - Always use static-ssl features
+      - name: Build CLI Binary
+        # This single step now handles all builds
+        run: >
+          ${{ env.CARGO }} build --release --bin baml-cli ${{ env.TARGET_FLAGS }}
+          --features static-ssl
+          --no-default-features
+        working-directory: engine
+
+      - name: Build CFFI Library
+        run: >
+          ${{ env.CARGO }} build --release -p baml_cffi ${{ env.TARGET_FLAGS }}
+        working-directory: engine
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
+
+      # Determine CFFI library name and artifact suffix based on OS
+      - name: Set CFFI Lib Info
+        id: cffi_info
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
+        shell: bash
+        run: |
+          target="${{ matrix._.target }}"
+          if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
+            # This case is currently excluded by the 'if' condition, but kept for completeness
+            base_name="libbaml_cffi.dll"
+            suffix="windows"
+          elif [[ "${{ matrix._.os }}" == *"macos"* ]]; then
+            base_name="libbaml_cffi.dylib"
+            suffix="darwin"
+          else # Linux
+            base_name="libbaml_cffi.so"
+            suffix="linux"
+          fi
+          # Extract extension
+          extension="${base_name##*.}"
+          # Construct new name: libbaml_cffi-${target}.${extension}
+          new_name="libbaml_cffi-${target}.${extension}"
+
+          echo "lib_name=${base_name}" >> $GITHUB_OUTPUT
+          echo "new_lib_name=${new_name}" >> $GITHUB_OUTPUT
+          echo "artifact_suffix=${suffix}" >> $GITHUB_OUTPUT
+          echo "Original Filename: ${base_name}"
+          echo "New Filename: ${new_name}"
+
+
+      # List target directories to debug build outputs
+      - name: List target directories
+        shell: bash
+        run: |
+          echo "Listing target/ directory:"
+          ls -la engine/target/
+          
+          echo "Listing target/${{ matrix._.target }} directory:"
+          ls -la engine/target/${{ matrix._.target }}/
+          
+          echo "Listing target/${{ matrix._.target }}/release directory:"
+          ls -la engine/target/${{ matrix._.target }}/release/
+
+      # Rename the CFFI library file
+      - name: Rename CFFI Library
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
+        shell: bash
+        run: |
+          set -x # enable debug printing
+          release_dir="engine/target/${{ matrix._.target }}/release"
+          original_file="${release_dir}/${{ steps.cffi_info.outputs.lib_name }}"
+          new_file="${release_dir}/${{ steps.cffi_info.outputs.new_lib_name }}"
+
+          echo "Checking if original file exists: ${original_file}"
+          if [ ! -f "$original_file" ]; then
+            echo "Error: CFFI library file not found at ${original_file}"
+            # List directory contents again for debugging
+            ls -la "$release_dir"
+            exit 1
+          fi
+
+          echo "Renaming ${original_file} to ${new_file}"
+          mv "$original_file" "$new_file"
+
+          echo "Checking if new file exists: ${new_file}"
+          if [ ! -f "$new_file" ]; then
+             echo "Error: Failed to rename CFFI library file. New file not found at ${new_file}"
+             ls -la "$release_dir"
+             exit 1
+          fi
+          echo "Rename successful. New listing:"
+          ls -la "$release_dir"
+
+      # Upload the CFFI library for this specific target
+      - name: Upload CFFI Library Artifact
+        uses: actions/upload-artifact@v4
+        # Skip this step on Windows runners
+        if: matrix._.os != 'windows-2022'
+        with:
+          # Artifact name uses the target name for uniqueness (as decided previously)
+          name: libbaml-cffi-${{ matrix._.target }}
+          # Path now points to the *renamed* library file
+          path: engine/target/${{ matrix._.target }}/release/${{ steps.cffi_info.outputs.new_lib_name }}
+          if-no-files-found: error # Fail if the library file doesn't exist
+      
+      # Determine binary path and archive name
+      - name: Set binary and archive paths
+        id: paths
+        if: inputs.package_for_release
+        shell: bash
+        run: |
+          echo "version: ${{ inputs.version }}"
+          if [[ "${{ matrix._.os }}" == *"windows"* ]]; then
+            bin="engine/target/${{ matrix._.target }}/release/baml-cli.exe"
+          else
+            bin="engine/target/${{ matrix._.target }}/release/baml-cli"
+          fi
+          # Ensure the binary exists before proceeding
+          if [ ! -f "$bin" ]; then
+            echo "Binary not found at $bin"
+            exit 1
+          fi
+          echo "bin=$bin" >> $GITHUB_OUTPUT
+          # Use inputs.version if provided, otherwise default to 'dev' or similar
+          version_name="${{ inputs.version || 'dev' }}"
+          archive_base="baml-cli-${version_name}-${{ matrix._.target }}"
+          echo "archive_base=$archive_base" >> $GITHUB_OUTPUT
+          # Directory to create for staging files
+          echo "archive_dir=./${archive_base}" >> $GITHUB_OUTPUT 
+
+      # Print determined paths for debugging
+      - name: Print artifact details
+        if: inputs.package_for_release
+        shell: bash
+        run: |
+          echo "Binary Path: ${{ steps.paths.outputs.bin }}"
+          echo "Archive Base Name: ${{ steps.paths.outputs.archive_base }}"
+          echo "Staging Directory: ${{ steps.paths.outputs.archive_dir }}"
+
+      # Create archives with proper format
+      - name: Create archive (Windows)
+        if: matrix._.os == 'windows-2022'
+        shell: bash
+        run: |
+          set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
+
+          staging_dir="${{ steps.paths.outputs.archive_dir }}"
+          archive_base="${{ steps.paths.outputs.archive_base }}"
+          archive_file="${archive_base}.zip"
+          checksum_file="${archive_base}.zip.sha256"
+
+          echo "Creating staging directory: $staging_dir"
+          mkdir -p "$staging_dir"
+
+          echo "Copying files to staging directory"
+          cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
+          # Use find for robust copy
+          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
+
+          echo "Creating archive: $archive_file"
+          # Use original cd logic for 7z stability, but run in subshell
+          (
+            cd "$staging_dir"
+            7z a "../${archive_file}" .
+          )
+          # Check if 7z command succeeded and file exists
+          if [ ! -f "${archive_file}" ]; then
+            echo "Archive creation failed or file not found: ${archive_file}"
+            exit 1
+          fi
+
+          echo "Creating checksum file: $checksum_file"
+          certutil -hashfile "${archive_file}" SHA256 > "${checksum_file}"
+          # Check if certutil command succeeded and file exists
+          if [ ! -f "${checksum_file}" ]; then
+            echo "Checksum creation failed or file not found: ${checksum_file}"
+            exit 1
+          fi
+          # Add check for empty checksum file
+          if [ ! -s "${checksum_file}" ]; then
+             echo "Checksum file is empty: ${checksum_file}"
+             exit 1
+          fi
+
+          echo "Archive and checksum created successfully:"
+          ls -l "${archive_base}".*
+
+      - name: Create archive (Unix)
+        if: matrix._.os != 'windows-2022'
+        shell: bash
+        run: |
+          set -euo pipefail # Exit immediately if a command exits with a non-zero status, treat unset variables as an error, and catch errors in pipelines.
+
+          staging_dir="${{ steps.paths.outputs.archive_dir }}"
+          archive_base="${{ steps.paths.outputs.archive_base }}"
+          archive_file="${archive_base}.tar.gz"
+          checksum_file="${archive_file}.sha256"
+
+          echo "Creating staging directory: $staging_dir"
+          mkdir -p "$staging_dir"
+
+          echo "Copying files to staging directory"
+          cp "${{ steps.paths.outputs.bin }}" "$staging_dir/"
+          # Use find for robust copy
+          find . -maxdepth 1 -name 'README.md' -exec cp {} "$staging_dir/" \; || echo "README.md not found"
+          find . -maxdepth 1 -name 'LICENSE*' -exec cp {} "$staging_dir/" \; || echo "LICENSE* files not found"
+
+          echo "Creating archive: $archive_file"
+          # Create the archive in the parent directory directly using -C
+          tar czf "${archive_file}" -C "$staging_dir" .
+          # Check if tar command succeeded and file exists
+          if [ ! -f "${archive_file}" ]; then
+            echo "Archive creation failed or file not found: ${archive_file}"
+            exit 1
+          fi
+
+          echo "Creating checksum file: $checksum_file"
+          shasum -a 256 "${archive_file}" > "${checksum_file}"
+          # Check if shasum command succeeded and file exists
+          if [ ! -f "${checksum_file}" ]; then
+            echo "Checksum creation failed or file not found: ${checksum_file}"
+            exit 1
+          fi
+
+          echo "Archive and checksum created successfully:"
+          ls -l "${archive_base}".*
+
+      # Debug: List root directory contents
+      - name: List root directory contents
+        shell: bash
+        run: |
+          echo "Listing root directory contents:"
+          ls -la
+          echo "Looking for specific archive files:"
+          find . -name "${{ steps.paths.outputs.archive_base }}.*" -type f
+
+      # Upload different artifacts based on mode
+      - name: Upload CLI artifacts (Release)
+        if: inputs.package_for_release
+        uses: actions/upload-artifact@v4
+        with:
+          # Artifact name in GitHub Actions UI remains the same
+          name: baml-cli-${{ matrix._.target }}
+          path: |
+            ${{ steps.paths.outputs.archive_base }}.*
+          if-no-files-found: error
+
+      - name: Upload CLI artifacts (CI)
+        if: inputs.package_for_release == false
+        uses: actions/upload-artifact@v4
+        with:
+          name: baml-cli-${{ matrix._.target }}
+          path: |
+            ${{ matrix._.os == 'windows-2022' && format('engine/target/{0}/release/baml-cli.exe', matrix._.target) || format('engine/target/{0}/release/baml-cli', matrix._.target) }}

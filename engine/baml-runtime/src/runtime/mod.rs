@@ -25,10 +25,11 @@ use std::sync::Arc;
 
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 
+#[derive(Clone)]
 pub struct InternalBamlRuntime {
-    pub(crate) ir: Arc<IntermediateRepr>,
-    pub(crate) db: ParserDatabase,
-    diagnostics: Diagnostics,
+    pub ir: Arc<IntermediateRepr>,
+    pub db: ParserDatabase,
+    pub diagnostics: Diagnostics,
     clients: DashMap<String, Arc<LLMProvider>>,
     retry_policies: DashMap<String, CallablePolicy>,
 }

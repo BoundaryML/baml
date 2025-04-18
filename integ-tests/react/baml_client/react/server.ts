@@ -2535,6 +2535,24 @@ export const TestGeminiSystemAsChat = async (
 };
 
 /**
+ * Executes the "TestGroq" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestGroq"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestGroq = async (
+  input: string,
+): Promise<string> => {
+  return b.TestGroq(
+    input,
+  );
+};
+
+/**
  * Executes the "TestImageInput" BAML action.
  *
  * This server action calls the underlying BAML function "TestImageInput"

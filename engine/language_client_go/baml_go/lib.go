@@ -34,7 +34,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.83.0"
+	VERSION            = "0.84.4"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
@@ -334,29 +334,50 @@ func getCacheDir() (string, error) {
 
 func getTargetLibFilename() (string, error) {
 	goos, goarch := runtime.GOOS, runtime.GOARCH
-	libName, tag := "libbaml", "v"+VERSION
-	var ext, arch string
+	libName := "libbaml_cffi"
+	var ext, targetTriple string
 	switch goos {
 	case "linux":
 		ext = "so"
+		if isMusl() {
+			if goarch == "amd64" {
+				targetTriple = "x86_64-unknown-linux-musl"
+			} else if goarch == "arm64" {
+				targetTriple = "aarch64-unknown-linux-musl"
+			} else {
+				return "", fmt.Errorf("%w: unsupported architecture %s", ErrNotSupportedPlatform, goarch)
+			}
+		} else {
+			if goarch == "amd64" {
+				targetTriple = "x86_64-unknown-linux-gnu"
+			} else if goarch == "arm64" {
+				targetTriple = "aarch64-unknown-linux-gnu"
+			} else {
+				return "", fmt.Errorf("%w: unsupported architecture %s", ErrNotSupportedPlatform, goarch)
+			}
+		}
 	case "darwin":
 		ext = "dylib"
+		if goarch == "amd64" {
+			targetTriple = "x86_64-apple-darwin"
+		} else if goarch == "arm64" {
+			targetTriple = "aarch64-apple-darwin"
+		} else {
+			return "", fmt.Errorf("%w: unsupported architecture %s", ErrNotSupportedPlatform, goarch)
+		}
 	default:
 		return "", fmt.Errorf("%w: unsupported OS %s", ErrNotSupportedPlatform, goos)
 	}
-	switch goarch {
-	case "amd64":
-		arch = "x86_64"
-	case "arm64":
-		arch = "aarch64"
-	default:
-		return "", fmt.Errorf("%w: unsupported architecture %s", ErrNotSupportedPlatform, goarch)
-	}
-	return fmt.Sprintf("%s-%s-%s-%s.%s", libName, tag, goos, arch, ext), nil
+	return fmt.Sprintf("%s-%s.%s", libName, targetTriple, ext), nil
+}
+
+func isMusl() bool {
+	// TODO: Implement this
+	return false
 }
 
 func downloadBamlLibrary(destDir string, filename string) error {
-	tag := "v" + VERSION
+	tag := VERSION
 	downloadURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s", githubRepo, tag, filename)
 	checksumURL := fmt.Sprintf("https://github.com/%s/releases/download/%s/%s.sha256", githubRepo, tag, filename)
 	destPath := filepath.Join(destDir, filename)
@@ -388,7 +409,7 @@ func downloadBamlLibrary(destDir string, filename string) error {
 	if resp.StatusCode != http.StatusOK {
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		if resp.StatusCode == http.StatusNotFound {
-			return fmt.Errorf("%w: library file not found at %s (HTTP 404). Check release tag '%s' and filename '%s'", ErrDownloadFailed, downloadURL, tag, filename)
+			return fmt.Errorf("%w: library file not found at %s (HTTP 404). Check release tag 'v%s' and filename '%s'", ErrDownloadFailed, downloadURL, tag, filename)
 		}
 		return fmt.Errorf("%w: unexpected HTTP status %d fetching %s. Server response: %s", ErrDownloadFailed, resp.StatusCode, downloadURL, string(bodyBytes))
 	}

@@ -24,51 +24,56 @@ class StaticResponseHandler(SimpleHTTPRequestHandler):
         #     }
         # }
 
-        response = {
-            "id": "chat-fecaba633f1e41c6ab1aac77ad38c2f3",
-            "object": "chat.completion",
-            "created": 1743172689,
-            "model": "Molmo-7B-D-0924",
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": " Yes",
-                        "tool_calls": [],
-                    },
-                    "logprobs": {
-                        "content": [
-                            {
-                                "token": " Yes",
-                                "logprob": -0.034360505640506744,
-                                "bytes": [32, 89, 101, 115],
-                                "top_logprobs": [],
-                            },
-                            {
-                                "token": "",
-                                "logprob": -0.5018682479858398,
-                                "bytes": [],
-                                "top_logprobs": [],
-                            },
-                        ]
-                    },
-                    "finish_reason": "stop",
-                    "stop_reason": None,
-                }
-            ],
-            "usage": {
-                "prompt_tokens": 433,
-                "total_tokens": 435,
-                "completion_tokens": 2,
-            },
-            "prompt_logprobs": None,
-        }
+        # response = {
+        #     "id": "chat-fecaba633f1e41c6ab1aac77ad38c2f3",
+        #     "object": "chat.completion",
+        #     "created": 1743172689,
+        #     "model": "Molmo-7B-D-0924",
+        #     "choices": [
+        #         {
+        #             "index": 0,
+        #             "message": {
+        #                 "role": "assistant",
+        #                 "content": " Yes",
+        #                 "tool_calls": [],
+        #             },
+        #             "logprobs": {
+        #                 "content": [
+        #                     {
+        #                         "token": " Yes",
+        #                         "logprob": -0.034360505640506744,
+        #                         "bytes": [32, 89, 101, 115],
+        #                         "top_logprobs": [],
+        #                     },
+        #                     {
+        #                         "token": "",
+        #                         "logprob": -0.5018682479858398,
+        #                         "bytes": [],
+        #                         "top_logprobs": [],
+        #                     },
+        #                 ]
+        #             },
+        #             "finish_reason": "stop",
+        #             "stop_reason": None,
+        #         }
+        #     ],
+        #     "usage": {
+        #         "prompt_tokens": 433,
+        #         "total_tokens": 435,
+        #         "completion_tokens": 2,
+        #     },
+        #     "prompt_logprobs": None,
+        # }
+        object = json.loads(
+            """
+            {"id":"chatcmpl-95d2fc5f-0434-4c2a-98c0-0275212b6ae1","object":"chat.completion","created":1744657880,"model":"llama-3.1-8b-instant","choices":[{"index":0,"message":{"role":"assistant","content":"Hello! It's nice to meet you. Is there something I can help you with or would you like to chat?"},"logprobs":null,"finish_reason":"stop"}],"usage":{"queue_time":0.147255087,"prompt_tokens":40,"prompt_time":0.006949183,"completion_tokens":25,"completion_time":0.033333333,"total_tokens":65,"total_time":0.040282516},"usage_breakdown":{"models":null},"system_fingerprint":"fp_6b54d780f2","x_groq":{"id":"req_01jrtvd4tye14v6tchdwj65nce"}}
+            """
+        )
 
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps(response).encode("utf-8"))
+        self.wfile.write(json.dumps(object).encode("utf-8"))
 
 
 def run(server_class=HTTPServer, handler_class=StaticResponseHandler, port=8000):

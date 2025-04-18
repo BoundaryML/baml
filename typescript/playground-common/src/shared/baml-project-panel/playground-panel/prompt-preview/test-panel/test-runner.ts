@@ -108,7 +108,6 @@ const useRunTests = (maxBatchSize = 5) => {
             const result = await testCase.fn.run_test_with_expr_events(
               rt,
               testCase.tc.name,
-              vscode.loadEnv(),
               (partial: WasmFunctionResponse) => {
                 setState(test, { status: 'running', response: partial })
               },
@@ -325,6 +324,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                 )
               },
               findMediaFile,
+              vscode.loadAwsCreds.bind(vscode),
             )
 
             const endTime = performance.now()

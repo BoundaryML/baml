@@ -447,10 +447,12 @@ fn relevant_data_models<'a>(
 mod tests {
     use std::collections::HashMap;
 
+    use internal_baml_jinja::types::RenderOptions;
+
     use super::*;
     use crate::BamlRuntime;
 
-    #[test]
+    #[test_log::test]
     fn skipped_variants_are_not_rendered() {
         let files = vec![(
             "test-file.baml",
@@ -474,5 +476,199 @@ mod tests {
         let foo_enum = render_output.find_enum("Foo").unwrap();
         assert_eq!(foo_enum.values[0].0.real_name(), "Bar".to_string());
         assert_eq!(foo_enum.values.len(), 1);
+    }
+
+    #[test]
+    fn test_render_output_format_aliases() {
+        let files = vec![(
+            "test-file.baml",
+            r#"
+enum Month {
+  January
+  February
+  March
+  April
+  May
+  June
+  July
+  August
+  September
+  October
+  November
+  December
+}
+
+class Date {
+  day int
+  month Month
+  year Date?
+}
+
+type DateAlias = Date
+
+class Education {
+  from_date DateAlias
+  to_date DateAlias | "current"
+  school string
+  description string
+}
+
+class Resume {
+  education Education[]
+}
+
+            "#,
+        )]
+        .into_iter()
+        .collect();
+        let env_vars: HashMap<&str, &str> = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
+        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None).unwrap();
+
+        let field_type = FieldType::class("Resume");
+        let render_output =
+            render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
+
+        let rendered = render_output
+            .render(RenderOptions::default())
+            .unwrap()
+            .unwrap();
+        println!("{}", rendered);
+
+        assert_eq!(
+            rendered,
+            r#"
+Month
+----
+- January
+- February
+- March
+- April
+- May
+- June
+- July
+- August
+- September
+- October
+- November
+- December
+
+Date {
+  day: int,
+  month: Month,
+  year: Date or null,
+}
+
+Answer in JSON using this schema:
+{
+  education: [
+    {
+      from_date: Date,
+      to_date: Date or "current",
+      school: string,
+      description: string,
+    }
+  ],
+}
+        "#
+            .trim()
+        )
+    }
+
+    #[test]
+    fn test_render_output_format() {
+        let files = vec![(
+            "test-file.baml",
+            r#"
+enum Month {
+  January
+  February
+  March
+  April
+  May
+  June
+  July
+  August
+  September
+  October
+  November
+  December
+}
+
+class Date {
+  day int
+  month Month
+  year int
+}
+
+class Education {
+  from_date Date
+  to_date Date | "current"
+  school string
+  description string
+}
+
+class Resume {
+  education Education[]
+}
+
+            "#,
+        )]
+        .into_iter()
+        .collect();
+        let env_vars: HashMap<&str, &str> = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
+        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None).unwrap();
+
+        let field_type = FieldType::class("Resume");
+        let render_output =
+            render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
+
+        let rendered = render_output
+            .render(RenderOptions::default())
+            .unwrap()
+            .unwrap();
+        println!("{}", rendered);
+
+        assert_eq!(
+            rendered,
+            r#"
+Month
+----
+- January
+- February
+- March
+- April
+- May
+- June
+- July
+- August
+- September
+- October
+- November
+- December
+
+Date {
+  day: int,
+  month: Month,
+  year: int,
+}
+
+Answer in JSON using this schema:
+{
+  education: [
+    {
+      from_date: Date,
+      to_date: Date or "current",
+      school: string,
+      description: string,
+    }
+  ],
+}
+        "#
+            .trim()
+        )
     }
 }

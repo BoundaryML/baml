@@ -27,6 +27,7 @@ import { dirname, join } from 'path'
 import * as dotenv from 'dotenv'
 import * as fs from 'fs'
 import { AwsCredentialIdentity } from '@smithy/types'
+import { refreshBamlConfigSingleton } from '../plugins/language-server/bamlConfig'
 // import { CredentialsProviderError } from '@aws-sdk/credential-providers'
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -198,6 +199,8 @@ export class WebviewPanelHost {
    * @param context A reference to the extension context
    */
   private _setWebviewMessageListener(webview: Webview) {
+    console.log('_setWebviewMessageListener')
+
     const addProject = async () => {
       await requestDiagnostics()
       console.log('last opened func', openPlaygroundConfig.lastOpenedFunction)
@@ -208,6 +211,12 @@ export class WebviewPanelHost {
       this.postMessage('baml_cli_version', bamlConfig.cliVersion)
       this.postMessage('baml_settings_updated', bamlConfig)
     }
+
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('baml')) {
+        this.postMessage('baml_settings_updated', refreshBamlConfigSingleton())
+      }
+    })
 
     webview.onDidReceiveMessage(
       async (
@@ -305,6 +314,7 @@ export class WebviewPanelHost {
             config.update('baml.enablePlaygroundProxy', proxyEnabled, vscode.ConfigurationTarget.Workspace)
             return
           case 'GET_WEBVIEW_URI':
+            console.log('GET_WEBVIEW_URI', vscodeMessage)
             // This is 1:1 with the contents of `image.file` in a test file, e.g. given `image { file baml_src://path/to-image.png }`,
             // relpath will be 'baml_src://path/to-image.png'
             const relpath = vscodeMessage.path
@@ -340,20 +350,6 @@ export class WebviewPanelHost {
               port: this._port(),
             }
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: response })
-            return
-          case 'LOAD_ENV':
-            ;(async () => {
-              try {
-                const envVars = await loadEnv(vscodeMessage)
-                this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: envVars })
-              } catch (error) {
-                this._panel.webview.postMessage({
-                  rpcId: message.rpcId,
-                  rpcMethod: vscodeCommand,
-                  data: { error: error },
-                })
-              }
-            })()
             return
           case 'LOAD_AWS_CREDS':
             ;(async () => {
@@ -404,56 +400,4 @@ export class WebviewPanelHost {
       this._disposables,
     )
   }
-}
-
-const getActiveWorkspacePath = (): string | undefined => {
-  const activeDocument = window.activeTextEditor?.document.uri
-  if (activeDocument) {
-    const activeWorkspace = workspace.getWorkspaceFolder(activeDocument)
-    if (activeWorkspace) {
-      return activeWorkspace.uri.fsPath
-    }
-  }
-  return workspace.workspaceFolders?.[0]?.uri.fsPath
-}
-
-const getEnvVarBlob = async ({ activeWorkspacePath }: { activeWorkspacePath: string }): Promise<string> => {
-  const envVarFile: string | undefined = workspace.getConfiguration('baml').get('envVarFile')
-  const envVarCommand: string | undefined = workspace.getConfiguration('baml').get('envVarCommand')
-
-  if (envVarFile) {
-    return await readFileAsync(join(activeWorkspacePath, envVarFile), 'utf-8')
-  }
-  if (envVarCommand) {
-    const { stdout, stderr } = await execAsync(envVarCommand, {
-      cwd: activeWorkspacePath,
-      env: {
-        workspaceFolder: activeWorkspacePath,
-        fileWorkspaceFolder: activeWorkspacePath,
-        ...process.env,
-      },
-      timeout: 10_000, // milliseconds
-      windowsHide: true,
-    })
-    if (stderr) {
-      throw new Error(stderr)
-    }
-    return stdout
-  }
-  return ''
-}
-
-const loadEnv = async (req: LoadEnvRequest): Promise<LoadEnvResponse> => {
-  const activeWorkspacePath = getActiveWorkspacePath()
-  if (!activeWorkspacePath) {
-    console.warn('Failed to choose workspace for resolving env vars')
-    return { envVars: {} }
-  }
-
-  const envVarBlob = await getEnvVarBlob({ activeWorkspacePath })
-  const envVars = dotenv.parse(envVarBlob)
-
-  console.log('env vars loaded', { time: Date.now(), envVars })
-
-  return { envVars }
 }

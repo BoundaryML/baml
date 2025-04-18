@@ -157,7 +157,7 @@ pub(crate) enum MapStyle {
     ObjectLiteral,
 }
 
-pub(crate) struct RenderOptions {
+pub struct RenderOptions {
     prefix: RenderSetting<String>,
     pub(crate) or_splitter: String,
     enum_value_prefix: RenderSetting<String>,
@@ -599,10 +599,7 @@ impl OutputFormatContent {
         })
     }
 
-    pub(crate) fn render(
-        &self,
-        options: RenderOptions,
-    ) -> Result<Option<String>, minijinja::Error> {
+    pub fn render(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
         let prefix = self.prefix(&options);
 
         let mut render_state = RenderState {
@@ -631,11 +628,6 @@ impl OutputFormatContent {
                 message = Some(class.to_owned());
             }
         }
-
-        let enum_definitions = Vec::from_iter(render_state.hoisted_enums.iter().map(|e| {
-            let enm = self.enums.get(e).expect("Enum not found"); // TODO: Jinja Err
-            self.enum_to_string(enm, &options)
-        }));
 
         let mut class_definitions = Vec::new();
         let mut type_alias_definitions = Vec::new();
@@ -671,6 +663,13 @@ impl OutputFormatContent {
                 _ => format!("{alias} = {recursive_pointer}"),
             });
         }
+
+        // once render_state.hoisted_enums is used, we shouldn't write to it again, hence why into_iter() over iter().
+        // We want a compile-time error if render_state.hoisted_enums is used again.
+        let enum_definitions = Vec::from_iter(render_state.hoisted_enums.into_iter().map(|e| {
+            let enm = self.enums.get(&e).expect("Enum not found"); // TODO: Jinja Err
+            self.enum_to_string(enm, &options)
+        }));
 
         let mut output = String::new();
 

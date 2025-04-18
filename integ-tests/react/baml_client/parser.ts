@@ -2511,6 +2511,24 @@ export class LlmResponseParser {
     }
   }
   
+  TestGroq(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestGroq",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestImageInput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -5566,6 +5584,24 @@ export class LlmStreamParser {
     try {
       return this.runtime.parseLlmResponse(
         "TestGeminiSystemAsChat",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestGroq(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestGroq",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),

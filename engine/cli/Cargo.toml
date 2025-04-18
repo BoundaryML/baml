@@ -23,6 +23,7 @@ anyhow.workspace = true
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 baml-runtime = { path = "../baml-runtime", features = ["internal"] }
+language-server = { path = "../language_server" }
 baml-types.workspace = true
 baml-log.workspace = true
 base64.workspace = true
@@ -95,7 +96,6 @@ aws-smithy-runtime-api = "1.7.0"
 aws-smithy-types = "1.2.0"
 aws-smithy-runtime = "1.6.0"
 enum_dispatch = "0.3.13"
-ambassador = "0.4.0"
 aws-smithy-json = "0.60.7"
 jsonwebtoken = "9.3.0"
 pretty_assertions = "1.4.0"
@@ -110,11 +110,13 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 ctrlc = "3.4"
 
+# openssl = { version = "0.10", optional = true }
 
 [features]
 defaults = []
 internal = []
 skip-integ-tests = []
+static-ssl = ["reqwest/native-tls-vendored"]
 
 [dev-dependencies]
 assert_cmd = "2"

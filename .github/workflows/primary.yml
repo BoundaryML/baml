@@ -8,8 +8,10 @@ on:
     paths:
       - "engine/**"
       - ".github/workflows/primary.yml"
+      - "typescript/**"
     branches:
       - canary
+      - greg/lsp
   # need to run this periodically on the default branch to populate the build cache
   schedule:
     # daily at 2am PST

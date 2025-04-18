@@ -28,7 +28,7 @@ end
 module Baml
   module Serializable
     def serialize
-      Baml::Ffi::serialize(Baml::Types, self)
+      Baml::Ffi::serialize(Baml::Types, Baml::Types, false, self)
     end
   end
 

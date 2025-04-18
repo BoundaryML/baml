@@ -38,14 +38,20 @@ fn main() {
     for out_path in
         [Path::new(&crate_dir).join("../language_client_go/include/baml_cffi_generated.h")]
     {
+        let outpath_content =
+            std::fs::read_to_string(&out_path).unwrap_or_else(|_| String::from(""));
         let res = cbindgen::Builder::new()
             .with_config(cbindgen::Config::from_file("cbindgen.toml").unwrap())
             .with_crate(".")
             .generate()
             .expect("Failed to generate C header")
-            .write_to_file(out_path);
+            .write_to_file(out_path.clone());
         if std::env::var("CI").is_ok() {
             if res {
+                let new_content = std::fs::read_to_string(&out_path).unwrap();
+                println!("New header content: \n==============\n{}", new_content);
+                println!("\n\n");
+                println!("Old header content: \n==============\n{}", outpath_content);
                 panic!("cbindgen generated a diff");
             }
         }

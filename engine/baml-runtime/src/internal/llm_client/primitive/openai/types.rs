@@ -14,7 +14,7 @@ pub struct ChatCompletionGeneric<C> {
     /// A list of chat completion choices. Can be more than one if `n` is greater than 1.s
     pub choices: Vec<C>,
     /// The Unix timestamp (in seconds) of when the chat completion was created.
-    #[serde(deserialize_with = "deserialize_float_to_u32")]
+    #[serde(default, deserialize_with = "deserialize_float_to_u32")]
     pub created: Option<u32>,
     /// The model used for the chat completion.
     pub model: String,

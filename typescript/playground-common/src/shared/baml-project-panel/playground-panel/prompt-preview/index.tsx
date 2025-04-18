@@ -13,8 +13,8 @@ import { ResizablePanel } from '@/components/ui/resizable'
 import { useAtom, useAtomValue } from 'jotai'
 import { areTestsRunningAtom, showEnvDialogAtom } from '../atoms'
 import { ThemeProvider } from '../../theme/ThemeProvider'
-import { Dialog, DialogContent } from '@/components/ui/dialog'
-import EnvVars from '../side-bar/env-vars'
+import { EnvironmentVariablesDialog } from '../side-bar/env-vars'
+
 const PromptPreview = ({ isEmbed = false }: { isEmbed?: boolean }) => {
   const areTestsRunning = useAtomValue(areTestsRunningAtom)
   const ref = useRef<ImperativePanelHandle>(null)
@@ -45,11 +45,7 @@ const PromptPreview = ({ isEmbed = false }: { isEmbed?: boolean }) => {
         className='flex overflow-x-auto flex-col justify-start items-start pr-2 w-full h-full'
         style={{ minHeight: '530px' }}
       >
-        <Dialog open={showEnvDialog} onOpenChange={setShowEnvDialog}>
-          <DialogContent className='mt-12 sm:max-w-[825px]'>
-            <EnvVars />
-          </DialogContent>
-        </Dialog>
+        <EnvironmentVariablesDialog showEnvDialog={showEnvDialog} setShowEnvDialog={setShowEnvDialog} />
         <ResizablePanelGroup autoSaveId={'prompt-preview'} direction='vertical' className='py-2 h-full'>
           <ResizablePanel defaultSize={areTestsRunning ? 40 : 80} className='flex flex-col gap-4 px-4'>
             <PreviewToolbar />

@@ -4,9 +4,9 @@ pub(crate) mod colordiff;
 pub(crate) mod commands;
 pub(crate) mod deploy;
 pub(crate) mod format;
+pub(crate) mod lsp;
 pub(crate) mod propelauth;
 pub(crate) mod tui;
-
 use anyhow::Result;
 use clap::Parser;
 

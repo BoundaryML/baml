@@ -4,7 +4,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Result};
 use baml_types::BamlMap;
 use baml_types::{
-    expr::{self, Expr, ExprMetadata, Name},
+    expr::{self, Expr, ExprMetadata, Name, VarIndex},
     Arrow, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, JinjaExpression, Resolvable,
     StreamingBehavior, StringOr, TypeValue, UnresolvedValue,
 };
@@ -124,12 +124,25 @@ impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
             .args
             .iter()
             .map(|(arg_name, _arg_type)| arg_name.to_string())
-            .collect();
+            .collect::<Vec<String>>();
+        let closed_body = arg_names.iter().enumerate().fold(body, |acc, (ind, name)| {
+            acc.close(
+                &VarIndex {
+                    de_bruijn: 0,
+                    tuple: ind as u32,
+                },
+                name,
+            )
+        });
         let tests = self
             .walk_tests()
             .map(|e| e.node(db))
             .collect::<Result<Vec<_>>>()?;
-        let arg_types = args.iter().map(|(_, arg_type)| arg_type.clone()).collect();
+        let arg_types = args
+            .iter()
+            .map(|(_, arg_type)| arg_type.clone())
+            .collect::<Vec<_>>();
+        let arity = arg_types.len();
         let return_type = self
             .expr_fn()
             .return_type
@@ -148,8 +161,8 @@ impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
             inputs: args,
             output: return_type,
             expr: Expr::Lambda(
-                arg_names,
-                Arc::new(body),
+                arity,
+                Arc::new(closed_body),
                 (self.expr_fn().span.clone(), Some(lambda_type)),
             ),
             tests,
@@ -308,21 +321,36 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 let map_type = item_type.map(|t| FieldType::Map(Box::new(key_type), Box::new(t)));
                 Ok(Expr::Map(new_items, (span.clone(), map_type)))
             }
-            ast::Expression::Identifier(id) => {
-                Ok(Expr::Var(id.name().to_string(), (id.span().clone(), None)))
-            }
+            ast::Expression::Identifier(id) => Ok(Expr::FreeVar(
+                id.name().to_string(),
+                (id.span().clone(), None),
+            )),
 
             ast::Expression::Lambda(args, body, span) => {
                 let args = args
                     .arguments
                     .iter()
                     .filter_map(|arg| arg.value.as_string_value().map(|v| v.0.to_string()))
-                    .collect();
+                    .collect::<Vec<String>>();
+                let arity = args.len();
                 let body = convert_function_body(*body.to_owned(), db)?;
-                Ok(Expr::Lambda(args, Arc::new(body), (span.clone(), None)))
+                let closed_body = args.iter().enumerate().fold(body, |acc, (ind, arg_name)| {
+                    acc.close(
+                        &VarIndex {
+                            de_bruijn: 0,
+                            tuple: ind as u32,
+                        },
+                        arg_name,
+                    )
+                });
+                Ok(Expr::Lambda(
+                    arity,
+                    Arc::new(closed_body),
+                    (span.clone(), None),
+                ))
             }
             ast::Expression::FnApp(func, args, span) => {
-                let func = Expr::Var(func.name().to_string(), (func.span().clone(), None));
+                let func = Expr::FreeVar(func.name().to_string(), (func.span().clone(), None));
                 let args = args.iter().map(|arg| arg.repr(db)).collect::<Result<_>>()?;
                 Ok(Expr::App(
                     Arc::new(func),
@@ -597,6 +625,13 @@ impl IntermediateRepr {
         repr.clients.sort_by(|a, b| a.elem.name.cmp(&b.elem.name));
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
+
+        // TODO: Necessary?
+        for expr_fn in repr.expr_fns.iter_mut() {
+            let expr = expr_fn.elem.expr.clone();
+            let inferred_expr = infer_types_in_context(&mut HashMap::new(), Arc::new(expr));
+            expr_fn.elem.expr = Arc::unwrap_or_clone(inferred_expr);
+        }
 
         Ok(repr)
     }
@@ -1511,15 +1546,27 @@ impl ExprFunction {
 
     /// Traverse the function body adding type annotations to variables that
     /// correspond to function parameters.
-    /// TODO: Make this capture-avoiding.
     pub fn assign_param_types_to_body_variables(self) -> Self {
         let new_expr = match &self.expr {
-            Expr::Lambda(params, body, meta) => {
+            Expr::Lambda(arity, body, meta) => {
                 let body = Arc::unwrap_or_clone(body.clone());
-                let new_body = self.inputs.iter().fold(body, |body, (name, r#type)| {
-                    annotate_variable(name, r#type.clone(), body)
-                });
-                Expr::Lambda(params.clone(), Arc::new(new_body), meta.clone())
+                let new_body =
+                    self.inputs
+                        .iter()
+                        .enumerate()
+                        .fold(body, |body, (ind, (name, r#type))| {
+                            let target = VarIndex {
+                                de_bruijn: 0,
+                                tuple: ind as u32,
+                            };
+                            annotate_variable(target, r#type.clone(), body)
+                        });
+                let res = Expr::Lambda(*arity, Arc::new(new_body), meta.clone());
+                eprintln!(
+                    "ASSIGN_PARAM_TYPES_TO_BODY_VARIABLES input:\n{:?}\nresult:\n{:?}",
+                    self.expr, res
+                );
+                res
             }
             // TODO: Handle other cases - traverse the tree.
             // It seems like only Expr::Lambda is admissable as an ExprBody's expr field?
@@ -1533,47 +1580,49 @@ impl ExprFunction {
 }
 
 /// For all variables under an expression, assign them the given type.
-/// TODO: This ignores scope completely. Make it capture-avoiding.
 pub fn annotate_variable(
-    name: &str,
+    target: VarIndex,
     r#type: FieldType,
     expr: Expr<ExprMetadata>,
 ) -> Expr<ExprMetadata> {
     match &expr {
-        Expr::Var(var_name, meta) => {
-            let mut new_expr = expr.clone();
-            if name == var_name {
-                new_expr.meta_mut().1 = Some(r#type);
-            }
-            new_expr
-        }
-        Expr::Lambda(params, body, meta) => {
-            if !params.contains(&name.to_string()) {
-                let new_body =
-                    annotate_variable(name, r#type.clone(), Arc::unwrap_or_clone(body.clone()));
-                // new_expr = annotate_variable(name, r#type.clone(), body);
-                Expr::Lambda(params.clone(), Arc::new(new_body), meta.clone())
+        Expr::FreeVar(var_name, meta) => expr,
+        Expr::BoundVar(var_index, meta) => {
+            if var_index == &target {
+                Expr::BoundVar(var_index.clone(), (meta.0.clone(), Some(r#type.clone())))
             } else {
                 expr
             }
         }
+        Expr::Lambda(arity, body, meta) => {
+            let new_body = annotate_variable(
+                target.deeper(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(body.clone()),
+            );
+            Expr::Lambda(*arity, Arc::new(new_body), meta.clone())
+        }
         Expr::App(f, args, meta) => {
-            let new_f = annotate_variable(name, r#type.clone(), Arc::unwrap_or_clone(f.clone()));
-            let new_args = annotate_variable(name, r#type, Arc::unwrap_or_clone(args.clone()));
+            let new_f = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(f.clone()),
+            );
+            let new_args =
+                annotate_variable(target.clone(), r#type, Arc::unwrap_or_clone(args.clone()));
             Expr::App(Arc::new(new_f), Arc::new(new_args), meta.clone())
         }
         Expr::Let(var_name, expr, body, meta) => {
-            let new_binding =
-                annotate_variable(name, r#type.clone(), Arc::unwrap_or_clone(expr.clone()));
-            let new_body = if var_name != name {
-                Arc::new(annotate_variable(
-                    name,
-                    r#type.clone(),
-                    Arc::unwrap_or_clone(body.clone()),
-                ))
-            } else {
-                body.clone()
-            };
+            let new_binding = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(expr.clone()),
+            );
+            let new_body = Arc::new(annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(body.clone()),
+            ));
             Expr::Let(
                 var_name.clone(),
                 Arc::new(new_binding),
@@ -1583,7 +1632,7 @@ pub fn annotate_variable(
         }
         Expr::ArgsTuple(args, meta) => Expr::ArgsTuple(
             args.iter()
-                .map(|arg| annotate_variable(name, r#type.clone(), arg.clone()))
+                .map(|arg| annotate_variable(target.clone(), r#type.clone(), arg.clone()))
                 .collect(),
             meta.clone(),
         ),
@@ -1600,14 +1649,14 @@ pub fn annotate_variable(
                 .map(|(key, value)| {
                     (
                         key.clone(),
-                        annotate_variable(name, r#type.clone(), value.clone()),
+                        annotate_variable(target.clone(), r#type.clone(), value.clone()),
                     )
                 })
                 .collect();
             let new_spread = match spread {
                 None => None,
                 Some(expr) => Some(Box::new(annotate_variable(
-                    name,
+                    target,
                     r#type.clone(),
                     expr.as_ref().clone(),
                 ))),
@@ -1625,7 +1674,7 @@ pub fn annotate_variable(
                 .map(|(key, value)| {
                     (
                         key.clone(),
-                        annotate_variable(name, r#type.clone(), value.clone()),
+                        annotate_variable(target.clone(), r#type.clone(), value.clone()),
                     )
                 })
                 .collect();
@@ -1634,7 +1683,7 @@ pub fn annotate_variable(
         Expr::List(items, meta) => {
             let new_items = items
                 .iter()
-                .map(|item| annotate_variable(name, r#type.clone(), item.clone()))
+                .map(|item| annotate_variable(target.clone(), r#type.clone(), item.clone()))
                 .collect();
             Expr::List(new_items, meta.clone())
         }

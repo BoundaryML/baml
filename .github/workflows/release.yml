@@ -25,6 +25,39 @@ permissions:
   id-token: write
 
 jobs:
+  determine-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version_string: ${{ steps.set-version.outputs.version }}
+      is_release_tag: ${{ steps.set-version.outputs.is_release_tag }}
+    steps:
+      - name: Set Version Info
+        id: set-version
+        run: |
+          VERSION="0.1.0" # Default version
+          IS_RELEASE="false"
+          REF_NAME="${{ github.ref_name }}"
+          REF_TYPE="${{ github.ref_type }}"
+
+          if [[ "$REF_TYPE" == "branch" ]]; then
+            # If it's a branch, keep the version as the default
+            : # No-op, version remains "canary"
+          elif [[ "$REF_TYPE" == "tag" ]];
+          then
+            # Use sanitized tag name for version initially
+            VERSION=$(echo "$REF_NAME" | sed 's|/|-|g')
+            # Check if it's a release tag matching vX.Y.Z
+            if [[ "$REF_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              IS_RELEASE="true"
+              # Use the exact tag name for releases
+              VERSION="$REF_NAME"
+            fi
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "is_release_tag=$IS_RELEASE" >> $GITHUB_OUTPUT
+          echo "Determined version: $VERSION"
+          echo "Is release tag: $IS_RELEASE"
   build-python-release:
     uses: ./.github/workflows/build-python-release.reusable.yaml
 
@@ -33,21 +66,38 @@ jobs:
 
   build-typescript-release:
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
+  
+  build-cli:
+    needs: determine-version
+    uses: ./.github/workflows/build-cli-release.reusable.yaml
+    with:
+      version: ${{ needs.determine-version.outputs.version_string }}
+      package_for_release: true
 
-  build-vscode-release:
+  # This job now calls the reusable workflow which contains the matrix strategy
+  build-vscode-reusable: # Renamed job for clarity
+    needs: [ determine-version, build-cli ]
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
+    with:
+      # No artifact_name needed here anymore
+      version: ${{ needs.determine-version.outputs.version_string }}
+      # Pass the boolean output directly
+      is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
 
   # placeholder fan-in step
   all-builds:
     name: Assert all builds passed
     runs-on: ubuntu-latest
     needs:
+      - determine-version
       - build-python-release
       - build-ruby-release
       - build-typescript-release
-      - build-vscode-release
+      - build-cli
+      - build-vscode-reusable # Depends on the job calling the reusable workflow
     steps:
       - run: echo "::do-nothing::" >/dev/null
+      
 
   publish-to-pypi:
     environment: release
@@ -165,66 +215,150 @@ jobs:
             gem push $i
           done
 
-  publish-to-github:
-    environment: release
-    permissions:
-      contents: write
-    needs: [all-builds]
-    if: ${{ startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - name: Get Changelog
-        id: latest_release
-        run: |
-          echo "::set-output name=changelog::$(awk '/^## \[/{if (p) exit; p=1} p' CHANGELOG.md)"
-
-      - name: Create Release
-        uses: mikepenz/action-gh-release@v1 #softprops/action-gh-release
-        with:
-          body: ${{steps.latest_release.outputs.changelog}}
 
   publish-to-open-vsx:
     environment: release
-    needs: [all-builds]
+    needs: [determine-version, all-builds] # Also need determine-version for the condition
     runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
+    # Updated condition to use the output from determine-version
+    if: ${{ (needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: typescript/
-      - uses: actions/download-artifact@v4
+      # No checkout needed if only publishing downloaded artifacts
+      # Setup Node/PNPM/Mise only if needed to run the ovsx CLI tool
+      - uses: pnpm/action-setup@v3
         with:
-          name: baml-vscode-vsix
-          path: typescript/vscode-ext/packages/out/
+          version: 9.12.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Use pattern matching to get all target-specific VSIXs
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts # Download to a dedicated directory
+          merge-multiple: true # Combine artifacts from the matrix runs
+      - name: List downloaded VSIXs
+        run: ls -l vsix-artifacts/
       - name: Publish to open-vsx
         run: |
-          cd typescript/vscode-ext/packages
-          pnpm ovsx publish --packagePath ./out/*.vsix
+          # Use npx to run the globally available or project-local ovsx tool
+          # Publish all downloaded VSIXs using a glob pattern
+          npx ovsx publish --packagePath ./vsix-artifacts/*.vsix
         env:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
   publish-to-vscode-marketplace:
     environment: release
-    needs: [all-builds]
+    needs: [determine-version, all-builds] # Also need determine-version for the condition
     runs-on: ubuntu-latest
-    if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.force_publish_vscode }}
+    # Updated condition to use the output from determine-version and check for tag/force
+    # if: ${{ (startsWith(github.ref, 'refs/tags/') && needs.determine-version.outputs.is_release_tag == 'true') || inputs.force_publish_vscode }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: typescript/
-      - uses: actions/download-artifact@v4
+      # No checkout needed if only publishing downloaded artifacts
+      # Setup Node/PNPM/Mise only if needed to run the vsce CLI tool
+      - uses: pnpm/action-setup@v3
         with:
-          name: baml-vscode-vsix
-          path: typescript/vscode-ext/packages/out/
+          version: 9.12.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Download VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Use pattern matching to get all target-specific VSIXs
+          pattern: baml-vscode-vsix-*
+          path: vsix-artifacts # Download to a dedicated directory
+          merge-multiple: true # Combine artifacts from the matrix runs
+      - name: List downloaded VSIXs
+        run: ls -al vsix-artifacts/
       - name: Publish to VSCode Marketplace
         run: |
-          cd typescript/vscode-ext/packages
-          pnpm vsce publish --packagePath ./out/*.vsix
+          # Use npx to run the vsce tool
+          # Publish all downloaded VSIXs using a glob pattern
+          npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCODE_PAT }}
+
+  publish-to-github:
+    environment: release
+    permissions:
+      contents: write
+    # Depend on all builds AND the version determination
+    needs: [all-builds, determine-version]
+    # Run regardless of tag or branch, flags will handle draft/prerelease state
+    # if: ${{ startsWith(github.ref, 'refs/tags/') }} # Removed condition
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # Checkout needed for CHANGELOG.md
+
+      # Download all CLI artifacts produced by the build-cli job
+      - name: Download all baml-cli artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Match artifacts starting with 'baml-cli-'
+          pattern: baml-cli-* 
+          # Download into this directory
+          path: cli-artifacts 
+          merge-multiple: true # Merge artifacts from different OS/arch into the path
+
+      # Download all CFFI library artifacts produced by the build-cli job
+      - name: Download all libbaml-cffi artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # Match artifacts starting with 'libbaml-cffi-'
+          pattern: libbaml-cffi-* 
+          # Download into a separate directory
+          path: cffi-artifacts 
+          merge-multiple: true # Merge artifacts from different OS into the path
+
+      - name: List downloaded CLI artifacts
+        run: |
+          echo "Downloaded CLI artifacts:"
+          ls -R cli-artifacts/
+
+      # Add step to list downloaded CFFI artifacts for verification
+      - name: List downloaded CFFI artifacts
+        run: |
+          echo "Downloaded CFFI artifacts:"
+          ls -R cffi-artifacts/
+
+      # Always create the changelog file, it will be empty for non-releases
+      - name: Initialize Changelog File
+        run: touch CHANGELOG.txt
+
+      # Get changelog only if it's a proper release tag
+      - name: Populate Changelog File for Release
+        # Condition updated to use output from determine-version
+        # if: needs.determine-version.outputs.is_release_tag == 'true'
+        run: |
+          # Extract the latest changelog section using awk and write it to CHANGELOG.txt
+          # This assumes the latest release is at the top and starts with ## [version]
+          awk '/^## \[/{if (p) exit; if ($2 == "[${{ needs.determine-version.outputs.version_string }}]") p=1} p' CHANGELOG.md | sed '1d' > CHANGELOG.txt # Skip the header line itself
+
+      - name: List CHANGELOG.txt
+        run: ls -l CHANGELOG.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Use version string from determine-version job
+          name: ${{ needs.determine-version.outputs.version_string }}
+          tag_name: ${{ needs.determine-version.outputs.version_string }}
+          # Use the generated CHANGELOG.txt file path for the body
+          body_path: CHANGELOG.txt
+          # Set draft and prerelease based on whether it's a release tag
+          draft: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          prerelease: ${{ needs.determine-version.outputs.is_release_tag == 'false' }}
+          # Upload all files from the cli-artifacts and cffi-artifacts directories
+          files: |
+            cli-artifacts/**/*
+            cffi-artifacts/**/*
+          fail_on_unmatched_files: true
+          # Use default GITHUB_TOKEN
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Do not auto-generate release notes, rely on changelog or empty body
+          generate_release_notes: false

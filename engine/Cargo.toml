@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "baml-lib/*",
+  "baml-lsp-types",
   "baml-rpc",
   "baml-runtime",
   "baml-schema-wasm",
@@ -11,10 +12,12 @@ members = [
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
+  "language_server",
   "language_client_cffi",
   "sandbox",
 ]
 default-members = [
+  "baml-lsp-types",
   "baml-lib/*",
   "baml-rpc",
   "baml-runtime",
@@ -25,14 +28,17 @@ default-members = [
   # "baml-schema-wasm",
   "bstd",
   "cli",
+  "language_client_cffi",
   "language_client_codegen",
   "language_client_python",
   "language_client_ruby/ext/ruby_ffi",
   "language_client_typescript",
-  "language_client_cffi",
+  "language_server",
 ]
 
 [workspace.dependencies]
+lsp-server = { version = "0.7.6" }
+lsp-types = { version = "0.95.0" }
 anyhow = "1.0"
 askama = "0.12.1"
 baml-cli = { path = "cli" }
@@ -57,6 +63,7 @@ internal-baml-codegen = { path = "language_client_codegen" }
 internal-baml-core = { path = "baml-lib/baml-core" }
 internal-baml-jinja = { path = "baml-lib/jinja-runtime" }
 internal-llm-client = { path = "baml-lib/llm-client" }
+baml-lsp-types = { path = "baml-lsp-types" }
 jsonish = { path = "baml-lib/jsonish" }
 log = "0.4.20"
 # TODO: disable imports, etc
@@ -110,7 +117,7 @@ tokio = { version = "1", default-features = false, features = [
 ] }
 
 [workspace.package]
-version = "0.83.0"
+version = "0.84.4"
 authors = ["Boundary <contact@boundaryml.com>"]
 
 description = "BAML Toolchain"

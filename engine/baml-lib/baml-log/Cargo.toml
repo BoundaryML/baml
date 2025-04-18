@@ -6,6 +6,9 @@ authors.workspace = true
 license-file.workspace = true
 description = "Logging library for BAML for end user logging"
 
+[features]
+use-native-logger = []
+
 [lints.rust]
 dead_code = "deny"
 elided_named_lifetimes = "deny"
@@ -20,3 +23,5 @@ thiserror = "2.0.12"
 colored = "2"
 lazy_static = "1.5.0"
 chrono = "0.4.40"
+log.workspace = true
+

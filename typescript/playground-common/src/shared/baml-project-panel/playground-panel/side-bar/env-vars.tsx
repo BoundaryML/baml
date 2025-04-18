@@ -29,21 +29,26 @@ import { motion } from 'motion/react'
 
 const envVarVisibilityAtom = atom<Record<string, boolean>>({})
 
-const REQUIRED_ENV_VAR_UNSET_WARNING = 'Clients may fail if this is not set'
+const REQUIRED_ENV_VAR_UNSET_WARNING = 'Your BAML clients may fail if this is not set'
 
-const renderedEnvVarsAtom = atom((get) => {
-  const envVars = get(envVarsAtom)
+interface EnvVarEntry {
+  key: string
+  value: string | undefined
+  required: boolean
+  hidden: boolean
+}
+
+const renderedEnvVarsAtom = atom<EnvVarEntry[]>((get) => {
+  const envVars = get(envVarsAtom) as Record<string, string>
   const requiredEnvVars = get(requiredEnvVarsAtom)
   const visibility = get(envVarVisibilityAtom)
 
-  const vars = Object.entries(envVars)
-    .filter(([key]) => key !== 'BOUNDARY_PROXY_URL')
-    .map(([key, value]) => ({
-      key,
-      value,
-      required: requiredEnvVars.includes(key),
-      hidden: visibility[key] !== false, // hidden by default unless explicitly set to false
-    }))
+  const vars: EnvVarEntry[] = Object.entries(envVars).map(([key, value]) => ({
+    key,
+    value,
+    required: requiredEnvVars.includes(key),
+    hidden: visibility[key] !== false, // hidden by default unless explicitly set to false
+  }))
 
   const missingVars = requiredEnvVars.filter((envVar) => !(envVar in envVars))
 
@@ -59,7 +64,71 @@ const renderedEnvVarsAtom = atom((get) => {
   return sortBy(vars, [(v) => v.key])
 })
 
-export default function EnvVariablesManager() {
+const escapeValue = (value: string): string => {
+  return value.replace(/[\n\r\t]/g, (match) => {
+    switch (match) {
+      case '\n':
+        return '\\n'
+      case '\r':
+        return '\\r'
+      case '\t':
+        return '\\t'
+      default:
+        return match
+    }
+  })
+}
+
+const unescapeValue = (value: string): string => {
+  return value.replace(/\\[nrt]/g, (match) => {
+    switch (match) {
+      case '\\n':
+        return '\n'
+      case '\\r':
+        return '\r'
+      case '\\t':
+        return '\t'
+      default:
+        return match
+    }
+  })
+}
+
+function EnvVarStatus({ value, required }: { value?: string; required: boolean }) {
+  if (!value || value === '') {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <AlertTriangle className='h-4 w-4 text-orange-500 flex-shrink-0' />
+          </TooltipTrigger>
+          <TooltipContent side='top' className='text-xs'>
+            {value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  if (required) {
+    return (
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Check className='h-4 w-4 text-green-500 flex-shrink-0' />
+          </TooltipTrigger>
+          <TooltipContent side='top' className='text-xs'>
+            Used by one of your BAML clients
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    )
+  }
+
+  return <div />
+}
+
+export const EnvironmentVariablesPanel: React.FC = () => {
   const envVars = useAtomValue(renderedEnvVarsAtom)
   const setEnvVars = useSetAtom(envVarsAtom)
   const setVisibility = useSetAtom(envVarVisibilityAtom)
@@ -69,25 +138,6 @@ export default function EnvVariablesManager() {
   const [newValue, setNewValue] = useState('')
   const [envFileContent, setEnvFileContent] = useState('')
   const { toast } = useToast()
-
-  // Local state for environment variables
-  const [inMemoryEnvVars, setInMemoryEnvVars] = useState<Record<string, string>>(currentEnvVars)
-
-  // // Sync local state with atom on mount and when atom changes
-  // useEffect(() => {
-  //   setInMemoryEnvVars(currentEnvVars)
-  // }, [currentEnvVars])
-
-  // Sync atom with local state whenever local state changes
-  useEffect(() => {
-    // Schedule the update to run on the next animation frame
-    const timeoutId = requestAnimationFrame(() => {
-      setEnvVars(inMemoryEnvVars)
-    })
-
-    // Cleanup the scheduled update if the effect re-runs before it executes
-    return () => cancelAnimationFrame(timeoutId)
-  }, [inMemoryEnvVars, setEnvVars])
 
   // Toggle visibility of an environment variable
   const toggleVisibility = (index: number) => {
@@ -101,30 +151,26 @@ export default function EnvVariablesManager() {
   // Update an environment variable immediately
   const updateEnvVar = (index: number, value: string) => {
     const envVar = envVars[index]
-    setInMemoryEnvVars((prev) => ({
-      ...prev,
-      [envVar.key]: value,
-    }))
+    const newVars = { ...currentEnvVars }
+    newVars[envVar.key] = value
+    setEnvVars(newVars)
   }
 
   // Delete an environment variable
   const deleteEnvVar = (index: number) => {
     const { key } = envVars[index]
-    setInMemoryEnvVars((prev) => {
-      const newVars = { ...prev }
-      delete newVars[key]
-      return newVars
-    })
+    const newVars = { ...currentEnvVars }
+    delete newVars[key]
+    setEnvVars(newVars)
   }
 
   // Add a new environment variable
   const addEnvVar = () => {
     if (newKey.trim() === '') return
 
-    setInMemoryEnvVars((prev) => ({
-      ...prev,
-      [newKey]: newValue,
-    }))
+    const newVars = { ...currentEnvVars }
+    newVars[newKey] = newValue
+    setEnvVars(newVars)
 
     // Reset form
     setNewKey('')
@@ -132,13 +178,14 @@ export default function EnvVariablesManager() {
   }
 
   // Parse and import environment variables from .env file
-  const parseEnvFile = () => {
+  const parseAndSaveEnvFile = () => {
     try {
       const parsed = parseDotenv(envFileContent)
-      setInMemoryEnvVars((prev) => ({
-        ...prev,
-        ...parsed,
-      }))
+      const newVars = { ...currentEnvVars }
+      Object.entries(parsed).forEach(([key, value]) => {
+        newVars[key] = value
+      })
+      setEnvVars(newVars)
       setEnvFileContent('')
       toast({
         title: 'Environment variables imported',
@@ -210,97 +257,86 @@ export default function EnvVariablesManager() {
       <div className='space-y-1'>
         <table className='w-full'>
           <tbody>
-            {envVars.map((env, index) => (
-              <motion.tr
-                initial={{ opacity: 0, y: 2 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.001, duration: 0.05 }}
-                key={env.key}
-                className='relative hover:bg-accent/50 rounded-md'
-              >
-                <td className='pl-2 pr-0.5 py-0.5'>
-                  <div className='flex items-center gap-2 justify-between'>
-                    <code className='font-mono text-xs text-muted-foreground'>{env.key}</code>
-                    {!env.value || env.value === '' ? (
-                      <TooltipProvider key={env.key} delayDuration={300}>
+            {envVars
+              .filter(({ key }) => key !== 'BOUNDARY_PROXY_URL')
+              .map((env, index) => (
+                <motion.tr
+                  initial={{ opacity: 0, y: 2 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.001, duration: 0.05 }}
+                  key={env.key}
+                  className='relative hover:bg-accent/50 rounded-md'
+                >
+                  <td className='pl-2 pr-0.5 py-0.5'>
+                    <div className='flex items-center gap-2 justify-between'>
+                      <code className='font-mono text-xs text-muted-foreground'>{env.key}</code>
+                      <EnvVarStatus value={env.value} required={env.required} />
+                    </div>
+                  </td>
+                  <td className='px-0.5 py-0.5'>
+                    <TooltipProvider key={env.key} delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Input
+                            type={env.hidden ? 'password' : 'text'}
+                            value={typeof env.value === 'string' ? escapeValue(env.value) : ''}
+                            onChange={(e) => updateEnvVar(index, unescapeValue(e.target.value))}
+                            className='h-6 text-xs font-mono placeholder:font-sans min-w-32'
+                            placeholder={env.required && !env.value ? '<unset>' : undefined}
+                            autoComplete='off'
+                            data-1p-ignore
+                          />
+                        </TooltipTrigger>
+                        <TooltipContent side='top' className='text-xs'>
+                          {env.value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </td>
+                  <td className='pl-0.5 pr-2 py-0.5 text-right'>
+                    <div className='flex gap-1 justify-end'>
+                      <TooltipProvider delayDuration={300}>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <AlertTriangle className='h-4 w-4 text-orange-500 flex-shrink-0' />
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='p-0.5 w-5 h-5'
+                              onClick={() => toggleVisibility(index)}
+                            >
+                              {env.hidden ? (
+                                <EyeOff className='w-4 h-4 text-muted-foreground hover:text-primary' />
+                              ) : (
+                                <Eye className='w-4 h-4 text-muted-foreground hover:text-primary' />
+                              )}
+                            </Button>
                           </TooltipTrigger>
                           <TooltipContent side='top' className='text-xs'>
-                            {env.value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
+                            {env.hidden ? 'Click to show value' : 'Click to hide value'}
                           </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                    ) : (
-                      <div />
-                    )}
-                  </div>
-                </td>
-                <td className='px-0.5 py-0.5'>
-                  <TooltipProvider key={env.key} delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Input
-                          type={env.hidden ? 'password' : 'text'}
-                          value={typeof env.value === 'string' ? env.value : ''}
-                          onChange={(e) => updateEnvVar(index, e.target.value)}
-                          className='h-6 text-xs font-mono placeholder:font-sans'
-                          placeholder={env.required && !env.value ? '<unset>' : undefined}
-                          autoComplete='off'
-                          data-1p-ignore
-                        />
-                      </TooltipTrigger>
-                      <TooltipContent side='top' className='text-xs'>
-                        {env.value ? 'Click to edit' : REQUIRED_ENV_VAR_UNSET_WARNING}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </td>
-                <td className='pl-0.5 pr-2 py-0.5 text-right'>
-                  <div className='flex gap-1 justify-end'>
-                    <TooltipProvider delayDuration={300}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            className='p-0.5 w-5 h-5'
-                            onClick={() => toggleVisibility(index)}
-                          >
-                            {env.hidden ? (
-                              <EyeOff className='w-4 h-4 text-muted-foreground hover:text-primary' />
-                            ) : (
-                              <Eye className='w-4 h-4 text-muted-foreground hover:text-primary' />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side='top' className='text-xs'>
-                          {env.hidden ? 'Click to show value' : 'Click to hide value'}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                    <TooltipProvider delayDuration={300}>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant='ghost'
-                            size='sm'
-                            className='p-0.5 w-5 h-5'
-                            onClick={() => deleteEnvVar(index)}
-                          >
-                            <Trash2 className='w-4 h-4 text-muted-foreground hover:text-destructive' />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side='top' className='text-xs'>
-                          Delete environment variable
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </td>
-              </motion.tr>
-            ))}
+                      <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              className='p-0.5 w-5 h-5'
+                              onClick={() => deleteEnvVar(index)}
+                            >
+                              <Trash2 className='w-4 h-4 text-muted-foreground hover:text-destructive' />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side='top' className='text-xs'>
+                            Delete environment variable
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </div>
+                  </td>
+                </motion.tr>
+              ))}
             <motion.tr
               initial={{ opacity: 0, y: 2 }}
               animate={{ opacity: 1, y: 0 }}
@@ -360,11 +396,24 @@ export default function EnvVariablesManager() {
               <Button variant='outline'>Cancel</Button>
             </DialogClose>
             <DialogClose asChild>
-              <Button onClick={parseEnvFile}>Import</Button>
+              <Button onClick={parseAndSaveEnvFile}>Import</Button>
             </DialogClose>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export const EnvironmentVariablesDialog: React.FC<{
+  showEnvDialog: boolean
+  setShowEnvDialog: (show: boolean) => void
+}> = ({ showEnvDialog, setShowEnvDialog }) => {
+  return (
+    <Dialog open={showEnvDialog} onOpenChange={setShowEnvDialog}>
+      <DialogContent className='mt-12 max-h-[80vh] overflow-y-auto sm:max-w-none w-fit'>
+        <EnvironmentVariablesPanel />
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -8,148 +8,17 @@ import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-se
 import { telemetry } from './plugins/language-server'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
-import { type LanguageClient, type ServerOptions, TransportKind } from 'vscode-languageclient/node'
-
-let client: LanguageClient
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
 const LANG_NAME = 'Baml'
 
-let timeout: NodeJS.Timeout | undefined
-let statusBarItem: vscode.StatusBarItem
 let server: any
-
 let glowOnDecoration: vscode.TextEditorDecorationType | null = null
 let glowOffDecoration: vscode.TextEditorDecorationType | null = null
 let isGlowOn: boolean = true
 let animationTimer: NodeJS.Timeout | null = null
 let highlightRanges: vscode.Range[] = []
-
-function scheduleDiagnostics(): void {
-  if (timeout) {
-    clearTimeout(timeout)
-  }
-  timeout = setTimeout(() => {
-    statusBarItem.show()
-    runDiagnostics()
-  }, 1000) // 1 second after the last keystroke
-}
-
-interface LintRequest {
-  lintingRules: string[]
-  promptTemplate: string
-  promptVariables: { [key: string]: string }
-}
-
-interface LinterOutput {
-  exactPhrase: string
-  reason: string
-  severity: string
-  recommendation?: string
-  recommendation_reason?: string
-  fix?: string
-}
-
-interface LinterRuleOutput {
-  diagnostics: LinterOutput[]
-  ruleName: string
-}
-
-async function runDiagnostics(): Promise<void> {
-  const editor = vscode.window.activeTextEditor
-  if (!editor) {
-    statusBarItem.hide()
-    return
-  }
-
-  console.log('Running diagnostics')
-
-  statusBarItem.text = `$(sync~spin) Running AI Linter...`
-  statusBarItem.backgroundColor = '##9333ea'
-  statusBarItem.color = '#ffffff'
-  const text = editor.document.getText()
-
-  const lintRequest: LintRequest = {
-    lintingRules: ['Rule1', 'Rule2'],
-    promptTemplate: text,
-    promptVariables: {},
-  }
-  const diagnostics: vscode.Diagnostic[] = []
-
-  try {
-    const response = await axios.post<LinterRuleOutput[]>('http://localhost:8000/lint', lintRequest)
-    console.log('Got response:', response.data)
-    const results = response.data
-
-    results.forEach((rule) => {
-      let found = false
-
-      rule.diagnostics.forEach((output) => {
-        const escapedPhrase = output.exactPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-        const phrase = output.exactPhrase
-        let index = 0
-        // Find all occurrences of the phrase
-        while ((index = text.indexOf(phrase, index)) !== -1) {
-          found = true
-          const startPos = editor.document.positionAt(index)
-          const endPos = editor.document.positionAt(index + phrase.length)
-          const range = new vscode.Range(startPos, endPos)
-
-          const diagnostic = new vscode.Diagnostic(
-            range,
-            `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
-            output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
-          )
-
-          if (output.fix) {
-            diagnostic.code = '[linter]' + output.fix
-          }
-          diagnostic.source = rule.ruleName
-
-          diagnostics.push(diagnostic)
-          index += phrase.length // Move index to the end of the current found phrase to continue searching
-        }
-
-        if (!found && phrase.length > 100) {
-          const subPhrase = phrase.substring(0, 100)
-          index = 0 // Reset index for new search
-          while ((index = text.indexOf(subPhrase, index)) !== -1) {
-            const startPos = editor.document.positionAt(index)
-            const endPos = editor.document.positionAt(index + subPhrase.length)
-            const range = new vscode.Range(startPos, endPos)
-
-            const diagnostic = new vscode.Diagnostic(
-              range,
-              `${output.reason}${output.recommendation ? ` - ${output.recommendation}` : ''}`,
-              output.severity === 'error' ? vscode.DiagnosticSeverity.Error : vscode.DiagnosticSeverity.Warning,
-            )
-
-            if (output.fix) {
-              diagnostic.code = '[linter]' + output.fix
-            }
-            diagnostic.source = rule.ruleName
-
-            diagnostics.push(diagnostic)
-            index += subPhrase.length // Move index to the end of the current found phrase to continue searching
-          }
-        }
-
-        // const newRegex = new RegExp(`\\b${}\\b`, 'gi');
-      })
-    })
-    console.log('Pushing test errorrrr')
-
-    console.log('Diagnostics:', diagnostics)
-    diagnosticsCollection.clear()
-    diagnosticsCollection.set(editor.document.uri, diagnostics)
-  } catch (error) {
-    console.error('Failed to run diagnostics:', error)
-    vscode.window.showErrorMessage('Failed to run diagnostics')
-  }
-  statusBarItem.text = 'AI Linter Ready'
-  statusBarItem.hide()
-}
 
 import type { Express } from 'express'
 import StatusBarPanel from './panels/StatusBarPanel'
@@ -158,31 +27,19 @@ export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
 
   vscode.workspace.getConfiguration('baml')
-  // TODO: Reactivate linter.
-  // statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100)
-  // statusBarItem.text = `AI Linter Ready`
-  // statusBarItem.show()
-  context.subscriptions.push(StatusBarPanel.instance)
 
-  const provider = new DiagnosticCodeActionProvider()
-  const selector: vscode.DocumentSelector = { scheme: 'file', language: 'baml' } // Adjust language as necessary
-  const codeActionProvider = vscode.languages.registerCodeActionsProvider(selector, provider, {
-    providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
-  })
+  context.subscriptions.push(StatusBarPanel.instance)
 
   // Initialize the highlight effect.
   createDecorations()
   startAnimation()
 
-  context.subscriptions.push(codeActionProvider)
-
   const app: Express = require('express')()
   app.use(cors())
-  let port: number
   const server = app.listen(0, () => {
     console.log('Server started on port ' + getPort())
     WebviewPanelHost.currentPanel?.postMessage('port_number', {
-      port: port,
+      port: getPort(),
     })
   })
 
@@ -425,14 +282,18 @@ export function activate(context: vscode.ExtensionContext) {
   // Listen for messages from the webview
 
   plugins.map(async (plugin) => {
-    const enabled = await plugin.enabled()
-    if (enabled) {
-      console.log(`Activating ${plugin.name}`)
-      if (plugin.activate) {
-        await plugin.activate(context, outputChannel)
+    try {
+      const enabled = await plugin.enabled()
+      if (enabled) {
+        console.log(`Activating ${plugin.name}`)
+        if (plugin.activate) {
+          await plugin.activate(context, outputChannel)
+        }
+      } else {
+        console.log(`${plugin.name} is Disabled`)
       }
-    } else {
-      console.log(`${plugin.name} is Disabled`)
+    } catch (error) {
+      console.error(`Error activating ${plugin.name}:`, error)
     }
   })
 
@@ -454,39 +315,12 @@ export function deactivate(): void {
   diagnosticsCollection.clear()
   diagnosticsCollection.dispose()
   StatusBarPanel.instance.dispose()
-  statusBarItem.dispose()
   for (const plugin of plugins) {
     if (plugin.deactivate) {
       void plugin.deactivate()
     }
   }
   server?.close()
-}
-class DiagnosticCodeActionProvider implements vscode.CodeActionProvider {
-  public provideCodeActions(
-    document: vscode.TextDocument,
-    range: vscode.Range,
-    context: vscode.CodeActionContext,
-    token: vscode.CancellationToken,
-  ): vscode.ProviderResult<vscode.CodeAction[]> {
-    const codeActions: vscode.CodeAction[] = []
-
-    for (const diagnostic of context.diagnostics) {
-      if (diagnostic.code?.toString().startsWith('[linter]')) {
-        const fixString = diagnostic.code.toString().replace('[linter]', '')
-        const fixAction = new vscode.CodeAction(`Apply fix: ${fixString}`, vscode.CodeActionKind.QuickFix)
-        fixAction.edit = new vscode.WorkspaceEdit()
-        fixAction.diagnostics = [diagnostic]
-        fixAction.isPreferred = true
-
-        const edit = new vscode.TextEdit(diagnostic.range, fixString)
-        fixAction.edit.set(document.uri, [edit])
-
-        codeActions.push(fixAction)
-      }
-    }
-    return codeActions
-  }
 }
 
 // Create our two decoration states

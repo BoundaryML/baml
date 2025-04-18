@@ -10,6 +10,8 @@ function PrimitiveAlias(p: Primitive) -> Primitive {
     client "openai/gpt-4o"
     prompt r#"
       Return the given value back: {{ p }}
+
+      {{ ctx.output_format }}
     "#
 }
 

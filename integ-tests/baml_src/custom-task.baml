@@ -45,7 +45,7 @@ class GroceryReceipt {
     The total amount spent on groceries
   "#)
 }
-
+ 
 class CustomTaskResult {
   bookOrder BookOrder | null
   flightConfirmation FlightConfirmation | null

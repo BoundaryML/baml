@@ -11,7 +11,7 @@ pub mod client_registry;
 pub mod errors;
 pub mod eval_expr;
 pub mod request;
-mod runtime;
+pub mod runtime;
 pub mod runtime_interface;
 pub mod test_constraints;
 #[cfg(not(target_arch = "wasm32"))]
@@ -113,8 +113,9 @@ use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
+#[derive(Clone)]
 pub struct BamlRuntime {
-    pub(crate) inner: InternalBamlRuntime,
+    pub inner: InternalBamlRuntime,
     tracer: Arc<BamlTracer>,
     env_vars: HashMap<String, String>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -190,7 +191,7 @@ impl BamlRuntime {
         })
     }
 
-    pub fn from_file_content<T: AsRef<str>, U: AsRef<str>>(
+    pub fn from_file_content<T: AsRef<str> + std::fmt::Debug, U: AsRef<str>>(
         root_path: &str,
         files: &HashMap<T, T>,
         env_vars: HashMap<U, U>,
@@ -200,8 +201,11 @@ impl BamlRuntime {
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
             .collect();
         baml_log::set_from_env(&copy)?;
+
+        let inner = InternalBamlRuntime::from_file_content(root_path, files)?;
+
         Ok(BamlRuntime {
-            inner: InternalBamlRuntime::from_file_content(root_path, files)?,
+            inner,
             tracer: BamlTracer::new(None, env_vars.into_iter())?.into(),
             env_vars: copy,
             #[cfg(not(target_arch = "wasm32"))]
@@ -217,6 +221,7 @@ impl BamlRuntime {
     pub fn create_ctx_manager(
         &self,
         language: BamlValue,
+        // A callback that can be implemented in JS to read files that are referred in tests.
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
         let ctx =
@@ -229,15 +234,22 @@ impl BamlRuntime {
         ctx
     }
 
-    pub fn create_ctx_manager_with_env(
+    // Another way of creating a context that uses some
+    // helper functions to load AWS SSO profile and creds.
+    // These functions are implemented in Node for example, and used by the vscode playground to make aws sso work.
+    pub fn create_ctx_manager_with_env_var_loaders(
         &self,
         language: BamlValue,
-        env_vars: HashMap<String, String>,
+        // This callback reads files that are added in tests
         baml_src_reader: BamlSrcReader,
+        // This callback can be implemented in JS to load AWS SSO profile and creds.
         aws_cred_provider: AwsCredProvider,
     ) -> RuntimeContextManager {
-        let ctx =
-            RuntimeContextManager::new_from_env_vars(env_vars, baml_src_reader, aws_cred_provider);
+        let ctx = RuntimeContextManager::new_from_env_vars(
+            self.env_vars.clone(),
+            baml_src_reader,
+            aws_cred_provider,
+        );
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -548,6 +560,7 @@ impl BamlRuntime {
                         context,
                         runtime: self,
                         expr_tx: expr_tx.clone(),
+                        evaluated_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
                     };
                     let param_baml_values = params
                         .iter()
@@ -875,11 +888,14 @@ impl BamlRuntime {
                     .output_type
                     .generate_client(self.inner.ir(), args)
                     .with_context(|| {
-                        let ((line, col), _) = generator.span.line_and_column();
-                        format!(
-                            "Error while running generator defined at {}:{line}:{col}",
-                            generator.span.file.path()
-                        )
+                        let err_msg = format!(
+                            "Error while running generator defined at {}:{}:{}",
+                            generator.span.file.path(),
+                            generator.span.line_and_column().0 .0,
+                            generator.span.line_and_column().0 .1
+                        );
+                        log::error!("{}", err_msg);
+                        err_msg
                     })
             })
             .collect()

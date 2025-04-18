@@ -67,7 +67,6 @@ jobs:
           # building in engine/ ensures that we pick up .cargo/config.toml
           working-directory: engine
           args: --release --out language_client_python/dist --manifest-path language_client_python/Cargo.toml
-          sccache: "true"
           manylinux: ${{ matrix._.manylinux }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
