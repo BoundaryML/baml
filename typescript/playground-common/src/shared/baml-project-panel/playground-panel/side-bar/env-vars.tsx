@@ -140,25 +140,22 @@ export const EnvironmentVariablesPanel: React.FC = () => {
   const { toast } = useToast()
 
   // Toggle visibility of an environment variable
-  const toggleVisibility = (index: number) => {
-    const envVar = envVars[index]
+  const toggleVisibility = (key: string) => {
     setVisibility((prev) => ({
       ...prev,
-      [envVar.key]: !envVar.hidden,
+      [key]: !prev[key],
     }))
   }
 
   // Update an environment variable immediately
-  const updateEnvVar = (index: number, value: string) => {
-    const envVar = envVars[index]
+  const updateEnvVar = (key: string, value: string) => {
     const newVars = { ...currentEnvVars }
-    newVars[envVar.key] = value
+    newVars[key] = value
     setEnvVars(newVars)
   }
 
   // Delete an environment variable
-  const deleteEnvVar = (index: number) => {
-    const { key } = envVars[index]
+  const deleteEnvVar = (key: string) => {
     const newVars = { ...currentEnvVars }
     delete newVars[key]
     setEnvVars(newVars)
@@ -259,11 +256,11 @@ export const EnvironmentVariablesPanel: React.FC = () => {
           <tbody>
             {envVars
               .filter(({ key }) => key !== 'BOUNDARY_PROXY_URL')
-              .map((env, index) => (
+              .map((env) => (
                 <motion.tr
                   initial={{ opacity: 0, y: 2 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.001, duration: 0.05 }}
+                  transition={{ duration: 0.05 }}
                   key={env.key}
                   className='relative hover:bg-accent/50 rounded-md'
                 >
@@ -280,7 +277,7 @@ export const EnvironmentVariablesPanel: React.FC = () => {
                           <Input
                             type={env.hidden ? 'password' : 'text'}
                             value={typeof env.value === 'string' ? escapeValue(env.value) : ''}
-                            onChange={(e) => updateEnvVar(index, unescapeValue(e.target.value))}
+                            onChange={(e) => updateEnvVar(env.key, unescapeValue(e.target.value))}
                             className='h-6 text-xs font-mono placeholder:font-sans min-w-32'
                             placeholder={env.required && !env.value ? '<unset>' : undefined}
                             autoComplete='off'
@@ -302,7 +299,7 @@ export const EnvironmentVariablesPanel: React.FC = () => {
                               variant='ghost'
                               size='sm'
                               className='p-0.5 w-5 h-5'
-                              onClick={() => toggleVisibility(index)}
+                              onClick={() => toggleVisibility(env.key)}
                             >
                               {env.hidden ? (
                                 <EyeOff className='w-4 h-4 text-muted-foreground hover:text-primary' />
@@ -323,7 +320,7 @@ export const EnvironmentVariablesPanel: React.FC = () => {
                               variant='ghost'
                               size='sm'
                               className='p-0.5 w-5 h-5'
-                              onClick={() => deleteEnvVar(index)}
+                              onClick={() => deleteEnvVar(env.key)}
                             >
                               <Trash2 className='w-4 h-4 text-muted-foreground hover:text-destructive' />
                             </Button>
@@ -340,7 +337,7 @@ export const EnvironmentVariablesPanel: React.FC = () => {
             <motion.tr
               initial={{ opacity: 0, y: 2 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: envVars.length * 0.001, duration: 0.05 }}
+              transition={{ duration: 0.05 }}
               className='rounded-md'
             >
               <td className='pl-2 pr-0.5 py-0.5'>
