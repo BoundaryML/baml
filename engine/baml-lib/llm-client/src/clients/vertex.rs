@@ -173,6 +173,7 @@ pub struct ResolvedVertex {
     pub auth_strategy: ResolvedGcpAuthStrategy,
     pub model: String,
     pub headers: IndexMap<String, String>,
+    /// This is usually not pub, but we need it so that we can pass it through to the Anthropic client.
     pub role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,

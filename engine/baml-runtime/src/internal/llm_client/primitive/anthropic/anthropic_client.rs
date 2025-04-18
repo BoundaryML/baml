@@ -193,8 +193,13 @@ impl AnthropicClient {
         })
     }
 
-    /// When using Vertex with Anthropic, we need to use a synthetic client that mimics the Anthropic API.
-    /// This allows us to construct an Anthropic HTTP client from a baml client for vertex-ai.
+    /// GCP only supports using Anthropic on Vertex using the Anthropic SDK with
+    /// the Vertex plugin, i.e. pip install anthropic[vertex]. For us, this means
+    /// that we need to somehow construct an Anthropic-shaped request and use it
+    /// with GCP-style auth/URLs.
+    ///
+    /// We implement this by constructing a synthetic Anthropic client that allows
+    /// us to convert RenderedChatMessages into the Anthropic API format.
     pub fn synthetic_for_vertex_anthropic(
         name: String,
         context: RenderContext_Client,

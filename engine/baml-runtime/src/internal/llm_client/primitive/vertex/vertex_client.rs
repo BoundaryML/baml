@@ -70,16 +70,21 @@ fn resolve_properties(
         );
     };
 
+    if !props.anthropic_version.is_some() && props.model.starts_with("claude") {
+        props.anthropic_version =
+            Some(internal_llm_client::anthropic::DEFAULT_ANTHROPIC_VERSION.to_string());
+    }
+
     if let Some(anthropic_version) = &props.anthropic_version {
         props
             .properties
             .entry("anthropic_version".into())
             .or_insert_with(|| json!(anthropic_version));
+        props
+            .properties
+            .entry("max_tokens".into())
+            .or_insert_with(|| json!(internal_llm_client::anthropic::DEFAULT_MAX_TOKENS));
     }
-    props
-        .properties
-        .entry("max_tokens".into())
-        .or_insert_with(|| json!(4096));
 
     Ok(props)
 }

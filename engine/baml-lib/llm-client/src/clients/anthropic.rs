@@ -12,6 +12,9 @@ use secrecy::SecretString;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
+pub const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
+pub const DEFAULT_MAX_TOKENS: u32 = 4096;
+
 #[derive(Debug, Clone)]
 pub struct UnresolvedAnthropic<Meta> {
     base_url: UnresolvedUrl,
@@ -50,7 +53,7 @@ impl<Meta> UnresolvedAnthropic<Meta> {
 pub struct ResolvedAnthropic {
     pub base_url: String,
     pub api_key: ApiKeyWithProvenance,
-    pub role_selection: RolesSelection,
+    role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
     pub headers: IndexMap<String, String>,
@@ -134,7 +137,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
         // Add default Anthropic version header if not present
         headers
             .entry("anthropic-version".to_string())
-            .or_insert_with(|| "2023-06-01".to_string());
+            .or_insert_with(|| DEFAULT_ANTHROPIC_VERSION.to_string());
 
         let properties = {
             let mut properties = self
@@ -145,7 +148,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
 
             properties
                 .entry("max_tokens".to_string())
-                .or_insert(serde_json::json!(4096));
+                .or_insert(serde_json::json!(DEFAULT_MAX_TOKENS));
 
             properties
         };
