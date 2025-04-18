@@ -5,11 +5,14 @@ use crate::internal::llm_client::{
     },
     ResolveMediaUrls,
 };
-use secrecy::ExposeSecret;
+use indexmap::IndexMap;
+use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlMedia, BamlMediaContent};
+use baml_types::{
+    tracing::events::HttpRequestId, ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent,
+};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -18,7 +21,7 @@ use internal_baml_jinja::{
 };
 use internal_llm_client::{
     anthropic::ResolvedAnthropic, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
-    UnresolvedClientProperty,
+    RolesSelection, SupportedRequestModes, UnresolvedClientProperty,
 };
 
 use crate::{
@@ -187,6 +190,29 @@ impl AnthropicClient {
                 .map(|s| s.to_string()),
             client: create_client()?,
             properties,
+        })
+    }
+
+    /// When using Vertex with Anthropic, we need to use a synthetic client that mimics the Anthropic API.
+    /// This allows us to construct an Anthropic HTTP client from a baml client for vertex-ai.
+    pub fn synthetic_for_vertex_anthropic(
+        name: String,
+        context: RenderContext_Client,
+        role_selection: RolesSelection,
+    ) -> Result<Self> {
+        Ok(Self {
+            name: format!("{}:baml-anthropic", name),
+            context,
+            retry_policy: None,
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                max_one_system_prompt: true,
+                resolve_media_urls: ResolveMediaUrls::Never,
+                allowed_metadata: AllowedRoleMetadata::None,
+            },
+            client: create_client()?,
+            properties: ResolvedAnthropic::synthetic_for_vertex_anthropic(role_selection),
         })
     }
 }
@@ -372,7 +398,7 @@ impl ToProviderMessageExt for AnthropicClient {
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(
+pub fn convert_completion_prompt_to_body(
     prompt: &String,
 ) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();

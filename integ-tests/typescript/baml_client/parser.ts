@@ -3015,6 +3015,24 @@ export class LlmResponseParser {
     }
   }
   
+  TestVertexClaude(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestVertexClaude",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestVertexWithSystemInstructions(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -6088,6 +6106,24 @@ export class LlmStreamParser {
     try {
       return this.runtime.parseLlmResponse(
         "TestVertex",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestVertexClaude(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestVertexClaude",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),

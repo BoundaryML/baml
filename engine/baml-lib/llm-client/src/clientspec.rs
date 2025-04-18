@@ -327,7 +327,7 @@ impl UnresolvedRolesSelection {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) struct RolesSelection {
+pub struct RolesSelection {
     allowed: Option<Vec<String>>,
     default: Option<String>,
 }
@@ -406,7 +406,6 @@ impl AllowedRoleMetadata {
         }
     }
 }
-
 
 #[derive(Clone, Debug)]
 pub enum UnresolvedResponseType {

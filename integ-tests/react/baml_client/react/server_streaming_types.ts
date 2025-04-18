@@ -190,6 +190,7 @@ export type StreamingServerTypes = {
   TestThinking: partial_types.CustomStory,
   TestUniverseQuestion: partial_types.UniverseQuestion,
   TestVertex: string,
+  TestVertexClaude: string,
   TestVertexWithSystemInstructions: string,
   UnionTest_Function: partial_types.UnionTest_ReturnType,
   UseBlockConstraint: number,

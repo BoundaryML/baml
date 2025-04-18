@@ -8334,6 +8334,54 @@ export function useTestVertex(
   return useBamlAction(action, props)
 }
 /**
+ * A specialized hook for the TestVertexClaude BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestVertexClaude({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestVertexClaude({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestVertexClaude(props: HookInput<'TestVertexClaude', { stream: false }>): HookOutput<'TestVertexClaude', { stream: false }>
+export function useTestVertexClaude(props?: HookInput<'TestVertexClaude', { stream?: true }>): HookOutput<'TestVertexClaude', { stream: true }>
+export function useTestVertexClaude(
+  props: HookInput<'TestVertexClaude', { stream?: boolean }> = {},
+): HookOutput<'TestVertexClaude', { stream: true }> | HookOutput<'TestVertexClaude', { stream: false }> {
+  let action = Actions.TestVertexClaude;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestVertexClaude;
+  }
+  return useBamlAction(action, props)
+}
+/**
  * A specialized hook for the TestVertexWithSystemInstructions BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

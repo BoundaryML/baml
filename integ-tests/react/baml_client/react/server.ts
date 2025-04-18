@@ -3033,6 +3033,24 @@ export const TestVertex = async (
 };
 
 /**
+ * Executes the "TestVertexClaude" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestVertexClaude"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestVertexClaude = async (
+  input: string,
+): Promise<string> => {
+  return b.TestVertexClaude(
+    input,
+  );
+};
+
+/**
  * Executes the "TestVertexWithSystemInstructions" BAML action.
  *
  * This server action calls the underlying BAML function "TestVertexWithSystemInstructions"

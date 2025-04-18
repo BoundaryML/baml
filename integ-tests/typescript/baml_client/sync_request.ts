@@ -3351,6 +3351,26 @@ export class HttpRequest {
     }
   }
   
+  TestVertexClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestVertexClaude",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestVertexWithSystemInstructions(
       
       __baml_options__?: BamlCallOptions
@@ -6764,6 +6784,26 @@ export class HttpStreamRequest {
     try {
       return this.runtime.buildRequestSync(
         "TestVertex",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestVertexClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestVertexClaude",
         {
           "input": input
         },

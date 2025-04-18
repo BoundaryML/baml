@@ -483,6 +483,11 @@ async def test_should_work_with_vertex():
     res = await b.TestVertex("donkey kong")
     assert_that("donkey kong" in res.lower())
 
+@pytest.mark.asyncio
+async def test_should_work_with_vertex_claude():
+    res = await b.TestVertexClaude("donkey kong")
+    assert_that("donkey kong" in res.lower())
+
 
 @pytest.mark.asyncio
 async def test_should_work_with_image_base64():

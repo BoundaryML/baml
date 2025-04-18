@@ -8,6 +8,7 @@ use anyhow::Result;
 
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
+use secrecy::SecretString;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
@@ -49,7 +50,7 @@ impl<Meta> UnresolvedAnthropic<Meta> {
 pub struct ResolvedAnthropic {
     pub base_url: String,
     pub api_key: ApiKeyWithProvenance,
-    role_selection: RolesSelection,
+    pub role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
     pub headers: IndexMap<String, String>,
@@ -81,6 +82,25 @@ impl ResolvedAnthropic {
                     .unwrap_or_else(|| "user".to_string())
             }
         })
+    }
+
+    /// When using Vertex with Anthropic, we need to use a synthetic client that mimics the Anthropic API.
+    /// This allows us to construct an Anthropic HTTP client from a baml client for vertex-ai.
+    pub fn synthetic_for_vertex_anthropic(role_selection: RolesSelection) -> Self {
+        Self {
+            headers: IndexMap::new(),
+            properties: IndexMap::new(),
+            proxy_url: None,
+            finish_reason_filter: FinishReasonFilter::All,
+            base_url: "BAML-ANTHROPIC-PLACEHOLDER".to_string(),
+            api_key: ApiKeyWithProvenance {
+                api_key: SecretString::new("".into()),
+                provenance: None,
+            },
+            role_selection,
+            allowed_metadata: AllowedRoleMetadata::All,
+            supported_request_modes: SupportedRequestModes { stream: Some(true) },
+        }
     }
 }
 

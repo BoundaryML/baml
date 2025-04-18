@@ -12,8 +12,15 @@ function TestVertexWithSystemInstructions() -> string {
   "#
 }
 
+function TestVertexClaude(input: string) -> string {
+  client VertexClaude
+  prompt #"
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
+  "#
+}
+
 test TestVertex {
-  functions [TestVertex, TestVertexWithSystemInstructions]
+  functions [TestVertex, TestVertexWithSystemInstructions, TestVertexClaude]
   args {
     input "a cat"
 

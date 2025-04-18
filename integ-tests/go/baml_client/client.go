@@ -10046,6 +10046,66 @@ func (*stream) TestVertex(ctx context.Context, input string) <-chan string {
 
 
 
+func TestVertexClaude(ctx context.Context, input string) (*string, error) {
+	args := map[string]any{ "input": input, }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "TestVertexClaude", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func (result any) string {
+		return (result).(string)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) TestVertexClaude(ctx context.Context, input string) <-chan string {
+	args := map[string]any{ "input": input, }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan string)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestVertexClaude", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(string)
+			}
+		}
+	}()
+	return channel
+}
+
+
+
 func TestVertexWithSystemInstructions(ctx context.Context) (*string, error) {
 	args := map[string]any{  }
 	encoded, err := baml.EncodeRoot(args, typeMap)
