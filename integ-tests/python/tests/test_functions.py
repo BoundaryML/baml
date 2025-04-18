@@ -628,6 +628,7 @@ async def test_streaming():
     last_msg_time = start_time
     first_msg_time = start_time + 10
     async for msg in stream:
+        print("stream event", msg)
         msgs.append(str(msg))
         if len(msgs) == 1:
             first_msg_time = asyncio.get_event_loop().time()

@@ -14,41 +14,10 @@ pub struct DevArgs {
     pub from: PathBuf,
     #[arg(long, help = "port to expose BAML on", default_value = "2024")]
     port: u16,
-    #[arg(long, help = "turn on preview features", default_value = "false")]
-    preview: bool,
 }
 
 impl DevArgs {
     pub fn run(&self, defaults: crate::RuntimeCliDefaults) -> Result<()> {
-        if !self.preview {
-            log::warn!(
-                r#"Development mode is a preview feature.
-                
-Please run with --preview, like so:
-
-    {} dev --preview
-
-Please provide feedback and let us know if you run into any issues:
-
-    - join our Discord at https://docs.boundaryml.com/discord, or
-    - comment on https://github.com/BoundaryML/baml/issues/892
-
-We expect to stabilize this feature over the next few weeks, but we need
-your feedback to do so.
-
-Thanks for trying out BAML!
-"#,
-                if matches!(
-                    std::env::var("npm_lifecycle_event").ok().as_deref(),
-                    Some("npx")
-                ) {
-                    "npx @boundaryml/baml"
-                } else {
-                    "baml-cli"
-                }
-            );
-            anyhow::bail!("--preview is not set")
-        }
         baml_log::info!("Starting BAML development server on port {}", self.port);
 
         let t = BamlRuntime::get_tokio_singleton()?;
@@ -75,21 +44,6 @@ Thanks for trying out BAML!
 
         // print all events and errors
         t.block_on(async {
-            log::warn!(
-                r#"Development mode is a preview feature.
-
-Please provide feedback and let us know if you run into any issues:
-
-    - join our Discord at https://docs.boundaryml.com/discord, or
-    - comment on https://github.com/BoundaryML/baml/issues/892
-
-We expect to stabilize this feature over the next few weeks, but we need
-your feedback to do so.
-
-Thanks for trying out BAML!
-"#
-            );
-
             for result in rx {
                 match result {
                     Ok(events) => {
