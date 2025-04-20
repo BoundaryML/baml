@@ -104,6 +104,8 @@ impl MediaFile {
         Ok(self
             .span_path
             .parent()
+            .map(PathBuf::from)
+            .or_else(|| std::env::current_dir().ok())
             .context("Internal error: no path to resolve against")?
             .join(&self.relpath))
     }
