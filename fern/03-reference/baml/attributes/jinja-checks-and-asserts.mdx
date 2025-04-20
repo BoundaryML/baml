@@ -29,33 +29,33 @@ by writing `some_argument|some_filter`. Filters can be applied one after the
 other by chaining them with additional `|`s.
 
  -  `abs`: Absolote value.
- -  `capitalize`: Make the first letter uppercase.
- -  `escape`: Replace special HTML characters with their escaped counterparts.
- -  `first`: First item of a list.
- -  `last`: Last item of a list.
- -  `default(x)`: Returns `x` when applied to something undefined. 
- -  `float`: Convert to a float, or 0.0 if conversion fails.
- -  `int`: Convert to an int, or 0 if conversion fails.
- -  `join`: Concatenate a list of strings.
- -  `length`: List length.
- -  `lower`: Make the string lowercase.
- -  `upper`: Make the string uppercase.
- -  `map(filter)`: Apply a filter to each item in a list.
- -  `max`: Maximum of a list of numbers or Booleans.
- -  `min`: Minimum of a list of numbers or Booleans.
- -  `regex_match("regex")`: Return true if argument matches the regex.
- -  `reject`: Filter 
- -  `reverse`: Reverse a list or string.
- -  `round`: Round a float to the nearest int.
- -  `select("test_name")`: Retain the values of a list passing `test_name`.
- -  `sum`: Sum of a list of numbers.
- -  `title`: Convert a string to "Title Case".
- -  `trim`: Remove leading and trailing whitespace from a string.
- -  `unique`: Remove duplicate entries in a list.
+ -  `capitalize`: Make the first letter uppercase
+ -  `escape`: Replace special HTML characters with their escaped counterparts
+ -  `first`: First item of a list
+ -  `last`: Last item of a list
+ -  `default(x)`: Returns `x` when applied to something undefined.
+ -  `float`: Convert to a float, or 0.0 if conversion fails
+ -  `int`: Convert to an int, or 0 if conversion fails
+ -  `join`: Concatenate a list of strings
+ -  `length`: List length
+ -  `lower`: Make the string lowercase
+ -  `upper`: Make the string uppercase
+ -  `map(filter)`: Apply a filter to each item in a list
+ -  `max`: Maximum of a list of numbers or Booleans
+ -  `min`: Minimum of a list of numbers or Booleans
+ -  `regex_match("regex")`: Return true if argument matches the regex
+ -  `reject("test")`: Filter out items that fail the test
+ -  `reverse`: Reverse a list or string
+ -  `round`: Round a float to the nearest int
+ -  `select("test_name")`: Retain the values of a list passing `test_name`
+ -  `sum`: Sum of a list of numbers
+ -  `title`: Convert a string to "Title Case"
+ -  `trim`: Remove leading and trailing whitespace from a string
+ -  `unique`: Remove duplicate entries in a list
 
  ### Common Patterns
 
-#### Test that a substring appears inside some string.
+#### Test that a substring appears inside some string
 
  ```baml BAML
  function GenerateStory(subject: string) -> string {
@@ -76,7 +76,7 @@ other by chaining them with additional `|`s.
  the result to `regex_match()` to search for an occurrance of "horse".
 
 
-#### Test that a string is an exact match.
+#### Test that a string is an exact match
 
 ```baml BAML
 class Person {
@@ -106,7 +106,7 @@ We can use `regex_match` with special control characters indicating
 the beginning and end of a string, as in the first `@@assert`, or
 simply check equality with a literal string as in the second `@@assert`.
 
-#### Test that item prices add up to a total.
+#### Test that item prices add up to a total
 
 ```baml BAML
 class Receipt {
