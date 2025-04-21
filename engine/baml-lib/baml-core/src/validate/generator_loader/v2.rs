@@ -12,7 +12,7 @@ use strum::VariantNames;
 
 use crate::configuration::{
     CloudProject, CloudProjectBuilder, CodegenGeneratorBuilder, Generator,
-    GeneratorDefaultClientMode, GeneratorOutputType,
+    GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat,
 };
 
 fn parse_required_key<'a>(
@@ -200,6 +200,30 @@ pub(crate) fn parse_generator(
         }
     }
 
+    match parse_optional_key(&args, "module_format") {
+        Ok(Some("cjs")) => {
+            builder.module_format(Some(ModuleFormat::Cjs));
+        }
+        Ok(Some("esm")) => {
+            builder.module_format(Some(ModuleFormat::Esm));
+        }
+        Ok(Some(name)) => {
+            errors.push(DatamodelError::new_validation_error(
+                &format!("'{}' is not supported. Use one of: 'cjs' or 'esm'", name),
+                args.get("module_format")
+                    .map(|arg| arg.span().clone())
+                    .unwrap_or_else(|| ast_generator.span().clone()),
+            ));
+        }
+        Ok(None) => {
+            // TODO: add a warning if not set?
+            builder.module_format(None);
+        }
+        Err(err) => {
+            errors.push(err);
+        }
+    }
+
     if !errors.is_empty() {
         return Err(errors);
     }
@@ -298,6 +322,7 @@ fn check_property_allowlist<'ir>(
         "on_generate",
         "project",
         "client_package_name",
+        "module_format",
     ];
 
     let mut errors = vec![];

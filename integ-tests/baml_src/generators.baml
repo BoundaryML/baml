@@ -15,6 +15,7 @@ generator lang_typescript_esm {
   output_type typescript
   output_dir "../typescript-esm"
   version "0.84.4"
+  module_format esm
 }
 
 

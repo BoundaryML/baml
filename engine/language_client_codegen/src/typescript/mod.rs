@@ -11,9 +11,10 @@ use baml_types::LiteralValue;
 use generate_types::{render_docstring, type_name_for_checks};
 use indexmap::IndexMap;
 use internal_baml_core::{
-    configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
+    configuration::{GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat},
     ir::{repr::IntermediateRepr, FieldType, IRHelper, IRHelperExtended},
 };
+use regex::Regex;
 
 use self::typescript_language_features::{ToTypescript, TypescriptLanguageFeatures};
 use crate::{dir_writer::FileCollector, field_type_attributes};
@@ -290,7 +291,58 @@ pub(crate) fn generate(
         TypescriptFramework::None => {}
     }
 
+    // if it's typescriopt and generator.esm is enabled, we need to change the imports in each file to use the .js extension
+    if generator.module_format == Some(ModuleFormat::Esm) {
+        baml_log::info!("Changing imports to .js for ESM");
+        collector.modify_files(|content: &mut String| {
+            *content = replace_ts_imports_with_js(content);
+        });
+    }
+
     collector.commit(&generator.output_dir())
+}
+
+fn replace_ts_imports_with_js(content: &str) -> String {
+    // Regex to find import/export statements with module specifiers.
+    // It captures the import/export part, quotes, and the path itself.
+    // Escaped curly braces in the character set just in case.
+    let re = Regex::new(r#"(import(?:["'\s]*(?:[\w\*\{\}\n\r\t, ]+)from\s*)?|export(?:["'\s]*(?:[\w\*\{\}\n\r\t, ]+)from\s*)?)(["'])([^"']+)(["'])"#).unwrap();
+
+    re.replace_all(content, |caps: &regex::Captures| {
+        let import_export_part = &caps[1];
+        let quote = &caps[2];
+        let path = &caps[3];
+        let closing_quote = &caps[4];
+
+        // Check if it's a relative path (starts with ./ or ../)
+        if path.starts_with("./") || path.starts_with("../") {
+            // Check if it already has a common JS/TS/CSS extension
+            if !path.ends_with(".js") &&
+               !path.ends_with(".mjs") &&
+               !path.ends_with(".cjs") &&
+               !path.ends_with(".jsx") && // Consider react specific extensions too
+               !path.ends_with(".tsx") &&
+               !path.ends_with(".css") && // Ignore CSS files
+               !path.ends_with(".json")
+            {
+                // Remove existing .ts if present before adding .js
+                let base_path = if path.ends_with(".ts") {
+                    &path[..path.len() - 3]
+                } else {
+                    path
+                };
+                // Append .js
+                format!("{import_export_part}{quote}{base_path}.js{closing_quote}")
+            } else {
+                // Already has a recognized extension, leave it as is.
+                caps[0].to_string()
+            }
+        } else {
+            // Not a relative path (e.g., external package like 'react' or '@boundaryml/baml'), leave it as is.
+            caps[0].to_string()
+        }
+    })
+    .to_string()
 }
 
 impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for TypescriptConfig {
@@ -594,7 +646,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::WithMetadata { .. } => {
                 unreachable!("distribute_metadata makes this field unreachable.")
             }
-            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
+            FieldType::Arrow(_) => {
+                todo!("Arrow types should not be used in generated type definitions")
+            }
         };
         let base_type_ref = if is_partial_type {
             base_rep
@@ -675,7 +729,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Optional(inner) => {
                 format!("{} | null", inner.to_type_ref(ir, use_module_prefix))
             }
-            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
+            FieldType::Arrow(_) => {
+                todo!("Arrow types should not be used in generated type definitions")
+            }
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_type_ref(ir, use_module_prefix);
@@ -685,5 +741,101 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 None => base.to_type_ref(ir, use_module_prefix),
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_replace_ts_imports_with_js() {
+        // Add .js to relative paths without extension
+        assert_eq!(
+            replace_ts_imports_with_js("import { Foo } from './bar';"),
+            "import { Foo } from './bar.js';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("export * from \"../baz/qux\";"),
+            "export * from \"../baz/qux.js\";"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import type { Bar } from './bar'"),
+            "import type { Bar } from './bar.js'"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import {\n  Thing1,\n  Thing2\n} from \"./things\";"),
+            "import {\n  Thing1,\n  Thing2\n} from \"./things.js\";"
+        );
+
+        // Replace .ts with .js in relative paths
+        assert_eq!(
+            replace_ts_imports_with_js("import { Foo } from './bar.ts';"),
+            "import { Foo } from './bar.js';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("export * from \"../baz/qux.ts\";"),
+            "export * from \"../baz/qux.js\";"
+        );
+
+        // Should ignore already correct .js paths
+        assert_eq!(
+            replace_ts_imports_with_js("import { Foo } from './bar.js';"),
+            "import { Foo } from './bar.js';"
+        );
+        // Should ignore other extensions like .css, .mjs, .cjs
+        assert_eq!(
+            replace_ts_imports_with_js("import styles from './styles.css';"),
+            "import styles from './styles.css';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import config from './config.json';"),
+            "import config from './config.json';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import { util } from './util.mjs';"),
+            "import { util } from './util.mjs';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import { main } from '../main.cjs';"),
+            "import { main } from '../main.cjs';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import { Comp } from './Comp.tsx';"),
+            "import { Comp } from './Comp.tsx';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import { Button } from './Button.jsx';"),
+            "import { Button } from './Button.jsx';"
+        );
+
+        // Should ignore absolute paths or URLs
+        assert_eq!(
+            replace_ts_imports_with_js("import React from 'react';"),
+            "import React from 'react';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("import { BamlClient } from '@boundaryml/baml';"),
+            "import { BamlClient } from '@boundaryml/baml';"
+        );
+        assert_eq!(
+            replace_ts_imports_with_js("const path = '/path/to/file.ts';"),
+            "const path = '/path/to/file.ts';" // This is not an import/export statement
+        );
+
+        // Empty string
+        assert_eq!(replace_ts_imports_with_js(""), "");
+        // String with no imports
+        assert_eq!(
+            replace_ts_imports_with_js("const x = 10; function y() {}"),
+            "const x = 10; function y() {}"
+        );
+        // Mixed content
+        assert_eq!(
+            replace_ts_imports_with_js(
+                "console.log('hello');\nimport { a } from './a.ts';\nimport { b } from './b';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.ts';\nconsole.log('world');"
+            ),
+            "console.log('hello');\nimport { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.js';\nconsole.log('world');"
+        );
     }
 }

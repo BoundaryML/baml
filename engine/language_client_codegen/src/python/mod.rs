@@ -464,6 +464,7 @@ class Foo {
             Vec::new(),
             Some(GeneratorOutputType::PythonPydantic),
             None,
+            None,
         )
         .unwrap()
     }

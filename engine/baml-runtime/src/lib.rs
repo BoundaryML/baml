@@ -855,6 +855,7 @@ impl BamlRuntime {
                         generator.on_generate.clone(),
                         Some(generator.output_type),
                         generator.client_package_name.clone(),
+                        generator.module_format,
                     )?,
                 ))
             })

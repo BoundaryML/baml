@@ -574,6 +574,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Vec::new(),
             None,
             None,
+            None,
         )
         .map_err(|_| BamlError::InternalError {
             message: "Failed to make placeholder generator".to_string(),
