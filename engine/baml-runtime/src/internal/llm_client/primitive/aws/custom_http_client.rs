@@ -15,7 +15,7 @@ use crate::request::create_client;
 #[cfg(target_arch = "wasm32")]
 use {futures::channel::oneshot, wasm_bindgen_futures::spawn_local};
 
-/// Returns a wrapper around the global [fig_request::client] that implements
+/// Returns a wrapper around the global reqwest client.
 /// [HttpClient].
 #[cfg(not(target_arch = "wasm32"))] // Keep function non-WASM for now
 pub fn client() -> anyhow::Result<Client> {
