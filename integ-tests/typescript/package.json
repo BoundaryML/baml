@@ -13,7 +13,6 @@
     "generate": "baml-cli generate --from ../baml_src",
     "memory-test": "BAML_LOG=info infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000 -t 'memory'"
   },
-  "module": "node",
   "keywords": [],
   "author": "",
   "license": "ISC",
