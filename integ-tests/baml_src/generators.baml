@@ -10,6 +10,14 @@ generator lang_typescript {
   version "0.84.4"
 }
 
+
+generator lang_typescript_esm {
+  output_type typescript
+  output_dir "../typescript-esm"
+  version "0.84.4"
+}
+
+
 generator lang_typescript_react {
   output_type typescript/react
   output_dir "../react"
