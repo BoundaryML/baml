@@ -3674,7 +3674,7 @@ checksum = "3d87ae53030f3a22e83879e666cb94e58a7bdf31706878a0ba48752994146dab"
 dependencies = [
  "magnus-macros",
  "rb-sys",
- "rb-sys-env",
+ "rb-sys-env 0.1.2",
  "seq-macro",
 ]
 
@@ -4684,18 +4684,18 @@ dependencies = [
 
 [[package]]
 name = "rb-sys"
-version = "0.9.103"
+version = "0.9.111"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91dbe37ab6ac2fba187480fb6544b92445e41e5c6f553bf0c33743f3c450a1df"
+checksum = "becea799ce051c16fb140be80f5e7cf781070f99ca099332383c2b17861249af"
 dependencies = [
  "rb-sys-build",
 ]
 
 [[package]]
 name = "rb-sys-build"
-version = "0.9.103"
+version = "0.9.111"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4d56a49dcb646b70b758789c0d16c055a386a4f2a3346333abb69850fa860ce"
+checksum = "64691175abc704862f60a9ca8ef06174080cc50615f2bf1d4759f46db18b4d29"
 dependencies = [
  "bindgen",
  "lazy_static",
@@ -4711,6 +4711,12 @@ name = "rb-sys-env"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a35802679f07360454b418a5d1735c89716bde01d35b1560fc953c1415a0b3bb"
+
+[[package]]
+name = "rb-sys-env"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08f8d2924cf136a1315e2b4c7460a39f62ef11ee5d522df9b2750fab55b868b6"
 
 [[package]]
 name = "redox_syscall"
@@ -4927,7 +4933,7 @@ dependencies = [
  "log",
  "magnus",
  "rb-sys",
- "rb-sys-env",
+ "rb-sys-env 0.2.2",
  "serde",
  "serde_json",
  "serde_magnus",
