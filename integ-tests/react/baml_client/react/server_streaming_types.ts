@@ -131,6 +131,7 @@ export type StreamingServerTypes = {
   TestAnthropic: string,
   TestAnthropicShorthand: string,
   TestAws: string,
+  TestAwsInferenceProfile: string,
   TestAwsInvalidAccessKey: string,
   TestAwsInvalidProfile: string,
   TestAwsInvalidRegion: string,

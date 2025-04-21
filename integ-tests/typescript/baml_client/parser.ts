@@ -1953,6 +1953,24 @@ export class LlmResponseParser {
     }
   }
   
+  TestAwsInferenceProfile(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestAwsInferenceProfile",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestAwsInvalidAccessKey(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -5026,6 +5044,24 @@ export class LlmStreamParser {
     try {
       return this.runtime.parseLlmResponse(
         "TestAws",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestAwsInferenceProfile(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestAwsInferenceProfile",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),

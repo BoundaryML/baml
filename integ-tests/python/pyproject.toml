@@ -20,6 +20,7 @@ dependencies = [
     "ruff",
     "anthropic (>=0.49.0,<0.50.0)",
     "google-genai (>=1.5.0,<2.0.0)",
+    "boto3>=1.37.37",
 ]
 
 [dependency-groups]
