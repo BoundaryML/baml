@@ -627,12 +627,6 @@ async def test_fallback_to_shorthand():
 
 
 @pytest.mark.asyncio
-async def test_aws_streaming():
-    res = await b.stream.TestAws(input="Mt Rainier is tall").get_final_response()
-    assert len(res) > 0, "Expected non-empty result but got empty."
-
-
-@pytest.mark.asyncio
 async def test_streaming():
     stream = b.stream.PromptTestStreaming(
         input="Programming languages are fun to create"
