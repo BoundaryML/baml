@@ -201,7 +201,7 @@ export function activate(context: vscode.ExtensionContext) {
         console.log('args:', params)
         // A helpful thing to toggle on for debugging:
         console.log('HANDLER setFlashingRegions', params)
-        vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
+        // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
 
         // Focus the editor to ensure styling updates are applied rapidly.
         if (vscode.window.activeTextEditor) {
