@@ -4,14 +4,34 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.85.0](https://github.com/boundaryml/baml/compare/0.84.4..0.85.0) - 2025-04-23
+
+### Bug Fixes
+
+- make playground env var reveal toggle visibility on the correct row (#1816) - ([5c3794a](https://github.com/boundaryml/baml/commit/5c3794a10b2257b8f3ef9c4cc8bc49429359dbe3)) - Samuel Lijin
+- Fix issue where playground proxy wasn't actually used which caused CORS issues (#1841) - ([1657e35](https://github.com/boundaryml/baml/commit/1657e3529476ec1aa9ccdd2059e50795a3a5a0b9)) - aaronvg
+- add support for plumbing through some errors for go (#1844) - ([766ba08](https://github.com/boundaryml/baml/commit/766ba08f4fb7062d977cc834e3016211d06ac27f)) - hellovai
+
+### Features
+
+- move REST API out of preview and add docs on streaming (#1818) - ([55e9d9d](https://github.com/boundaryml/baml/commit/55e9d9da7055b3ad708890d769128c9d1a1be403)) - Samuel Lijin
+- Support claude models via vertex apis (#1820) - ([c8378bc](https://github.com/boundaryml/baml/commit/c8378bc4d049d6c254cb30b4fc4c3eaa95af1ff2)) - Samuel Lijin
+- Support HTTPS_PROXY and HTTP_PROXY system proxies in AWS client by delegating to the reqwest client (#1827) - ([c5c7fc6](https://github.com/boundaryml/baml/commit/c5c7fc63138a391f16c432ba3cc84376189ef6b8)) - aaronvg
+- Make Typescript generator have a `outputFormat "esm"` field to use ES Module-friendly imports (#1831) - ([d27e729](https://github.com/boundaryml/baml/commit/d27e729b9bb6d50fac0059401c4a8ca1269d8168)) - aaronvg
+- Support ruby 3.4 (#1830) - ([960c7d8](https://github.com/boundaryml/baml/commit/960c7d8bc2adde79c1f62b1ed6887fde212ececb)) - aaronvg
+
+
+### Miscellaneous
+- Test collector using openai-generic client (groq) (#1813) - ([430e428](https://github.com/boundaryml/baml/commit/430e4288b3a8b17166832bd61beda1a36fa4d1c6)) - aaronvg
+- Document jinja in checks and asserts (#1826) - ([b27c980](https://github.com/boundaryml/baml/commit/b27c98073519120914ad29fae0ca627fc1757b57)) - Greg Hale
+- only print out vertex auth errors if it failed to auth completely (#1843) - ([e42a594](https://github.com/boundaryml/baml/commit/e42a594475557c75c04f2aeeafc77ffae7fdb0d9)) - aaronvg
+- Bump version to 0.85.0 - ([654fec2](https://github.com/boundaryml/baml/commit/654fec219d88ff90fa64fdf77aa49a124cbd0d45)) - Aaron Villalpando
+
 ## [0.84.4](https://github.com/boundaryml/baml/compare/0.84.3..0.84.4) - 2025-04-17
 
 ### Bug Fixes
 
 - make vscode proxy work again (#1806) - ([667851d](https://github.com/boundaryml/baml/commit/667851d2902c2eec26db3db7e98855ec3657ff8f)) - Samuel Lijin
-
-### Features
-
 - BAML gem supports ruby 3.4 (#1804) - ([eae1cec](https://github.com/boundaryml/baml/commit/eae1cec03c5993ee6aff3dfe50a0202483b26412)) - Dimitri Roche
 
 
