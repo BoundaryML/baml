@@ -244,13 +244,27 @@ impl BamlProject {
 
     /// Load files into the current state. Also return the newly loaded files.
     pub fn load_files(&mut self) -> anyhow::Result<HashMap<DocumentKey, TextDocument>> {
-        let workspace_file_paths = gather_files(&self.root_dir_name, false)?;
+        let workspace_file_paths = gather_files(&self.root_dir_name, false).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to gather files from directory {}: {}",
+                self.root_dir_name.display(),
+                e
+            )
+        })?;
         let workspace_files = workspace_file_paths
             .into_iter()
             .map(|file_path| {
-                let document_key = DocumentKey::from_path(&self.root_dir_name, &file_path)?;
-                let contents =
-                    std::fs::read_to_string(&file_path).context("Failed to read file")?;
+                let document_key = DocumentKey::from_path(&self.root_dir_name, &file_path)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "Failed to create document key for file {}: {}",
+                            file_path.display(),
+                            e
+                        )
+                    })?;
+                let contents = std::fs::read_to_string(&file_path).map_err(|e| {
+                    anyhow::anyhow!("Failed to read file {}: {}", file_path.display(), e)
+                })?;
                 let text_document = TextDocument::new(contents, 0);
                 Ok((document_key, text_document))
             })

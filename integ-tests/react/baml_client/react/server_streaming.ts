@@ -3094,6 +3094,25 @@ export const TestOpenAIWithNullMaxTokens = async (
 };
 
 /**
+ * Executes the streaming variant of the "TestOpenRouterMistralSmall3_1_24b" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const TestOpenRouterMistralSmall3_1_24b = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.TestOpenRouterMistralSmall3_1_24b(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "TestRetryConstant" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

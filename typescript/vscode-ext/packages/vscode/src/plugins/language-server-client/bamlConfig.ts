@@ -26,6 +26,7 @@ export const BAML_CONFIG_SINGLETON: { config: BamlConfig | null; cliVersion: str
 export const refreshBamlConfigSingleton = () => {
   try {
     console.log('getting config')
+
     const configResponse = workspace.getConfiguration('baml')
     console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
     BAML_CONFIG_SINGLETON.config = bamlConfigSchema.parse(configResponse)

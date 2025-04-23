@@ -1,5 +1,5 @@
 import * as vscode from 'vscode'
-import { getBAMLFunctions } from './plugins/language-server'
+import { getBAMLFunctions } from './plugins/language-server-client'
 
 // Helper function to create regex patterns for matching BAML function calls
 function createBamlPatterns() {

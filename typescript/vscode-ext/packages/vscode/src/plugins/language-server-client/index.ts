@@ -149,6 +149,17 @@ const activateClient = (
       clientReady = true
       client.createDefaultErrorHandler(2)
       requestDiagnostics()
+      if (isDebugMode()) {
+        client.outputChannel.show(true)
+      }
+      // client.onNotification('window/message', (message: { message: string }) => {
+      //   console.log('window/message', message)
+      //   window.showErrorMessage(message.message, { modal: false }, 'Show Output').then((selection) => {
+      //     if (selection === 'Show Output') {
+      //       client.outputChannel.show(true)
+      //     }
+      //   })
+      // })
       client.onNotification('baml/showLanguageServerOutput', () => {
         // need to append line for the show to work for some reason.
         // dont delete this.
@@ -203,7 +214,11 @@ const activateClient = (
             break
           }
           case 'error': {
-            window.showErrorMessage(message.message)
+            window.showErrorMessage(message.message, { modal: false }, 'Show Output').then((selection) => {
+              if (selection === 'Show Output') {
+                client.outputChannel.show(true)
+              }
+            })
             break
           }
           default: {

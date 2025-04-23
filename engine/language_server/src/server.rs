@@ -258,25 +258,37 @@ impl Server {
             .and_then(|workspace| workspace.did_change_watched_files)
             .and_then(|watched_files| watched_files.dynamic_registration)
             .unwrap_or_default();
+        tracing::info!("*** dynamic_registration: {}", dynamic_registration);
         if dynamic_registration {
             // Register all dynamic capabilities here
 
             // `workspace/didChangeWatchedFiles`
             // (this registers the configuration file watcher)
             let params = lsp_types::RegistrationParams {
-                registrations: vec![lsp_types::Registration {
-                    id: "baml-server-file-operations".into(),
-                    method: "workspace/didChangeWatchedFiles".into(),
-                    register_options: Some(
-                        serde_json::to_value(lsp_types::DidChangeWatchedFilesRegistrationOptions {
-                            watchers: vec![FileSystemWatcher {
-                                glob_pattern: lsp_types::GlobPattern::String("**/*.{baml}".into()),
-                                kind: None,
-                            }],
-                        })
-                        .unwrap(),
-                    ),
-                }],
+                registrations: vec![
+                    lsp_types::Registration {
+                        id: "baml-server-file-operations".into(),
+                        method: "workspace/didChangeWatchedFiles".into(),
+                        register_options: Some(
+                            serde_json::to_value(
+                                lsp_types::DidChangeWatchedFilesRegistrationOptions {
+                                    watchers: vec![FileSystemWatcher {
+                                        glob_pattern: lsp_types::GlobPattern::String(
+                                            "**/*.{baml}".into(),
+                                        ),
+                                        kind: None,
+                                    }],
+                                },
+                            )
+                            .unwrap(),
+                        ),
+                    },
+                    lsp_types::Registration {
+                        id: "baml-server-configuration".into(),
+                        method: "workspace/didChangeConfiguration".into(),
+                        register_options: None,
+                    },
+                ],
             };
 
             let response_handler = |()| {
@@ -325,6 +337,7 @@ impl Server {
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(true),
             }),
+
             definition_provider: Some(lsp_types::OneOf::Left(true)),
             document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -345,6 +358,7 @@ impl Server {
                     supported: Some(true),
                     change_notifications: Some(lsp_types::OneOf::Left(true)),
                 }),
+
                 ..Default::default()
             }),
             ..Default::default()

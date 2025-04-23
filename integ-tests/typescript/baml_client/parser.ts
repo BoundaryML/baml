@@ -2907,6 +2907,24 @@ export class LlmResponseParser {
     }
   }
   
+  TestOpenRouterMistralSmall3_1_24b(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestOpenRouterMistralSmall3_1_24b",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestRetryConstant(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -6016,6 +6034,24 @@ export class LlmStreamParser {
     try {
       return this.runtime.parseLlmResponse(
         "TestOpenAIWithNullMaxTokens",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as string
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenRouterMistralSmall3_1_24b(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): string {
+    try {
+      return this.runtime.parseLlmResponse(
+        "TestOpenRouterMistralSmall3_1_24b",
         llmResponse,
         true,
         this.ctxManager.cloneContext(),

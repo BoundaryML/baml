@@ -2226,6 +2226,19 @@ paths:
                 title: TestOpenAIWithNullMaxTokensResponse
                 type: string
       operationId: TestOpenAIWithNullMaxTokens
+  /call/TestOpenRouterMistralSmall3_1_24b:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenRouterMistralSmall3_1_24b'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenRouterMistralSmall3_1_24bResponse
+                type: string
+      operationId: TestOpenRouterMistralSmall3_1_24b
   /call/TestRetryConstant:
     post:
       requestBody:
@@ -5026,6 +5039,22 @@ components:
         application/json:
           schema:
             title: TestOpenAIWithNullMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenRouterMistralSmall3_1_24b:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenRouterMistralSmall3_1_24bRequest
             type: object
             properties:
               input:
