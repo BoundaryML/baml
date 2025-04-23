@@ -293,16 +293,15 @@ pub(crate) fn generate(
 
     // if it's typescriopt and generator.esm is enabled, we need to change the imports in each file to use the .js extension
     if generator.module_format == Some(ModuleFormat::Esm) {
-        baml_log::info!("Changing imports to .js for ESM");
         collector.modify_files(|content: &mut String| {
-            *content = replace_ts_imports_with_js(content);
+            *content = add_js_suffix_to_imports(content);
         });
     }
 
     collector.commit(&generator.output_dir())
 }
 
-fn replace_ts_imports_with_js(content: &str) -> String {
+fn add_js_suffix_to_imports(content: &str) -> String {
     // Regex to find import/export statements with module specifiers.
     // It captures the import/export part, quotes, and the path itself.
     // Escaped curly braces in the character set just in case.
@@ -752,87 +751,87 @@ mod tests {
     fn test_replace_ts_imports_with_js() {
         // Add .js to relative paths without extension
         assert_eq!(
-            replace_ts_imports_with_js("import { Foo } from './bar';"),
+            add_js_suffix_to_imports("import { Foo } from './bar';"),
             "import { Foo } from './bar.js';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("export * from \"../baz/qux\";"),
+            add_js_suffix_to_imports("export * from \"../baz/qux\";"),
             "export * from \"../baz/qux.js\";"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import type { Bar } from './bar'"),
+            add_js_suffix_to_imports("import type { Bar } from './bar'"),
             "import type { Bar } from './bar.js'"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import {\n  Thing1,\n  Thing2\n} from \"./things\";"),
+            add_js_suffix_to_imports("import {\n  Thing1,\n  Thing2\n} from \"./things\";"),
             "import {\n  Thing1,\n  Thing2\n} from \"./things.js\";"
         );
 
         // Replace .ts with .js in relative paths
         assert_eq!(
-            replace_ts_imports_with_js("import { Foo } from './bar.ts';"),
+            add_js_suffix_to_imports("import { Foo } from './bar.ts';"),
             "import { Foo } from './bar.js';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("export * from \"../baz/qux.ts\";"),
+            add_js_suffix_to_imports("export * from \"../baz/qux.ts\";"),
             "export * from \"../baz/qux.js\";"
         );
 
         // Should ignore already correct .js paths
         assert_eq!(
-            replace_ts_imports_with_js("import { Foo } from './bar.js';"),
+            add_js_suffix_to_imports("import { Foo } from './bar.js';"),
             "import { Foo } from './bar.js';"
         );
         // Should ignore other extensions like .css, .mjs, .cjs
         assert_eq!(
-            replace_ts_imports_with_js("import styles from './styles.css';"),
+            add_js_suffix_to_imports("import styles from './styles.css';"),
             "import styles from './styles.css';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import config from './config.json';"),
+            add_js_suffix_to_imports("import config from './config.json';"),
             "import config from './config.json';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import { util } from './util.mjs';"),
+            add_js_suffix_to_imports("import { util } from './util.mjs';"),
             "import { util } from './util.mjs';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import { main } from '../main.cjs';"),
+            add_js_suffix_to_imports("import { main } from '../main.cjs';"),
             "import { main } from '../main.cjs';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import { Comp } from './Comp.tsx';"),
+            add_js_suffix_to_imports("import { Comp } from './Comp.tsx';"),
             "import { Comp } from './Comp.tsx';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import { Button } from './Button.jsx';"),
+            add_js_suffix_to_imports("import { Button } from './Button.jsx';"),
             "import { Button } from './Button.jsx';"
         );
 
         // Should ignore absolute paths or URLs
         assert_eq!(
-            replace_ts_imports_with_js("import React from 'react';"),
+            add_js_suffix_to_imports("import React from 'react';"),
             "import React from 'react';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("import { BamlClient } from '@boundaryml/baml';"),
+            add_js_suffix_to_imports("import { BamlClient } from '@boundaryml/baml';"),
             "import { BamlClient } from '@boundaryml/baml';"
         );
         assert_eq!(
-            replace_ts_imports_with_js("const path = '/path/to/file.ts';"),
+            add_js_suffix_to_imports("const path = '/path/to/file.ts';"),
             "const path = '/path/to/file.ts';" // This is not an import/export statement
         );
 
         // Empty string
-        assert_eq!(replace_ts_imports_with_js(""), "");
+        assert_eq!(add_js_suffix_to_imports(""), "");
         // String with no imports
         assert_eq!(
-            replace_ts_imports_with_js("const x = 10; function y() {}"),
+            add_js_suffix_to_imports("const x = 10; function y() {}"),
             "const x = 10; function y() {}"
         );
         // Mixed content
         assert_eq!(
-            replace_ts_imports_with_js(
+            add_js_suffix_to_imports(
                 "console.log('hello');\nimport { a } from './a.ts';\nimport { b } from './b';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.ts';\nconsole.log('world');"
             ),
             "console.log('hello');\nimport { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.js';\nconsole.log('world');"

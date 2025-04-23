@@ -4,7 +4,8 @@ function TestOpenRouterMistralSmall3_1_24b(input: string) -> string {
     Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
-
+ 
+ 
 test TestName {
   functions [TestOpenRouterMistralSmall3_1_24b]
   args {
