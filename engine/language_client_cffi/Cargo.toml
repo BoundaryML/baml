@@ -29,6 +29,7 @@ tokio-util = { version = "0.7", features = ["full"] }
 once_cell.workspace = true
 anyhow.workspace = true
 flatbuffers = "25.2.10"
+env_logger.workspace = true
 
 [build-dependencies]
 cbindgen = "0.28.0"

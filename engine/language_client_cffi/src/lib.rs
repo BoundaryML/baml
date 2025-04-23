@@ -107,12 +107,14 @@ static ERROR_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
 
 #[no_mangle]
 extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: CallbackFn) {
-    baml_log::init();
+    println!("Registering callbacks");
+    let _ = baml_log::init();
+    let _ = env_logger::try_init_from_env(env_logger::Env::new().filter("BAML_INTERNAL_LOG"));
 
     // Create a global runtime or pass it along as needed.
     unsafe {
-        RESULT_CALLBACK_FN.set(std::mem::transmute(callback_fn));
-        ERROR_CALLBACK_FN.set(std::mem::transmute(error_callback_fn));
+        let _ = RESULT_CALLBACK_FN.set(std::mem::transmute(callback_fn));
+        let _ = ERROR_CALLBACK_FN.set(std::mem::transmute(error_callback_fn));
     }
 }
 
@@ -120,6 +122,10 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
     let callback_fn = RESULT_CALLBACK_FN
         .get()
         .expect("expected callback function to be set. Did you call register_callbacks?");
+
+    let error_callback_fn = ERROR_CALLBACK_FN
+        .get()
+        .expect("expected error callback function to be set. Did you call register_callbacks?");
 
     match result {
         Ok(result) => match result.parsed() {
@@ -129,19 +135,33 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
                 callback_fn(id, is_done, content.as_ptr() as *const i8, content.len());
             }
             Some(Err(e)) => {
-                println!("Error: {}", e);
                 // let c_message = CString::new(e.to_string()).unwrap();
-                // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
+                let message = e.to_string();
+                error_callback_fn(
+                    id,
+                    true,
+                    message.as_ptr() as *const libc::c_char,
+                    message.len(),
+                );
             }
             None => {
-                println!("No result");
-                // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
+                let message = "No result from baml".to_string();
+                error_callback_fn(
+                    id,
+                    true,
+                    message.as_ptr() as *const libc::c_char,
+                    message.len(),
+                );
             }
         },
         Err(e) => {
-            println!("Error: {}", e);
-            // let c_message = CString::new(e.to_string()).unwrap();
-            // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
+            let message = format!("Error: {}", e);
+            error_callback_fn(
+                id,
+                true,
+                message.as_ptr() as *const libc::c_char,
+                message.len(),
+            );
         }
     }
 }

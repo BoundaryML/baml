@@ -1289,6 +1289,7 @@ dependencies = [
  "baml-runtime",
  "baml-types",
  "cbindgen",
+ "env_logger",
  "flatbuffers",
  "flatc",
  "flatc-rust",
