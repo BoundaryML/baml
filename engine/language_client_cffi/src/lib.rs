@@ -137,31 +137,16 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
             Some(Err(e)) => {
                 // let c_message = CString::new(e.to_string()).unwrap();
                 let message = e.to_string();
-                error_callback_fn(
-                    id,
-                    true,
-                    message.as_ptr() as *const libc::c_char,
-                    message.len(),
-                );
+                error_callback_fn(id, true, message.as_ptr() as *const i8, message.len());
             }
             None => {
                 let message = "No result from baml".to_string();
-                error_callback_fn(
-                    id,
-                    true,
-                    message.as_ptr() as *const libc::c_char,
-                    message.len(),
-                );
+                error_callback_fn(id, true, message.as_ptr() as *const i8, message.len());
             }
         },
         Err(e) => {
             let message = format!("Error: {}", e);
-            error_callback_fn(
-                id,
-                true,
-                message.as_ptr() as *const libc::c_char,
-                message.len(),
-            );
+            error_callback_fn(id, true, message.as_ptr() as *const i8, message.len());
         }
     }
 }
