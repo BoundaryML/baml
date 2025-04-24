@@ -132,6 +132,228 @@ const sleep = (time: number) => {
   })
 }
 
+// Encapsulates the registration of client event handlers (notifications and requests)
+export const registerClientEventHandlers = (client: LanguageClient, context: ExtensionContext) => {
+  client.onNotification('baml/showLanguageServerOutput', () => {
+    // need to append line for the show to work for some reason.
+    // dont delete this.
+    client.outputChannel.appendLine('\n')
+    client.outputChannel.show(true)
+  })
+
+  client.onNotification('baml/message', (message: BAMLMessage) => {
+    console.log('baml/message', message)
+    client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
+    let msg: Thenable<any>
+    switch (message.type) {
+      case 'warn': {
+        msg = window.showWarningMessage(message.message)
+        break
+      }
+      case 'info': {
+        window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            cancellable: false,
+          },
+          async (progress, token) => {
+            let customCancellationToken: vscode.CancellationTokenSource | null = null
+            const rest = new Promise<null>((resolve) => {
+              customCancellationToken = new vscode.CancellationTokenSource()
+
+              customCancellationToken.token.onCancellationRequested(() => {
+                customCancellationToken?.dispose()
+                customCancellationToken = null
+
+                // vscode.window.showInformationMessage('Cancelled the progress')
+                resolve(null)
+                return
+              })
+
+              const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
+              const updateCount = 50 // Number of updates
+              const intervalMs = totalMs / updateCount // Interval between updates
+              ;(async () => {
+                for (let i = 0; i < updateCount; i++) {
+                  const prog = ((i + 1) / updateCount) * 100
+                  progress.report({ increment: prog, message: message.message })
+                  await sleep(intervalMs)
+                }
+                resolve(null)
+              })()
+            })
+
+            return rest
+          },
+        )
+        break
+      }
+      case 'error': {
+        window.showErrorMessage(message.message, { modal: false }, 'Show Output').then((selection) => {
+          if (selection === 'Show Output') {
+            client.outputChannel.show(true)
+          }
+        })
+        break
+      }
+      default: {
+        throw new Error('Invalid message type')
+      }
+    }
+  })
+
+  client.onNotification('runtime_diagnostics', (params: { errors: number; warnings: number }) => {
+    console.log('runtime_diagnostics', params)
+    try {
+      if (params.errors > 0) {
+        StatusBarPanel.instance.setStatus({ status: 'fail', count: params.errors })
+      } else if (params.warnings > 0) {
+        StatusBarPanel.instance.setStatus({ status: 'warn', count: params.warnings })
+      } else {
+        StatusBarPanel.instance.setStatus('pass')
+      }
+    } catch (e) {
+      console.error('Error updating status bar', e)
+    }
+  })
+
+  client.onRequest('executeCommand', async (command: string) => {
+    try {
+      console.log('Executing command', command)
+      await vscode.commands.executeCommand(command)
+    } catch (e) {
+      console.error('Error executing command', e)
+    }
+  })
+
+  client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
+    console.log('baml_settings_updated', config)
+    BAML_CONFIG_SINGLETON.config = config.config
+    BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
+    WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
+  })
+
+  // Handler for both notifications and requests of type "runtime_updated".
+  const handleRuntimeUpdated = (params: { root_path: string; files: Record<string, string> }) => {
+    // console.log('*** HANDLE RUNTIME UPDATED ***' + JSON.stringify(params, null, 2))
+    // Only send message if current file is part of this root path
+    const activeEditor =
+      vscode.window.activeTextEditor ||
+      (vscode.window.visibleTextEditors.length > 0 ? vscode.window.visibleTextEditors[0] : null)
+    if (activeEditor) {
+      const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
+      const rootPathUri = URI.file(params.root_path).fsPath
+      if (currentFilePath.startsWith(rootPathUri)) {
+        console.log('sending add_project message')
+        WebviewPanelHost.currentPanel?.postMessage('add_project', {
+          ...params,
+          root_path: URI.file(params.root_path).toString(),
+        })
+      } else {
+        console.log('root path doesnt match current file', currentFilePath, rootPathUri)
+      }
+    } else {
+      console.log('no active editor')
+    }
+  }
+
+  // The Node-based Language Server sends REQUESTS of type "runtime_updated".
+  client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
+    console.log('REQUEST: runtime_updated')
+    handleRuntimeUpdated(params)
+  })
+
+  // The Web-based Language Server sends NOTIFICATIONS of type "runtime_updated".
+  client.onNotification('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
+    console.log('NOTIF: runtime_updated')
+    handleRuntimeUpdated(params)
+  })
+
+  client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
+    console.log('baml_settings_updated', config)
+    BAML_CONFIG_SINGLETON.config = config.config
+    BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
+    WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
+  })
+
+  client.onNotification('baml_src_generator_version', (version: string) => {
+    console.log('======= setLspVersion', version)
+
+    // TODO: If no version found, use bundled LSP else start new LSP.
+    const cliVersion = {
+      architecture: process.arch,
+      platform: process.platform,
+      version: version,
+    }
+    console.log('lsp -- cliVersion', cliVersion)
+
+    let restartLsp = false
+
+    async function downloadLsp() {
+      if (!(await checkIfCliBinaryExists(cliVersion))) {
+        console.log('lsp -- downloading lsp')
+        restartLsp = await window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            cancellable: false,
+            title: `Downloading BAML LSP v${cliVersion.version}`,
+          },
+          async (progress, token) => {
+            try {
+              console.log('lsp -- downloading lsp -- try')
+              await downloadCli(cliVersion)
+              window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
+              return true
+            } catch (error: any) {
+              window.showErrorMessage(`Failed to download BAML LSP v${cliVersion.version}: ${error}`)
+              return false
+            }
+          },
+        )
+      } else {
+        restartLsp = true
+      }
+
+      if (restartLsp) {
+        const cliAbsolutePath = cliBinaryPath(cliVersion)
+
+        const serverOptions = {
+          run: {
+            command: cliAbsolutePath,
+            args: ['lsp'],
+            options: {
+              env: process.env,
+            },
+          },
+          debug: {
+            command: cliAbsolutePath,
+            args: ['lsp'],
+          },
+        }
+
+        await window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            cancellable: false,
+            title: 'Restarting BAML LSP...',
+          },
+          async (progress, token) => {
+            // We need the clientOptions here, which are not in scope. Pass them or adjust restartClient
+            // For now, assuming restartClient has access or doesn't need them updated dynamically here
+            // const clientOptions: LanguageClientOptions = { /* ... */ }; // This is tricky
+            await commands.executeCommand('baml.restartLanguageServer') // Trigger restart via command
+            // Original plan: await restartClient(context, client, serverOptions, clientOptions) // Needs clientOptions
+          },
+        )
+      }
+    }
+
+    downloadLsp()
+
+    // TODO: Restart LSP.
+  })
+}
+
 const activateClient = (
   context: ExtensionContext,
   serverOptions: ServerOptions,
@@ -153,147 +375,11 @@ const activateClient = (
     if (isDebugMode()) {
       client.outputChannel.show(true)
     }
-    client.onNotification('baml/showLanguageServerOutput', () => {
-      // need to append line for the show to work for some reason.
-      // dont delete this.
-      client.outputChannel.appendLine('\n')
-      client.outputChannel.show(true)
-    })
-    client.onNotification('baml/message', (message: BAMLMessage) => {
-      console.log('baml/message', message)
-      client.outputChannel.appendLine('baml/message' + JSON.stringify(message, null, 2))
-      let msg: Thenable<any>
-      switch (message.type) {
-        case 'warn': {
-          msg = window.showWarningMessage(message.message)
-          break
-        }
-        case 'info': {
-          window.withProgress(
-            {
-              location: vscode.ProgressLocation.Notification,
-              cancellable: false,
-            },
-            async (progress, token) => {
-              let customCancellationToken: vscode.CancellationTokenSource | null = null
-              const rest = new Promise<null>((resolve) => {
-                customCancellationToken = new vscode.CancellationTokenSource()
 
-                customCancellationToken.token.onCancellationRequested(() => {
-                  customCancellationToken?.dispose()
-                  customCancellationToken = null
+    // Register all event handlers
+    registerClientEventHandlers(client, context)
 
-                  // vscode.window.showInformationMessage('Cancelled the progress')
-                  resolve(null)
-                  return
-                })
-
-                const totalMs = message.durationMs || 1500 // Total duration in milliseconds (2 seconds)
-                const updateCount = 50 // Number of updates
-                const intervalMs = totalMs / updateCount // Interval between updates
-                ;(async () => {
-                  for (let i = 0; i < updateCount; i++) {
-                    const prog = ((i + 1) / updateCount) * 100
-                    progress.report({ increment: prog, message: message.message })
-                    await sleep(intervalMs)
-                  }
-                  resolve(null)
-                })()
-              })
-
-              return rest
-            },
-          )
-          break
-        }
-        case 'error': {
-          window.showErrorMessage(message.message, { modal: false }, 'Show Output').then((selection) => {
-            if (selection === 'Show Output') {
-              client.outputChannel.show(true)
-            }
-          })
-          break
-        }
-        default: {
-          throw new Error('Invalid message type')
-        }
-      }
-    })
-
-    client.onNotification('runtime_diagnostics', (params: { errors: number; warnings: number }) => {
-      console.log('runtime_diagnostics', params)
-      try {
-        if (params.errors > 0) {
-          StatusBarPanel.instance.setStatus({ status: 'fail', count: params.errors })
-        } else if (params.warnings > 0) {
-          StatusBarPanel.instance.setStatus({ status: 'warn', count: params.warnings })
-        } else {
-          StatusBarPanel.instance.setStatus('pass')
-        }
-      } catch (e) {
-        console.error('Error updating status bar', e)
-      }
-    })
-
-    client.onRequest('executeCommand', async (command: string) => {
-      try {
-        console.log('Executing command', command)
-        await vscode.commands.executeCommand(command)
-      } catch (e) {
-        console.error('Error executing command', e)
-      }
-    })
-
-    client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
-      console.log('baml_settings_updated', config)
-      BAML_CONFIG_SINGLETON.config = config.config
-      BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
-      WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
-    })
-
-    // Handler for both notifications and requests of type "runtime_updated".
-    const handleRuntimeUpdated = (params: { root_path: string; files: Record<string, string> }) => {
-      // console.log('*** HANDLE RUNTIME UPDATED ***' + JSON.stringify(params, null, 2))
-      // Only send message if current file is part of this root path
-      const activeEditor =
-        vscode.window.activeTextEditor ||
-        (vscode.window.visibleTextEditors.length > 0 ? vscode.window.visibleTextEditors[0] : null)
-      if (activeEditor) {
-        const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
-        const rootPathUri = URI.file(params.root_path).fsPath
-        if (currentFilePath.startsWith(rootPathUri)) {
-          console.log('sending add_project message')
-          WebviewPanelHost.currentPanel?.postMessage('add_project', {
-            ...params,
-            root_path: URI.file(params.root_path).toString(),
-          })
-        } else {
-          console.log('root path doesnt match current file', currentFilePath, rootPathUri)
-        }
-      } else {
-        console.log('no active editor')
-      }
-    }
-
-    // The Node-based Language Server sends REQUESTS of type "runtime_updated".
-    client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
-      console.log('REQUEST: runtime_updated')
-      handleRuntimeUpdated(params)
-    })
-
-    // The Web-based Language Server sends NOTIFICATIONS of type "runtime_updated".
-    client.onNotification('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
-      console.log('NOTIF: runtime_updated')
-      handleRuntimeUpdated(params)
-    })
-
-    client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
-      console.log('baml_settings_updated', config)
-      BAML_CONFIG_SINGLETON.config = config.config
-      BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
-      WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
-    })
-
+    // Check for updates only on initial activation
     // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
     // Immediately check for updates on extension activation
     void checkForUpdates({ showIfNoUpdates: false })
@@ -307,71 +393,6 @@ const activateClient = (
         6 * 60 * 60 * 1000 /* 6h in milliseconds: min/hr * secs/min * ms/sec */,
       ),
     )
-
-    client.onRequest('setLspVersion', async (version: string) => {
-      console.log('======= setLspVersion', version)
-
-      // TODO: If no version found, use bundled LSP else start new LSP.
-      const cliVersion = {
-        architecture: process.arch,
-        platform: process.platform,
-        version: version,
-      }
-
-      let restartLsp = false
-
-      if (!(await checkIfCliBinaryExists(cliVersion))) {
-        restartLsp = await window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            cancellable: false,
-            title: `Downloading BAML LSP v${cliVersion.version}`,
-          },
-          async (progress, token) => {
-            try {
-              await downloadCli(cliVersion)
-              window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
-              return true
-            } catch (error) {
-              window.showErrorMessage(`Failed to download BAML LSP: ${error}`)
-              return false
-            }
-          },
-        )
-      } else {
-        restartLsp = true
-      }
-
-      // TODO: Restart LSP.
-      // if (restartLsp) {
-      //   const cliAbsolutePath = cliBinaryPath(cliVersion)
-
-      //   serverOptions = {
-      //     run: {
-      //       command: cliAbsolutePath,
-      //       args: ['lsp'],
-      //       options: {
-      //         env: process.env,
-      //       },
-      //     },
-      //     debug: {
-      //       command: cliAbsolutePath,
-      //       args: ['lsp'],
-      //     },
-      //   }
-
-      //   await window.withProgress(
-      //     {
-      //       location: vscode.ProgressLocation.Notification,
-      //       cancellable: false,
-      //       title: "Restarting BAML LSP...",
-      //     },
-      //     async (progress, token) => {
-      //       await restartClient(context, client, serverOptions, clientOptions)
-      //     },
-      //   )
-      // }
-    })
   })
 
   const disposable = client.start()

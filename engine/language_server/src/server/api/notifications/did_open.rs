@@ -34,6 +34,23 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
         if project.is_none() {
             tracing::error!("Failed to get or create project for path: {:?}", file_path);
             show_err_msg!("Failed to get or create project for path: {:?}", file_path);
+        } else {
+            let version = project
+                .expect("Ensured that a project db exists")
+                .lock()
+                .unwrap()
+                .get_common_generator_version();
+            if let Ok(version) = version {
+                notifier
+                    .0
+                    .send(lsp_server::Message::Notification(
+                        lsp_server::Notification::new(
+                            "baml_src_generator_version".to_string(),
+                            version,
+                        ),
+                    ))
+                    .internal_error()?;
+            }
         }
         // session.open_text_document(
         //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,

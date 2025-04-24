@@ -3532,6 +3532,7 @@ dependencies = [
  "regex",
  "rustc-hash 2.1.1",
  "schemars",
+ "semver",
  "serde",
  "serde-wasm-bindgen 0.4.5",
  "serde_json",

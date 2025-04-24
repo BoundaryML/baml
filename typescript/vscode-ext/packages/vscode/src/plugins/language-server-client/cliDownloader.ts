@@ -139,7 +139,7 @@ export async function downloadCli(cliVersion: CliVersion): Promise<void> {
   // const url = `${BASE_URL}/${cliVersion.version}/${compressedFileName}`
 
   // TODO: Mock download. Remove this.
-  const url = `${BASE_URL}/0.1.0/${cliBinaryFileName({ ...cliVersion, version: '0.1.0' })}.${extension}`
+  const url = `${BASE_URL}/${cliVersion.version}/${cliBinaryFileName(cliVersion)}.${extension}`
 
   console.log('LSP Download URL', url)
 

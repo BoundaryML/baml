@@ -23,6 +23,7 @@ use lsp_types::{
     Diagnostic, DiagnosticSeverity, Hover, HoverContents, Position, Range, TextDocumentItem,
 };
 use position_utils::get_word_at_position;
+use semver::Version;
 // use rustc_hash::FxHashSet;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::io;
@@ -1245,6 +1246,83 @@ impl Project {
     //     self.run_generators_without_debounce(on_success, on_error)
     //         .await;
     // }
+
+    /// Checks if all generators use the same major.minor version.
+    /// Returns Ok(()) if they do (or if there are no generators),
+    /// otherwise returns an Err with a descriptive message.
+    pub fn get_common_generator_version(&self) -> Result<String, String> {
+        let runtime_version = env!("CARGO_PKG_VERSION");
+
+        let generators = match self.list_generators() {
+            Ok(gens) => gens,
+            Err(_) => return Ok(runtime_version.to_string()), // Return cargo pkg version if error listing generators
+        };
+
+        if generators.is_empty() {
+            return Ok(runtime_version.to_string());
+        }
+
+        let mut major_minor_versions = std::collections::HashMap::new();
+        let mut highest_patch_by_major_minor = std::collections::HashMap::new();
+
+        // Track major.minor versions and find highest patch for each
+        for gen in &generators {
+            if let Ok(version) = semver::Version::parse(&gen.version) {
+                let major_minor = format!("{}.{}", version.major, version.minor);
+
+                // Track generators with this major.minor
+                major_minor_versions
+                    .entry(major_minor.clone())
+                    .or_insert_with(Vec::new)
+                    .push(gen.clone());
+
+                // Track highest patch version for this major.minor
+                highest_patch_by_major_minor
+                    .entry(major_minor)
+                    .and_modify(|highest_patch: &mut u64| {
+                        if version.patch > *highest_patch {
+                            *highest_patch = version.patch;
+                        }
+                    })
+                    .or_insert(version.patch);
+            } else {
+                tracing::warn!("Invalid semver version in generator: {}", gen.version);
+                // Consider how to handle invalid versions - for now, we ignore them for the check
+            }
+        }
+
+        // If there's more than one major.minor version, return an error
+        if major_minor_versions.len() > 1 {
+            let versions_str = major_minor_versions
+                .keys()
+                .map(|v| format!("'{}'", v))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let message = format!(
+                "Multiple generator major.minor versions detected: {}. Major and minor versions must match across all generators.",
+                versions_str
+            );
+            Err(message)
+        // If there's only one major.minor version, return it with the highest patch
+        } else if let Some((version, _)) = major_minor_versions.iter().next() {
+            if let Some(highest_patch) = highest_patch_by_major_minor.get(version) {
+                // Parse the version string to create a proper semver::Version
+                if let Ok(mut v) = Version::parse(&format!("{}.0", version)) {
+                    // Update with the highest patch version
+                    v.patch = *highest_patch;
+                    Ok(v.to_string())
+                } else {
+                    Ok(format!("{}.{}", version, highest_patch))
+                }
+            } else {
+                Ok(version.clone())
+            }
+        // Fallback to the runtime version if no valid versions were found
+        } else {
+            Err("No valid generator versions found".to_string())
+        }
+    }
 }
 
 fn get_dummy_value(

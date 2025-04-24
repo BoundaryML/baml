@@ -27,25 +27,32 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         session.clear_unsaved_files();
         session.reload(Some(notifier.clone())).internal_error()?;
         tracing::info!("About to run generator. URL path: {:?}", path);
-        session
+        let project = session
             .get_or_create_project(&path)
-            .expect("Ensured that a project db exists")
-            .lock()
-            .unwrap()
-            .run_generators_without_debounce(
-                |message| {
-                    tracing::info!("About to notify client that generator has run.");
-                    notifier
-                        .notify_baml_info(&format!("{}", message))
-                        .unwrap_or(())
-                },
-                |e| {
-                    tracing::error!("Error generating: {e}");
-                    notifier
-                        .notify_baml_error(&format!("Error generating: {e}"))
-                        .unwrap_or(())
-                },
-            );
+            .expect("Ensured that a project db exists");
+
+        let version = project.lock().unwrap().get_common_generator_version();
+        if let Ok(version) = version {
+            let _ = notifier.0.send(lsp_server::Message::Notification(
+                lsp_server::Notification::new("baml_src_generator_version".to_string(), version),
+            ));
+        }
+
+        project.lock().unwrap().run_generators_without_debounce(
+            |message| {
+                tracing::info!("About to notify client that generator has run.");
+                notifier
+                    .notify_baml_info(&format!("{}", message))
+                    .unwrap_or(())
+            },
+            |e| {
+                tracing::error!("Error generating: {e}");
+                notifier
+                    .notify_baml_error(&format!("Error generating: {e}"))
+                    .unwrap_or(())
+            },
+        );
+
         Ok(())
     }
 }

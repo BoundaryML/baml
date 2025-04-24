@@ -244,6 +244,51 @@ pub fn project_diagnostics(
         }
     }
 
+    // Check for generator version mismatch as well.
+    if let Err(message) = guard.get_common_generator_version() {
+        // Add the diagnostic to all generators
+        if let Ok(generators) = guard.list_generators() {
+            // Need to list generators again to get their spans
+            for gen in &generators {
+                if let Some(range) = span_to_range(
+                    &guard,
+                    &root_path,
+                    &Span {
+                        file: SourceFile::new_static(PathBuf::from(gen.span.file_path.clone()), ""),
+                        start: gen.span.start,
+                        end: gen.span.end,
+                    },
+                ) {
+                    let diagnostic = Diagnostic {
+                        range,
+                        message: message.clone(),
+                        severity: Some(DiagnosticSeverity::ERROR),
+                        source: Some("baml".to_string()),
+                        ..Default::default()
+                    };
+
+                    let span_path =
+                        ensure_absolute(&root_path, &PathBuf::from(gen.span.file_path.clone()));
+
+                    match Url::from_file_path(span_path) {
+                        Ok(uri) => {
+                            diagnostics_map
+                                .entry(uri)
+                                .or_insert_with(Vec::new)
+                                .push(diagnostic);
+                        }
+                        Err(_) => {
+                            tracing::error!(
+                                "Failed to parse URI for version mismatch diagnostic: {}",
+                                gen.span.file_path
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     diagnostics_map
 }
 
