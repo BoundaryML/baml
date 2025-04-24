@@ -185,6 +185,14 @@ def main(
         repo_root,
     )
 
+    # Run bundle install for Ruby client to update Gemfile.lock version of baml.
+    if ruby or bump_all:
+        c.print("Installing Ruby dependencies...", style="blue")
+        ruby_client_dir = os.path.join(repo_root, "engine/language_client_ruby")
+        os.chdir(ruby_client_dir)
+        run("bundle install")
+        c.print("Ruby dependencies installed successfully.", style="green")
+
     os.chdir(repo_root)
     new_version = get_current_version()
     if new_version is None:

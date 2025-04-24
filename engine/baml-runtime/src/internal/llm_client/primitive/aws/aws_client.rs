@@ -52,7 +52,8 @@ use crate::internal::llm_client::{
 };
 use crate::tracingv2::storage::storage::BAML_TRACER;
 use crate::{json_body, AwsCredProvider, JsonBodyInput, RenderCurlSettings, RuntimeContext};
-
+// See https://github.com/awslabs/aws-sdk-rust/issues/169
+use super::custom_http_client;
 #[cfg(target_arch = "wasm32")]
 use super::wasm::WasmAwsCreds;
 
@@ -388,8 +389,11 @@ impl AwsClient {
         }
 
         let config = loader.load().await;
+        let http_client = custom_http_client::client()?;
 
         let bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
+            // To support HTTPS_PROXY https://github.com/awslabs/aws-sdk-rust/issues/169
+            .http_client(http_client)
             .interceptor(CollectorInterceptor::new(span_id, http_request_id.clone()))
             .build();
         Ok(BedrockRuntimeClient::from_conf(bedrock_config))

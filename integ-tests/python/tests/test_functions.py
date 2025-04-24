@@ -483,6 +483,11 @@ async def test_should_work_with_vertex():
     res = await b.TestVertex("donkey kong")
     assert_that("donkey kong" in res.lower())
 
+@pytest.mark.asyncio
+async def test_should_work_with_vertex_claude():
+    res = await b.TestVertexClaude("donkey kong")
+    assert_that("donkey kong" in res.lower())
+
 
 @pytest.mark.asyncio
 async def test_should_work_with_image_base64():
@@ -576,6 +581,21 @@ async def test_aws():
 
 
 @pytest.mark.asyncio
+async def test_aws_inference_profile():
+    res = await b.TestAwsInferenceProfile("Hello, world!")
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
+async def test_aws_streaming():
+    res = b.stream.TestAws("Tell me a story in 8 sentences.")
+    chunks = []
+    async for chunk in res:
+        chunks.append(chunk)
+    assert len(chunks) > 1, "Expected more than one stream chunk."
+
+
+@pytest.mark.asyncio
 async def test_openai_shorthand():
     res = await b.TestOpenAIShorthand(input="Mt Rainier is tall")
     assert len(res) > 0, "Expected non-empty result but got empty."
@@ -612,12 +632,6 @@ async def test_fallback_to_shorthand():
 
 
 @pytest.mark.asyncio
-async def test_aws_streaming():
-    res = await b.stream.TestAws(input="Mt Rainier is tall").get_final_response()
-    assert len(res) > 0, "Expected non-empty result but got empty."
-
-
-@pytest.mark.asyncio
 async def test_streaming():
     stream = b.stream.PromptTestStreaming(
         input="Programming languages are fun to create"
@@ -628,6 +642,7 @@ async def test_streaming():
     last_msg_time = start_time
     first_msg_time = start_time + 10
     async for msg in stream:
+        print("stream event", msg)
         msgs.append(str(msg))
         if len(msgs) == 1:
             first_msg_time = asyncio.get_event_loop().time()
@@ -636,21 +651,20 @@ async def test_streaming():
 
     final = await stream.get_final_response()
 
-    assert first_msg_time - start_time <= 1.5, (
-        "Expected first message within 1 second but it took longer."
-    )
-    assert last_msg_time - start_time >= 1, (
-        "Expected last message after 1.5 seconds but it was earlier."
-    )
+    assert (
+        first_msg_time - start_time <= 1.5
+    ), "Expected first message within 1 second but it took longer."
+    assert (
+        last_msg_time - start_time >= 1
+    ), "Expected last message after 1.5 seconds but it was earlier."
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), (
-            "Expected messages to be continuous, but prev was %r and next was %r"
-            % (
-                prev_msg,
-                msg,
-            )
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -681,21 +695,20 @@ def test_streaming_sync():
 
     final = stream.get_final_response()
 
-    assert first_msg_time - start_time <= 1.5, (
-        "Expected first message within 1 second but it took longer."
-    )
-    assert last_msg_time - start_time >= 1, (
-        "Expected last message after 1.5 seconds but it was earlier."
-    )
+    assert (
+        first_msg_time - start_time <= 1.5
+    ), "Expected first message within 1 second but it took longer."
+    assert (
+        last_msg_time - start_time >= 1
+    ), "Expected last message after 1.5 seconds but it was earlier."
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), (
-            "Expected messages to be continuous, but prev was %r and next was %r"
-            % (
-                prev_msg,
-                msg,
-            )
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -718,12 +731,11 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), (
-            "Expected messages to be continuous, but prev was %r and next was %r"
-            % (
-                prev_msg,
-                msg,
-            )
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
         )
     print("msgs:")
     print(msgs[-1])
@@ -744,12 +756,11 @@ async def test_streaming_gemini():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(prev_msg), (
-            "Expected messages to be continuous, but prev was %r and next was %r"
-            % (
-                prev_msg,
-                msg,
-            )
+        assert msg.startswith(
+            prev_msg
+        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
+            prev_msg,
+            msg,
         )
     print("msgs:")
     print(msgs[-1])
@@ -1457,9 +1468,9 @@ In conclusion, this story is a reflection on the power of dreams and the respons
     print("Duration no caching: ", duration)
     print("Duration with caching: ", duration2)
 
-    assert duration2 < duration, (
-        f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
-    )
+    assert (
+        duration2 < duration
+    ), f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
 
 
 @pytest.mark.asyncio
@@ -1527,9 +1538,9 @@ async def test_baml_validation_error_format():
         except errors.BamlValidationError as e:
             print("Error: ", e)
             assert hasattr(e, "prompt"), "Error object should have 'prompt' attribute"
-            assert hasattr(e, "raw_output"), (
-                "Error object should have 'raw_output' attribute"
-            )
+            assert hasattr(
+                e, "raw_output"
+            ), "Error object should have 'raw_output' attribute"
             assert hasattr(e, "message"), "Error object should have 'message' attribute"
             assert 'Say "hello there"' in e.prompt
 
@@ -1616,7 +1627,8 @@ async def test_differing_unions():
 @pytest.mark.asyncio
 async def test_add_baml_existing_class():
     tb = TypeBuilder()
-    tb.add_baml("""
+    tb.add_baml(
+        """
         class ExtraPersonInfo {
             height int
             weight int
@@ -1626,7 +1638,8 @@ async def test_add_baml_existing_class():
             age int?
             extra ExtraPersonInfo?
         }
-    """)
+    """
+    )
     res = await b.ExtractPeople(
         "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
         {"tb": tb},
@@ -1644,12 +1657,14 @@ async def test_add_baml_existing_class():
 @pytest.mark.asyncio
 async def test_add_baml_existing_enum():
     tb = TypeBuilder()
-    tb.add_baml("""
+    tb.add_baml(
+        """
         dynamic enum Hobby {
             VideoGames
             BikeRiding
         }
-    """)
+    """
+    )
     res = await b.ExtractHobby("I play video games", {"tb": tb})
     assert res == ["VideoGames"]
 
@@ -1657,7 +1672,8 @@ async def test_add_baml_existing_enum():
 @pytest.mark.asyncio
 async def test_add_baml_both_classes_and_enums():
     tb = TypeBuilder()
-    tb.add_baml("""
+    tb.add_baml(
+        """
         class ExtraPersonInfo {
             height int
             weight int
@@ -1684,7 +1700,8 @@ async def test_add_baml_both_classes_and_enums():
             job Job?
             hobbies Hobby[]
         }
-    """)
+    """
+    )
     res = await b.ExtractPeople(
         "My name is John Doe. I'm 30 years old. My height is 6 feet and I weigh 180 pounds. My hair is brown. I work as a programmer and enjoy bike riding.",
         {"tb": tb},
@@ -1704,7 +1721,8 @@ async def test_add_baml_both_classes_and_enums():
 @pytest.mark.asyncio
 async def test_add_baml_with_attrs():
     tb = TypeBuilder()
-    tb.add_baml("""
+    tb.add_baml(
+        """
         class ExtraPersonInfo {
             height int @description("In centimeters and rounded to the nearest whole number")
             weight int @description("In kilograms and rounded to the nearest whole number")
@@ -1713,7 +1731,8 @@ async def test_add_baml_with_attrs():
         dynamic class Person {
             extra ExtraPersonInfo?
         }
-    """)
+    """
+    )
     res = await b.ExtractPeople(
         "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
         {"tb": tb},
@@ -1731,21 +1750,25 @@ async def test_add_baml_with_attrs():
 async def test_add_baml_error():
     tb = TypeBuilder()
     with pytest.raises(errors.BamlError):
-        tb.add_baml("""
+        tb.add_baml(
+            """
             dynamic Hobby {
                 VideoGames
                 BikeRiding
             }
-        """)
+        """
+        )
 
 
 @pytest.mark.asyncio
 async def test_add_baml_parser_error():
     tb = TypeBuilder()
     with pytest.raises(errors.BamlError):
-        tb.add_baml("""
+        tb.add_baml(
+            """
             syntaxerror
-        """)
+        """
+        )
 
 
 @pytest.mark.asyncio

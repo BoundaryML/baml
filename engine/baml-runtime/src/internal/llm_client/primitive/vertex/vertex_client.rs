@@ -1,4 +1,5 @@
 use crate::client_registry::ClientProperty;
+use crate::internal::llm_client::primitive::anthropic::{self, AnthropicClient};
 use crate::internal::llm_client::primitive::request::ResponseType;
 use crate::internal::llm_client::primitive::stream_request::make_stream_request;
 use crate::internal::llm_client::traits::{
@@ -62,12 +63,28 @@ fn resolve_properties(
 ) -> Result<ResolvedVertex, anyhow::Error> {
     let properties = properties.resolve(provider, &ctx.eval_ctx(false))?;
 
-    let ResolvedClientProperty::Vertex(props) = properties else {
+    let ResolvedClientProperty::Vertex(mut props) = properties else {
         anyhow::bail!(
             "Invalid client property. Should have been a vertex property but got: {}",
             properties.name()
         );
     };
+
+    if !props.anthropic_version.is_some() && props.model.starts_with("claude") {
+        props.anthropic_version =
+            Some(internal_llm_client::anthropic::DEFAULT_ANTHROPIC_VERSION.to_string());
+    }
+
+    if let Some(anthropic_version) = &props.anthropic_version {
+        props
+            .properties
+            .entry("anthropic_version".into())
+            .or_insert_with(|| json!(anthropic_version));
+        props
+            .properties
+            .entry("max_tokens".into())
+            .or_insert_with(|| json!(internal_llm_client::anthropic::DEFAULT_MAX_TOKENS));
+    }
 
     Ok(props)
 }
@@ -216,12 +233,15 @@ impl RequestBuilder for VertexClient {
         let baml_original_url = format!(
             "{base_url}/{model}:{rpc_and_protocol}",
             model = self.properties.model,
-            // publisher "anthropic" "google"
-            // rawPredict streamRawPredict
-            rpc_and_protocol = if stream {
-                "streamGenerateContent?alt=sse"
-            } else {
-                "generateContent"
+            rpc_and_protocol = match (&self.properties.anthropic_version, stream) {
+                (Some(ref anthropic_version), true) => {
+                    "streamRawPredict"
+                }
+                (Some(ref anthropic_version), false) => {
+                    "rawPredict"
+                }
+                (None, true) => "streamGenerateContent?alt=sse",
+                (None, false) => "generateContent",
             }
         );
 
@@ -244,11 +264,24 @@ impl RequestBuilder for VertexClient {
 
         let mut json_body = self.properties.properties.clone();
 
-        match prompt {
-            either::Either::Left(prompt) => {
-                json_body.extend(convert_completion_prompt_to_body(prompt))
+        match (&self.properties.anthropic_version, prompt) {
+            (Some(ref anthropic_version), either::Either::Left(prompt)) => {
+                json_body.extend(anthropic::convert_completion_prompt_to_body(prompt));
             }
-            either::Either::Right(messages) => json_body.extend(self.chat_to_message(messages)?),
+            (Some(ref anthropic_version), either::Either::Right(messages)) => {
+                let anthropic_client = AnthropicClient::synthetic_for_vertex_anthropic(
+                    self.name.clone(),
+                    self.context.clone(),
+                    self.properties.role_selection.clone(),
+                )?;
+                json_body.extend(anthropic_client.chat_to_message(messages)?);
+            }
+            (None, either::Either::Left(prompt)) => {
+                json_body.extend(convert_completion_prompt_to_body(prompt));
+            }
+            (None, either::Either::Right(messages)) => {
+                json_body.extend(self.chat_to_message(messages)?);
+            }
         }
 
         let req = req.json(&json_body);
@@ -275,7 +308,10 @@ impl WithChat for VertexClient {
             Some(model_name),
             either::Either::Right(prompt),
             false,
-            ResponseType::Vertex,
+            match self.properties.anthropic_version {
+                Some(ref anthropic_version) => ResponseType::Anthropic,
+                None => ResponseType::Vertex,
+            },
             ctx,
             http_request_id,
         )

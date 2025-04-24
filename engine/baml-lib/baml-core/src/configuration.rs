@@ -34,6 +34,12 @@ pub enum Generator {
     BoundaryCloud(CloudProject),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleFormat {
+    Cjs,
+    Esm,
+}
+
 // TODO: we should figure out how to model generator fields using serde, since
 // the generator blocks are essentially a serde_json parse
 // problem is that serde_json has atrocious error messages and we need to provide
@@ -48,7 +54,8 @@ pub struct CodegenGenerator {
     output_dir: PathBuf,
     pub version: String,
     pub client_package_name: Option<String>,
-
+    // For TS generators, we can choose between CJS and ESM module formats
+    pub module_format: Option<ModuleFormat>,
     pub span: crate::ast::Span,
 }
 

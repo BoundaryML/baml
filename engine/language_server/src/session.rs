@@ -169,7 +169,12 @@ impl Session {
             .unwrap()
             .iter_mut()
             .map(|(_project_root, project)| {
-                let files_map = project.lock().unwrap().baml_project.load_files()?;
+                let files_map = project
+                    .lock()
+                    .unwrap()
+                    .baml_project
+                    .load_files()
+                    .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
                 project
                     .lock()
                     .unwrap()
@@ -181,6 +186,7 @@ impl Session {
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+        tracing::info!("Initial reload of {} files", project_updates.len());
 
         let files: Vec<(DocumentKey, String)> = project_updates
             .into_iter()

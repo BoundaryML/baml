@@ -4,8 +4,8 @@ import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebviewPanelHost, openPlaygroundConfig } from './panels/WebviewPanelHost'
 import plugins from './plugins'
-import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server'
-import { telemetry } from './plugins/language-server'
+import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server-client'
+import { telemetry } from './plugins/language-server-client'
 import cors from 'cors'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 
@@ -201,7 +201,7 @@ export function activate(context: vscode.ExtensionContext) {
         console.log('args:', params)
         // A helpful thing to toggle on for debugging:
         console.log('HANDLER setFlashingRegions', params)
-        vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
+        // vscode.window.showWarningMessage(`setFlashingRegions:` + JSON.stringify(params))
 
         // Focus the editor to ensure styling updates are applied rapidly.
         if (vscode.window.activeTextEditor) {

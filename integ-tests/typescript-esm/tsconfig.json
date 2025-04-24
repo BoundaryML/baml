@@ -1,0 +1,7 @@
+{
+  "extends": "@tsconfig/node23/tsconfig.json",
+  "exclude": ["dist"],
+  "compilerOptions": {
+    "outDir": "dist"
+  }
+}

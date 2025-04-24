@@ -2,9 +2,10 @@ use anyhow::{Context, Result};
 use baml_types::{Constraint, ConstraintLevel, FieldType};
 use indexmap::IndexMap;
 use internal_baml_core::{
-    configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
+    configuration::{GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat},
     ir::repr::IntermediateRepr,
 };
+use regex::Regex;
 use std::{
     collections::{BTreeMap, HashSet},
     path::{Path, PathBuf},
@@ -39,6 +40,9 @@ pub struct GeneratorArgs {
     // The type of client to generate
     client_type: Option<GeneratorOutputType>,
     client_package_name: Option<String>,
+
+    // For TS generators, we can choose between CJS and ESM module formats
+    module_format: Option<ModuleFormat>,
 }
 
 fn relative_path_to_baml_src(path: &Path, baml_src: &Path) -> Result<PathBuf> {
@@ -62,6 +66,7 @@ impl GeneratorArgs {
         on_generate: Vec<String>,
         client_type: Option<GeneratorOutputType>,
         client_package_name: Option<String>,
+        module_format: Option<ModuleFormat>,
     ) -> Result<Self> {
         let baml_src = baml_src_dir.into();
         let input_file_map: BTreeMap<PathBuf, String> = input_files
@@ -80,6 +85,7 @@ impl GeneratorArgs {
             on_generate,
             client_type,
             client_package_name,
+            module_format,
         })
     }
 

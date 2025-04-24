@@ -8,8 +8,12 @@ use anyhow::Result;
 
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
+use secrecy::SecretString;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+
+pub const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
+pub const DEFAULT_MAX_TOKENS: u32 = 4096;
 
 #[derive(Debug, Clone)]
 pub struct UnresolvedAnthropic<Meta> {
@@ -82,6 +86,25 @@ impl ResolvedAnthropic {
             }
         })
     }
+
+    /// When using Vertex with Anthropic, we need to use a synthetic client that mimics the Anthropic API.
+    /// This allows us to construct an Anthropic HTTP client from a baml client for vertex-ai.
+    pub fn synthetic_for_vertex_anthropic(role_selection: RolesSelection) -> Self {
+        Self {
+            headers: IndexMap::new(),
+            properties: IndexMap::new(),
+            proxy_url: None,
+            finish_reason_filter: FinishReasonFilter::All,
+            base_url: "BAML-ANTHROPIC-PLACEHOLDER".to_string(),
+            api_key: ApiKeyWithProvenance {
+                api_key: SecretString::new("".into()),
+                provenance: None,
+            },
+            role_selection,
+            allowed_metadata: AllowedRoleMetadata::All,
+            supported_request_modes: SupportedRequestModes { stream: Some(true) },
+        }
+    }
 }
 
 impl<Meta: Clone> UnresolvedAnthropic<Meta> {
@@ -114,7 +137,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
         // Add default Anthropic version header if not present
         headers
             .entry("anthropic-version".to_string())
-            .or_insert_with(|| "2023-06-01".to_string());
+            .or_insert_with(|| DEFAULT_ANTHROPIC_VERSION.to_string());
 
         let properties = {
             let mut properties = self
@@ -125,7 +148,7 @@ impl<Meta: Clone> UnresolvedAnthropic<Meta> {
 
             properties
                 .entry("max_tokens".to_string())
-                .or_insert(serde_json::json!(4096));
+                .or_insert(serde_json::json!(DEFAULT_MAX_TOKENS));
 
             properties
         };

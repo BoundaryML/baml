@@ -159,6 +159,7 @@ pub struct UnresolvedVertex<Meta> {
     supported_request_modes: SupportedRequestModes,
     finish_reason_filter: UnresolvedFinishReasonFilter,
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
+    anthropic_version: Option<StringOr>,
 }
 
 pub enum BaseUrlOrLocation {
@@ -172,12 +173,14 @@ pub struct ResolvedVertex {
     pub auth_strategy: ResolvedGcpAuthStrategy,
     pub model: String,
     pub headers: IndexMap<String, String>,
-    role_selection: RolesSelection,
+    /// This is usually not pub, but we need it so that we can pass it through to the Anthropic client.
+    pub role_selection: RolesSelection,
     pub allowed_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
     pub properties: IndexMap<String, serde_json::Value>,
     pub proxy_url: Option<String>,
     pub finish_reason_filter: FinishReasonFilter,
+    pub anthropic_version: Option<String>,
 }
 
 impl ResolvedVertex {
@@ -247,6 +250,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
                 .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
                 .collect(),
             finish_reason_filter: self.finish_reason_filter.clone(),
+            anthropic_version: self.anthropic_version.clone(),
         }
     }
 
@@ -286,6 +290,10 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
                 .collect::<Result<IndexMap<_, _>>>()?,
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
+            anthropic_version: match self.anthropic_version {
+                Some(ref anthropic_version) => Some(anthropic_version.resolve(ctx)?),
+                None => None,
+            },
         })
     }
 
@@ -365,6 +373,10 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
         let headers = properties.ensure_headers().unwrap_or_default();
         let finish_reason_filter = properties.ensure_finish_reason_filter();
 
+        let anthropic_version = properties
+            .ensure_string("anthropic_version", false)
+            .map(|(_, v, _)| v);
+
         let (properties, errors) = properties.finalize();
         if !errors.is_empty() {
             return Err(errors);
@@ -385,6 +397,7 @@ impl<Meta: Clone> UnresolvedVertex<Meta> {
             supported_request_modes,
             properties,
             finish_reason_filter,
+            anthropic_version,
         })
     }
 }

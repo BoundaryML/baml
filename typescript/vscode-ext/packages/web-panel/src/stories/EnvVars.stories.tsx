@@ -32,7 +32,7 @@ const WrappedEnvVars: React.FC = () => {
         <div className='flex gap-8 items-start'>
           <EnvironmentVariablesPanel />
           <div className='p-4 bg-[#1e1e1e] rounded-lg min-w-[300px]'>
-            <h3 className='mb-2 text-sm font-mono'>JSON.stringify(useAtomValue(envVarsAtom))</h3>
+            <h3 className='mb-2 text-sm font-mono'>envVars</h3>
             <pre className='text-xs'>{JSON.stringify(envVars, null, 2)}</pre>
           </div>
         </div>
@@ -68,7 +68,6 @@ export const NoRequiredEnvVarsAreSet = {
   ],
 }
 
-// ANTHROPIC_API_KEY and OPENAI_API_KEY are required by default
 export const SomeRequiredEnvVarsAreSet = {
   decorators: [
     (Story: React.FC) => (
@@ -91,7 +90,6 @@ export const SomeRequiredEnvVarsAreSet = {
   ],
 }
 
-// ANTHROPIC_API_KEY and OPENAI_API_KEY are required by default
 export const AllRequiredEnvVarsAreSet = {
   decorators: [
     (Story: React.FC) => (
@@ -124,7 +122,6 @@ export const EnvVarContainsNewlines = {
   ],
 }
 
-// ANTHROPIC_API_KEY and OPENAI_API_KEY are required by default
 export const TableWith100EnvVars = {
   decorators: [
     (Story: React.FC) => (

@@ -76,10 +76,8 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
             tracing::info!("diagnostic notif");
-            background_request_task::<request::DocumentDiagnosticRequestHandler>(
-                req,
-                BackgroundSchedule::LatencySensitive,
-            )
+            local_request_task::<request::DocumentDiagnosticRequestHandler>(req)
+            // note background request task here sometimes results in inconsistent baml project state...
         }
         "getBAMLFunctions" => {
             tracing::info!("getBAMLFunctions");
@@ -218,6 +216,11 @@ pub(super) fn notification<'a>(notif: lsp_server::Notification) -> Vec<Task<'a>>
         notification::DidChangeWatchedFiles::METHOD => {
             handle_notification_result_error::<notification::DidChangeWatchedFiles>(
                 local_notification_task::<notification::DidChangeWatchedFiles>(notif),
+            )
+        }
+        notification::DidChangeConfiguration::METHOD => {
+            handle_notification_result_error::<notification::DidChangeConfiguration>(
+                local_notification_task::<notification::DidChangeConfiguration>(notif),
             )
         }
         notification::DidCloseTextDocumentHandler::METHOD => {

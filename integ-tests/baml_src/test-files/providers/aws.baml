@@ -58,3 +58,27 @@ function TestAwsInvalidSessionToken(input: string) -> string {
     Write a nice short story about {{ input }}. Keep it to 15 words or less.
   "#
 }
+
+function TestAwsInferenceProfile(input: string) -> string {
+  client AwsBedrockInferenceProfileClient
+  prompt #"
+    Write a nice short story about {{ input }}. Keep it to 15 words or less.
+  "#
+}
+
+test TestName {
+  functions [TestAwsInferenceProfile]
+  args {
+    input #"
+      hello world
+    "#
+  }
+}
+
+
+client<llm> AwsBedrockInferenceProfileClient {
+  provider "aws-bedrock"
+  options {
+    model "arn:aws:bedrock:us-east-1:404337120808:inference-profile/us.anthropic.claude-3-7-sonnet-20250219-v1:0"
+  }
+}

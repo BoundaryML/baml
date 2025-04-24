@@ -5,6 +5,7 @@ package baml
 #include <stdbool.h>
 
 extern void trigger_callback(uint32_t, bool, const int8_t *, int);
+extern void error_callback(uint32_t, bool, const int8_t *, int);
 */
 import "C"
 
@@ -36,7 +37,7 @@ func InvokeRuntimeCli(args []string) int {
 }
 
 func init() {
-	if err := baml_go.RegisterCallbacks(C.trigger_callback, C.trigger_callback); err != nil {
+	if err := baml_go.RegisterCallbacks(C.trigger_callback, C.error_callback); err != nil {
 		panic(err)
 	}
 }

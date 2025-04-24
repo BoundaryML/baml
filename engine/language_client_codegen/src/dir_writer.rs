@@ -126,6 +126,12 @@ impl<L: LanguageFeatures + Default> FileCollector<L> {
         );
     }
 
+    pub(super) fn modify_files(&mut self, mut modify: impl FnMut(&mut String)) {
+        for (_path, content) in self.files.iter_mut() {
+            modify(content);
+        }
+    }
+
     /// Ensure that a directory contains only files we generated before nuking it.
     ///
     /// This is a safety measure to prevent accidentally deleting user files.

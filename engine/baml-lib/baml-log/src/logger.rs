@@ -456,7 +456,9 @@ impl ConfigSetting<Level> for LogLevel {
                 let old_level = config.level;
                 config.level = value;
                 if old_level != value {
-                    println!("[BAML] Log level set to {}", value.colored());
+                    if value != Level::Off {
+                        println!("[BAML] Log level set to {}", value.colored());
+                    }
                 }
                 Ok(())
             }

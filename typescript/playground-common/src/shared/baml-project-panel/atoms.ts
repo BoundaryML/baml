@@ -263,12 +263,27 @@ export const envVarsAtom = atom(
       if (proxyUrl === undefined) {
         return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
       }
+
+      // Check if BOUNDARY_PROXY_URL exists in the env vars.
+      const hasBoundaryProxyUrl = envKeyValues.some(([k]) => k === 'BOUNDARY_PROXY_URL')
+
       const entries = envKeyValues.map(([k, v]) => {
         if (k === 'BOUNDARY_PROXY_URL') {
           return [k, proxyUrl]
         }
         return [k, v]
       })
+
+      // If proxy is enabled and there's a proxyUrl but no BOUNDARY_PROXY_URL, add it
+      // TODO: it's likely when proxy is updated we dont update our env vars properly again.
+      // so we resort to this.
+      if (proxyEnabled && proxyUrl && !hasBoundaryProxyUrl) {
+        console.warn(
+          '⚠️ WARNING: BOUNDARY_PROXY_URL was not found in env vars but proxy is enabled. Adding it automatically.',
+        )
+        entries.push(['BOUNDARY_PROXY_URL', proxyUrl])
+      }
+
       return Object.fromEntries(entries.filter((e) => e !== undefined))
     }
   },

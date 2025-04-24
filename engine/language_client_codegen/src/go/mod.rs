@@ -282,6 +282,7 @@ class Foo {
             Vec::new(),
             Some(GeneratorOutputType::Go),
             Some("example.com/integ-tests".to_string()),
+            None,
         )
         .unwrap()
     }

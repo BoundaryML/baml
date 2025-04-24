@@ -1980,6 +1980,24 @@ export const TestAws = async (
 };
 
 /**
+ * Executes the "TestAwsInferenceProfile" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsInferenceProfile"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsInferenceProfile = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAwsInferenceProfile(
+    input,
+  );
+};
+
+/**
  * Executes the "TestAwsInvalidAccessKey" BAML action.
  *
  * This server action calls the underlying BAML function "TestAwsInvalidAccessKey"
@@ -2916,6 +2934,24 @@ export const TestOpenAIWithNullMaxTokens = async (
 };
 
 /**
+ * Executes the "TestOpenRouterMistralSmall3_1_24b" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenRouterMistralSmall3_1_24b"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenRouterMistralSmall3_1_24b = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenRouterMistralSmall3_1_24b(
+    input,
+  );
+};
+
+/**
  * Executes the "TestRetryConstant" BAML action.
  *
  * This server action calls the underlying BAML function "TestRetryConstant"
@@ -3028,6 +3064,24 @@ export const TestVertex = async (
   input: string,
 ): Promise<string> => {
   return b.TestVertex(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestVertexClaude" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestVertexClaude"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestVertexClaude = async (
+  input: string,
+): Promise<string> => {
+  return b.TestVertexClaude(
     input,
   );
 };

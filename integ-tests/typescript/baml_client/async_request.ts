@@ -2171,6 +2171,26 @@ export class AsyncHttpRequest {
     }
   }
   
+  async TestAwsInferenceProfile(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestAwsInferenceProfile",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async TestAwsInvalidAccessKey(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -3211,6 +3231,26 @@ export class AsyncHttpRequest {
     }
   }
   
+  async TestOpenRouterMistralSmall3_1_24b(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestOpenRouterMistralSmall3_1_24b",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async TestRetryConstant(
       
       __baml_options__?: BamlCallOptions
@@ -3338,6 +3378,26 @@ export class AsyncHttpRequest {
     try {
       return await this.runtime.buildRequest(
         "TestVertex",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertexClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestVertexClaude",
         {
           "input": input
         },
@@ -5597,6 +5657,26 @@ export class AsyncHttpStreamRequest {
     }
   }
   
+  async TestAwsInferenceProfile(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestAwsInferenceProfile",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async TestAwsInvalidAccessKey(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -6637,6 +6717,26 @@ export class AsyncHttpStreamRequest {
     }
   }
   
+  async TestOpenRouterMistralSmall3_1_24b(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestOpenRouterMistralSmall3_1_24b",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async TestRetryConstant(
       
       __baml_options__?: BamlCallOptions
@@ -6764,6 +6864,26 @@ export class AsyncHttpStreamRequest {
     try {
       return await this.runtime.buildRequest(
         "TestVertex",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertexClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "TestVertexClaude",
         {
           "input": input
         },

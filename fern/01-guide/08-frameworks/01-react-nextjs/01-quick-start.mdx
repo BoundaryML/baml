@@ -219,6 +219,18 @@ generator typescript {
 
 <Markdown src="../../../snippets/baml/cli/generate.mdx" />
 
+
+ <Note>
+      If you need baml_client to be 'ESM' compatible, you can add the following `generator` configuration to your `.baml` file:
+
+      ```baml
+      generator typescript {
+        ...
+        module_format "esm" // the default is "cjs" for CommonJS
+      }
+      ```
+    </Note>
+
 ### Generated React Hooks
 
 BAML automatically generates type-safe Next.js server actions and React hooks for your BAML functions.

@@ -171,10 +171,6 @@ impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
     }
 }
 
-fn weird_default() -> FieldType {
-    FieldType::Primitive(TypeValue::Null)
-}
-
 impl WithRepr<Function> for ExprFnWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
         // TODO: Drop weird default (replace by better validation).
@@ -626,10 +622,10 @@ impl IntermediateRepr {
         repr.retry_policies
             .sort_by(|a, b| a.elem.name.0.cmp(&b.elem.name.0));
 
-        // TODO: Necessary?
+        let mut typing_context = initial_typing_context(&repr);
         for expr_fn in repr.expr_fns.iter_mut() {
             let expr = expr_fn.elem.expr.clone();
-            let inferred_expr = infer_types_in_context(&mut HashMap::new(), Arc::new(expr));
+            let inferred_expr = infer_types_in_context(&mut typing_context, Arc::new(expr));
             expr_fn.elem.expr = Arc::unwrap_or_clone(inferred_expr);
         }
 
@@ -1562,10 +1558,6 @@ impl ExprFunction {
                             annotate_variable(target, r#type.clone(), body)
                         });
                 let res = Expr::Lambda(*arity, Arc::new(new_body), meta.clone());
-                eprintln!(
-                    "ASSIGN_PARAM_TYPES_TO_BODY_VARIABLES input:\n{:?}\nresult:\n{:?}",
-                    self.expr, res
-                );
                 res
             }
             // TODO: Handle other cases - traverse the tree.
@@ -2139,6 +2131,13 @@ pub fn initial_context(ir: &IntermediateRepr) -> HashMap<Name, Expr<ExprMetadata
         );
     }
     ctx
+}
+
+pub fn initial_typing_context(ir: &IntermediateRepr) -> HashMap<Name, FieldType> {
+    let ctx = initial_context(ir);
+    ctx.into_iter()
+        .filter_map(|(name, expr)| expr.meta().1.as_ref().map(|t| (name, t.clone())))
+        .collect()
 }
 
 #[cfg(test)]

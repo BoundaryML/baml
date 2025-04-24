@@ -9,6 +9,7 @@ import "C"
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"sync"
 	"unsafe"
@@ -19,6 +20,10 @@ import (
 
 type BamlError struct {
 	Message string
+}
+
+func (e BamlError) Error() string {
+	return e.Message
 }
 
 type BamlClientError struct {
@@ -51,6 +56,33 @@ var (
 
 func SetTypeMap(t TypeMap) {
 	typeMap = t
+}
+
+//export error_callback
+func error_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.int) {
+	fmt.Println("Error callback")
+	callbackMutex.RLock()
+	id_uint := uint32(id)
+	callback, exists := dynamicCallbacks[id_uint]
+	callbackMutex.RUnlock()
+
+	if exists {
+		content_bytes := C.GoBytes(unsafe.Pointer(content), length)
+
+		// Parse the content as a string
+		content_str := string(content_bytes)
+
+		// TODO: cast to the right error type
+		err := BamlError{Message: content_str}
+
+		// Send the error to the callback
+		callback.channel <- ResultCallback{Error: err}
+
+		close(callback.channel)
+		callbackMutex.Lock()
+		defer callbackMutex.Unlock()
+		delete(dynamicCallbacks, id_uint)
+	}
 }
 
 //export trigger_callback

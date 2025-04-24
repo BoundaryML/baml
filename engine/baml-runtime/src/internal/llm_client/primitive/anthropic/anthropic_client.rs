@@ -5,11 +5,14 @@ use crate::internal::llm_client::{
     },
     ResolveMediaUrls,
 };
-use secrecy::ExposeSecret;
+use indexmap::IndexMap;
+use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlMedia, BamlMediaContent};
+use baml_types::{
+    tracing::events::HttpRequestId, ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent,
+};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -18,7 +21,7 @@ use internal_baml_jinja::{
 };
 use internal_llm_client::{
     anthropic::ResolvedAnthropic, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
-    UnresolvedClientProperty,
+    RolesSelection, SupportedRequestModes, UnresolvedClientProperty,
 };
 
 use crate::{
@@ -187,6 +190,34 @@ impl AnthropicClient {
                 .map(|s| s.to_string()),
             client: create_client()?,
             properties,
+        })
+    }
+
+    /// GCP only supports using Anthropic on Vertex using the Anthropic SDK with
+    /// the Vertex plugin, i.e. pip install anthropic[vertex]. For us, this means
+    /// that we need to somehow construct an Anthropic-shaped request and use it
+    /// with GCP-style auth/URLs.
+    ///
+    /// We implement this by constructing a synthetic Anthropic client that allows
+    /// us to convert RenderedChatMessages into the Anthropic API format.
+    pub fn synthetic_for_vertex_anthropic(
+        name: String,
+        context: RenderContext_Client,
+        role_selection: RolesSelection,
+    ) -> Result<Self> {
+        Ok(Self {
+            name: format!("{}:baml-anthropic", name),
+            context,
+            retry_policy: None,
+            features: ModelFeatures {
+                chat: true,
+                completion: false,
+                max_one_system_prompt: true,
+                resolve_media_urls: ResolveMediaUrls::Never,
+                allowed_metadata: AllowedRoleMetadata::None,
+            },
+            client: create_client()?,
+            properties: ResolvedAnthropic::synthetic_for_vertex_anthropic(role_selection),
         })
     }
 }
@@ -372,7 +403,7 @@ impl ToProviderMessageExt for AnthropicClient {
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(
+pub fn convert_completion_prompt_to_body(
     prompt: &String,
 ) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();

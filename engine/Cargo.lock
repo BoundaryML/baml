@@ -854,7 +854,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -974,7 +974,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1004,7 +1004,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1078,7 +1078,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1234,7 +1234,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1258,7 +1258,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1281,7 +1281,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1289,6 +1289,7 @@ dependencies = [
  "baml-runtime",
  "baml-types",
  "cbindgen",
+ "env_logger",
  "flatbuffers",
  "flatc",
  "flatc-rust",
@@ -1394,7 +1395,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3106,7 +3107,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3123,6 +3124,7 @@ dependencies = [
  "itertools 0.13.0",
  "log",
  "pathdiff 0.1.0",
+ "regex",
  "semver",
  "serde",
  "serde_json",
@@ -3133,7 +3135,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3170,7 +3172,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "colored 2.1.0",
@@ -3183,7 +3185,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3204,7 +3206,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "askama",
@@ -3223,7 +3225,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3248,7 +3250,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -3260,7 +3262,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3281,7 +3283,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3419,7 +3421,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3500,7 +3502,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.84.4"
+version = "0.85.0"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -3674,7 +3676,7 @@ checksum = "3d87ae53030f3a22e83879e666cb94e58a7bdf31706878a0ba48752994146dab"
 dependencies = [
  "magnus-macros",
  "rb-sys",
- "rb-sys-env",
+ "rb-sys-env 0.1.2",
  "seq-macro",
 ]
 
@@ -4684,18 +4686,18 @@ dependencies = [
 
 [[package]]
 name = "rb-sys"
-version = "0.9.103"
+version = "0.9.111"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91dbe37ab6ac2fba187480fb6544b92445e41e5c6f553bf0c33743f3c450a1df"
+checksum = "becea799ce051c16fb140be80f5e7cf781070f99ca099332383c2b17861249af"
 dependencies = [
  "rb-sys-build",
 ]
 
 [[package]]
 name = "rb-sys-build"
-version = "0.9.103"
+version = "0.9.111"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c4d56a49dcb646b70b758789c0d16c055a386a4f2a3346333abb69850fa860ce"
+checksum = "64691175abc704862f60a9ca8ef06174080cc50615f2bf1d4759f46db18b4d29"
 dependencies = [
  "bindgen",
  "lazy_static",
@@ -4711,6 +4713,12 @@ name = "rb-sys-env"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a35802679f07360454b418a5d1735c89716bde01d35b1560fc953c1415a0b3bb"
+
+[[package]]
+name = "rb-sys-env"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08f8d2924cf136a1315e2b4c7460a39f62ef11ee5d522df9b2750fab55b868b6"
 
 [[package]]
 name = "redox_syscall"
@@ -4927,7 +4935,7 @@ dependencies = [
  "log",
  "magnus",
  "rb-sys",
- "rb-sys-env",
+ "rb-sys-env 0.2.2",
  "serde",
  "serde_json",
  "serde_magnus",

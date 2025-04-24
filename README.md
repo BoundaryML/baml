@@ -35,7 +35,7 @@
 |   |     |
 | - | - |
 | What is BAML? | BAML is a new programming language for building AI applications. |
-| Do I need to write my whole app in BAML? | Nope, only the AI parts, you can then use BAML with any existing language of your choice! [python](/python), [typescript](/ts), and [more](/more). |
+| Do I need to write my whole app in BAML? | Nope, only the AI parts, you can then use BAML with any existing language of your choice! [python](https://docs.boundaryml.com/guide/installation-language/python), [typescript](https://docs.boundaryml.com/guide/installation-language/typescript), and [more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages). |
 | Is BAML stable? | Yes, many companies use it in production! We ship updates weekly and rarely have breaking changes |
 | Why a new language? | [Jump to section](#why-a-new-programming-language) |
 | Why a lamb? | Baaaaa-ml. LAMB == BAML |

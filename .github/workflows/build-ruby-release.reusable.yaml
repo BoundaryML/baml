@@ -3,7 +3,7 @@ name: BAML Release - Build Ruby
 on:
   workflow_call: {}
   push:
-    branches: [aaron-fix]
+    branches: [bump-ruby]
 
 permissions:
   contents: read
@@ -20,15 +20,8 @@ jobs:
       fail-fast: false
       matrix:
         _:
+          # Note needs glibc 2.29 https://github.com/rake-compiler/rake-compiler-dock/issues/122
           - platform: x86_64-linux
-            # This is necessary because rb-sys-dock depends on manylinux2014,
-            # which is based on CentOS 7 which is EOL as of July 2024 Once
-            # rake-compiler-dock switches to manylinux_2_28 and rb-sys-dock
-            # picks that up, we can pick their updates up and then drop this.
-            # See https://github.com/oxidize-rb/rb-sys/issues/402 and
-            # https://github.com/rake-compiler/rake-compiler-dock/issues/122
-            # for more details.
-            rb-sys-dock-setup: ./x86-64_linux-setup.sh
           - platform: x86_64-linux-musl
           - platform: aarch64-linux
           - platform: aarch64-linux-musl

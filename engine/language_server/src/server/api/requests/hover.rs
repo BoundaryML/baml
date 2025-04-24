@@ -25,6 +25,7 @@ impl SyncRequestHandler for Hover {
         let project = session
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");
+
         let document_key =
             DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
 

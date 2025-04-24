@@ -4,23 +4,25 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
 
 ## Table of Contents
 
-- [How to Contribute](#how-to-contribute)
-   - [Join our Community](#join-our-community)
-   - [Check Existing Issues](#check-existing-issues)
-   - [Creating an Issue](#creating-an-issue)
-   - [Fork the Repository](#fork-the-repository)
-   - [Submit a Pull Request (PR)](#submit-a-pull-request-pr)
-   - [Examples of Merged PRs](#examples-of-merged-prs)
-- [Setting up the BAML Compiler and Runtime](#setting-up-the-baml-compiler-and-runtime)
-   - [Compiler Architecture Overview](#compiler-architecture-overview)
-   - [Steps to Build and Test Locally](#steps-to-build-and-test-locally)
-- [Running Integration Tests](#running-integration-tests)
-   - [Python Integration Tests](#python-integration-tests)
-   - [TypeScript Integration Tests](#typescript-integration-tests)
-   - [OpenAPI Server Tests](#openapi-server-tests)
-- [Grammar Testing](#grammar-testing)
-- [VSCode Extension Testing](#vscode-extension-testing)
-- [Testing PromptFiddle.com](#testing-prompfiddlecom)
+- [Contributing to BAML](#contributing-to-baml)
+  - [Table of Contents](#table-of-contents)
+  - [How to Contribute](#how-to-contribute)
+    - [Examples of Merged PRs:](#examples-of-merged-prs)
+  - [Setting up the BAML Compiler and Runtime](#setting-up-the-baml-compiler-and-runtime)
+      - [Compiler Architecture Overview](#compiler-architecture-overview)
+    - [Steps to Build and Test Locally](#steps-to-build-and-test-locally)
+  - [Running Integration Tests](#running-integration-tests)
+    - [Prerequisites for All Tests](#prerequisites-for-all-tests)
+      - [Environment Variables](#environment-variables)
+    - [TypeScript Integration Tests](#typescript-integration-tests)
+    - [Python Integration Tests](#python-integration-tests)
+    - [Ruby Integration Tests](#ruby-integration-tests)
+    - [Adding New Tests](#adding-new-tests)
+    - [Debugging Tests](#debugging-tests)
+    - [OpenAPI Server Testss](#openapi-server-testss)
+  - [Grammar Testing](#grammar-testing)
+  - [VSCode Extension Testing](#vscode-extension-testing)
+  - [Testing promptfiddle.com](#testing-promptfiddlecom)
 
 
 ## How to Contribute
@@ -231,36 +233,6 @@ Each language has its own debugging setup in VS Code:
    - Use launch configuration from Ruby README
    - Use verbose mode for detailed output
 
-### Common Issues and Solutions
-
-1. **Environment Setup**:
-   - For external contributors:
-     - Create a `.env` file with required API keys
-     - Use `dotenv` commands instead of Infisical
-   - For BAML internal developers:
-     - Ensure Infisical is configured correctly
-     - Use `infisical run` commands
-
-2. **Client Generation**:
-   - Ensure BAML CLI is up to date: `baml update-client`
-   - Check BAML source files for errors
-   - Regenerate client code after changes
-
-3. **Build Issues**:
-   - Clean and rebuild language clients
-   - Check language-specific toolchain versions
-   - Verify all dependencies are installed
-
-4. **Environment Variables**:
-   - Set up Infisical correctly
-   - Verify API keys are present
-   - Check `.env` file if not using Infisical
-
-5. **Test Timeouts**:
-   - Adjust timeout settings in test configurations
-   - Consider rate limiting for API calls
-   - Use appropriate test annotations/decorators
-
 ### OpenAPI Server Testss
 
 1. Navigate to the test directory:
@@ -310,8 +282,11 @@ This requires a macos or linux machine, since we symlink some playground files b
    - Select "Launch VSCode Extension" and press the play button.
      - This will open a new VSCode window in Debug mode.
      - You can open a simple BAML project in this window (refer to our quickstart guide to set up a simple project, or clone the `baml-examples` repository).
+4. Generate the language server binary (in case our scripts don't do this for you)
+   - `cd typescript/vscode-ext/packages/vscode`
+   - `pnpm server:build`
 
-4. Reload the extension:
+5. Reload the extension:
    - Use `Command + Shift + P` to reload the extension when you change any core logic.
    - Alternatively, close and reopen the playground if you rebuild the playground.
 
@@ -333,5 +308,3 @@ This is useful if you want to iterate faster on the Extension UI, since it suppo
    - `pnpm dev`
 
 3. Modify the files in `typescript/playground-common`
-
-4. Use the `vscode-` prefixed tailwind classes to get proper colors.

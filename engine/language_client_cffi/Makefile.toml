@@ -39,7 +39,7 @@ dependencies = ["build-local"]
 # Integration test tasks
 #-----------------------------------------------------------------------------
 [tasks.integ-tests-generate]
-script = "cd ../../integ-tests && ../baml-cli/baml-cli generate"
+script = "cd ../../integ-tests && BAML_LIBRARY_PATH=$(pwd)/../engine/target/debug/libbaml_cffi.dylib ../baml-cli/baml-cli generate"
 dependencies = ["build-go-cli"]
 
 [tasks.integ-tests-build]
