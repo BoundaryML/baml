@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
@@ -12,13 +13,14 @@
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, fenix, ... }:
+  outputs = { self, nixpkgs, nixpkgs-unstable, flake-utils, fenix, ... }:
 
 
     flake-utils.lib.eachDefaultSystem (system:
 
       let
         pkgs = nixpkgs.legacyPackages.${system};
+        pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
         clang = pkgs.llvmPackages_17.clang;
         pythonEnv = pkgs.python3.withPackages (ps: []);
 
@@ -35,6 +37,7 @@
 
         appleDeps = with pkgs.darwin.apple_sdk.frameworks; [
           CoreServices
+          System
           SystemConfiguration
           pkgs.libiconv-darwin
         ];
@@ -72,7 +75,7 @@
           vsce # VSCode extension packaging tool
           toolchain
           nodejs
-          uv
+          pkgs-unstable.uv
           wasm-pack
           pkgs.gcc
           napi-rs-cli
