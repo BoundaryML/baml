@@ -94,9 +94,9 @@ pub fn init_aws_cred_provider(
     load_aws_creds_cb: js_sys::Function,
     _load_gcp_creds_cb: js_sys::Function,
 ) {
-    let (req_tx, req_rx) = tokio::sync::mpsc::channel::<Option<String>>(1);
+    let (req_tx, req_rx) = tokio::sync::mpsc::channel::<Option<String>>(100);
     let (resp_tx, resp_rx) =
-        tokio::sync::broadcast::channel::<Result<AwsCredResult, RuntimeCallbackError>>(1);
+        tokio::sync::broadcast::channel::<Result<AwsCredResult, RuntimeCallbackError>>(100);
 
     set_remote_cred_provider(AwsCredProviderImpl::new(req_tx, resp_rx));
     wasm_bindgen_futures::spawn_local(loop_aws_cred_provider(load_aws_creds_cb, req_rx, resp_tx));
