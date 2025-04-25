@@ -79,10 +79,15 @@ class VSCodeAPIWrapper {
   }
 
   async readLocalFile(bamlSrc: string, path: string): Promise<GetWebviewUriResponse> {
+    if (this.vsCodeApi) {
+      const uri = this.vsCodeApi.Uri.file(path).toString();
+    } else {
+      const uri = window.Uri.file(path).toString();
+    }
     const resp = await this.rpc<GetWebviewUriRequest, GetWebviewUriResponse>({
       vscodeCommand: 'GET_WEBVIEW_URI',
       bamlSrc,
-      path,
+      uri,
       contents: true,
     })
 
