@@ -22,7 +22,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
         pkgs-unstable = nixpkgs-unstable.legacyPackages.${system};
         clang = pkgs.llvmPackages_17.clang;
-        pythonEnv = pkgs.python3.withPackages (ps: []);
+        pythonEnv = pkgs.python39.withPackages (ps: []);
 
         toolchain = with fenix.packages.${system}; combine [
           complete.cargo
@@ -76,6 +76,7 @@
           toolchain
           nodejs
           pkgs-unstable.uv
+          pkgs-unstable.flatbuffers
           wasm-pack
           pkgs.gcc
           napi-rs-cli
@@ -101,9 +102,11 @@
           pkgs.gcc
         ];
 
+        wheelName = "baml-${version}-cp39-cp39-manylinux_2_28_x86_64.whl";
+
         
       in
-        {
+        rec {
           packages.default = rustPlatform.buildRustPackage {
 
             # Disable tests in this build - FFI is a little tricky.
@@ -162,7 +165,217 @@
             PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
             # CC="${clang}/bin/clang"; # Temporarily commented out for linux testing.
 
+            installPhase = ''
+              runHook preInstall
+              echo "Listing baml binaries in target/debug:"
+              find target/debug -type f -name "baml*"
+              mkdir -p $out/bin
+              BINARY_NAME=$(find target/debug -type f -executable -name "baml*" | head -n1)
+              echo "Found binary: $BINARY_NAME"
+              cp "$BINARY_NAME" $out/bin/baml-cli
+              runHook postInstall
+            '';
           };
+
+          packages.pyLib = rustPlatform.buildRustPackage {
+            pname = "baml-cli";
+            inherit version;
+            src = ./engine;
+            cargoLock.lockFile = ./engine/Cargo.lock;
+
+            LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
+            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
+              "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
+            else
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+
+            buildType = "debug";
+            doCheck = false;
+
+            # Skip BAML validation during build
+            SKIP_BAML_VALIDATION = "1";
+
+            RUSTFLAGS = if pkgs.stdenv.isDarwin
+              then
+                "--cfg tracing_unstable -C linker=lld"
+              else
+                "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
+
+            OPENSSL_STATIC = "1";
+            OPENSSL_DIR = "${pkgs.openssl.dev}";
+            OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
+            OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
+
+            nativeBuildInputs = nativeBuildInputs ++ [
+              pkgs.maturin
+              pythonEnv
+            ];
+
+            buildInputs = buildInputs;
+
+            buildPhase = ''
+              cargo build
+              cd language_client_python
+              maturin build --offline --target-dir ../target
+            '';
+
+            installPhase = ''
+              mkdir -p $out/lib
+              cp ../target/wheels/baml_py-${version}-cp38-abi3-linux_x86_64.whl $out/lib/
+            '';
+          };
+
+          packages.baml-py = pkgs.python39Packages.buildPythonPackage {
+            pname = "baml-py";
+            inherit version;
+            format = "wheel";
+            
+            src = "${packages.pyLib}/lib/baml_py-${version}-cp38-abi3-linux_x86_64.whl";
+            
+            propagatedBuildInputs = with pkgs.python39Packages; [
+              pydantic
+              typing-extensions
+            ];
+
+            pythonImportsCheck = [ "baml_py" ];
+            doCheck = false;
+
+            meta = with pkgs.lib; {
+              description = "Python bindings for BAML";
+              homepage = "https://github.com/BoundaryML/baml";
+              license = licenses.mit;
+              maintainers = [];
+            };
+          };
+
+          packages.tsLib = rustPlatform.buildRustPackage {
+            pname = "baml-ts";
+            inherit version;
+            src = ./engine;
+            cargoLock.lockFile = ./engine/Cargo.lock;
+
+            LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
+            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
+              "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
+            else
+              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+
+            doCheck = false;
+
+            # Skip BAML validation during build
+            SKIP_BAML_VALIDATION = "1";
+
+            RUSTFLAGS = if pkgs.stdenv.isDarwin
+              then
+                "--cfg tracing_unstable -C linker=lld"
+              else
+                "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
+
+            nativeBuildInputs = nativeBuildInputs ++ [ 
+              pkgs.nodejs
+              pkgs.napi-rs-cli
+            ];
+
+            buildInputs = buildInputs;
+
+            buildPhase = ''
+              # Build specifically the typescript FFI crate
+              cargo build -p baml-typescript-ffi
+              cd language_client_typescript
+              
+              echo "Listing target directory contents:"
+              ls -R ../target
+              
+              echo "Listing current directory contents:"
+              ls -la
+              
+              # Copy the built library to where napi expects it
+              mkdir -p target/debug
+              find ../target -name "*.so" -o -name "*.dylib" -o -name "*.dll"
+              cp ../target/debug/libbaml.so target/debug/libbaml_typescript_ffi.so
+              echo "Running napi build..."
+              napi build --platform 2>&1
+              mkdir -p dist
+              cp index.js index.d.ts native.js native.d.ts stream.js stream.d.ts type_builder.js type_builder.d.ts dist/
+              
+              # Create minimal package.json and package-lock.json
+              cat > dist/package.json << EOF
+              {
+                "name": "baml-ts",
+                "version": "${version}",
+                "bin": {
+                  "baml-cli": "./bin/baml-cli"
+                },
+                "dependencies": {},
+                "os": ["linux"],
+                "cpu": ["x64"]
+              }
+              EOF
+              
+              cat > dist/package-lock.json << EOF
+              {
+                "name": "baml-ts",
+                "version": "${version}",
+                "lockfileVersion": 2,
+                "requires": true,
+                "packages": {
+                  "": {
+                    "name": "baml-ts",
+                    "version": "${version}",
+                    "dependencies": {},
+                    "bin": {
+                      "baml-cli": "bin/baml-cli"
+                    }
+                  }
+                }
+              }
+              EOF
+
+              # Copy the CLI binary
+              mkdir -p dist/bin
+              cp ${packages.default}/bin/baml-cli dist/bin/baml-cli
+            '';
+
+            installPhase = ''
+              mkdir -p $out/lib
+              cp -r dist/* $out/lib/
+            '';
+          };
+
+          packages.baml-ts = let
+            # Create a source with files in the correct location
+            npmSource = pkgs.runCommand "baml-ts-${version}-source" {} ''
+              mkdir -p $out
+              cp -r ${packages.tsLib}/lib/* $out/
+            '';
+          in pkgs.buildNpmPackage {
+            pname = "baml";
+            inherit version;
+            
+            src = npmSource;
+
+            npmDepsHash = "sha256-VCrDNrdYv0X5XtPA8iLwpji8+bla1vK4M8p9mfMIP5w=";
+            forceEmptyCache = true;
+
+            buildInputs = [ pkgs.nodejs ];
+
+            # Configure npm to use temporary directories
+            NPM_CONFIG_CACHE = "./tmp/npm";
+            NPM_CONFIG_TMP = "./tmp/npm";
+            NPM_CONFIG_PREFIX = "./tmp/npm";
+
+            buildPhase = ''
+              # Ensure temp directories exist
+              mkdir -p tmp/npm
+              npm pack
+            '';
+
+            installPhase = ''
+              mkdir -p $out/lib
+              cp baml-ts-${version}.tgz $out/lib/
+            '';
+          };
+
           devShell = pkgs.mkShell rec {
             inherit buildInputs;
             PATH="${clang}/bin:$PATH";
