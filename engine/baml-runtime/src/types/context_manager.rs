@@ -12,7 +12,8 @@ use crate::{
     RuntimeContext, SpanCtx,
 };
 
-use super::runtime_context::{AwsCredProvider, BamlSrcReader};
+use super::remote_cred_provider::{AwsCredProvider, AwsCredResult};
+use super::runtime_context::BamlSrcReader;
 pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 
 #[derive(Clone)]

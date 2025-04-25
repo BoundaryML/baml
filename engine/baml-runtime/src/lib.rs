@@ -81,9 +81,7 @@ use web_time::SystemTime;
 use crate::internal::llm_client::LLMCompleteResponseMetadata;
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
-pub use runtime_context::{
-    AwsCredProvider, AwsCredProviderImpl, AwsCredResult, BamlSrcReader, RuntimeCallbackError,
-};
+pub use runtime_context::BamlSrcReader;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
