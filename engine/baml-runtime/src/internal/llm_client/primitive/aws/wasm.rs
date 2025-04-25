@@ -38,7 +38,10 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use time::OffsetDateTime;
 
-use crate::{AwsCredProvider, AwsCredProviderImpl, AwsCredResult};
+use crate::{
+    remote_cred_provider::get_remote_cred_provider, AwsCredProvider, AwsCredProviderImpl,
+    AwsCredResult,
+};
 
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");
@@ -176,8 +179,9 @@ impl std::fmt::Debug for WasmAwsCreds {
 
 impl WasmAwsCreds {
     async fn provide_credentials_impl(&self) -> aws_credential_types::provider::Result {
-        match self.aws_cred_provider.clone() {
-            Some(mut aws_cred_provider) => {
+        match get_remote_cred_provider() {
+            // match self.aws_cred_provider.clone() {
+            Some(aws_cred_provider) => {
                 match aws_cred_provider.aws_req(self.profile.clone()).await {
                     Err(e) => {
                         log::error!("Error calling AWS cred provider: {:?}", e);
