@@ -177,55 +177,36 @@ impl std::fmt::Debug for WasmAwsCreds {
 impl WasmAwsCreds {
     async fn provide_credentials_impl(&self) -> aws_credential_types::provider::Result {
         match self.aws_cred_provider.clone() {
-            Some(AwsCredProviderImpl {
-                req_tx,
-                mut resp_rx,
-            }) => {
-                if let Err(e) = req_tx.send(self.profile.clone()).await {
-                    log::error!(
-                        "Failed to send AWS cred request across WASM bridge: {:?}",
-                        e
-                    );
-                    return Err(CredentialsError::unhandled(e));
-                };
-                let creds = match resp_rx.recv().await {
-                    Ok(Ok(creds)) => creds,
-                    Ok(Err(e)) => {
-                        log::error!("Error in AWS cred provider: {:?}", e);
-                        return Err(CredentialsError::unhandled(e));
-                    }
+            Some(mut aws_cred_provider) => {
+                match aws_cred_provider.aws_req(self.profile.clone()).await {
                     Err(e) => {
-                        log::error!(
-                            "Failed to recv AWS cred response across WASM bridge: {:?}",
-                            e
-                        );
+                        log::error!("Error calling AWS cred provider: {:?}", e);
                         return Err(CredentialsError::unhandled(e));
                     }
-                };
-
-                match creds {
-                    AwsCredResult::Ok {
-                        access_key_id,
-                        secret_access_key,
-                        session_token,
-                        expiration,
-                        ..
-                    } => Ok(Credentials::new(
-                        access_key_id,
-                        secret_access_key,
-                        session_token,
-                        match expiration {
-                            Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
-                                Ok(dt) => Some(dt.into()),
-                                Err(_) => None,
+                    Ok(creds) => match creds {
+                        AwsCredResult::Ok {
+                            access_key_id,
+                            secret_access_key,
+                            session_token,
+                            expiration,
+                            ..
+                        } => Ok(Credentials::new(
+                            access_key_id,
+                            secret_access_key,
+                            session_token,
+                            match expiration {
+                                Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
+                                    Ok(dt) => Some(dt.into()),
+                                    Err(_) => None,
+                                },
+                                None => None,
                             },
-                            None => None,
-                        },
-                        "baml-playground-wasm-bridge",
-                    )),
-                    AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(
-                        format!("{}: {}", name, message),
-                    )),
+                            "baml-playground-wasm-bridge",
+                        )),
+                        AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(
+                            format!("{}: {}", name, message),
+                        )),
+                    },
                 }
             }
             None => Err(CredentialsError::not_loaded_no_source()),

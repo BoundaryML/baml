@@ -26,6 +26,7 @@ cfg-if.workspace = true
 clap.workspace = true
 colored = "2.1.0"
 dashmap.workspace = true
+derive-new.workspace = true
 derive_more.workspace = true
 dunce = "1.0.4"
 either.workspace = true

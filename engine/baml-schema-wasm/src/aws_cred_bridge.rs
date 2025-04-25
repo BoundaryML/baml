@@ -51,7 +51,7 @@ async fn drive_aws_cred_provider(
     resp_tx: tokio::sync::broadcast::Sender<Result<AwsCredResult, RuntimeCallbackError>>,
 ) {
     let Some(profile_name) = req_rx.recv().await else {
-        let _ = resp_tx.send(Err(RuntimeCallbackError::AwsCredProviderError(
+        let _ = resp_tx.send(Err(RuntimeCallbackError::RecvError(
             "request channel closed".to_string(),
         )));
         return;
@@ -67,5 +67,5 @@ pub fn js_fn_to_aws_cred_provider(load_aws_creds_cb: js_sys::Function) -> AwsCre
 
     wasm_bindgen_futures::spawn_local(drive_aws_cred_provider(load_aws_creds_cb, req_rx, resp_tx));
 
-    Some(AwsCredProviderImpl { req_tx, resp_rx })
+    Some(AwsCredProviderImpl::new(req_tx, resp_rx))
 }
