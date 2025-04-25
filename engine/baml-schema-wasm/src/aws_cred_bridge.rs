@@ -1,6 +1,6 @@
 use baml_runtime::{
-    remote_cred_provider::set_remote_cred_provider, AwsCredProvider, AwsCredProviderImpl,
-    AwsCredResult, RuntimeCallbackError,
+    remote_cred_provider::set_remote_cred_provider, AwsCredProviderImpl, AwsCredResult,
+    RuntimeCallbackError,
 };
 use js_sys::Promise;
 use wasm_bindgen::prelude::*;
@@ -78,16 +78,16 @@ async fn loop_aws_cred_provider(
     )));
 }
 
-pub fn js_fn_to_aws_cred_provider(_load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
-    // let (req_tx, req_rx) = tokio::sync::mpsc::channel::<Option<String>>(1);
-    // let (resp_tx, resp_rx) =
-    //     tokio::sync::broadcast::channel::<Result<AwsCredResult, RuntimeCallbackError>>(1);
+// pub fn js_fn_to_aws_cred_provider(_load_aws_creds_cb: js_sys::Function) -> AwsCredProvider {
+//     // let (req_tx, req_rx) = tokio::sync::mpsc::channel::<Option<String>>(1);
+//     // let (resp_tx, resp_rx) =
+//     //     tokio::sync::broadcast::channel::<Result<AwsCredResult, RuntimeCallbackError>>(1);
 
-    // // wasm_bindgen_futures::spawn_local(drive_aws_cred_provider(load_aws_creds_cb, req_rx, resp_tx));
+//     // // wasm_bindgen_futures::spawn_local(drive_aws_cred_provider(load_aws_creds_cb, req_rx, resp_tx));
 
-    // Some(AwsCredProviderImpl::new(req_tx, resp_rx))
-    None
-}
+//     // Some(AwsCredProviderImpl::new(req_tx, resp_rx))
+//     None
+// }
 
 #[wasm_bindgen]
 pub fn init_aws_cred_provider(
