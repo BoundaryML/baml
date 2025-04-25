@@ -300,12 +300,28 @@ fn required_done<T>(
         FieldType::Tuple(_) => false,
         FieldType::RecursiveTypeAlias(_) => false,
         FieldType::Class(_) => false,
-        FieldType::Union(options) => options.iter().any(|option| {
-            let variant_required_done = required_done(ir, option, value);
-            let value_unifies_with_variant =
-                infer_type_with_meta(value).map_or(false, |v| &v == option);
-            variant_required_done && value_unifies_with_variant
-        }),
+        FieldType::Union(options) => {
+            // Determining whether a union requires done is complicated.
+            // If all the variants are required to be done, then the union
+            // requires done.
+            let all_require_done = options.iter().all(|option| required_done(ir, option, value));
+            if all_require_done { return true; }
+
+            // If none of the variants are required to be done, then the union
+            // does not require done.
+            let none_require_done = options.iter().all(|option| !required_done(ir, option, value));
+            if none_require_done { return false; }
+
+            // Otherwise, the answer depends on the value we are streaming.
+            // Search for the variant that matches the value, and use the
+            // required_done property of that variant.
+            options.iter().any(|option| {
+                let variant_required_done = required_done(ir, option, value);
+                let value_unifies_with_variant =
+                    infer_type_with_meta(value).map_or(false, |v| &v == option);
+                variant_required_done && value_unifies_with_variant
+            })
+        },
         FieldType::Arrow(_) => false, // TODO: Error? Arrow shouldn't appear here.
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
