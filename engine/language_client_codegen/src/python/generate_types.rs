@@ -126,17 +126,6 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
                 .static_fields
                 .iter()
                 .map(|f| {
-                    // let needed: bool = f.attributes.get("stream.not_null").is_some();
-                    // let (_, metadata) = c.ir.distribute_metadata(&f.elem.r#type.elem);
-                    // let done: bool = metadata.1.done;
-                    // let (field, optional) = match (done, needed) {
-                    //     (false, false) => {
-                    //         f.elem.r#type.elem.to_partial_type_ref(c.ir, false, false)
-                    //     }
-                    //     (true, false) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
-                    //     (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.ir, true, false),
-                    //     (true, true) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
-                    // };
                     (
                         Cow::Borrowed(f.elem.name.as_str()),
                         add_default_value(
