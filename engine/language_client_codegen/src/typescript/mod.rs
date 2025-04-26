@@ -844,7 +844,7 @@ mod tests {
     fn mk_ir() -> IntermediateRepr {
         make_test_ir(
             r##"
-class Greg {
+class Bar {
   inner Foo? @stream.not_null @stream.with_state @check(foo, {{ true }})
   @@stream.done
 }
@@ -853,7 +853,7 @@ class Foo {
   s string
 }
 
-function MakeGreg() -> Greg {
+function MakeBar() -> Bar {
   client GPT35
   prompt #"
     {{ ctx.output_format }}
@@ -861,9 +861,7 @@ function MakeGreg() -> Greg {
 }
 
 client<llm> GPT35 {
-  // Use one of the following: https://docs.boundaryml.com/docs/snippets/clients/providers/openai
   provider openai
-  // You can pass in any parameters from the OpenAI Python documentation into the options block.
   options {
     model gpt-4
     api_key env.OPENAI_API_KEY
@@ -912,8 +910,9 @@ client<llm> GPT35 {
         .unwrap()
     }
 
-    // TODO: test is flaky since it seems a dir isnt cleaned up.
-    #[test]
+    // Test is flaky since it seems a dir isnt cleaned up.
+    // Only meant to be uncommented and used during development.
+    // #[test]
     fn generate_streaming_typescript() {
         let ir = mk_ir();
         let generator_args = mk_gen();
