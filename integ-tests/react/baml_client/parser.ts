@@ -1251,6 +1251,42 @@ export class LlmResponseParser {
     }
   }
   
+  MakeClassWithBlockDone(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): ClassWithBlockDone {
+    try {
+      return this.runtime.parseLlmResponse(
+        "MakeClassWithBlockDone",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as ClassWithBlockDone
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithExternalDone(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): ClassWithoutDone {
+    try {
+      return this.runtime.parseLlmResponse(
+        "MakeClassWithExternalDone",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as ClassWithoutDone
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   MakeNestedBlockConstraint(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
@@ -4384,6 +4420,42 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
       ) as Checked<partial_types.BlockConstraint,"cross_field">
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithBlockDone(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): types.ClassWithBlockDone {
+    try {
+      return this.runtime.parseLlmResponse(
+        "MakeClassWithBlockDone",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as types.ClassWithBlockDone
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithExternalDone(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): types.ClassWithoutDone {
+    try {
+      return this.runtime.parseLlmResponse(
+        "MakeClassWithExternalDone",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+      ) as types.ClassWithoutDone
     } catch (error) {
       throw toBamlError(error);
     }

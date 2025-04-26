@@ -963,6 +963,32 @@ paths:
                 - checks
                 additionalProperties: false
       operationId: MakeBlockConstraint
+  /call/MakeClassWithBlockDone:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MakeClassWithBlockDone'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MakeClassWithBlockDoneResponse
+                $ref: '#/components/schemas/ClassWithBlockDone'
+      operationId: MakeClassWithBlockDone
+  /call/MakeClassWithExternalDone:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MakeClassWithExternalDone'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MakeClassWithExternalDoneResponse
+                $ref: '#/components/schemas/ClassWithoutDone'
+      operationId: MakeClassWithExternalDone
   /call/MakeNestedBlockConstraint:
     post:
       requestBody:
@@ -3533,6 +3559,32 @@ components:
         application/json:
           schema:
             title: MakeBlockConstraintRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    MakeClassWithBlockDone:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MakeClassWithBlockDoneRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    MakeClassWithExternalDone:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MakeClassWithExternalDoneRequest
             type: object
             properties:
               __baml_options__:

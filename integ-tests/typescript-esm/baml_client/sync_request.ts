@@ -1391,6 +1391,46 @@ export class HttpRequest {
     }
   }
   
+  MakeClassWithBlockDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithExternalDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   MakeNestedBlockConstraint(
       
       __baml_options__?: BamlCallOptions
@@ -4864,6 +4904,46 @@ export class HttpStreamRequest {
     try {
       return this.runtime.buildRequestSync(
         "MakeBlockConstraint",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithBlockDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithExternalDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "MakeClassWithExternalDone",
         {
           
         },

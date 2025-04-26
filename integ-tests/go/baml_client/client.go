@@ -4156,6 +4156,126 @@ func (*stream) MakeBlockConstraint(ctx context.Context) <-chan types.Checked[typ
 
 
 
+func MakeClassWithBlockDone(ctx context.Context) (*types.ClassWithBlockDone, error) {
+	args := map[string]any{  }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func (result any) types.ClassWithBlockDone {
+		return *(result).(*types.ClassWithBlockDone)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) MakeClassWithBlockDone(ctx context.Context) <-chan types.ClassWithBlockDone {
+	args := map[string]any{  }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan types.ClassWithBlockDone)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithBlockDone", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(types.ClassWithBlockDone)
+			}
+		}
+	}()
+	return channel
+}
+
+
+
+func MakeClassWithExternalDone(ctx context.Context) (*types.ClassWithoutDone, error) {
+	args := map[string]any{  }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func (result any) types.ClassWithoutDone {
+		return (result).(types.ClassWithoutDone)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) MakeClassWithExternalDone(ctx context.Context) <-chan types.ClassWithoutDone {
+	args := map[string]any{  }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan types.ClassWithoutDone)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "MakeClassWithExternalDone", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(types.ClassWithoutDone)
+			}
+		}
+	}()
+	return channel
+}
+
+
+
 func MakeNestedBlockConstraint(ctx context.Context) (*types.NestedBlockConstraint, error) {
 	args := map[string]any{  }
 	encoded, err := baml.EncodeRoot(args, typeMap)

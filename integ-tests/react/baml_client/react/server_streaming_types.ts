@@ -92,6 +92,8 @@ export type StreamingServerTypes = {
   JsonTypeAliasCycle: JsonValue,
   LiteralUnionsTest: (1 | true | "string output"),
   MakeBlockConstraint: Checked<partial_types.BlockConstraint,"cross_field">,
+  MakeClassWithBlockDone: types.ClassWithBlockDone,
+  MakeClassWithExternalDone: types.ClassWithoutDone,
   MakeNestedBlockConstraint: partial_types.NestedBlockConstraint,
   MakeSemanticContainer: partial_types.SemanticContainer,
   MapAlias: (Record<string, (string | null)[]> ),

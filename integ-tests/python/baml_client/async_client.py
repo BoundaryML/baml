@@ -1936,6 +1936,60 @@ class BamlAsyncClient:
       )
       return cast(Checked[types.BlockConstraint, Literal["cross_field"]], raw.cast_to(types, types, partial_types, False))
     
+    async def MakeClassWithBlockDone(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> types.ClassWithBlockDone:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = await self.__runtime.call_function(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(types.ClassWithBlockDone, raw.cast_to(types, types, partial_types, False))
+    
+    async def MakeClassWithExternalDone(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> types.ClassWithoutDone:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = await self.__runtime.call_function(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(types.ClassWithoutDone, raw.cast_to(types, types, partial_types, False))
+    
     async def MakeNestedBlockConstraint(
         self,
         
@@ -7059,6 +7113,70 @@ class BamlStreamClient:
         raw,
         lambda x: cast(Checked[partial_types.BlockConstraint, Literal["cross_field"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[types.BlockConstraint, Literal["cross_field"]], x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def MakeClassWithBlockDone(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.ClassWithBlockDone, types.ClassWithBlockDone]:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = self.__runtime.stream_function(
+        "MakeClassWithBlockDone",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlStream[partial_types.ClassWithBlockDone, types.ClassWithBlockDone](
+        raw,
+        lambda x: cast(partial_types.ClassWithBlockDone, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.ClassWithBlockDone, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def MakeClassWithExternalDone(
+        self,
+        
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[partial_types.ClassWithoutDone, types.ClassWithoutDone]:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      raw = self.__runtime.stream_function(
+        "MakeClassWithExternalDone",
+        {
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlStream[partial_types.ClassWithoutDone, types.ClassWithoutDone](
+        raw,
+        lambda x: cast(partial_types.ClassWithoutDone, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.ClassWithoutDone, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
     

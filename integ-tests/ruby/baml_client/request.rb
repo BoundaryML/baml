@@ -2145,6 +2145,68 @@ module Baml
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Ffi::HTTPRequest)
     }
+    def MakeClassWithBlockDone(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeClassWithExternalDone(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        false
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
     def MakeNestedBlockConstraint(
         *varargs,
         
@@ -7534,6 +7596,68 @@ module Baml
 
       @runtime.build_request(
         "MakeBlockConstraint",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeClassWithBlockDone(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        true
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def MakeClassWithExternalDone(
+        *varargs,
+        
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.build_request(
+        "MakeClassWithExternalDone",
         {
           
         },

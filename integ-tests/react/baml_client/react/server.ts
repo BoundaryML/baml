@@ -1278,6 +1278,36 @@ export const MakeBlockConstraint = async (
 };
 
 /**
+ * Executes the "MakeClassWithBlockDone" BAML action.
+ *
+ * This server action calls the underlying BAML function "MakeClassWithBlockDone"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<ClassWithBlockDone>} A promise that resolves with the result of the action.
+ */
+export const MakeClassWithBlockDone = async (
+): Promise<ClassWithBlockDone> => {
+  return b.MakeClassWithBlockDone(
+  );
+};
+
+/**
+ * Executes the "MakeClassWithExternalDone" BAML action.
+ *
+ * This server action calls the underlying BAML function "MakeClassWithExternalDone"
+ * with the specified parameters.
+ *
+ *
+ * @returns {Promise<ClassWithoutDone>} A promise that resolves with the result of the action.
+ */
+export const MakeClassWithExternalDone = async (
+): Promise<ClassWithoutDone> => {
+  return b.MakeClassWithExternalDone(
+  );
+};
+
+/**
  * Executes the "MakeNestedBlockConstraint" BAML action.
  *
  * This server action calls the underlying BAML function "MakeNestedBlockConstraint"

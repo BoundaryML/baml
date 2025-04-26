@@ -1649,6 +1649,52 @@ export class BamlSyncClient {
     }
   }
   
+  MakeClassWithBlockDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): ClassWithBlockDone {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.callFunctionSync(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as ClassWithBlockDone
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithExternalDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): ClassWithoutDone {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.callFunctionSync(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as ClassWithoutDone
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
   MakeNestedBlockConstraint(
       
       __baml_options__?: BamlCallOptions

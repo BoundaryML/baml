@@ -1346,6 +1346,38 @@ export const MakeBlockConstraint = async (
 };
 
 /**
+ * Executes the streaming variant of the "MakeClassWithBlockDone" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const MakeClassWithBlockDone = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.MakeClassWithBlockDone(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "MakeClassWithExternalDone" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const MakeClassWithExternalDone = async (
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.MakeClassWithExternalDone(
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "MakeNestedBlockConstraint" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

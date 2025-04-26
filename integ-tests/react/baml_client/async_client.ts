@@ -1647,6 +1647,52 @@ export class BamlAsyncClient {
     }
   }
   
+  async MakeClassWithBlockDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<ClassWithBlockDone> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = await this.runtime.callFunction(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as ClassWithBlockDone
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeClassWithExternalDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<ClassWithoutDone> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = await this.runtime.callFunction(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as ClassWithoutDone
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async MakeNestedBlockConstraint(
       
       __baml_options__?: BamlCallOptions
@@ -6064,6 +6110,64 @@ class BamlStreamClient {
         raw,
         (a): Checked<partial_types.BlockConstraint,"cross_field"> => a,
         (a): Checked<BlockConstraint,"cross_field"> => a,
+        this.ctxManager.cloneContext(),
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithBlockDone(
+      
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+  ): BamlStream<types.ClassWithBlockDone, ClassWithBlockDone> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.streamFunction(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        undefined,
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return new BamlStream<types.ClassWithBlockDone, ClassWithBlockDone>(
+        raw,
+        (a): types.ClassWithBlockDone => a,
+        (a): ClassWithBlockDone => a,
+        this.ctxManager.cloneContext(),
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  MakeClassWithExternalDone(
+      
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+  ): BamlStream<types.ClassWithoutDone, ClassWithoutDone> {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.streamFunction(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        undefined,
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return new BamlStream<types.ClassWithoutDone, ClassWithoutDone>(
+        raw,
+        (a): types.ClassWithoutDone => a,
+        (a): ClassWithoutDone => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
