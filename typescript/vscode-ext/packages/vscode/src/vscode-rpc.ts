@@ -140,6 +140,23 @@ export type LoadAwsCredsResponse =
       }
     }
 
+export interface LoadGcpCredsRequest {
+  vscodeCommand: 'LOAD_GCP_CREDS'
+}
+
+export type LoadGcpCredsResponse =
+  | {
+      ok: {
+        accessToken: string
+        projectId: string
+      }
+    }
+  | {
+      error: {
+        message: string
+      }
+    }
+
 export interface InitializedRequest {
   vscodeCommand: 'INITIALIZED'
 }
@@ -158,6 +175,7 @@ type ApiPairs = [
   [GetPlaygroundPortRequest, GetPlaygroundPortResponse],
   [LoadEnvRequest, LoadEnvResponse],
   [LoadAwsCredsRequest, LoadAwsCredsResponse],
+  [LoadGcpCredsRequest, LoadGcpCredsResponse],
   [InitializedRequest, InitializedResponse],
 ]
 

@@ -3,9 +3,14 @@ use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use crate::internal::wasm_jwt::encode_jwt;
+use crate::{
+    internal::wasm_jwt::encode_jwt,
+    remote_cred_provider::{get_remote_cred_provider, GcpCredResult},
+};
 
-pub struct VertexAuth(ServiceAccount);
+// pub struct VertexAuth(ServiceAccount);
+
+pub struct VertexAuth {}
 
 pub struct Token(String);
 
@@ -16,61 +21,102 @@ impl Token {
 }
 
 impl VertexAuth {
-    pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<VertexAuth> {
-        Ok(match auth_strategy {
-            ResolvedGcpAuthStrategy::FilePath(path) => {
-                anyhow::bail!(
-                    "Failed to auth - cannot load credentials from a file in WASM (path='{}...', path.len={})",
-                    path.chars().take(5).collect::<String>(),
-                    path.len()
-                )
-            }
-            ResolvedGcpAuthStrategy::JsonString(json) => {
-                log::debug!("Attempting to auth using JsonString strategy");
-                Self(serde_json::from_str(&json).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?)
-            }
-            ResolvedGcpAuthStrategy::JsonObject(json) => {
-                // NB: this should never happen in WASM, there's no way to pass a JSON object in
-                log::debug!("Attempting to auth using JsonObject strategy");
-                Self(serde_json::from_value(
-                    serde_json::to_value(&json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?)
-            }
-            ResolvedGcpAuthStrategy::SystemDefault => {
-                anyhow::bail!(
-                    "Failed to auth - failed to load default credentials in WASM (please set env.GOOGLE_APPLICATION_CREDENTIALS, see https://docs.boundaryml.com/ref/llm-client-providers/google-vertex#using-a-vertex-ai-client-in-the-playground)"
-                )
-            }
-        })
+    // pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<VertexAuth> {
+    //     Ok(match auth_strategy {
+    //         ResolvedGcpAuthStrategy::FilePath(path) => {
+    //             anyhow::bail!(
+    //                 "Failed to auth - cannot load credentials from a file in WASM (path='{}...', path.len={})",
+    //                 path.chars().take(5).collect::<String>(),
+    //                 path.len()
+    //             )
+    //         }
+    //         ResolvedGcpAuthStrategy::JsonString(json) => {
+    //             log::debug!("Attempting to auth using JsonString strategy");
+    //             Self(serde_json::from_str(&json).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?)
+    //         }
+    //         ResolvedGcpAuthStrategy::JsonObject(json) => {
+    //             // NB: this should never happen in WASM, there's no way to pass a JSON object in
+    //             log::debug!("Attempting to auth using JsonObject strategy");
+    //             Self(serde_json::from_value(
+    //                 serde_json::to_value(&json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?)
+    //         }
+    //         ResolvedGcpAuthStrategy::SystemDefault => {
+    //             anyhow::bail!(
+    //                 "Failed to auth - failed to load default credentials in WASM (please set env.GOOGLE_APPLICATION_CREDENTIALS, see https://docs.boundaryml.com/ref/llm-client-providers/google-vertex#using-a-vertex-ai-client-in-the-playground)"
+    //             )
+    //         }
+    //     })
+    // }
+
+    pub async fn new(_auth_strategy: &ResolvedGcpAuthStrategy) -> Result<VertexAuth> {
+        Ok(VertexAuth {})
     }
 
     pub async fn token(&self, scopes: &[&str]) -> Result<Arc<Token>> {
-        let claims = Claims::from_service_account(&self.0);
+        match get_remote_cred_provider() {
+            Some(cred_provider) => {
+                tracing::info!("requested gcp creds from vscode");
+                let gcp_creds = cred_provider.gcp_req().await?;
+                tracing::info!(
+                    "got gcp creds from vscode, discarded them because it's really aws creds"
+                );
+                match gcp_creds {
+                    GcpCredResult::Ok { access_token, .. } => Ok(Arc::new(Token(access_token))),
+                    GcpCredResult::Err { name, message } => {
+                        anyhow::bail!("Error occurred while fetching gcp creds: {name}: {message}");
+                    }
+                }
+            }
+            None => {
+                anyhow::bail!("Failed to auth - no remote cred provider found");
+            }
+        }
 
-        let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.0.private_key)
-            .await
-            .map_err(|e| anyhow::anyhow!(format!("{e:?}")))?;
+        // let claims = Claims::from_service_account(&self.0);
 
-        // Make the token request
-        let client = reqwest::Client::new();
-        let params = [
-            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-            ("assertion", &jwt),
-        ];
-        let res = client
-            .post(&self.0.token_uri)
-            .form(&params)
-            .send()
-            .await?
-            .text()
-            .await?;
+        // let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.0.private_key)
+        //     .await
+        //     .map_err(|e| anyhow::anyhow!(format!("{e:?}")))?;
 
-        parse_token_response(&res)
-            .context(format!("OAuth2 access token request failed: {res}"))
-            .map(Arc::new)
+        // // Make the token request
+        // let client = reqwest::Client::new();
+        // let params = [
+        //     ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+        //     ("assertion", &jwt),
+        // ];
+        // let res = client
+        //     .post(&self.0.token_uri)
+        //     .form(&params)
+        //     .send()
+        //     .await?
+        //     .text()
+        //     .await?;
+
+        // parse_token_response(&res)
+        //     .context(format!("OAuth2 access token request failed: {res}"))
+        //     .map(Arc::new)
     }
 
     pub async fn project_id(&self) -> Result<String> {
-        Ok(self.0.project_id.clone())
+        // Ok(self.0.project_id.clone())
+        match get_remote_cred_provider() {
+            Some(cred_provider) => {
+                tracing::info!("requested gcp creds from vscode");
+                let gcp_creds = cred_provider.gcp_req().await?;
+                tracing::info!(
+                    "got gcp creds from vscode, discarded them because it's really aws creds"
+                );
+                match gcp_creds {
+                    GcpCredResult::Ok { project_id, .. } => Ok(project_id),
+                    GcpCredResult::Err { name, message } => {
+                        anyhow::bail!("Error occurred while fetching gcp creds: {name}: {message}");
+                    }
+                }
+            }
+            None => {
+                anyhow::bail!("Failed to auth - no remote cred provider found");
+            }
+        }
     }
 }
 

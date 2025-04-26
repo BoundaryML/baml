@@ -51,10 +51,24 @@ pub enum AwsCredResult {
     },
 }
 
+#[derive(serde::Deserialize, Debug, Clone)]
+pub enum GcpCredResult {
+    #[serde(rename = "error", rename_all = "camelCase")]
+    Err { name: String, message: String },
+
+    #[serde(rename = "ok", rename_all = "camelCase")]
+    Ok {
+        access_token: String,
+        project_id: String,
+    },
+}
+
 #[derive(new)]
 pub struct AwsCredProviderImpl {
     aws_req_tx: tokio::sync::mpsc::Sender<Option<String>>,
     aws_resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<AwsCredResult>>,
+    gcp_req_tx: tokio::sync::mpsc::Sender<Option<String>>,
+    gcp_resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<GcpCredResult>>,
 }
 
 impl AwsCredProviderImpl {
@@ -90,26 +104,26 @@ impl AwsCredProviderImpl {
         Ok(creds)
     }
 
-    pub async fn gcp_req(
-        &mut self,
-        profile_name: Option<String>,
-    ) -> RuntimeCallbackResult<AwsCredResult> {
-        if let Err(e) = self.aws_req_tx.send(profile_name).await {
+    pub async fn gcp_req(&self) -> RuntimeCallbackResult<GcpCredResult> {
+        let req_tx = self.gcp_req_tx.clone();
+        let mut resp_rx = self.gcp_resp_rx.resubscribe();
+
+        if let Err(e) = req_tx.send(None).await {
             log::error!(
-                "Failed to send AWS cred request across WASM bridge: {:?}",
+                "Failed to send GCP cred request across WASM bridge: {:?}",
                 e
             );
             return Err(RuntimeCallbackError::SendError(e.to_string()));
         };
-        let creds = match self.aws_resp_rx.recv().await {
+        let creds = match resp_rx.recv().await {
             Ok(Ok(creds)) => creds,
             Ok(Err(e)) => {
-                log::error!("Error in AWS cred provider: {:?}", e);
+                log::error!("Error in GCP cred provider: {:?}", e);
                 return Err(e);
             }
             Err(e) => {
                 log::error!(
-                    "Failed to recv AWS cred response across WASM bridge: {:?}",
+                    "Failed to recv GCP cred response across WASM bridge: {:?}",
                     e
                 );
                 return Err(RuntimeCallbackError::RecvError(e.to_string()));
@@ -125,6 +139,8 @@ impl Clone for AwsCredProviderImpl {
         Self {
             aws_req_tx: self.aws_req_tx.clone(),
             aws_resp_rx: self.aws_resp_rx.resubscribe(),
+            gcp_req_tx: self.gcp_req_tx.clone(),
+            gcp_resp_rx: self.gcp_resp_rx.resubscribe(),
         }
     }
 }

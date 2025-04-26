@@ -11,6 +11,8 @@ import {
   SetProxySettingsRequest,
   LoadAwsCredsRequest,
   LoadAwsCredsResponse,
+  LoadGcpCredsResponse,
+  LoadGcpCredsRequest,
 } from './vscode-rpc'
 import type { WebviewApi } from 'vscode-webview'
 
@@ -117,6 +119,13 @@ class VSCodeAPIWrapper {
     const resp = await this.rpc<LoadAwsCredsRequest, LoadAwsCredsResponse>({
       vscodeCommand: 'LOAD_AWS_CREDS',
       profile,
+    })
+    return resp
+  }
+
+  public loadGcpCreds = async () => {
+    const resp = await this.rpc<LoadGcpCredsRequest, LoadGcpCredsResponse>({
+      vscodeCommand: 'LOAD_GCP_CREDS',
     })
     return resp
   }
