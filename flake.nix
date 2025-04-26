@@ -29,6 +29,7 @@
           complete.rustc
           complete.rust-std
           complete.rustfmt
+          complete.rust-analyzer
           targets.wasm32-unknown-unknown.latest.rust-std
 	        targets.x86_64-unknown-linux-musl.latest.rust-std
         ];

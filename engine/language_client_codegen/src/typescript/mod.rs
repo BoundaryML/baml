@@ -551,6 +551,7 @@ trait ToTypeReferenceInClientDefinition {
 
 impl ToTypeReferenceInClientDefinition for FieldType {
     /// How to serialize a type for use in a function's type signature.
+    /// Also returns whether the field is optional during streaming.
     fn to_partial_type_ref(&self, ir: &IntermediateRepr, needed: bool) -> (String, bool) {
         let (base_type, metadata) = ir.distribute_metadata(self);
         let is_partial_type = !metadata.1.done;
@@ -746,6 +747,8 @@ impl ToTypeReferenceInClientDefinition for FieldType {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::GeneratorArgs;
+    use internal_baml_core::ir::repr::make_test_ir;
 
     #[test]
     fn test_replace_ts_imports_with_js() {
@@ -836,5 +839,89 @@ mod tests {
             ),
             "console.log('hello');\nimport { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.js';\nconsole.log('world');"
         );
+    }
+
+    fn mk_ir() -> IntermediateRepr {
+        make_test_ir(
+            r##"
+class Greg {
+  inner Foo? @stream.not_null @stream.with_state @check(foo, {{ true }})
+  @@stream.done
+}
+
+class Foo {
+  s string
+}
+
+function MakeGreg() -> Greg {
+  client GPT35
+  prompt #"
+    {{ ctx.output_format }}
+  "#
+}
+
+client<llm> GPT35 {
+  // Use one of the following: https://docs.boundaryml.com/docs/snippets/clients/providers/openai
+  provider openai
+  // You can pass in any parameters from the OpenAI Python documentation into the options block.
+  options {
+    model gpt-4
+    api_key env.OPENAI_API_KEY
+  }
+} 
+
+// class Foo {
+//   i int @stream.not_null @stream.with_state
+//   b Bar @stream.done
+// }
+
+// class Foo {
+//   str string @stream.with_state
+// }
+//
+// class Inner {
+//   inner_int int
+//   inner_string string @stream.not_null
+//   inner_string_2 string @stream.not_null @stream.done
+// }
+//
+// class InnerDone {
+//   inner_done_inner Inner @stream.done
+//   inner_done_int int
+//   inner_done_str string
+//   @@stream.done
+// }
+        "##,
+        )
+        .unwrap()
+    }
+
+    fn mk_gen() -> GeneratorArgs {
+        GeneratorArgs::new(
+            "baml_client",
+            "baml_src",
+            vec![],
+            "no_version".to_string(),
+            true,
+            GeneratorDefaultClientMode::Async,
+            Vec::new(),
+            Some(GeneratorOutputType::Typescript),
+            None,
+            None,
+        )
+        .unwrap()
+    }
+
+    // TODO: test is flaky since it seems a dir isnt cleaned up.
+    #[test]
+    fn generate_streaming_typescript() {
+        let ir = mk_ir();
+        let generator_args = mk_gen();
+        let res = generate(&ir, &generator_args).unwrap();
+        // let partial_types = res.get(&PathBuf::from("partial_types.ts")).unwrap();
+        let async_client = res.get(&PathBuf::from("async_client.ts")).unwrap();
+        //eprintln!("{}", partial_types);
+        eprintln!("{}", async_client);
+        assert!(false);
     }
 }
