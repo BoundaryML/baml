@@ -11,7 +11,7 @@ import { WasmDiagnosticError, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
-  wasm.init_aws_cred_provider(vscode.loadAwsCreds, vscode.loadGcpCreds)
+  wasm.init_js_callback_bridge(vscode.loadAwsCreds, vscode.loadGcpCreds)
   return wasm
 })
 

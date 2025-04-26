@@ -6,87 +6,70 @@ use js_sys::Promise;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
-async fn invoke_aws_cred_provider(
-    load_aws_creds_cb: &js_sys::Function,
-    profile_name: Option<String>,
-) -> Result<AwsCredResult, RuntimeCallbackError> {
-    let Ok(load) = load_aws_creds_cb.call1(&JsValue::NULL, &JsValue::from(profile_name)) else {
-        return Err(RuntimeCallbackError::AwsCredProviderError(
-            "loadAwsCreds did not return a promise".to_string(),
-        ));
-    };
+trait WasmCallbackBridge {
+    type TCallbackResult: serde::de::DeserializeOwned;
+    const CALLBACK_NAME: &'static str;
 
-    let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
-
-    let load = match load {
-        Ok(load) => load,
-        Err(err) => {
-            if let Some(e) = err.dyn_ref::<js_sys::Error>() {
-                if let Some(e_str) = e.message().as_string() {
-                    return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                        "loadAwsCreds failure: {}",
-                        e_str
-                    )));
-                }
-            }
-
+    async fn invoke(
+        callback: &js_sys::Function,
+        arg: Option<String>,
+    ) -> Result<Self::TCallbackResult, RuntimeCallbackError> {
+        let Ok(load) = callback.call1(&JsValue::NULL, &JsValue::from(arg)) else {
             return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                "loadAwsCreds rejected: {:?}",
-                err
+                "{} did not return a promise",
+                Self::CALLBACK_NAME
             )));
-        }
-    };
+        };
 
-    let creds_result = match serde_wasm_bindgen::from_value::<AwsCredResult>(load) {
-        Ok(creds) => Ok(creds),
-        Err(e) => Err(RuntimeCallbackError::AwsCredProviderError(format!(
-            "Expected loadAwsCreds to return an AwsCredResult. {}",
-            e
-        ))),
-    };
+        let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
 
-    creds_result
+        let load = match load {
+            Ok(load) => load,
+            Err(err) => {
+                if let Some(e) = err.dyn_ref::<js_sys::Error>() {
+                    if let Some(e_str) = e.message().as_string() {
+                        return Err(RuntimeCallbackError::AwsCredProviderError(format!(
+                            "{} failure: {}",
+                            Self::CALLBACK_NAME,
+                            e_str
+                        )));
+                    }
+                }
+
+                return Err(RuntimeCallbackError::AwsCredProviderError(format!(
+                    "{} rejected: {:?}",
+                    Self::CALLBACK_NAME,
+                    err
+                )));
+            }
+        };
+
+        let creds_result = match serde_wasm_bindgen::from_value::<Self::TCallbackResult>(load) {
+            Ok(creds) => Ok(creds),
+            Err(e) => Err(RuntimeCallbackError::AwsCredProviderError(format!(
+                "Expected {} to return an {}: {:?}",
+                Self::CALLBACK_NAME,
+                std::any::type_name::<Self::TCallbackResult>(),
+                e
+            ))),
+        };
+
+        creds_result
+    }
 }
 
-async fn invoke_gcp_cred_provider(
-    load_gcp_creds_cb: &js_sys::Function,
-) -> Result<GcpCredResult, RuntimeCallbackError> {
-    let Ok(load) = load_gcp_creds_cb.call0(&JsValue::NULL) else {
-        return Err(RuntimeCallbackError::AwsCredProviderError(
-            "loadGcpCreds did not return a promise".to_string(),
-        ));
-    };
+struct AwsCredProvider;
 
-    let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
+impl WasmCallbackBridge for AwsCredProvider {
+    type TCallbackResult = AwsCredResult;
+    const CALLBACK_NAME: &'static str = "loadAwsCreds";
+}
 
-    let load = match load {
-        Ok(load) => load,
-        Err(err) => {
-            if let Some(e) = err.dyn_ref::<js_sys::Error>() {
-                if let Some(e_str) = e.message().as_string() {
-                    return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                        "loadAwsCreds failure: {}",
-                        e_str
-                    )));
-                }
-            }
+struct GcpCredProvider;
 
-            return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                "loadAwsCreds rejected: {:?}",
-                err
-            )));
-        }
-    };
-
-    let creds_result = match serde_wasm_bindgen::from_value::<GcpCredResult>(load) {
-        Ok(creds) => Ok(creds),
-        Err(e) => Err(RuntimeCallbackError::AwsCredProviderError(format!(
-            "Expected loadGcpCreds to return an GcpCredResult. {}",
-            e
-        ))),
-    };
-
-    creds_result
+impl WasmCallbackBridge for GcpCredProvider {
+    type TCallbackResult = GcpCredResult;
+    const CALLBACK_NAME: &'static str = "loadGcpCreds";
 }
 
 async fn loop_aws_cred_provider(
@@ -95,7 +78,7 @@ async fn loop_aws_cred_provider(
     resp_tx: tokio::sync::broadcast::Sender<Result<AwsCredResult, RuntimeCallbackError>>,
 ) {
     while let Some(profile_name) = req_rx.recv().await {
-        let _ = resp_tx.send(invoke_aws_cred_provider(&load_aws_creds_cb, profile_name).await);
+        let _ = resp_tx.send(AwsCredProvider::invoke(&load_aws_creds_cb, profile_name).await);
     }
     let _ = resp_tx.send(Err(RuntimeCallbackError::RecvError(
         "request channel closed".to_string(),
@@ -108,7 +91,7 @@ async fn loop_gcp_cred_provider(
     resp_tx: tokio::sync::broadcast::Sender<Result<GcpCredResult, RuntimeCallbackError>>,
 ) {
     while let Some(_) = req_rx.recv().await {
-        let _ = resp_tx.send(invoke_gcp_cred_provider(&load_gcp_creds_cb).await);
+        let _ = resp_tx.send(GcpCredProvider::invoke(&load_gcp_creds_cb, None).await);
     }
     let _ = resp_tx.send(Err(RuntimeCallbackError::RecvError(
         "request channel closed".to_string(),
@@ -116,7 +99,12 @@ async fn loop_gcp_cred_provider(
 }
 
 #[wasm_bindgen]
-pub fn init_aws_cred_provider(
+/// This allows us to invoke JS callbacks from Rust.
+///
+/// We need to do this as a wildly hacky workaround because (1) wasm in the webview is sandboxed and doesn't have easy
+/// access to env vars and (2) js_sys::Value is not Send which causes a bunch of painful issues with tokio, since
+/// the compiler-generated futures need to be Send even though we don't use web workers.
+pub fn init_js_callback_bridge(
     load_aws_creds_cb: js_sys::Function,
     load_gcp_creds_cb: js_sys::Function,
 ) {
