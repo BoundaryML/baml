@@ -77,6 +77,21 @@ function StreamFailingAssertion(theme: string, length: int) -> TwoStoriesOneTitl
   "#
 }
 
+class TwoStoriesOneTitleCheck {
+  title string
+  story_a string @check(too_long_story, {{this|length > 1000000}} )
+  story_b string @check(too_long_story, {{this|length > 1000000}} )
+}
+
+function StreamFailingCheck(theme: string, length: int) -> TwoStoriesOneTitleCheck {
+  client GPT35
+  prompt #"
+    Tell me two different stories along the theme of {{ theme }} with the same title.
+    Please make each about {{ length }} words long.
+    {{ctx.output_format}}
+  "#
+}
+
 class BlockConstraint {
   foo int
   bar string

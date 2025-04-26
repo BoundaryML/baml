@@ -326,6 +326,18 @@ class TestAllInputs:
         assert res.checks["gt_ten"].status == "succeeded"
 
     @pytest.mark.asyncio
+    async def test_alias_with_multiple_attrs_stream(self):
+        stream = b.stream.AliasWithMultipleAttrs(123)
+
+        chunks = []
+        async for chunk in stream:
+            print(chunk)
+            chunks.append(chunk)
+        assert len(chunks) > 1, "Expected more than one stream chunk."
+        assert chunks[0].value == 123
+        assert chunks[0].checks["gt_ten"].status == "succeeded"
+
+    @pytest.mark.asyncio
     async def test_simple_recursive_map_alias(self):
         res = await b.SimpleRecursiveMapAlias({"one": {"two": {"three": {}}}})
         assert res == {"one": {"two": {"three": {}}}}

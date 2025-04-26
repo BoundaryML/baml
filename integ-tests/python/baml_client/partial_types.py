@@ -36,119 +36,119 @@ class StreamState(BaseModel, Generic[T]):
 
 
 class AnotherObject(BaseModel):
-    id: Optional[str] = None
-    thingy2: Optional[str] = None
-    thingy3: Optional[str] = None
+    id: Optional[str]
+    thingy2: Optional[str]
+    thingy3: Optional[str]
 
 class BigNumbers(BaseModel):
-    a: Optional[int] = None
-    b: Optional[float] = None
+    a: Optional[int]
+    b: Optional[float]
 
 class BinaryNode(BaseModel):
-    data: Optional[int] = None
-    left: Optional["BinaryNode"] = None
-    right: Optional["BinaryNode"] = None
+    data: Optional[int]
+    left: Optional["BinaryNode"]
+    right: Optional["BinaryNode"]
 
 class Blah(BaseModel):
-    prop4: Optional[str] = None
+    prop4: Optional[str]
 
 class BlockConstraint(BaseModel):
-    foo: Optional[int] = None
-    bar: Optional[str] = None
+    foo: Optional[int]
+    bar: Optional[str]
 
 class BlockConstraintForParam(BaseModel):
-    bcfp: Optional[int] = None
-    bcfp2: Optional[str] = None
+    bcfp: Optional[int]
+    bcfp2: Optional[str]
 
 class BookOrder(BaseModel):
-    orderId: Optional[str] = None
-    title: Optional[str] = None
-    quantity: Optional[int] = None
-    price: Optional[float] = None
+    orderId: Optional[str]
+    title: Optional[str]
+    quantity: Optional[int]
+    price: Optional[float]
 
 class ClassForNullLiteral(BaseModel):
-    a: Optional[Literal["hi"]] = None
+    a: Optional[Literal["hi"]]
 
 class ClassOptionalOutput(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[str] = None
+    prop1: Optional[str]
+    prop2: Optional[str]
 
 class ClassOptionalOutput2(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[str] = None
-    prop3: Optional["Blah"] = None
+    prop1: Optional[str]
+    prop2: Optional[str]
+    prop3: Optional["Blah"]
 
 class ClassToRecAlias(BaseModel):
-    list: Optional["LinkedListAliasNode"] = None
+    list: Optional["LinkedListAliasNode"]
 
 class ClassWithBlockDone(BaseModel):
-    i_16_digits: Optional[int] = None
-    s_20_words: Optional[str] = None
+    i_16_digits: Optional[int]
+    s_20_words: Optional[str]
 
 class ClassWithImage(BaseModel):
-    myImage: Optional[baml_py.Image] = None
-    param2: Optional[str] = None
-    fake_image: Optional["FakeImage"] = None
+    myImage: Optional[baml_py.Image]
+    param2: Optional[str]
+    fake_image: Optional["FakeImage"]
 
 class ClassWithoutDone(BaseModel):
-    i_16_digits: Optional[int] = None
+    i_16_digits: Optional[int]
     s_20_words: StreamState[Optional[str]]
 
 class ClientDetails1559(BaseModel):
-    client_name: Optional[str] = None
-    client_address: Optional[str] = None
-    client_postal_code: Optional[str] = None
-    client_city: Optional[str] = None
-    client_country: Optional[str] = None
-    client_phone: Optional[str] = None
-    client_email: Optional[str] = None
+    client_name: Optional[str]
+    client_address: Optional[str]
+    client_postal_code: Optional[str]
+    client_city: Optional[str]
+    client_country: Optional[str]
+    client_phone: Optional[str]
+    client_email: Optional[str]
 
 class ComplexMemoryObject(BaseModel):
-    id: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
+    id: Optional[str]
+    name: Optional[str]
+    description: Optional[str]
     metadata: List[Union[str, int, float]]
 
 class CompoundBigNumbers(BaseModel):
-    big: Optional["BigNumbers"] = None
+    big: Optional["BigNumbers"]
     big_nums: List["BigNumbers"]
-    another: Optional["BigNumbers"] = None
+    another: Optional["BigNumbers"]
 
 class ContactInfo(BaseModel):
-    primary: Optional[Union["PhoneNumber", "EmailAddress"]] = None
-    secondary: Optional[Union["PhoneNumber", "EmailAddress", None]] = None
+    primary: Optional[Union["PhoneNumber", "EmailAddress"]]
+    secondary: Optional[Union["PhoneNumber", "EmailAddress", None]]
 
 class CustomStory(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str]
     characters: List[str]
-    content: Optional[str] = None
+    content: Optional[str]
 
 class CustomTaskResult(BaseModel):
-    bookOrder: Optional[Union["BookOrder", Optional[None]]] = None
-    flightConfirmation: Optional[Union["FlightConfirmation", Optional[None]]] = None
-    groceryReceipt: Optional[Union["GroceryReceipt", Optional[None]]] = None
+    bookOrder: Optional[Union["BookOrder", Optional[None]]]
+    flightConfirmation: Optional[Union["FlightConfirmation", Optional[None]]]
+    groceryReceipt: Optional[Union["GroceryReceipt", Optional[None]]]
 
 class Document1559(BaseModel):
-    client_details: Optional["ClientDetails1559"] = None
+    client_details: Optional["ClientDetails1559"]
     notes: List["Note1599"]
 
 class DummyOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
-    nonce: Optional[str] = None
-    nonce2: Optional[str] = None
+    nonce: Optional[str]
+    nonce2: Optional[str]
 
 class DynInputOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
-    testKey: Optional[str] = None
+    testKey: Optional[str]
 
 class DynamicClassOne(BaseModel):
     model_config = ConfigDict(extra='allow')
 
 class DynamicClassTwo(BaseModel):
     model_config = ConfigDict(extra='allow')
-    hi: Optional[str] = None
-    some_class: Optional["SomeClassNestedDynamic"] = None
-    status: Optional[Union[types.DynEnumOne, str]] = None
+    hi: Optional[str]
+    some_class: Optional["SomeClassNestedDynamic"]
+    status: Optional[Union[types.DynEnumOne, str]]
 
 class DynamicOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
@@ -160,38 +160,38 @@ class Earthling(BaseModel):
     age: Checked[Optional[int],Literal["earth_aged", "no_infants"]]
 
 class Education(BaseModel):
-    institution: Optional[str] = None
-    location: Optional[str] = None
-    degree: Optional[str] = None
+    institution: Optional[str]
+    location: Optional[str]
+    degree: Optional[str]
     major: List[str]
-    graduation_date: Optional[str] = None
+    graduation_date: Optional[str]
 
 class Email(BaseModel):
-    subject: Optional[str] = None
-    body: Optional[str] = None
-    from_address: Optional[str] = None
+    subject: Optional[str]
+    body: Optional[str]
+    from_address: Optional[str]
 
 class EmailAddress(BaseModel):
-    value: Optional[str] = None
+    value: Optional[str]
 
 class Event(BaseModel):
-    title: Optional[str] = None
-    date: Optional[str] = None
-    location: Optional[str] = None
-    description: Optional[str] = None
+    title: Optional[str]
+    date: Optional[str]
+    location: Optional[str]
+    description: Optional[str]
 
 class FakeImage(BaseModel):
-    url: Optional[str] = None
+    url: Optional[str]
 
 class FlightConfirmation(BaseModel):
-    confirmationNumber: Optional[str] = None
-    flightNumber: Optional[str] = None
-    departureTime: Optional[str] = None
-    arrivalTime: Optional[str] = None
-    seatNumber: Optional[str] = None
+    confirmationNumber: Optional[str]
+    flightNumber: Optional[str]
+    departureTime: Optional[str]
+    arrivalTime: Optional[str]
+    seatNumber: Optional[str]
 
 class FooAny(BaseModel):
-    planetary_age: Optional[Union["Martian", "Earthling"]] = None
+    planetary_age: Optional[Union["Martian", "Earthling"]]
     certainty: Checked[Optional[int],Literal["unreasonably_certain"]]
     species: Checked[Optional[str],Literal["regex_bad", "regex_good", "trivial"]]
 
@@ -199,71 +199,71 @@ class Forest(BaseModel):
     trees: List["Tree"]
 
 class FormatterTest0(BaseModel):
-    lorem: Optional[str] = None
-    ipsum: Optional[str] = None
+    lorem: Optional[str]
+    ipsum: Optional[str]
 
 class FormatterTest1(BaseModel):
-    lorem: Optional[str] = None
-    ipsum: Optional[str] = None
+    lorem: Optional[str]
+    ipsum: Optional[str]
 
 class FormatterTest2(BaseModel):
-    lorem: Optional[str] = None
-    ipsum: Optional[str] = None
+    lorem: Optional[str]
+    ipsum: Optional[str]
 
 class FormatterTest3(BaseModel):
-    lorem: Optional[str] = None
-    ipsum: Optional[str] = None
+    lorem: Optional[str]
+    ipsum: Optional[str]
 
 class GroceryReceipt(BaseModel):
-    receiptId: Optional[str] = None
-    storeName: Optional[str] = None
+    receiptId: Optional[str]
+    storeName: Optional[str]
     items: List[Union[str, int, float]]
-    totalAmount: Optional[float] = None
+    totalAmount: Optional[float]
 
 class Haiku(BaseModel):
-    line1: Optional[str] = None
-    line2: Optional[str] = None
-    line3: Optional[str] = None
+    line1: Optional[str]
+    line2: Optional[str]
+    line3: Optional[str]
 
 class InnerClass(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[str] = None
-    inner: Optional["InnerClass2"] = None
+    prop1: Optional[str]
+    prop2: Optional[str]
+    inner: Optional["InnerClass2"]
 
 class InnerClass2(BaseModel):
-    prop2: Optional[int] = None
-    prop3: Optional[float] = None
+    prop2: Optional[int]
+    prop3: Optional[float]
 
 class InputClass(BaseModel):
-    key: Optional[str] = None
-    key2: Optional[str] = None
+    key: Optional[str]
+    key2: Optional[str]
 
 class InputClassNested(BaseModel):
-    key: Optional[str] = None
-    nested: Optional["InputClass"] = None
+    key: Optional[str]
+    nested: Optional["InputClass"]
 
 class LinkedList(BaseModel):
-    head: Optional["Node"] = None
-    len: Optional[int] = None
+    head: Optional["Node"]
+    len: Optional[int]
 
 class LinkedListAliasNode(BaseModel):
-    value: Optional[int] = None
-    next: Optional["LinkedListAliasNode"] = None
+    value: Optional[int]
+    next: Optional["LinkedListAliasNode"]
 
 class LiteralClassHello(BaseModel):
-    prop: Optional[Literal["hello"]] = None
+    prop: Optional[Literal["hello"]]
 
 class LiteralClassOne(BaseModel):
-    prop: Optional[Literal["one"]] = None
+    prop: Optional[Literal["one"]]
 
 class LiteralClassTwo(BaseModel):
-    prop: Optional[Literal["two"]] = None
+    prop: Optional[Literal["two"]]
 
 class MalformedConstraints(BaseModel):
     foo: Checked[Optional[int],Literal["foo_check"]]
 
 class MalformedConstraints2(BaseModel):
-    foo: Optional[int] = None
+    foo: Optional[int]
 
 class Martian(BaseModel):
     """A Martian organism with an age.
@@ -273,202 +273,207 @@ class Martian(BaseModel):
     So many Mars years."""
 
 class MemoryObject(BaseModel):
-    id: Optional[str] = None
-    name: Optional[str] = None
-    description: Optional[str] = None
+    id: Optional[str]
+    name: Optional[str]
+    description: Optional[str]
 
 class MergeAttrs(BaseModel):
     amount: Checked[Optional[int],Literal["gt_ten"]]
 
 class NamedArgsSingleClass(BaseModel):
-    key: Optional[str] = None
-    key_two: Optional[bool] = None
-    key_three: Optional[int] = None
+    key: Optional[str]
+    key_two: Optional[bool]
+    key_three: Optional[int]
 
 class Nested(BaseModel):
-    prop3: Optional[Union[str, Optional[None]]] = None
-    prop4: Optional[Union[str, Optional[None]]] = None
-    prop20: Optional["Nested2"] = None
+    prop3: Optional[Union[str, Optional[None]]]
+    prop4: Optional[Union[str, Optional[None]]]
+    prop20: Optional["Nested2"]
 
 class Nested2(BaseModel):
-    prop11: Optional[Union[str, Optional[None]]] = None
-    prop12: Optional[Union[str, Optional[None]]] = None
+    prop11: Optional[Union[str, Optional[None]]]
+    prop12: Optional[Union[str, Optional[None]]]
 
 class NestedBlockConstraint(BaseModel):
     nbc: Checked[Optional["BlockConstraint"],Literal["cross_field"]]
 
 class NestedBlockConstraintForParam(BaseModel):
-    nbcfp: Optional["BlockConstraintForParam"] = None
+    nbcfp: Optional["BlockConstraintForParam"]
 
 class Node(BaseModel):
-    data: Optional[int] = None
-    next: Optional["Node"] = None
+    data: Optional[int]
+    next: Optional["Node"]
 
 class NodeWithAliasIndirection(BaseModel):
-    value: Optional[int] = None
-    next: Optional["NodeWithAliasIndirection"] = None
+    value: Optional[int]
+    next: Optional["NodeWithAliasIndirection"]
 
 class Note1599(BaseModel):
-    note_title: Optional[str] = None
-    note_description: Optional[str] = None
-    note_amount: Optional[str] = None
+    note_title: Optional[str]
+    note_description: Optional[str]
+    note_amount: Optional[str]
 
 class OptionalListAndMap(BaseModel):
-    p: Optional[List[str]] = None
-    q: Optional[Dict[str, Optional[str]]] = None
+    p: Optional[List[str]]
+    q: Optional[Dict[str, Optional[str]]]
 
 class OptionalTest_Prop1(BaseModel):
-    omega_a: Optional[str] = None
-    omega_b: Optional[int] = None
+    omega_a: Optional[str]
+    omega_b: Optional[int]
 
 class OptionalTest_ReturnType(BaseModel):
-    omega_1: Optional["OptionalTest_Prop1"] = None
-    omega_2: Optional[str] = None
+    omega_1: Optional["OptionalTest_Prop1"]
+    omega_2: Optional[str]
     omega_3: List[Optional[types.OptionalTest_CategoryType]]
 
 class OrderInfo(BaseModel):
-    order_status: Optional[types.OrderStatus] = None
-    tracking_number: Optional[str] = None
-    estimated_arrival_date: Optional[str] = None
+    order_status: Optional[types.OrderStatus]
+    tracking_number: Optional[str]
+    estimated_arrival_date: Optional[str]
 
 class OriginalA(BaseModel):
-    value: Optional[int] = None
+    value: Optional[int]
 
 class OriginalB(BaseModel):
     model_config = ConfigDict(extra='allow')
-    value: Optional[int] = None
+    value: Optional[int]
 
 class Person(BaseModel):
     model_config = ConfigDict(extra='allow')
-    name: Optional[str] = None
-    hair_color: Optional[Union[types.Color, str]] = None
+    name: Optional[str]
+    hair_color: Optional[Union[types.Color, str]]
 
 class PhoneNumber(BaseModel):
-    value: Optional[str] = None
+    value: Optional[str]
 
 class Quantity(BaseModel):
-    amount: Optional[Union[int, float]] = None
-    unit: Optional[str] = None
+    amount: Optional[Union[int, float]]
+    unit: Optional[str]
 
 class RaysData(BaseModel):
-    dataType: Optional[types.DataType] = None
-    value: Optional[Union["Resume", "Event"]] = None
+    dataType: Optional[types.DataType]
+    value: Optional[Union["Resume", "Event"]]
 
 class ReceiptInfo(BaseModel):
     items: List["ReceiptItem"]
-    total_cost: Optional[float] = None
-    venue: Optional[Union[Literal["barisa"], Literal["ox_burger"]]] = None
+    total_cost: Optional[float]
+    venue: Optional[Union[Literal["barisa"], Literal["ox_burger"]]]
 
 class ReceiptItem(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    quantity: Optional[int] = None
-    price: Optional[float] = None
+    name: Optional[str]
+    description: Optional[str]
+    quantity: Optional[int]
+    price: Optional[float]
 
 class Recipe(BaseModel):
     ingredients: Dict[str, Optional["Quantity"]]
-    recipe_type: Optional[Union[Literal["breakfast"], Literal["dinner"]]] = None
+    recipe_type: Optional[Union[Literal["breakfast"], Literal["dinner"]]]
 
 class RecursiveAliasDependency(BaseModel):
-    value: Optional["JsonValue"] = None
+    value: Optional["JsonValue"]
 
 class Resume(BaseModel):
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
+    name: Optional[str]
+    email: Optional[str]
+    phone: Optional[str]
     experience: List[str]
     education: List["Education"]
     skills: List[str]
 
 class Schema(BaseModel):
-    prop1: Optional[Union[str, Optional[None]]] = None
-    prop2: Optional[Union["Nested", str]] = None
+    prop1: Optional[Union[str, Optional[None]]]
+    prop2: Optional[Union["Nested", str]]
     prop5: List[Union[str, Optional[None]]]
-    prop6: Optional[Union[str, List["Nested"]]] = None
+    prop6: Optional[Union[str, List["Nested"]]]
     nested_attrs: List[Union[str, Optional[None], "Nested"]]
-    parens: Optional[Union[str, Optional[None]]] = None
-    other_group: Optional[Union[str, Union[int, str]]] = None
+    parens: Optional[Union[str, Optional[None]]]
+    other_group: Optional[Union[str, Union[int, str]]]
 
 class SearchParams(BaseModel):
-    dateRange: Optional[int] = None
+    dateRange: Optional[int]
     location: List[str]
-    jobTitle: Optional["WithReasoning"] = None
-    company: Optional["WithReasoning"] = None
+    jobTitle: Optional["WithReasoning"]
+    company: Optional["WithReasoning"]
     description: List["WithReasoning"]
     tags: List[Union[types.Tag, str]]
 
 class SemanticContainer(BaseModel):
-    sixteen_digit_number: Optional[int] = None
-    string_with_twenty_words: Optional[str] = None
-    class_1: Optional["ClassWithoutDone"] = None
-    class_2: Optional["types.ClassWithBlockDone"] = None
+    sixteen_digit_number: Optional[int]
+    string_with_twenty_words: str
+    class_1: Optional["ClassWithoutDone"]
+    class_2: "types.ClassWithBlockDone"
     class_done_needed: "types.ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
     three_small_things: List["SmallThing"]
-    final_string: Optional[str] = None
+    final_string: Optional[str]
 
 class SimpleTag(BaseModel):
-    field: Optional[str] = None
+    field: Optional[str]
 
 class SmallThing(BaseModel):
     i_16_digits: int
-    i_8_digits: Optional[int] = None
+    i_8_digits: Optional[int]
 
 class SomeClassNestedDynamic(BaseModel):
     model_config = ConfigDict(extra='allow')
-    hi: Optional[str] = None
+    hi: Optional[str]
 
 class StringToClassEntry(BaseModel):
-    word: Optional[str] = None
+    word: Optional[str]
 
 class TestClassAlias(BaseModel):
-    key: Optional[str] = None
-    key2: Optional[str] = None
-    key3: Optional[str] = None
-    key4: Optional[str] = None
-    key5: Optional[str] = None
+    key: Optional[str]
+    key2: Optional[str]
+    key3: Optional[str]
+    key4: Optional[str]
+    key5: Optional[str]
 
 class TestClassNested(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional["InnerClass"] = None
+    prop1: Optional[str]
+    prop2: Optional["InnerClass"]
 
 class TestClassWithEnum(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[types.EnumInClass] = None
+    prop1: Optional[str]
+    prop2: Optional[types.EnumInClass]
 
 class TestMemoryOutput(BaseModel):
     items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
     more_items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
 
 class TestOutputClass(BaseModel):
-    prop1: Optional[str] = None
-    prop2: Optional[int] = None
+    prop1: Optional[str]
+    prop2: Optional[int]
 
 class Tree(BaseModel):
-    data: Optional[int] = None
-    children: Optional["Forest"] = None
+    data: Optional[int]
+    children: Optional["Forest"]
 
 class TwoStoriesOneTitle(BaseModel):
-    title: Optional[str] = None
-    story_a: Optional[str] = None
-    story_b: Optional[str] = None
+    title: Optional[str]
+    story_a: Optional[str]
+    story_b: Optional[str]
+
+class TwoStoriesOneTitleCheck(BaseModel):
+    title: Optional[str]
+    story_a: Checked[Optional[str],Literal["too_long_story"]]
+    story_b: Checked[Optional[str],Literal["too_long_story"]]
 
 class UnionTest_ReturnType(BaseModel):
-    prop1: Optional[Union[str, bool]] = None
+    prop1: Optional[Union[str, bool]]
     prop2: List[Union[float, bool]]
-    prop3: Optional[Union[List[bool], List[int]]] = None
+    prop3: Optional[Union[List[bool], List[int]]]
 
 class UniverseQuestion(BaseModel):
     """my docs"""
-    question: Optional[str] = None
-    answer: Optional[str] = None
+    question: Optional[str]
+    answer: Optional[str]
 
 class UniverseQuestionInput(BaseModel):
-    question: Optional[str] = None
+    question: Optional[str]
 
 class WithReasoning(BaseModel):
-    value: Optional[str] = None
-    reasoning: Optional[str] = None
+    value: Optional[str]
+    reasoning: Optional[str]
 
 JsonArray: TypeAlias = List["JsonValue"]
 

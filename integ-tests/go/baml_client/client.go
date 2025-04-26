@@ -6080,6 +6080,66 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 
 
 
+func StreamFailingCheck(ctx context.Context, theme string, length int64) (*types.TwoStoriesOneTitleCheck, error) {
+	args := map[string]any{ "theme": theme,"length": length, }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "StreamFailingCheck", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func (result any) types.TwoStoriesOneTitleCheck {
+		return *(result).(*types.TwoStoriesOneTitleCheck)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int64) <-chan types.TwoStoriesOneTitleCheck {
+	args := map[string]any{ "theme": theme,"length": length, }
+	encoded, err := baml.EncodeRoot(args, typeMap)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan types.TwoStoriesOneTitleCheck)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "StreamFailingCheck", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(types.TwoStoriesOneTitleCheck)
+			}
+		}
+	}()
+	return channel
+}
+
+
+
 func StreamOneBigNumber(ctx context.Context, digits int64) (*int64, error) {
 	args := map[string]any{ "digits": digits, }
 	encoded, err := baml.EncodeRoot(args, typeMap)

@@ -210,6 +210,8 @@ var typeMap = map[string]reflect.Type{
   
   "TwoStoriesOneTitle": reflect.TypeOf(types.TwoStoriesOneTitle{}),
   
+  "TwoStoriesOneTitleCheck": reflect.TypeOf(types.TwoStoriesOneTitleCheck{}),
+  
   "UnionTest_ReturnType": reflect.TypeOf(types.UnionTest_ReturnType{}),
   
   "UniverseQuestion": reflect.TypeOf(types.UniverseQuestion{}),

@@ -2798,6 +2798,33 @@ class BamlSyncClient:
       )
       return cast(types.TwoStoriesOneTitle, raw.cast_to(types, types, partial_types, False))
     
+    def StreamFailingCheck(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.TwoStoriesOneTitleCheck:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.call_function_sync(
+        "StreamFailingCheck",
+        {
+          "theme": theme,"length": length,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+      return cast(types.TwoStoriesOneTitleCheck, raw.cast_to(types, types, partial_types, False))
+    
     def StreamOneBigNumber(
         self,
         digits: int,
@@ -4935,7 +4962,7 @@ class BamlStreamClient:
         self,
         money: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[int,Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -4958,9 +4985,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
+      return baml_py.BamlSyncStream[Checked[int,Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
         raw,
-        lambda x: cast(Checked[Optional[int], Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[int,Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[int, Literal["gt_ten"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -4969,7 +4996,7 @@ class BamlStreamClient:
         self,
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -4992,9 +5019,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5003,7 +5030,7 @@ class BamlStreamClient:
         self,
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5026,9 +5053,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5037,7 +5064,7 @@ class BamlStreamClient:
         self,
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5060,9 +5087,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5071,7 +5098,7 @@ class BamlStreamClient:
         self,
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5094,9 +5121,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5105,7 +5132,7 @@ class BamlStreamClient:
         self,
         input: List[types.AliasedEnum],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5128,9 +5155,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5173,7 +5200,7 @@ class BamlStreamClient:
         self,
         a: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+    ) -> baml_py.BamlSyncStream[int, int]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5196,9 +5223,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[int], int](
+      return baml_py.BamlSyncStream[int, int](
         raw,
-        lambda x: cast(Optional[int], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(int, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(int, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5207,7 +5234,7 @@ class BamlStreamClient:
         self,
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5230,9 +5257,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5343,7 +5370,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]]:
+    ) -> baml_py.BamlSyncStream[Union[types.DynEnumTwo, str], Union[types.DynEnumTwo, str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5366,9 +5393,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]](
+      return baml_py.BamlSyncStream[Union[types.DynEnumTwo, str], Union[types.DynEnumTwo, str]](
         raw,
-        lambda x: cast(Optional[Union[types.DynEnumTwo, str]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Union[types.DynEnumTwo, str], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[types.DynEnumTwo, str], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5377,7 +5404,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
+    ) -> baml_py.BamlSyncStream[types.Category, types.Category]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5400,9 +5427,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[types.Category], types.Category](
+      return baml_py.BamlSyncStream[types.Category, types.Category](
         raw,
-        lambda x: cast(Optional[types.Category], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.Category, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.Category, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5411,7 +5438,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
+    ) -> baml_py.BamlSyncStream[types.Category, types.Category]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5434,9 +5461,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[types.Category], types.Category](
+      return baml_py.BamlSyncStream[types.Category, types.Category](
         raw,
-        lambda x: cast(Optional[types.Category], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.Category, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.Category, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5445,7 +5472,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[types.Category], types.Category]:
+    ) -> baml_py.BamlSyncStream[types.Category, types.Category]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5468,9 +5495,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[types.Category], types.Category](
+      return baml_py.BamlSyncStream[types.Category, types.Category](
         raw,
-        lambda x: cast(Optional[types.Category], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.Category, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.Category, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5479,7 +5506,7 @@ class BamlStreamClient:
         self,
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5504,9 +5531,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5515,7 +5542,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]]:
+    ) -> baml_py.BamlSyncStream[Union[Optional[partial_types.BookOrder], Optional[partial_types.FlightConfirmation], Optional[partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5538,9 +5565,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]](
+      return baml_py.BamlSyncStream[Union[Optional[partial_types.BookOrder], Optional[partial_types.FlightConfirmation], Optional[partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]](
         raw,
-        lambda x: cast(Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Union[Optional[partial_types.BookOrder], Optional[partial_types.FlightConfirmation], Optional[partial_types.GroceryReceipt]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5549,7 +5576,7 @@ class BamlStreamClient:
         self,
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5572,9 +5599,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5583,7 +5610,7 @@ class BamlStreamClient:
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5607,9 +5634,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5618,7 +5645,7 @@ class BamlStreamClient:
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5642,9 +5669,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5653,7 +5680,7 @@ class BamlStreamClient:
         self,
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5677,9 +5704,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5688,7 +5715,7 @@ class BamlStreamClient:
         self,
         img: baml_py.Image,client_sector: str,client_name: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5713,9 +5740,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5724,7 +5751,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]]:
+    ) -> baml_py.BamlSyncStream[Union[Optional[partial_types.OriginalA], Optional[partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5746,9 +5773,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]](
+      return baml_py.BamlSyncStream[Union[Optional[partial_types.OriginalA], Optional[partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]](
         raw,
-        lambda x: cast(Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Union[Optional[partial_types.OriginalA], Optional[partial_types.OriginalB]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[types.OriginalA, types.OriginalB], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5859,7 +5886,7 @@ class BamlStreamClient:
         self,
         input: List[types.DynInputOutput],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
+    ) -> baml_py.BamlSyncStream[List[Optional[partial_types.DynInputOutput]], List[types.DynInputOutput]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5882,9 +5909,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]](
+      return baml_py.BamlSyncStream[List[Optional[partial_types.DynInputOutput]], List[types.DynInputOutput]](
         raw,
-        lambda x: cast(List[partial_types.DynInputOutput], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(List[Optional[partial_types.DynInputOutput]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(List[types.DynInputOutput], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -5893,7 +5920,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5915,9 +5942,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6062,7 +6089,7 @@ class BamlStreamClient:
         self,
         text: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[List[partial_types.Person], List[types.Person]]:
+    ) -> baml_py.BamlSyncStream[List[Optional[partial_types.Person]], List[types.Person]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6085,9 +6112,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[List[partial_types.Person], List[types.Person]](
+      return baml_py.BamlSyncStream[List[Optional[partial_types.Person]], List[types.Person]](
         raw,
-        lambda x: cast(List[partial_types.Person], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(List[Optional[partial_types.Person]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(List[types.Person], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6200,7 +6227,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]]:
+    ) -> baml_py.BamlSyncStream[Optional[Optional[partial_types.ClassOptionalOutput]], Optional[types.ClassOptionalOutput]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6223,9 +6250,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[partial_types.ClassOptionalOutput, Optional[types.ClassOptionalOutput]](
+      return baml_py.BamlSyncStream[Optional[Optional[partial_types.ClassOptionalOutput]], Optional[types.ClassOptionalOutput]](
         raw,
-        lambda x: cast(partial_types.ClassOptionalOutput, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[Optional[partial_types.ClassOptionalOutput]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Optional[types.ClassOptionalOutput], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6234,7 +6261,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]]:
+    ) -> baml_py.BamlSyncStream[Optional[Optional[partial_types.ClassOptionalOutput2]], Optional[types.ClassOptionalOutput2]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6257,9 +6284,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[partial_types.ClassOptionalOutput2, Optional[types.ClassOptionalOutput2]](
+      return baml_py.BamlSyncStream[Optional[Optional[partial_types.ClassOptionalOutput2]], Optional[types.ClassOptionalOutput2]](
         raw,
-        lambda x: cast(partial_types.ClassOptionalOutput2, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[Optional[partial_types.ClassOptionalOutput2]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Optional[types.ClassOptionalOutput2], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6302,7 +6329,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[types.EnumOutput], types.EnumOutput]:
+    ) -> baml_py.BamlSyncStream[types.EnumOutput, types.EnumOutput]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6325,9 +6352,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[types.EnumOutput], types.EnumOutput](
+      return baml_py.BamlSyncStream[types.EnumOutput, types.EnumOutput](
         raw,
-        lambda x: cast(Optional[types.EnumOutput], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.EnumOutput, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.EnumOutput, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6370,7 +6397,7 @@ class BamlStreamClient:
         self,
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]]:
+    ) -> baml_py.BamlSyncStream[Union[Optional[partial_types.LiteralClassOne], Optional[partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6393,9 +6420,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]](
+      return baml_py.BamlSyncStream[Union[Optional[partial_types.LiteralClassOne], Optional[partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]](
         raw,
-        lambda x: cast(Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Union[Optional[partial_types.LiteralClassOne], Optional[partial_types.LiteralClassTwo]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[types.LiteralClassOne, types.LiteralClassTwo], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6404,7 +6431,7 @@ class BamlStreamClient:
         self,
         myString: Optional[str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6427,9 +6454,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6438,7 +6465,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[bool], bool]:
+    ) -> baml_py.BamlSyncStream[bool, bool]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6461,9 +6488,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[bool], bool](
+      return baml_py.BamlSyncStream[bool, bool](
         raw,
-        lambda x: cast(Optional[bool], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(bool, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(bool, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6506,7 +6533,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]]:
+    ) -> baml_py.BamlSyncStream[List[Optional[partial_types.TestOutputClass]], List[types.TestOutputClass]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6529,9 +6556,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
+      return baml_py.BamlSyncStream[List[Optional[partial_types.TestOutputClass]], List[types.TestOutputClass]](
         raw,
-        lambda x: cast(List[partial_types.TestOutputClass], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(List[Optional[partial_types.TestOutputClass]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(List[types.TestOutputClass], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6608,7 +6635,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+    ) -> baml_py.BamlSyncStream[int, int]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6631,9 +6658,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[int], int](
+      return baml_py.BamlSyncStream[int, int](
         raw,
-        lambda x: cast(Optional[int], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(int, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(int, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6642,7 +6669,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Literal[False]], Literal[False]]:
+    ) -> baml_py.BamlSyncStream[Literal[False], Literal[False]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6665,9 +6692,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Literal[False]], Literal[False]](
+      return baml_py.BamlSyncStream[Literal[False], Literal[False]](
         raw,
-        lambda x: cast(Optional[Literal[False]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Literal[False], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Literal[False], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6676,7 +6703,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Literal[5]], Literal[5]]:
+    ) -> baml_py.BamlSyncStream[Literal[5], Literal[5]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6699,9 +6726,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Literal[5]], Literal[5]](
+      return baml_py.BamlSyncStream[Literal[5], Literal[5]](
         raw,
-        lambda x: cast(Optional[Literal[5]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Literal[5], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Literal[5], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6710,7 +6737,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Literal["example output"]], Literal["example output"]]:
+    ) -> baml_py.BamlSyncStream[Literal["example output"], Literal["example output"]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6733,9 +6760,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Literal["example output"]], Literal["example output"]](
+      return baml_py.BamlSyncStream[Literal["example output"], Literal["example output"]](
         raw,
-        lambda x: cast(Optional[Literal["example output"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Literal["example output"], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Literal["example output"], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6778,7 +6805,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[types.TestEnum], types.TestEnum]:
+    ) -> baml_py.BamlSyncStream[types.TestEnum, types.TestEnum]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6801,9 +6828,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[types.TestEnum], types.TestEnum](
+      return baml_py.BamlSyncStream[types.TestEnum, types.TestEnum](
         raw,
-        lambda x: cast(Optional[types.TestEnum], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.TestEnum, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.TestEnum, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6846,7 +6873,7 @@ class BamlStreamClient:
         self,
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6869,9 +6896,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7120,7 +7147,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]]:
+    ) -> baml_py.BamlSyncStream[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]], Union[Literal[1], Literal[True], Literal["string output"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7143,9 +7170,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]](
+      return baml_py.BamlSyncStream[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]], Union[Literal[1], Literal[True], Literal["string output"]]](
         raw,
-        lambda x: cast(Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[Literal[1], Literal[True], Literal["string output"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7154,7 +7181,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint, Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint,Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7176,9 +7203,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint, Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]](
+      return baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint,Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]](
         raw,
-        lambda x: cast(Checked[partial_types.BlockConstraint, Literal["cross_field"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[partial_types.BlockConstraint,Literal["cross_field"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[types.BlockConstraint, Literal["cross_field"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7187,7 +7214,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[partial_types.ClassWithBlockDone, types.ClassWithBlockDone]:
+    ) -> baml_py.BamlSyncStream[types.ClassWithBlockDone, types.ClassWithBlockDone]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7209,9 +7236,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[partial_types.ClassWithBlockDone, types.ClassWithBlockDone](
+      return baml_py.BamlSyncStream[types.ClassWithBlockDone, types.ClassWithBlockDone](
         raw,
-        lambda x: cast(partial_types.ClassWithBlockDone, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.ClassWithBlockDone, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.ClassWithBlockDone, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7220,7 +7247,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[partial_types.ClassWithoutDone, types.ClassWithoutDone]:
+    ) -> baml_py.BamlSyncStream[types.ClassWithoutDone, types.ClassWithoutDone]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7242,9 +7269,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[partial_types.ClassWithoutDone, types.ClassWithoutDone](
+      return baml_py.BamlSyncStream[types.ClassWithoutDone, types.ClassWithoutDone](
         raw,
-        lambda x: cast(partial_types.ClassWithoutDone, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.ClassWithoutDone, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(types.ClassWithoutDone, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7421,7 +7448,7 @@ class BamlStreamClient:
         self,
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]]:
+    ) -> baml_py.BamlSyncStream[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7444,9 +7471,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]](
+      return baml_py.BamlSyncStream[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]](
         raw,
-        lambda x: cast(Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7489,7 +7516,7 @@ class BamlStreamClient:
         self,
         s: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7512,9 +7539,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7523,7 +7550,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]]:
+    ) -> baml_py.BamlSyncStream[List[Optional[Optional[partial_types.OptionalTest_ReturnType]]], List[Optional[types.OptionalTest_ReturnType]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7546,9 +7573,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[List[partial_types.OptionalTest_ReturnType], List[Optional[types.OptionalTest_ReturnType]]](
+      return baml_py.BamlSyncStream[List[Optional[Optional[partial_types.OptionalTest_ReturnType]]], List[Optional[types.OptionalTest_ReturnType]]](
         raw,
-        lambda x: cast(List[partial_types.OptionalTest_ReturnType], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(List[Optional[Optional[partial_types.OptionalTest_ReturnType]]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(List[Optional[types.OptionalTest_ReturnType]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7591,7 +7618,7 @@ class BamlStreamClient:
         self,
         inp: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[Optional[int], Literal["too_big"]], Checked[int, Literal["too_big"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[int,Literal["too_big"]], Checked[int, Literal["too_big"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7614,9 +7641,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[Optional[int], Literal["too_big"]], Checked[int, Literal["too_big"]]](
+      return baml_py.BamlSyncStream[Checked[int,Literal["too_big"]], Checked[int, Literal["too_big"]]](
         raw,
-        lambda x: cast(Checked[Optional[int], Literal["too_big"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[int,Literal["too_big"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[int, Literal["too_big"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7625,7 +7652,7 @@ class BamlStreamClient:
         self,
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], Union[int, str, bool, float]]:
+    ) -> baml_py.BamlSyncStream[Union[Optional[int], Optional[str], Optional[bool], Optional[float]], Union[int, str, bool, float]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7648,9 +7675,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], Union[int, str, bool, float]](
+      return baml_py.BamlSyncStream[Union[Optional[int], Optional[str], Optional[bool], Optional[float]], Union[int, str, bool, float]](
         raw,
-        lambda x: cast(Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Union[Optional[int], Optional[str], Optional[bool], Optional[float]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[int, str, bool, float], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7659,7 +7686,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7682,9 +7709,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7693,7 +7720,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7716,9 +7743,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7727,7 +7754,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7750,9 +7777,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7761,7 +7788,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7784,9 +7811,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7795,7 +7822,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7818,9 +7845,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7829,7 +7856,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7852,9 +7879,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7863,7 +7890,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7886,9 +7913,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7965,7 +7992,7 @@ class BamlStreamClient:
         self,
         money: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[int,Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7988,9 +8015,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
+      return baml_py.BamlSyncStream[Checked[int,Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
         raw,
-        lambda x: cast(Checked[Optional[int], Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[int,Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[int, Literal["gt_ten"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7999,7 +8026,7 @@ class BamlStreamClient:
         self,
         inp: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+    ) -> baml_py.BamlSyncStream[int, int]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8022,9 +8049,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[int], int](
+      return baml_py.BamlSyncStream[int, int](
         raw,
-        lambda x: cast(Optional[int], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(int, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(int, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8268,11 +8295,46 @@ class BamlStreamClient:
         self.__ctx_manager.get(),
       )
     
+    def StreamFailingCheck(
+        self,
+        theme: str,length: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[partial_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]:
+      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+
+      raw = self.__runtime.stream_function_sync(
+        "StreamFailingCheck",
+        {
+          "theme": theme,
+          "length": length,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+      )
+
+      return baml_py.BamlSyncStream[partial_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck](
+        raw,
+        lambda x: cast(partial_types.TwoStoriesOneTitleCheck, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(types.TwoStoriesOneTitleCheck, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
     def StreamOneBigNumber(
         self,
         digits: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+    ) -> baml_py.BamlSyncStream[int, int]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8295,9 +8357,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[int], int](
+      return baml_py.BamlSyncStream[int, int](
         raw,
-        lambda x: cast(Optional[int], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(int, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(int, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8443,7 +8505,7 @@ class BamlStreamClient:
         self,
         story: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8466,9 +8528,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8477,7 +8539,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8500,9 +8562,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8511,7 +8573,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8534,9 +8596,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8545,7 +8607,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8568,9 +8630,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8579,7 +8641,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8602,9 +8664,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8613,7 +8675,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8636,9 +8698,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8647,7 +8709,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8670,9 +8732,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8681,7 +8743,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8704,9 +8766,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8715,7 +8777,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8738,9 +8800,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8749,7 +8811,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8772,9 +8834,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8783,7 +8845,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8806,9 +8868,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8817,7 +8879,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8840,9 +8902,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8851,7 +8913,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8874,9 +8936,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8885,7 +8947,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8908,9 +8970,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8919,7 +8981,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8942,9 +9004,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8953,7 +9015,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8976,9 +9038,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -8987,7 +9049,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9010,9 +9072,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9021,7 +9083,7 @@ class BamlStreamClient:
         self,
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9045,9 +9107,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9056,7 +9118,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9078,9 +9140,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9089,7 +9151,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9112,9 +9174,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9123,7 +9185,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9146,9 +9208,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9157,7 +9219,7 @@ class BamlStreamClient:
         self,
         myBool: bool,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9180,9 +9242,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9191,7 +9253,7 @@ class BamlStreamClient:
         self,
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9214,9 +9276,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9225,7 +9287,7 @@ class BamlStreamClient:
         self,
         myArg: List[types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9248,9 +9310,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9259,7 +9321,7 @@ class BamlStreamClient:
         self,
         myFloat: float,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9282,9 +9344,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9293,7 +9355,7 @@ class BamlStreamClient:
         self,
         myInt: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9316,9 +9378,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9327,7 +9389,7 @@ class BamlStreamClient:
         self,
         myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
+    ) -> baml_py.BamlSyncStream[Dict[str, Optional[partial_types.StringToClassEntry]], Dict[str, types.StringToClassEntry]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9350,9 +9412,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]](
+      return baml_py.BamlSyncStream[Dict[str, Optional[partial_types.StringToClassEntry]], Dict[str, types.StringToClassEntry]](
         raw,
-        lambda x: cast(Dict[str, partial_types.StringToClassEntry], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Dict[str, Optional[partial_types.StringToClassEntry]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Dict[str, types.StringToClassEntry], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9429,7 +9491,7 @@ class BamlStreamClient:
         self,
         myString: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9452,9 +9514,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9463,7 +9525,7 @@ class BamlStreamClient:
         self,
         myStringArray: List[str],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9486,9 +9548,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9531,7 +9593,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9554,9 +9616,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9565,7 +9627,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9587,9 +9649,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9598,7 +9660,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9621,9 +9683,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9632,7 +9694,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9655,9 +9717,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9666,7 +9728,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9689,9 +9751,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9700,7 +9762,7 @@ class BamlStreamClient:
         self,
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9723,9 +9785,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9734,7 +9796,7 @@ class BamlStreamClient:
         self,
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9757,9 +9819,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9768,7 +9830,7 @@ class BamlStreamClient:
         self,
         imgs: List[baml_py.Image],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9791,9 +9853,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9836,7 +9898,7 @@ class BamlStreamClient:
         self,
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9860,9 +9922,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9871,7 +9933,7 @@ class BamlStreamClient:
         self,
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9894,9 +9956,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9905,7 +9967,7 @@ class BamlStreamClient:
         self,
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9928,9 +9990,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9939,7 +10001,7 @@ class BamlStreamClient:
         self,
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9962,9 +10024,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -9973,7 +10035,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], Optional[str]]:
+    ) -> baml_py.BamlSyncStream[Optional[Optional[str]], Optional[str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9996,9 +10058,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], Optional[str]](
+      return baml_py.BamlSyncStream[Optional[Optional[str]], Optional[str]](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[Optional[str]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10041,7 +10103,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10064,9 +10126,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10075,7 +10137,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10098,9 +10160,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10109,7 +10171,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10132,9 +10194,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10143,7 +10205,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10166,9 +10228,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10177,7 +10239,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10200,9 +10262,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10211,7 +10273,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10234,9 +10296,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10245,7 +10307,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10268,9 +10330,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10279,7 +10341,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10302,9 +10364,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10313,7 +10375,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10336,9 +10398,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10347,7 +10409,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10370,9 +10432,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10381,7 +10443,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10404,9 +10466,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10415,7 +10477,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10437,9 +10499,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10448,7 +10510,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10470,9 +10532,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10481,7 +10543,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10504,9 +10566,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10515,7 +10577,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10537,9 +10599,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10616,7 +10678,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10639,9 +10701,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10650,7 +10712,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10673,9 +10735,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10684,7 +10746,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[str], str]:
+    ) -> baml_py.BamlSyncStream[str, str]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10706,9 +10768,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[str], str](
+      return baml_py.BamlSyncStream[str, str](
         raw,
-        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(str, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(str, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10751,7 +10813,7 @@ class BamlStreamClient:
         self,
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+    ) -> baml_py.BamlSyncStream[int, int]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10774,9 +10836,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[int], int](
+      return baml_py.BamlSyncStream[int, int](
         raw,
-        lambda x: cast(Optional[int], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(int, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(int, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10785,7 +10847,7 @@ class BamlStreamClient:
         self,
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+    ) -> baml_py.BamlSyncStream[int, int]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10808,9 +10870,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[int], int](
+      return baml_py.BamlSyncStream[int, int](
         raw,
-        lambda x: cast(Optional[int], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(int, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(int, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -10819,7 +10881,7 @@ class BamlStreamClient:
         self,
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[int], int]:
+    ) -> baml_py.BamlSyncStream[int, int]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10842,9 +10904,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[int], int](
+      return baml_py.BamlSyncStream[int, int](
         raw,
-        lambda x: cast(Optional[int], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(int, x.cast_to(types, types, partial_types, True)),
         lambda x: cast(int, x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )

@@ -5166,6 +5166,56 @@ export function useStreamFailingAssertion(
   return useBamlAction(action, props)
 }
 /**
+ * A specialized hook for the StreamFailingCheck BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - theme: string
+ *
+ * - length: number
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** TwoStoriesOneTitleCheck
+ * - **Streaming Partial:** partial_types.TwoStoriesOneTitleCheck
+ * - **Streaming Final:** TwoStoriesOneTitleCheck
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useStreamFailingCheck({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useStreamFailingCheck({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useStreamFailingCheck(props: HookInput<'StreamFailingCheck', { stream: false }>): HookOutput<'StreamFailingCheck', { stream: false }>
+export function useStreamFailingCheck(props?: HookInput<'StreamFailingCheck', { stream?: true }>): HookOutput<'StreamFailingCheck', { stream: true }>
+export function useStreamFailingCheck(
+  props: HookInput<'StreamFailingCheck', { stream?: boolean }> = {},
+): HookOutput<'StreamFailingCheck', { stream: true }> | HookOutput<'StreamFailingCheck', { stream: false }> {
+  let action = Actions.StreamFailingCheck;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.StreamFailingCheck;
+  }
+  return useBamlAction(action, props)
+}
+/**
  * A specialized hook for the StreamOneBigNumber BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

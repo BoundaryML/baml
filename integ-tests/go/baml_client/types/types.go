@@ -4826,6 +4826,61 @@ func (c TwoStoriesOneTitle) Encode(builder *flatbuffers.Builder, typeMap baml.Ty
 }
 
 
+type TwoStoriesOneTitleCheck struct {
+
+	Title string `json:"title"`
+
+	Story_a Checked[string] `json:"story_a"`
+
+	Story_b Checked[string] `json:"story_b"`
+
+
+}
+
+func (c *TwoStoriesOneTitleCheck) Decode(holder cffi.CFFIValueClass, typeMap baml.TypeMap) {
+	if string(holder.Name()) != "TwoStoriesOneTitleCheck" {
+		panic(fmt.Sprintf("expected TwoStoriesOneTitleCheck, got %s", string(holder.Name())))
+	}
+
+
+	
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+				
+				case "title":
+					c.Title = baml.Decode(valueHolder, typeMap).(string)
+				
+				case "story_a":
+					c.Story_a = baml.Decode(valueHolder, typeMap).(Checked[string])
+				
+				case "story_b":
+					c.Story_b = baml.Decode(valueHolder, typeMap).(Checked[string])
+				
+			}
+		}
+	}
+
+
+
+}
+
+func (c TwoStoriesOneTitleCheck) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	fields := map[string]any{}
+	
+	fields["title"] = c.Title
+	
+	fields["story_a"] = c.Story_a
+	
+	fields["story_b"] = c.Story_b
+	
+	return baml.EncodeClass(builder, typeMap, "TwoStoriesOneTitleCheck", fields, nil)
+}
+
+
 type UnionTest_ReturnType struct {
 
 	Prop1 Union__string__bool `json:"prop1"`

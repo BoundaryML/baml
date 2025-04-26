@@ -1000,6 +1000,17 @@ type TwoStoriesOneTitle struct {
     
 }
 
+type TwoStoriesOneTitleCheck struct {
+    
+    Title *string `json:"title"`
+    
+    Story_a types.Checked[*string] `json:"story_a"`
+    
+    Story_b types.Checked[*string] `json:"story_b"`
+    
+    
+}
+
 type UnionTest_ReturnType struct {
     
     Prop1 *types.Union__string__bool `json:"prop1"`

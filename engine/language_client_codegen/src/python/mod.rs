@@ -336,13 +336,13 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         let use_module_prefix = !is_partial_type;
         let with_state = metadata.1.state;
         let constraints = metadata.0;
-        let module_prefix = if use_module_prefix {
-            "types."
-        } else {
+        let module_prefix = if is_partial_type {
             "partial_types."
+        } else {
+            "types."
         };
 
-        match &base_type {
+        let (base_rep, optional) = match &base_type {
             FieldType::Enum(name) => {
                 if ir
                     .find_enum(name)
@@ -447,7 +447,33 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
             }
-        }
+        };
+
+        let base_type_ref = if is_partial_type {
+            base_rep
+        } else {
+            if needed {
+                base_type.to_type_ref(ir, use_module_prefix)
+            } else {
+                base_rep
+            }
+        };
+
+        let rep_with_checks = match field_type_attributes(self) {
+            Some(checks) => {
+                let checks_type_ref = type_name_for_checks(&checks);
+                format!("Checked[{},{checks_type_ref}]", base_type_ref)
+            }
+            None => base_type_ref,
+        };
+
+        let rep_with_stream_state = if with_state {
+            format!("StreamState[{}]", rep_with_checks)
+            // (stream_state(&rep_with_checks.0), rep_with_checks.1)
+        } else {
+            rep_with_checks
+        };
+        (rep_with_stream_state, needed)
     }
 }
 

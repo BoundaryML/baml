@@ -113,6 +113,7 @@ module Baml
     class TestOutputClass < T::Struct; end
     class Tree < T::Struct; end
     class TwoStoriesOneTitle < T::Struct; end
+    class TwoStoriesOneTitleCheck < T::Struct; end
     class UnionTest_ReturnType < T::Struct; end
     class UniverseQuestion < T::Struct; end
     class UniverseQuestionInput < T::Struct; end
@@ -1478,6 +1479,22 @@ module Baml
       const :title, T.nilable(String)
       const :story_a, T.nilable(String)
       const :story_b, T.nilable(String)
+
+      def initialize(props)
+        super(
+          title: props[:title],
+          story_a: props[:story_a],
+          story_b: props[:story_b],
+        )
+
+        @props = props
+      end
+    end
+    class TwoStoriesOneTitleCheck < T::Struct
+      include Baml::Sorbet::Struct
+      const :title, T.nilable(String)
+      const :story_a, T.nilable(Baml::Checked[String])
+      const :story_b, T.nilable(Baml::Checked[String])
 
       def initialize(props)
         super(

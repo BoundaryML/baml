@@ -1432,6 +1432,19 @@ paths:
                 title: StreamFailingAssertionResponse
                 $ref: '#/components/schemas/TwoStoriesOneTitle'
       operationId: StreamFailingAssertion
+  /call/StreamFailingCheck:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamFailingCheck'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamFailingCheckResponse
+                $ref: '#/components/schemas/TwoStoriesOneTitleCheck'
+      operationId: StreamFailingCheck
   /call/StreamOneBigNumber:
     post:
       requestBody:
@@ -4077,6 +4090,25 @@ components:
         application/json:
           schema:
             title: StreamFailingAssertionRequest
+            type: object
+            properties:
+              length:
+                type: integer
+              theme:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - length
+            - theme
+            additionalProperties: false
+    StreamFailingCheck:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamFailingCheckRequest
             type: object
             properties:
               length:
@@ -6791,6 +6823,50 @@ components:
           type: string
         story_b:
           type: string
+        title:
+          type: string
+      required:
+      - story_a
+      - story_b
+      - title
+      additionalProperties: false
+    TwoStoriesOneTitleCheck:
+      type: object
+      properties:
+        story_a:
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                too_long_story:
+                  $ref: '#components/schemas/Check'
+              required:
+              - too_long_story
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+        story_b:
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                too_long_story:
+                  $ref: '#components/schemas/Check'
+              required:
+              - too_long_story
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
         title:
           type: string
       required:

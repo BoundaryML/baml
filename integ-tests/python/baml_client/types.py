@@ -573,6 +573,11 @@ class TwoStoriesOneTitle(BaseModel):
     story_a: str
     story_b: str
 
+class TwoStoriesOneTitleCheck(BaseModel):
+    title: str
+    story_a: Checked[str,Literal["too_long_story"]]
+    story_b: Checked[str,Literal["too_long_story"]]
+
 class UnionTest_ReturnType(BaseModel):
     prop1: Union[str, bool]
     prop2: List[Union[float, bool]]
