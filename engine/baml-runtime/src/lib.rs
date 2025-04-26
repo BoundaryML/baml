@@ -224,8 +224,7 @@ impl BamlRuntime {
         // A callback that can be implemented in JS to read files that are referred in tests.
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
-        let ctx =
-            RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader, None);
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -242,8 +241,7 @@ impl BamlRuntime {
         // This callback reads files that are added in tests
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
-        let ctx =
-            RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader, None);
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
         let tags: HashMap<String, BamlValue> = [(
             "baml.language".to_string(),
             BamlValue::String("wasm".to_string()),

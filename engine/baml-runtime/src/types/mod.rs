@@ -9,8 +9,7 @@ mod trace_stats;
 
 pub use context_manager::RuntimeContextManager;
 pub use remote_cred_provider::{
-    AwsCredProvider, AwsCredProviderImpl, AwsCredResult, RuntimeCallbackError,
-    RuntimeCallbackResult,
+    AwsCredProviderImpl, AwsCredResult, RuntimeCallbackError, RuntimeCallbackResult,
 };
 pub use response::{FunctionResult, TestFailReason, TestResponse, TestStatus};
 pub use runtime_context::{RuntimeContext, SpanCtx};

@@ -404,7 +404,6 @@ export class WebviewPanelHost {
                 const projectId = await auth.getProjectId()
 
                 const tokenResponse = await client.getAccessToken()
-                console.log('gcp auth response', { tokenResponse, projectId })
 
                 this._panel.webview.postMessage({
                   rpcId: message.rpcId,

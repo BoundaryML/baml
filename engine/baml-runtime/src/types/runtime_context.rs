@@ -5,9 +5,7 @@ use internal_baml_core::ir::FieldType;
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
-use crate::{
-    internal::llm_client::llm_provider::LLMProvider, tracing::BamlTracer, AwsCredProvider,
-};
+use crate::{internal::llm_client::llm_provider::LLMProvider, tracing::BamlTracer};
 
 #[derive(Debug, Clone)]
 pub struct SpanCtx {
@@ -52,7 +50,6 @@ cfg_if::cfg_if!(
 pub struct RuntimeContext {
     // path to baml_src in the local filesystem
     pub baml_src: Arc<BamlSrcReader>,
-    pub aws_cred_provider: AwsCredProvider,
     env: HashMap<String, String>,
     pub tags: HashMap<String, BamlValue>,
     pub client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
@@ -80,7 +77,6 @@ impl RuntimeContext {
 
     pub fn new(
         baml_src: Arc<BamlSrcReader>,
-        aws_cred_provider: AwsCredProvider,
         env: HashMap<String, String>,
         tags: HashMap<String, BamlValue>,
         client_overrides: Option<(Option<String>, HashMap<String, Arc<LLMProvider>>)>,
@@ -93,7 +89,6 @@ impl RuntimeContext {
     ) -> RuntimeContext {
         RuntimeContext {
             baml_src,
-            aws_cred_provider,
             env,
             tags,
             client_overrides,

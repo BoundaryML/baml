@@ -31,8 +31,6 @@ pub fn set_remote_cred_provider(aws_cred_provider: AwsCredProviderImpl) {
     REMOTE_CRED_PROVIDER_SINGLETON.set(aws_cred_provider);
 }
 
-pub type AwsCredProvider = Option<AwsCredProviderImpl>;
-
 #[derive(serde::Deserialize, Debug, Clone)]
 pub enum AwsCredResult {
     #[serde(rename = "error", rename_all = "camelCase")]

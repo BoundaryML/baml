@@ -38,10 +38,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use time::OffsetDateTime;
 
-use crate::{
-    remote_cred_provider::get_remote_cred_provider, AwsCredProvider, AwsCredProviderImpl,
-    AwsCredResult,
-};
+use crate::{remote_cred_provider::get_remote_cred_provider, AwsCredProviderImpl, AwsCredResult};
 
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");
@@ -163,8 +160,6 @@ impl HttpClient for BrowserHttp2 {
 }
 
 pub(super) struct WasmAwsCreds {
-    // pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
-    pub aws_cred_provider: AwsCredProvider,
     pub profile: Option<String>,
 }
 

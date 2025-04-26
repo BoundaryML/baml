@@ -1,5 +1,5 @@
 #[cfg(target_arch = "wasm32")]
-pub(crate) mod aws_cred_bridge;
+pub(crate) mod js_callback_bridge;
 
 #[cfg(target_arch = "wasm32")]
 pub mod runtime_wasm;
