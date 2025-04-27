@@ -466,7 +466,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         let rep_with_checks = match field_type_attributes(self) {
             Some(checks) => {
                 let checks_type_ref = type_name_for_checks(&checks);
-                format!("Checked[{},{checks_type_ref}]", base_type_ref)
+                format!("Checked[{}, {checks_type_ref}]", base_type_ref)
             }
             None => base_type_ref,
         };

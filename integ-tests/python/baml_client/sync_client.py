@@ -4962,7 +4962,7 @@ class BamlStreamClient:
         self,
         money: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[Optional[int],Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -4985,9 +4985,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[Optional[int],Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
+      return baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
         raw,
-        lambda x: cast(Checked[Optional[int],Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[Optional[int], Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[int, Literal["gt_ten"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7181,7 +7181,7 @@ class BamlStreamClient:
         self,
         
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint,Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint, Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7203,9 +7203,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint,Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]](
+      return baml_py.BamlSyncStream[Checked[partial_types.BlockConstraint, Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]](
         raw,
-        lambda x: cast(Checked[partial_types.BlockConstraint,Literal["cross_field"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[partial_types.BlockConstraint, Literal["cross_field"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[types.BlockConstraint, Literal["cross_field"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7618,7 +7618,7 @@ class BamlStreamClient:
         self,
         inp: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[Optional[int],Literal["too_big"]], Checked[int, Literal["too_big"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[Optional[int], Literal["too_big"]], Checked[int, Literal["too_big"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7641,9 +7641,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[Optional[int],Literal["too_big"]], Checked[int, Literal["too_big"]]](
+      return baml_py.BamlSyncStream[Checked[Optional[int], Literal["too_big"]], Checked[int, Literal["too_big"]]](
         raw,
-        lambda x: cast(Checked[Optional[int],Literal["too_big"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[Optional[int], Literal["too_big"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[int, Literal["too_big"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7992,7 +7992,7 @@ class BamlStreamClient:
         self,
         money: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Checked[Optional[int],Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
+    ) -> baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8015,9 +8015,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Checked[Optional[int],Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
+      return baml_py.BamlSyncStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
         raw,
-        lambda x: cast(Checked[Optional[int],Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Checked[Optional[int], Literal["gt_ten"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Checked[int, Literal["gt_ten"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )

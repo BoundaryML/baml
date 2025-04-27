@@ -4706,7 +4706,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[Optional[int],Literal["gt_ten"]]:
+    ) -> Checked[Optional[int], Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4726,7 +4726,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Checked[Optional[int],Literal["gt_ten"]], parsed)
+      return cast(Checked[Optional[int], Literal["gt_ten"]], parsed)
     
     def AliasedInputClass(
         self,
@@ -6396,7 +6396,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[partial_types.BlockConstraint,Literal["cross_field"]]:
+    ) -> Checked[partial_types.BlockConstraint, Literal["cross_field"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6416,7 +6416,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Checked[partial_types.BlockConstraint,Literal["cross_field"]], parsed)
+      return cast(Checked[partial_types.BlockConstraint, Literal["cross_field"]], parsed)
     
     def MakeClassWithBlockDone(
         self,
@@ -6734,7 +6734,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[Optional[int],Literal["too_big"]]:
+    ) -> Checked[Optional[int], Literal["too_big"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6754,7 +6754,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Checked[Optional[int],Literal["too_big"]], parsed)
+      return cast(Checked[Optional[int], Literal["too_big"]], parsed)
     
     def PrimitiveAlias(
         self,
@@ -7020,7 +7020,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[Optional[int],Literal["gt_ten"]]:
+    ) -> Checked[Optional[int], Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7040,7 +7040,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Checked[Optional[int],Literal["gt_ten"]], parsed)
+      return cast(Checked[Optional[int], Literal["gt_ten"]], parsed)
     
     def ReturnFailingAssert(
         self,
