@@ -6618,7 +6618,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Literal[False], Literal[False]]:
+    ) -> baml_py.BamlStream[Optional[Literal[False]], Literal[False]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6640,9 +6640,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlStream[Literal[False], Literal[False]](
+      return baml_py.BamlStream[Optional[Literal[False]], Literal[False]](
         raw,
-        lambda x: cast(Literal[False], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[Literal[False]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Literal[False], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6651,7 +6651,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Literal[5], Literal[5]]:
+    ) -> baml_py.BamlStream[Optional[Literal[5]], Literal[5]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6673,9 +6673,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlStream[Literal[5], Literal[5]](
+      return baml_py.BamlStream[Optional[Literal[5]], Literal[5]](
         raw,
-        lambda x: cast(Literal[5], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[Literal[5]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Literal[5], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -6684,7 +6684,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Literal["example output"], Literal["example output"]]:
+    ) -> baml_py.BamlStream[Optional[Literal["example output"]], Literal["example output"]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6706,9 +6706,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlStream[Literal["example output"], Literal["example output"]](
+      return baml_py.BamlStream[Optional[Literal["example output"]], Literal["example output"]](
         raw,
-        lambda x: cast(Literal["example output"], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[Literal["example output"]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Literal["example output"], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )
@@ -7082,7 +7082,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[Optional[Union[Literal[1], Literal[True], Literal["string output"]]], Union[Literal[1], Literal[True], Literal["string output"]]]:
+    ) -> baml_py.BamlStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7104,9 +7104,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlStream[Optional[Union[Literal[1], Literal[True], Literal["string output"]]], Union[Literal[1], Literal[True], Literal["string output"]]](
+      return baml_py.BamlStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]](
         raw,
-        lambda x: cast(Optional[Union[Literal[1], Literal[True], Literal["string output"]]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Union[Literal[1], Literal[True], Literal["string output"]], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )

@@ -6006,7 +6006,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Literal[False]:
+    ) -> Optional[Literal[False]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6026,13 +6026,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Literal[False], parsed)
+      return cast(Optional[Literal[False]], parsed)
     
     def FnOutputLiteralInt(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Literal[5]:
+    ) -> Optional[Literal[5]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6052,13 +6052,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Literal[5], parsed)
+      return cast(Optional[Literal[5]], parsed)
     
     def FnOutputLiteralString(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Literal["example output"]:
+    ) -> Optional[Literal["example output"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6078,7 +6078,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Literal["example output"], parsed)
+      return cast(Optional[Literal["example output"]], parsed)
     
     def FnOutputStringList(
         self,
@@ -6370,7 +6370,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[Literal[1], Literal[True], Literal["string output"]]]:
+    ) -> Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6390,7 +6390,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Union[Literal[1], Literal[True], Literal["string output"]]], parsed)
+      return cast(Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], parsed)
     
     def MakeBlockConstraint(
         self,

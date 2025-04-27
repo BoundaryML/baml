@@ -381,7 +381,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
             }
             FieldType::Literal(value) => {
-                if needed {
+                // Note: The `false` here preserves potentially bugged codegen
+                // from before this commit. As the `false` implies, we always
+                // wrap primitives in `Optional` when generating partial types,
+                // although we should probably only do this when `!needed`.
+                if false {
                     (to_python_literal(value), false)
                 } else {
                     (format!("Optional[{}]", to_python_literal(value)), true)
