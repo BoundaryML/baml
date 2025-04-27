@@ -415,7 +415,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .map(|t| t.to_partial_type_ref(ir, false).0)
                     .collect::<Vec<_>>()
                     .join(", ");
-                if needed {
+                // Note: The `false` here preserves potentially bugged codegen
+                // from before this commit. As the `false` implies, we always
+                // wrap primitives in `Optional` when generating partial types,
+                // although we should probably only do this when `!needed`.
+                if false {
                     (format!("Union[{union_contents}]"), false)
                 } else {
                     (format!("Optional[Union[{union_contents}]]"), true)
