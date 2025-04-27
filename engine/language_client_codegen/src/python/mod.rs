@@ -388,11 +388,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
             }
             FieldType::List(inner) => {
-                let (inner_type, _) = inner.to_partial_type_ref(ir, false);
+                let (inner_type, _) = inner.to_partial_type_ref(ir, true);
                 (format!("List[{}]", inner_type), false)
             }
             FieldType::Map(key, value) => {
-                let (value_type, _) = value.to_partial_type_ref(ir, false);
+                let (value_type, _) = value.to_partial_type_ref(ir, true);
                 (
                     format!(
                         "Dict[{}, {}]",
@@ -442,7 +442,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
             }
             FieldType::Optional(inner) => {
-                let (inner_type, _) = inner.to_partial_type_ref(ir, false);
+                let (inner_type, _) = inner.to_partial_type_ref(ir, true);
                 (format!("Optional[{}]", inner_type), true)
             }
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {

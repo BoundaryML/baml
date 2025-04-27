@@ -5408,7 +5408,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[partial_types.DynInputOutput]]:
+    ) -> List[partial_types.DynInputOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5428,7 +5428,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(List[Optional[partial_types.DynInputOutput]], parsed)
+      return cast(List[partial_types.DynInputOutput], parsed)
     
     def ExpectFailure(
         self,
@@ -5564,7 +5564,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[partial_types.Person]]:
+    ) -> List[partial_types.Person]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5584,7 +5584,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(List[Optional[partial_types.Person]], parsed)
+      return cast(List[partial_types.Person], parsed)
     
     def ExtractReceiptInfo(
         self,
@@ -5668,7 +5668,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Optional[partial_types.ClassOptionalOutput]]:
+    ) -> Optional[partial_types.ClassOptionalOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5688,13 +5688,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Optional[partial_types.ClassOptionalOutput]], parsed)
+      return cast(Optional[partial_types.ClassOptionalOutput], parsed)
     
     def FnClassOptionalOutput2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Optional[partial_types.ClassOptionalOutput2]]:
+    ) -> Optional[partial_types.ClassOptionalOutput2]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5714,13 +5714,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Optional[partial_types.ClassOptionalOutput2]], parsed)
+      return cast(Optional[partial_types.ClassOptionalOutput2], parsed)
     
     def FnEnumListOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[types.EnumOutput]]:
+    ) -> List[types.EnumOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5740,7 +5740,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(List[Optional[types.EnumOutput]], parsed)
+      return cast(List[types.EnumOutput], parsed)
     
     def FnEnumOutput(
         self,
@@ -5902,7 +5902,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[partial_types.TestOutputClass]]:
+    ) -> List[partial_types.TestOutputClass]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5922,7 +5922,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(List[Optional[partial_types.TestOutputClass]], parsed)
+      return cast(List[partial_types.TestOutputClass], parsed)
     
     def FnOutputClassNested(
         self,
@@ -6682,7 +6682,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[Optional[partial_types.OptionalTest_ReturnType]]]:
+    ) -> List[Optional[partial_types.OptionalTest_ReturnType]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6702,7 +6702,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(List[Optional[Optional[partial_types.OptionalTest_ReturnType]]], parsed)
+      return cast(List[Optional[partial_types.OptionalTest_ReturnType]], parsed)
     
     def PredictAge(
         self,
@@ -8086,7 +8086,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, Optional[partial_types.StringToClassEntry]]:
+    ) -> Dict[str, partial_types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8106,7 +8106,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Dict[str, Optional[partial_types.StringToClassEntry]], parsed)
+      return cast(Dict[str, partial_types.StringToClassEntry], parsed)
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
