@@ -4,6 +4,7 @@
 use crate::deserializer::coercer::ParsingError;
 use crate::{BamlValueWithFlags, Flag};
 use indexmap::{IndexMap, IndexSet};
+use internal_baml_core::ir::ir_helpers::infer_type_with_meta;
 use internal_baml_core::ir::repr::{IntermediateRepr, Walker};
 use internal_baml_core::ir::{Field, IRHelper, IRHelperExtended, IRSemanticStreamingHelper};
 
@@ -70,7 +71,7 @@ fn process_node(
     let (completion_state, field_type) = value.meta().clone();
     let (base_type, (_, streaming_behavior)) = ir.distribute_metadata(field_type);
 
-    let must_be_done = required_done(ir, field_type);
+    let must_be_done = required_done(ir, field_type, &value);
     let allow_partials_in_sub_nodes = allow_partials && !must_be_done;
 
     let new_meta = Completion {
@@ -276,7 +277,11 @@ fn needed_fields(
 
 /// Whether a type must be complete before being included as a node
 /// in a streamed value.
-fn required_done(ir: &impl IRHelperExtended, field_type: &FieldType) -> bool {
+fn required_done<T>(
+    ir: &impl IRHelperExtended,
+    field_type: &FieldType,
+    value: &BamlValueWithMeta<T>,
+) -> bool {
     let (base_type, (_, streaming_behavior)) = ir.distribute_metadata(field_type);
     let type_implies_done = match base_type {
         FieldType::Primitive(tv) => match tv {
@@ -295,9 +300,28 @@ fn required_done(ir: &impl IRHelperExtended, field_type: &FieldType) -> bool {
         FieldType::Tuple(_) => false,
         FieldType::RecursiveTypeAlias(_) => false,
         FieldType::Class(_) => false,
-        // TODO: This rule is pretty aggressive. For example in the case of
-        // Class | Enum it would not allow classes to be streamed.
-        FieldType::Union(options) => options.iter().any(|option| required_done(ir, option)),
+        FieldType::Union(options) => {
+            // Determining whether a union requires done is complicated.
+            // If all the variants are required to be done, then the union
+            // requires done.
+            let all_require_done = options.iter().all(|option| required_done(ir, option, value));
+            if all_require_done { return true; }
+
+            // If none of the variants are required to be done, then the union
+            // does not require done.
+            let none_require_done = options.iter().all(|option| !required_done(ir, option, value));
+            if none_require_done { return false; }
+
+            // Otherwise, the answer depends on the value we are streaming.
+            // Search for the variant that matches the value, and use the
+            // required_done property of that variant.
+            options.iter().any(|option| {
+                let variant_required_done = required_done(ir, option, value);
+                let value_unifies_with_variant =
+                    infer_type_with_meta(value).map_or(false, |v| &v == option);
+                variant_required_done && value_unifies_with_variant
+            })
+        },
         FieldType::Arrow(_) => false, // TODO: Error? Arrow shouldn't appear here.
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
