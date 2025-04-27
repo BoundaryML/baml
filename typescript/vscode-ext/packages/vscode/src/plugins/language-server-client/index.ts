@@ -295,97 +295,102 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
 
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
   client.onNotification('baml_src_generator_version', async (version: string) => {
-    bamlOutputChannel.appendLine(`============ baml_src_generator_version notification: ${version}`)
+    try {
+      bamlOutputChannel.appendLine(`============ baml_src_generator_version notification: ${version}`)
 
-    if (!semver.valid(version)) {
-      console.error(`Received invalid version string from LSP: ${version}`)
-      window.showErrorMessage(`BAML Language Server requested an invalid version: ${version}. Cannot update.`)
-      return
-    }
-
-    // Check if the requested version is less than 0.86.0
-    // Only LSPs 0.86.0 and above send out the baml_src_generator_version notification
-    // so older LSPs will not be able to request an update
-    if (semver.lt(version, '0.86.0')) {
-      bamlOutputChannel.appendLine(
-        `Ignoring version update request for ${version} as it's less than minimum required version 0.86.0`,
-      )
-      return
-    }
-
-    console.log(`============ Attempting to resolve CLI path for requested version ${version}...`)
-    bamlOutputChannel.appendLine(`============ Attempting to resolve CLI path for requested version ${version}...`)
-    const targetCliPath = await resolveCliPath(context, version, bamlOutputChannel)
-
-    if (!targetCliPath) {
-      console.error(`Failed to resolve CLI path for version ${version}. LSP restart aborted.`)
-      bamlOutputChannel?.appendLine(`ERROR: Failed to resolve CLI path for version ${version}. LSP restart aborted.`)
-      return
-    }
-
-    console.log(`Resolved target CLI path: ${targetCliPath}`)
-    // Use the module-level variable to check the current path
-    console.log(`Currently executing CLI path: ${currentExecutingCliPath ?? 'Unknown'}`)
-
-    // Compare target path with the stored current path
-    if (targetCliPath !== currentExecutingCliPath) {
-      bamlOutputChannel.appendLine(
-        `Target path (${targetCliPath}) differs from current (${currentExecutingCliPath}). Restarting LSP...`,
-      )
-
-      const serverOptionsForRestart: ServerOptions = {
-        run: { command: targetCliPath, args: ['lsp'], options: { env: process.env } },
-        debug: { command: targetCliPath, args: ['lsp'], options: debugOptions },
+      if (!semver.valid(version)) {
+        console.error(`Received invalid version string from LSP: ${version}`)
+        window.showErrorMessage(`BAML Language Server requested an invalid version: ${version}. Cannot update.`)
+        return
       }
 
-      const clientOptionsForRestart = getClientOptions()
-
-      await window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          cancellable: false,
-          title: `Restarting BAML Language Server (v${version})...`,
-        },
-        async () => {
-          try {
-            console.log('Calling restartClient utility...')
-            client = await restartClient(context, client, serverOptionsForRestart, clientOptionsForRestart)
-            clientReady = true
-            console.log('restartClient finished successfully.')
-            // Update the module-level variable after successful restart
-            currentExecutingCliPath = targetCliPath
-            BAML_CONFIG_SINGLETON.cliVersion = version
-
-            window.withProgress(
-              {
-                location: vscode.ProgressLocation.Notification,
-                title: `BAML Language Server reloaded with version ${version}`,
-                cancellable: false,
-              },
-              async () => {
-                // Show progress for 4 seconds
-                await new Promise((resolve) => setTimeout(resolve, 4000))
-              },
-            )
-            bamlOutputChannel?.appendLine(`BAML Language Server reloaded with version ${version}.`)
-          } catch (e) {
-            clientReady = false
-            console.error('Error restarting client:', e)
-            // Ensure error message is a string
-            const errorMessage = e instanceof Error ? e.message : String(e)
-            bamlOutputChannel?.appendLine(`ERROR: Error restarting client for version ${version}: ${errorMessage}`)
-            window.showErrorMessage(`Failed to restart BAML Language Server to version ${version}.`)
-          }
-        },
-      )
-    } else {
-      // bamlOutputChannel?.appendLine(
-      //   `Resolved path is the same as current. No LSP restart needed for version ${version}.`,
-      // )
-      if (BAML_CONFIG_SINGLETON.cliVersion !== version) {
-        bamlOutputChannel?.appendLine(`Updating BAML config singleton version to ${version} (no restart needed).`)
-        BAML_CONFIG_SINGLETON.cliVersion = version
+      // Check if the requested version is less than 0.86.0
+      // Only LSPs 0.86.0 and above send out the baml_src_generator_version notification
+      // so older LSPs will not be able to request an update
+      if (semver.lt(version, '0.86.0')) {
+        bamlOutputChannel.appendLine(
+          `Ignoring version update request for ${version} as it's less than minimum required version 0.86.0`,
+        )
+        return
       }
+
+      console.log(`============ Attempting to resolve CLI path for requested version ${version}...`)
+      bamlOutputChannel.appendLine(`============ Attempting to resolve CLI path for requested version ${version}...`)
+      const targetCliPath = await resolveCliPath(context, version, bamlOutputChannel)
+
+      if (!targetCliPath) {
+        console.error(`Failed to resolve CLI path for version ${version}. LSP restart aborted.`)
+        bamlOutputChannel?.appendLine(`ERROR: Failed to resolve CLI path for version ${version}. LSP restart aborted.`)
+        return
+      }
+
+      console.log(`Resolved target CLI path: ${targetCliPath}`)
+      // Use the module-level variable to check the current path
+      console.log(`Currently executing CLI path: ${currentExecutingCliPath ?? 'Unknown'}`)
+
+      // Compare target path with the stored current path
+      if (targetCliPath !== currentExecutingCliPath) {
+        bamlOutputChannel.appendLine(
+          `Target path (${targetCliPath}) differs from current (${currentExecutingCliPath}). Restarting LSP...`,
+        )
+
+        const serverOptionsForRestart: ServerOptions = {
+          run: { command: targetCliPath, args: ['lsp'], options: { env: process.env } },
+          debug: { command: targetCliPath, args: ['lsp'], options: debugOptions },
+        }
+
+        const clientOptionsForRestart = getClientOptions()
+
+        await window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            cancellable: false,
+            title: `Restarting BAML Language Server (v${version})...`,
+          },
+          async () => {
+            try {
+              console.log('Calling restartClient utility...')
+              client = await restartClient(context, client, serverOptionsForRestart, clientOptionsForRestart)
+              clientReady = true
+              console.log('restartClient finished successfully.')
+              // Update the module-level variable after successful restart
+              currentExecutingCliPath = targetCliPath
+              BAML_CONFIG_SINGLETON.cliVersion = version
+
+              window.withProgress(
+                {
+                  location: vscode.ProgressLocation.Notification,
+                  title: `BAML Language Server reloaded with version ${version}`,
+                  cancellable: false,
+                },
+                async () => {
+                  // Show progress for 4 seconds
+                  await new Promise((resolve) => setTimeout(resolve, 4000))
+                },
+              )
+              bamlOutputChannel?.appendLine(`BAML Language Server reloaded with version ${version}.`)
+            } catch (e) {
+              clientReady = false
+              console.error('Error restarting client:', e)
+              // Ensure error message is a string
+              const errorMessage = e instanceof Error ? e.message : String(e)
+              bamlOutputChannel?.appendLine(`ERROR: Error restarting client for version ${version}: ${errorMessage}`)
+              window.showErrorMessage(`Failed to restart BAML Language Server to version ${version}.`)
+            }
+          },
+        )
+      } else {
+        // bamlOutputChannel?.appendLine(
+        //   `Resolved path is the same as current. No LSP restart needed for version ${version}.`,
+        // )
+        if (BAML_CONFIG_SINGLETON.cliVersion !== version) {
+          bamlOutputChannel?.appendLine(`Updating BAML config singleton version to ${version} (no restart needed).`)
+          BAML_CONFIG_SINGLETON.cliVersion = version
+        }
+      }
+    } catch (e: any) {
+      console.error('Error processing baml_src_generator_version:', e)
+      bamlOutputChannel?.appendLine(`ERROR: Error processing baml_src_generator_version: ${e}`)
     }
   })
 }
