@@ -4706,7 +4706,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[int,Literal["gt_ten"]]:
+    ) -> Checked[Optional[int],Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4726,13 +4726,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Checked[int,Literal["gt_ten"]], parsed)
+      return cast(Checked[Optional[int],Literal["gt_ten"]], parsed)
     
     def AliasedInputClass(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4752,13 +4752,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def AliasedInputClass2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4778,13 +4778,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def AliasedInputClassNested(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4804,13 +4804,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def AliasedInputEnum(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4830,13 +4830,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def AliasedInputList(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4856,7 +4856,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def AllowedOptionals(
         self,
@@ -4888,7 +4888,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4908,13 +4908,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(int, parsed)
+      return cast(Optional[int], parsed)
     
     def AudioInput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4934,7 +4934,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def BuildLinkedList(
         self,
@@ -5122,7 +5122,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5142,7 +5142,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def CustomTask(
         self,
@@ -5174,7 +5174,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5194,13 +5194,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def DescribeImage2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5220,13 +5220,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def DescribeImage3(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5246,13 +5246,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def DescribeImage4(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5272,13 +5272,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def DescribeMedia1599(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5298,7 +5298,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def DifferentiateUnions(
         self,
@@ -5434,7 +5434,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5454,7 +5454,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def ExtractContactInfo(
         self,
@@ -5824,7 +5824,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5844,13 +5844,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def FnOutputBool(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> bool:
+    ) -> Optional[bool]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5870,7 +5870,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(bool, parsed)
+      return cast(Optional[bool], parsed)
     
     def FnOutputClass(
         self,
@@ -5980,7 +5980,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6000,7 +6000,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(int, parsed)
+      return cast(Optional[int], parsed)
     
     def FnOutputLiteralBool(
         self,
@@ -6162,7 +6162,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6182,7 +6182,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def GetDataType(
         self,
@@ -6656,7 +6656,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6676,7 +6676,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def OptionalTest_Function(
         self,
@@ -6734,7 +6734,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[int,Literal["too_big"]]:
+    ) -> Checked[Optional[int],Literal["too_big"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6754,7 +6754,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Checked[int,Literal["too_big"]], parsed)
+      return cast(Checked[Optional[int],Literal["too_big"]], parsed)
     
     def PrimitiveAlias(
         self,
@@ -6786,7 +6786,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6806,13 +6806,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def PromptTestClaudeChat(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6832,13 +6832,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def PromptTestClaudeChatNoSystem(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6858,13 +6858,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def PromptTestOpenAI(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6884,13 +6884,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def PromptTestOpenAIChat(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6910,13 +6910,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def PromptTestOpenAIChatNoSystem(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6936,13 +6936,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def PromptTestStreaming(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6962,7 +6962,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def RecursiveAliasCycle(
         self,
@@ -7020,7 +7020,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[int,Literal["gt_ten"]]:
+    ) -> Checked[Optional[int],Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7040,13 +7040,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Checked[int,Literal["gt_ten"]], parsed)
+      return cast(Checked[Optional[int],Literal["gt_ten"]], parsed)
     
     def ReturnFailingAssert(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7066,7 +7066,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(int, parsed)
+      return cast(Optional[int], parsed)
     
     def ReturnJsonEntry(
         self,
@@ -7280,7 +7280,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7300,7 +7300,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(int, parsed)
+      return cast(Optional[int], parsed)
     
     def StreamUnionIntegers(
         self,
@@ -7410,7 +7410,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7430,13 +7430,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAnthropic(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7456,13 +7456,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAnthropicShorthand(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7482,13 +7482,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAws(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7508,13 +7508,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAwsInferenceProfile(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7534,13 +7534,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAwsInvalidAccessKey(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7560,13 +7560,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAwsInvalidProfile(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7586,13 +7586,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAwsInvalidRegion(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7612,13 +7612,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAwsInvalidSessionToken(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7638,13 +7638,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzure(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7664,13 +7664,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzureFailure(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7690,13 +7690,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzureO1NoMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7716,13 +7716,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzureO1WithMaxCompletionTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7742,13 +7742,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzureO1WithMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7768,13 +7768,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzureO3NoMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7794,13 +7794,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzureO3WithMaxCompletionTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7820,13 +7820,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestAzureWithMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7846,13 +7846,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestCaching(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7872,13 +7872,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFallbackClient(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7898,13 +7898,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFallbackStrategy(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7924,13 +7924,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFallbackToShorthand(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7950,13 +7950,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleBool(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7976,13 +7976,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleClass(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8002,13 +8002,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleEnumList(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8028,13 +8028,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleFloat(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8054,13 +8054,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleInt(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8080,7 +8080,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
@@ -8164,7 +8164,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8184,13 +8184,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleStringArray(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8210,7 +8210,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestFnNamedArgsSingleStringList(
         self,
@@ -8242,7 +8242,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8262,13 +8262,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestGeminiOpenAiGeneric(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8288,13 +8288,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestGeminiSystem(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8314,13 +8314,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestGeminiSystemAsChat(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8340,13 +8340,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestGroq(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8366,13 +8366,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestImageInput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8392,13 +8392,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestImageInputAnthropic(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8418,13 +8418,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestImageListInput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8444,7 +8444,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestMemory(
         self,
@@ -8476,7 +8476,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8496,13 +8496,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestNamedArgsLiteralBool(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8522,13 +8522,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestNamedArgsLiteralInt(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8548,13 +8548,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestNamedArgsLiteralString(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8574,7 +8574,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOllama(
         self,
@@ -8632,7 +8632,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8652,13 +8652,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIDummyClient(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8678,13 +8678,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIGPT4oMini(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8704,13 +8704,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAILegacyProvider(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8730,13 +8730,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIO1NoMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8756,13 +8756,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIO1WithMaxCompletionTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8782,13 +8782,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIO1WithMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8808,13 +8808,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIShorthand(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8834,13 +8834,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIWithMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8860,13 +8860,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenAIWithNullMaxTokens(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8886,13 +8886,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestOpenRouterMistralSmall3_1_24b(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8912,13 +8912,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestRetryConstant(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8938,13 +8938,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestRetryExponential(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8964,13 +8964,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestRoundRobinStrategy(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8990,13 +8990,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestSingleFallbackClient(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9016,7 +9016,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestThinking(
         self,
@@ -9074,7 +9074,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9094,13 +9094,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestVertexClaude(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9120,13 +9120,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def TestVertexWithSystemInstructions(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> str:
+    ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9146,7 +9146,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(str, parsed)
+      return cast(Optional[str], parsed)
     
     def UnionTest_Function(
         self,
@@ -9178,7 +9178,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9198,13 +9198,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(int, parsed)
+      return cast(Optional[int], parsed)
     
     def UseMalformedConstraints(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9224,13 +9224,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(int, parsed)
+      return cast(Optional[int], parsed)
     
     def UseNestedBlockConstraint(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> int:
+    ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9250,7 +9250,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(int, parsed)
+      return cast(Optional[int], parsed)
     
 
 

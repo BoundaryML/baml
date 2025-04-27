@@ -399,7 +399,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 )
             }
             FieldType::Primitive(r#type) => {
-                if needed {
+                // Note: The `false` here preserves potentially bugged codegen
+                // from before this commit. As the `false` implies, we always
+                // wrap primitives in `Optional` when generating partial types,
+                // although we should probably only do this when `!needed`.
+                if false {
                     (r#type.to_python(), false)
                 } else {
                     (format!("Optional[{}]", r#type.to_python()), true)
