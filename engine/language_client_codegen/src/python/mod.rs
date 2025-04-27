@@ -243,12 +243,12 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
                         Ok(PythonFunction {
                             name: f.name().to_string(),
                             partial_return_type: partial_type,
-                            return_type: f.elem().output().to_type_ref(ir, true),
+                            return_type: f.elem().output().to_type_ref(ir),
                             args: f
                                 .inputs()
                                 .iter()
                                 .map(|(name, r#type)| {
-                                    (name.to_string(), r#type.to_type_ref(ir, false), None)
+                                    (name.to_string(), r#type.to_type_ref(ir), None)
                                 })
                                 .collect(),
                         })
@@ -265,14 +265,14 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
 }
 
 trait ToTypeReferenceInClientDefinition {
-    fn to_type_ref(&self, ir: &IntermediateRepr, with_checked: bool) -> String;
+    fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
 
     /// The string representation of a field type, and whether the field is optional during streaming.
     fn to_partial_type_ref(&self, ir: &IntermediateRepr, needed: bool) -> String;
 }
 
 impl ToTypeReferenceInClientDefinition for FieldType {
-    fn to_type_ref(&self, ir: &IntermediateRepr, _with_checked: bool) -> String {
+    fn to_type_ref(&self, ir: &IntermediateRepr) -> String {
         match self {
             FieldType::Enum(name) => {
                 if ir
@@ -288,12 +288,12 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Literal(value) => to_python_literal(value),
             FieldType::RecursiveTypeAlias(name) => format!("types.{name}"),
             FieldType::Class(name) => format!("types.{name}"),
-            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir, _with_checked)),
+            FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
             FieldType::Map(key, value) => {
                 format!(
                     "Dict[{}, {}]",
-                    key.to_type_ref(ir, _with_checked),
-                    value.to_type_ref(ir, _with_checked)
+                    key.to_type_ref(ir),
+                    value.to_type_ref(ir)
                 )
             }
             FieldType::Primitive(r#type) => r#type.to_python(),
@@ -301,7 +301,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Union[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref(ir, _with_checked))
+                    .map(|t| t.to_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
@@ -309,20 +309,20 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 "Tuple[{}]",
                 inner
                     .iter()
-                    .map(|t| t.to_type_ref(ir, _with_checked))
+                    .map(|t| t.to_type_ref(ir))
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
             FieldType::Optional(inner) => {
-                format!("Optional[{}]", inner.to_type_ref(ir, _with_checked))
+                format!("Optional[{}]", inner.to_type_ref(ir))
             }
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
-                    let base_type_ref = base.to_type_ref(ir, _with_checked);
+                    let base_type_ref = base.to_type_ref(ir);
                     let checks_type_ref = type_name_for_checks(&checks);
                     format!("Checked[{base_type_ref}, {checks_type_ref}]")
                 }
-                None => base.to_type_ref(ir, _with_checked),
+                None => base.to_type_ref(ir),
             },
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
@@ -403,7 +403,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 let value_type = value.to_partial_type_ref(ir, true);
                 format!(
                     "Dict[{}, {}]",
-                    key.to_type_ref(ir, use_module_prefix),
+                    key.to_type_ref(ir),
                     value_type
                 )
             }
@@ -454,7 +454,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 // After we verify that we don't need to wrap all primitives
                 // in optional, we should remove this workaround.
                 if let FieldType::Primitive(_) = inner.as_ref() {
-                  format!("Optional[{}]", inner.to_type_ref(ir, false))
+                  format!("Optional[{}]", inner.to_type_ref(ir))
                 } else {
                   let inner_rep = inner.to_partial_type_ref(ir, true);
                   format!("Optional[{}]", inner_rep)
