@@ -197,8 +197,8 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                         (false, false) => {
                             f.elem.r#type.elem.to_partial_type_ref(c.ir, false, false)
                         }
-                        (true, false) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
-                        (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.ir, true, false),
+                        (true, false) => (format!("Optional[{}]",f.elem.r#type.elem.to_type_ref(c.ir, true)), true),
+                        (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.ir, true, true),
                         (true, true) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
                     };
                     (

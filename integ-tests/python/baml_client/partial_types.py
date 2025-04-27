@@ -399,9 +399,9 @@ class SearchParams(BaseModel):
 
 class SemanticContainer(BaseModel):
     sixteen_digit_number: Optional[int] = None
-    string_with_twenty_words: str
+    string_with_twenty_words: Optional[str] = None
     class_1: Optional["ClassWithoutDone"] = None
-    class_2: "types.ClassWithBlockDone"
+    class_2: Optional["types.ClassWithBlockDone"] = None
     class_done_needed: "types.ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
     three_small_things: List["SmallThing"]
