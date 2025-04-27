@@ -359,7 +359,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                         (format!("Optional[Union[types.{name}, str]]"), true)
                     }
                 } else {
-                    if needed {
+                    // Note: The `false` here preserves potentially bugged codegen
+                    // from before this commit. As the `false` implies, we always
+                    // wrap primitives in `Optional` when generating partial types,
+                    // although we should probably only do this when `!needed`.
+                    if false {
                         (format!("types.{name}"), false)
                     } else {
                         (format!("Optional[types.{name}]"), true)
@@ -446,6 +450,12 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
             }
             FieldType::Optional(inner) => {
+                /// We do special handling of primitive types here,
+                /// using to_type_ref, because primitives get unconditionally
+                /// wrapped in Optional when using partial_type_ref().
+                /// Using that function here would give us Optional[Optional[P]].
+                /// After we verify that we don't need to wrap all primitives
+                /// in optional, we should remove this workaround.
                 if let FieldType::Primitive(_) = inner.as_ref() {
                   (format!("Optional[{}]", inner.to_type_ref(ir, false)), true)
                 } else {

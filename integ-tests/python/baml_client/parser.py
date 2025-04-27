@@ -5044,7 +5044,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.Category:
+    ) -> Optional[types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5064,13 +5064,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(types.Category, parsed)
+      return cast(Optional[types.Category], parsed)
     
     def ClassifyMessage2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.Category:
+    ) -> Optional[types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5090,13 +5090,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(types.Category, parsed)
+      return cast(Optional[types.Category], parsed)
     
     def ClassifyMessage3(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.Category:
+    ) -> Optional[types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5116,7 +5116,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(types.Category, parsed)
+      return cast(Optional[types.Category], parsed)
     
     def Completion(
         self,
@@ -5720,7 +5720,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[types.EnumOutput]:
+    ) -> List[Optional[types.EnumOutput]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5740,13 +5740,13 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(List[types.EnumOutput], parsed)
+      return cast(List[Optional[types.EnumOutput]], parsed)
     
     def FnEnumOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.EnumOutput:
+    ) -> Optional[types.EnumOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5766,7 +5766,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(types.EnumOutput, parsed)
+      return cast(Optional[types.EnumOutput], parsed)
     
     def FnLiteralClassInputOutput(
         self,
@@ -6110,7 +6110,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> types.TestEnum:
+    ) -> Optional[types.TestEnum]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6130,7 +6130,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(types.TestEnum, parsed)
+      return cast(Optional[types.TestEnum], parsed)
     
     def FnTestClassAlias(
         self,
