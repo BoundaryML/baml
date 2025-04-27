@@ -10035,7 +10035,7 @@ class BamlStreamClient:
         self,
         input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlSyncStream[Optional[Optional[str]], Optional[str]]:
+    ) -> baml_py.BamlSyncStream[Optional[str], Optional[str]]:
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10058,9 +10058,9 @@ class BamlStreamClient:
         collectors,
       )
 
-      return baml_py.BamlSyncStream[Optional[Optional[str]], Optional[str]](
+      return baml_py.BamlSyncStream[Optional[str], Optional[str]](
         raw,
-        lambda x: cast(Optional[Optional[str]], x.cast_to(types, types, partial_types, True)),
+        lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, True)),
         lambda x: cast(Optional[str], x.cast_to(types, types, partial_types, False)),
         self.__ctx_manager.get(),
       )

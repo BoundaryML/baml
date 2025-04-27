@@ -446,8 +446,12 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 }
             }
             FieldType::Optional(inner) => {
-                let (inner_type, _) = inner.to_partial_type_ref(ir, true);
-                (format!("Optional[{}]", inner_type), true)
+                if let FieldType::Primitive(_) = inner.as_ref() {
+                  (format!("Optional[{}]", inner.to_type_ref(ir, false)), true)
+                } else {
+                  let (inner_rep, _) = inner.to_partial_type_ref(ir, true);
+                  (format!("Optional[{}]", inner_rep), true)
+                }
             }
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
@@ -506,10 +510,19 @@ fn default_value_for_parameter_type(field_type: &FieldType) -> Option<&'static s
 #[cfg(test)]
 mod tests {
     use internal_baml_core::ir::repr::make_test_ir;
+    use baml_types::{FieldType, TypeValue};
 
     use crate::GeneratorArgs;
 
     use super::*;
+
+    #[test]
+    fn optional_str() { 
+        let ir = make_test_ir("").unwrap();
+        let field_type = FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::String)));
+        let rep = field_type.to_partial_type_ref(&ir, true);
+        assert_eq!(rep.0, "Optional[str]")
+    }
 
     fn mk_ir() -> IntermediateRepr {
         make_test_ir(
