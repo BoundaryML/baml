@@ -2,6 +2,7 @@ use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::{DidOpenTextDocumentParams, PublishDiagnosticsParams, TextDocumentItem};
 
 use crate::server::api::diagnostics::publish_session_lsp_diagnostics;
+use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
 use crate::server::api::ResultExt;
 use crate::server::client::{Notifier, Requester};
@@ -35,18 +36,23 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             tracing::error!("Failed to get or create project for path: {:?}", file_path);
             show_err_msg!("Failed to get or create project for path: {:?}", file_path);
         } else {
-            let version = project
-                .expect("Ensured that a project db exists")
-                .lock()
-                .unwrap()
-                .get_common_generator_version();
+            let project = project.unwrap();
+            let version = project.lock().unwrap().get_common_generator_version();
             if let Ok(version) = version {
                 notifier
                     .0
                     .send(lsp_server::Message::Notification(
                         lsp_server::Notification::new(
                             "baml_src_generator_version".to_string(),
-                            version,
+                            BamlSrcVersionPayload {
+                                version,
+                                root_path: project
+                                    .lock()
+                                    .unwrap()
+                                    .root_path()
+                                    .to_string_lossy()
+                                    .to_string(),
+                            },
                         ),
                     ))
                     .internal_error()?;

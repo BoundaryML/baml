@@ -294,9 +294,12 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
   client.onNotification('runtime_updated', handleRuntimeUpdated)
 
   // eslint-disable-next-line @typescript-eslint/no-misused-promises
-  client.onNotification('baml_src_generator_version', async (version: string) => {
+  client.onNotification('baml_src_generator_version', async (payload: { version: string; root_path: string }) => {
     try {
-      bamlOutputChannel.appendLine(`============ baml_src_generator_version notification: ${version}`)
+      bamlOutputChannel.appendLine(
+        `============ baml_src_generator_version notification: ${payload.version} ${payload.root_path}`,
+      )
+      const version = payload.version
 
       if (!semver.valid(version)) {
         console.error(`Received invalid version string from LSP: ${version}`)

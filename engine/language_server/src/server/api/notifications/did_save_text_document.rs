@@ -1,3 +1,4 @@
+use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
 use crate::server::api::ResultExt;
 use crate::server::client::{Notifier, Requester};
 use crate::server::Result;
@@ -34,7 +35,18 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         let version = project.lock().unwrap().get_common_generator_version();
         if let Ok(version) = version {
             let _ = notifier.0.send(lsp_server::Message::Notification(
-                lsp_server::Notification::new("baml_src_generator_version".to_string(), version),
+                lsp_server::Notification::new(
+                    "baml_src_generator_version".to_string(),
+                    BamlSrcVersionPayload {
+                        version,
+                        root_path: project
+                            .lock()
+                            .unwrap()
+                            .root_path()
+                            .to_string_lossy()
+                            .to_string(),
+                    },
+                ),
             ));
         }
 

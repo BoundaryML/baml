@@ -20,6 +20,8 @@ const MAX_FAILURE_COUNT_BEFORE_RESET = 5 // Reset backoff after this many failur
 
 // Backoff state (maps version string to failure info)
 const downloadBackoffState = new Map<string, { failureCount: number; lastAttemptTimestamp: number }>()
+// Set to track versions currently being downloaded
+const downloadsInProgress = new Set<string>()
 
 export type CliVersion = {
   architecture: string
@@ -612,20 +614,46 @@ export async function resolveCliPath(
     }
   }
 
+  // Check if a download for this version is already in progress
+  if (downloadsInProgress.has(requestedVersion)) {
+    bamlOutputChannel.appendLine(
+      `Download for version ${requestedVersion} is already in progress. Skipping duplicate request.`,
+    )
+    return null
+  }
+
   // 3. Download the specific requested version
-  bamlOutputChannel.appendLine(`Attempting to download CLI version ${requestedVersion}...`)
-  // Show progress during download attempt
-  const downloadedPath = await window.withProgress(
-    {
-      location: ProgressLocation.Notification,
-      cancellable: false,
-      title: `Downloading BAML Language Server v${requestedVersion}`,
-    },
-    async (progress) => {
-      // Pass the output channel to downloadCli
-      return await downloadCli(context, cliVersionMeta, bamlOutputChannel)
-    },
-  )
+  let downloadedPath: string | null = null
+  try {
+    // Acquire lock
+    downloadsInProgress.add(requestedVersion)
+    bamlOutputChannel.appendLine(`Attempting to download CLI version ${requestedVersion}... [Lock acquired]`)
+
+    // Show progress during download attempt
+    downloadedPath = await window.withProgress(
+      {
+        location: ProgressLocation.Notification,
+        cancellable: false,
+        title: `Downloading BAML Language Server v${requestedVersion}`,
+      },
+      async (progress) => {
+        // Pass the output channel to downloadCli
+        return await downloadCli(context, cliVersionMeta, bamlOutputChannel)
+      },
+    )
+  } catch (error) {
+    // Catch any unexpected errors during the withProgress or downloadCli call itself
+    // although downloadCli has its own internal catch
+    const errorMsg = error instanceof Error ? error.message : String(error)
+    bamlOutputChannel.appendLine(
+      `ERROR: Unexpected error during download process initiation for ${requestedVersion}: ${errorMsg}`,
+    )
+    downloadedPath = null // Ensure path is null on error
+  } finally {
+    // Release lock
+    downloadsInProgress.delete(requestedVersion)
+    bamlOutputChannel.appendLine(`Download attempt for ${requestedVersion} finished. [Lock released]`)
+  }
 
   if (downloadedPath) {
     window.showInformationMessage(`BAML CLI v${requestedVersion} downloaded successfully!`)
