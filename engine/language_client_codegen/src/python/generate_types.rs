@@ -203,7 +203,11 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                     };
                     (
                         f.elem.name.as_str(),
-                        field,
+                        add_default_value(
+                            c.ir,
+                            &f.elem.r#type.elem,
+                            &field,
+                        ),
                         f.elem.docstring.as_ref().map(render_docstring),
                     )
                 })
