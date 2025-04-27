@@ -110,28 +110,7 @@ function _getTargetTriple(): string | null {
   const releaseArch = getReleaseArchitecture(arch)
   const releasePlatform = getReleasePlatform(platform)
 
-  // Basic validation
-  if (releasePlatform === platform || releaseArch === arch) {
-    // Likely an unknown/unsupported combination from the helper functions
-    if (releasePlatform === 'win32' || releasePlatform === 'darwin' || releasePlatform === 'linux') {
-      // If platform is known but arch resulted in passthrough, maybe still form a triple? Risky.
-      console.warn(`Forming triple for potentially unsupported combination: ${releaseArch}-${releasePlatform}`)
-      // Let's return null to indicate uncertainty/unsupported status clearly
-      return null
-    } else {
-      return null // Platform itself is unknown
-    }
-  }
-
-  // Handle linux case specifically for gnu/musl (though detection is hard)
-  // We primarily rely on the gnu default from getReleasePlatform
-  if (platform === 'linux') {
-    // We don't have a reliable way to detect musl vs gnu here easily.
-    // The path resolution logic later will have to try both if needed.
-    return `${releaseArch}-${releasePlatform}` // e.g., x86_64-unknown-linux-gnu
-  } else {
-    return `${releaseArch}-${releasePlatform}`
-  }
+  return `${releaseArch}-${releasePlatform}`
 }
 
 /**
