@@ -24,19 +24,43 @@ import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
 import { getCurrentOpenedFile } from '../../helpers/get-open-file'
 import { BAML_CONFIG_SINGLETON, refreshBamlConfigSingleton } from './bamlConfig'
-import { checkIfCliBinaryExists, cliBinaryPath, downloadCli } from './cliDownloader'
+import { resolveCliPath, getReleaseArchitecture, getReleasePlatform } from './cliDownloader'
 
 export { BAML_CONFIG_SINGLETON as bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line
 let clientReady = false
 
 let client: LanguageClient
-let serverModule: string
 let telemetry: TelemetryReporter
 const intervalTimers: NodeJS.Timeout[] = []
+let bamlOutputChannel: OutputChannel
+
+// Variable to store the path of the currently executing CLI
+let currentExecutingCliPath: string | null = null
 
 const isDebugMode = () => process.env.VSCODE_DEBUG_MODE === 'true'
 const isE2ETestOnPullRequest = () => process.env.PRISMA_USE_LOCAL_LS === 'true'
+
+const debugOptions = {
+  execArgv: ['--nolazy', '--inspect=6009'],
+  env: {
+    DEBUG: true,
+    RUST_BACKTRACE: 'full',
+    ...process.env,
+  },
+}
+
+const getClientOptions = (): LanguageClientOptions => ({
+  documentSelector: [
+    { scheme: 'file', language: 'baml' },
+    { language: 'json', pattern: '**/baml_src/**' },
+  ],
+  outputChannel: vscode.window.createOutputChannel('Baml Language Server'),
+  revealOutputChannelOn: RevealOutputChannelOn.Never,
+  synchronize: {
+    fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
+  },
+})
 
 export const requestDiagnostics = async () => {
   const currentFile = getCurrentOpenedFile()
@@ -44,7 +68,6 @@ export const requestDiagnostics = async () => {
     console.warn('no current baml file')
     return
   }
-  // if not a baml file return
   if (!currentFile.endsWith('.baml')) {
     return
   }
@@ -56,16 +79,22 @@ export const requestDiagnostics = async () => {
 }
 
 export const requestBamlCLIVersion = async (): Promise<string | undefined> => {
+  if (!clientReady) {
+    console.warn('Client not ready for bamlCliVersion request')
+    return
+  }
   try {
-    console.log('requesting baml cli version')
+    console.log('Requesting BAML CLI version from LSP...')
     const version = await client?.sendRequest('bamlCliVersion')
     if (!version) {
+      console.warn('LSP did not return a BAML CLI version.')
       return
     }
-    console.log('Got BAML CLI version', version)
+    console.log('Got BAML CLI version from LSP:', version)
     BAML_CONFIG_SINGLETON.cliVersion = version as string
+    return version as string
   } catch (e) {
-    console.error('Failed to get BAML CLI version', e)
+    console.error('Failed to get BAML CLI version from LSP:', e)
   }
 }
 
@@ -75,7 +104,16 @@ export const getBAMLFunctions = async (): Promise<
     span: { file_path: string; start: number; end: number }
   }[]
 > => {
-  return await client.sendRequest('getBAMLFunctions')
+  if (!clientReady) {
+    console.warn('Client not ready for getBAMLFunctions request')
+    return []
+  }
+  try {
+    return await client.sendRequest('getBAMLFunctions')
+  } catch (e) {
+    console.error('Failed to get BAML functions:', e)
+    return []
+  }
 }
 
 const LatestVersions = z.object({
@@ -100,19 +138,15 @@ const LatestVersions = z.object({
 type LatestVersions = z.infer<typeof LatestVersions>
 
 const checkForUpdates = ({ showIfNoUpdates }: { showIfNoUpdates: boolean }) => {
+  console.log('checkForUpdates called (currently stubbed). showIfNoUpdates:', showIfNoUpdates)
   try {
     if (telemetry) {
       telemetry.sendTelemetryEvent({
         event: 'baml.checkForUpdates',
-        properties: {
-          // is_typescript: latestVersions.generators.find((g) => g.language === 'typescript'),
-          // is_python: latestVersions.generators.find((g) => g.language === 'python'),
-          // baml_check: latestVersions,
-          // updateAvailable: !!update,
-          // vscodeUpdateAvailable: shouldUpdateVscode,
-        },
+        properties: { stub: 'true' },
       })
     }
+    bamlOutputChannel?.appendLine('Checked for updates (stubbed).')
   } catch (e) {
     console.error('Failed to check for updates', e)
   }
@@ -132,7 +166,6 @@ const sleep = (time: number) => {
   })
 }
 
-// Encapsulates the registration of client event handlers (notifications and requests)
 export const registerClientEventHandlers = (client: LanguageClient, context: ExtensionContext) => {
   client.onNotification('baml/showLanguageServerOutput', () => {
     // need to append line for the show to work for some reason.
@@ -219,138 +252,141 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
 
   client.onRequest('executeCommand', async (command: string) => {
     try {
-      console.log('Executing command', command)
+      console.log('Executing command requested by LSP:', command)
       await vscode.commands.executeCommand(command)
     } catch (e) {
-      console.error('Error executing command', e)
+      console.error(`Error executing command '${command}' requested by LSP:`, e)
     }
   })
 
   client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
-    console.log('baml_settings_updated', config)
+    console.log('Received baml_settings_updated from LSP:', config)
     BAML_CONFIG_SINGLETON.config = config.config
     BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
     WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
   })
 
-  // Handler for both notifications and requests of type "runtime_updated".
   const handleRuntimeUpdated = (params: { root_path: string; files: Record<string, string> }) => {
-    // console.log('*** HANDLE RUNTIME UPDATED ***' + JSON.stringify(params, null, 2))
-    // Only send message if current file is part of this root path
     const activeEditor =
-      vscode.window.activeTextEditor ||
-      (vscode.window.visibleTextEditors.length > 0 ? vscode.window.visibleTextEditors[0] : null)
+      window.activeTextEditor || (window.visibleTextEditors.length > 0 ? window.visibleTextEditors[0] : null)
     if (activeEditor) {
-      const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
-      const rootPathUri = URI.file(params.root_path).fsPath
-      if (currentFilePath.startsWith(rootPathUri)) {
-        console.log('sending add_project message')
-        WebviewPanelHost.currentPanel?.postMessage('add_project', {
-          ...params,
-          root_path: URI.file(params.root_path).toString(),
-        })
-      } else {
-        console.log('root path doesnt match current file', currentFilePath, rootPathUri)
+      try {
+        const currentFilePath = URI.parse(activeEditor.document.uri.toString()).fsPath
+        const rootPathUri = URI.file(params.root_path).fsPath
+        if (currentFilePath.startsWith(rootPathUri)) {
+          console.log('Forwarding runtime_updated to WebviewPanelHost')
+          WebviewPanelHost.currentPanel?.postMessage('add_project', {
+            ...params,
+            root_path: URI.file(params.root_path).toString(),
+          })
+        } else {
+          console.log('runtime_updated ignored: root path does not match active editor', currentFilePath, rootPathUri)
+        }
+      } catch (e) {
+        console.error('Error processing runtime_updated:', e)
       }
     } else {
-      console.log('no active editor')
+      console.log('runtime_updated ignored: no active editor')
     }
   }
 
-  // The Node-based Language Server sends REQUESTS of type "runtime_updated".
-  client.onRequest('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
-    console.log('REQUEST: runtime_updated')
-    handleRuntimeUpdated(params)
-  })
+  client.onRequest('runtime_updated', handleRuntimeUpdated)
+  client.onNotification('runtime_updated', handleRuntimeUpdated)
 
-  // The Web-based Language Server sends NOTIFICATIONS of type "runtime_updated".
-  client.onNotification('runtime_updated', (params: { root_path: string; files: Record<string, string> }) => {
-    console.log('NOTIF: runtime_updated')
-    handleRuntimeUpdated(params)
-  })
+  // eslint-disable-next-line @typescript-eslint/no-misused-promises
+  client.onNotification('baml_src_generator_version', async (version: string) => {
+    bamlOutputChannel.appendLine(`============ baml_src_generator_version notification: ${version}`)
 
-  client.onRequest('baml_settings_updated', (config: typeof BAML_CONFIG_SINGLETON) => {
-    console.log('baml_settings_updated', config)
-    BAML_CONFIG_SINGLETON.config = config.config
-    BAML_CONFIG_SINGLETON.cliVersion = config.cliVersion
-    WebviewPanelHost.currentPanel?.postMessage('baml_settings_updated', BAML_CONFIG_SINGLETON)
-  })
-
-  client.onNotification('baml_src_generator_version', (version: string) => {
-    console.log('======= setLspVersion', version)
-
-    // TODO: If no version found, use bundled LSP else start new LSP.
-    const cliVersion = {
-      architecture: process.arch,
-      platform: process.platform,
-      version: version,
-    }
-    console.log('lsp -- cliVersion', cliVersion)
-
-    let restartLsp = false
-
-    async function downloadLsp() {
-      if (!(await checkIfCliBinaryExists(cliVersion))) {
-        console.log('lsp -- downloading lsp')
-        restartLsp = await window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            cancellable: false,
-            title: `Downloading BAML LSP v${cliVersion.version}`,
-          },
-          async (progress, token) => {
-            try {
-              console.log('lsp -- downloading lsp -- try')
-              await downloadCli(cliVersion)
-              window.showInformationMessage(`BAML LSP v${cliVersion.version} downloaded!`)
-              return true
-            } catch (error: any) {
-              window.showErrorMessage(`Failed to download BAML LSP v${cliVersion.version}: ${error}`)
-              return false
-            }
-          },
-        )
-      } else {
-        restartLsp = true
-      }
-
-      if (restartLsp) {
-        const cliAbsolutePath = cliBinaryPath(cliVersion)
-
-        const serverOptions = {
-          run: {
-            command: cliAbsolutePath,
-            args: ['lsp'],
-            options: {
-              env: process.env,
-            },
-          },
-          debug: {
-            command: cliAbsolutePath,
-            args: ['lsp'],
-          },
-        }
-
-        await window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            cancellable: false,
-            title: 'Restarting BAML LSP...',
-          },
-          async (progress, token) => {
-            // We need the clientOptions here, which are not in scope. Pass them or adjust restartClient
-            // For now, assuming restartClient has access or doesn't need them updated dynamically here
-            // const clientOptions: LanguageClientOptions = { /* ... */ }; // This is tricky
-            await commands.executeCommand('baml.restartLanguageServer') // Trigger restart via command
-            // Original plan: await restartClient(context, client, serverOptions, clientOptions) // Needs clientOptions
-          },
-        )
-      }
+    if (!semver.valid(version)) {
+      console.error(`Received invalid version string from LSP: ${version}`)
+      window.showErrorMessage(`BAML Language Server requested an invalid version: ${version}. Cannot update.`)
+      return
     }
 
-    downloadLsp()
+    // Check if the requested version is less than 0.86.0
+    // Only LSPs 0.86.0 and above send out the baml_src_generator_version notification
+    // so older LSPs will not be able to request an update
+    if (semver.lt(version, '0.86.0')) {
+      bamlOutputChannel.appendLine(
+        `Ignoring version update request for ${version} as it's less than minimum required version 0.86.0`,
+      )
+      return
+    }
 
-    // TODO: Restart LSP.
+    console.log(`============ Attempting to resolve CLI path for requested version ${version}...`)
+    bamlOutputChannel.appendLine(`============ Attempting to resolve CLI path for requested version ${version}...`)
+    const targetCliPath = await resolveCliPath(context, version, bamlOutputChannel)
+
+    if (!targetCliPath) {
+      console.error(`Failed to resolve CLI path for version ${version}. LSP restart aborted.`)
+      bamlOutputChannel?.appendLine(`ERROR: Failed to resolve CLI path for version ${version}. LSP restart aborted.`)
+      return
+    }
+
+    console.log(`Resolved target CLI path: ${targetCliPath}`)
+    // Use the module-level variable to check the current path
+    console.log(`Currently executing CLI path: ${currentExecutingCliPath ?? 'Unknown'}`)
+
+    // Compare target path with the stored current path
+    if (targetCliPath !== currentExecutingCliPath) {
+      bamlOutputChannel.appendLine(
+        `Target path (${targetCliPath}) differs from current (${currentExecutingCliPath}). Restarting LSP...`,
+      )
+
+      const serverOptionsForRestart: ServerOptions = {
+        run: { command: targetCliPath, args: ['lsp'], options: { env: process.env } },
+        debug: { command: targetCliPath, args: ['lsp'], options: debugOptions },
+      }
+
+      const clientOptionsForRestart = getClientOptions()
+
+      await window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          cancellable: false,
+          title: `Restarting BAML Language Server (v${version})...`,
+        },
+        async () => {
+          try {
+            console.log('Calling restartClient utility...')
+            client = await restartClient(context, client, serverOptionsForRestart, clientOptionsForRestart)
+            clientReady = true
+            console.log('restartClient finished successfully.')
+            // Update the module-level variable after successful restart
+            currentExecutingCliPath = targetCliPath
+            BAML_CONFIG_SINGLETON.cliVersion = version
+
+            window.withProgress(
+              {
+                location: vscode.ProgressLocation.Notification,
+                title: `BAML Language Server reloaded with version ${version}`,
+                cancellable: false,
+              },
+              async () => {
+                // Show progress for 4 seconds
+                await new Promise((resolve) => setTimeout(resolve, 4000))
+              },
+            )
+            bamlOutputChannel?.appendLine(`BAML Language Server reloaded with version ${version}.`)
+          } catch (e) {
+            clientReady = false
+            console.error('Error restarting client:', e)
+            // Ensure error message is a string
+            const errorMessage = e instanceof Error ? e.message : String(e)
+            bamlOutputChannel?.appendLine(`ERROR: Error restarting client for version ${version}: ${errorMessage}`)
+            window.showErrorMessage(`Failed to restart BAML Language Server to version ${version}.`)
+          }
+        },
+      )
+    } else {
+      // bamlOutputChannel?.appendLine(
+      //   `Resolved path is the same as current. No LSP restart needed for version ${version}.`,
+      // )
+      if (BAML_CONFIG_SINGLETON.cliVersion !== version) {
+        bamlOutputChannel?.appendLine(`Updating BAML config singleton version to ${version} (no restart needed).`)
+        BAML_CONFIG_SINGLETON.cliVersion = version
+      }
+    }
   })
 }
 
@@ -360,44 +396,56 @@ const activateClient = (
   clientOptions: LanguageClientOptions,
 ) => {
   refreshBamlConfigSingleton()
-  console.log('Starting language server with options', JSON.stringify(serverOptions, null, 2))
+  console.log('Activating BAML Language Client...')
+  console.log('Server Options:', JSON.stringify(serverOptions, null, 2))
 
-  // TODO: Use bundled LSP to find out the generator versions, then if mismatch
-  // download new version and switch to that one.
-  // Create the language client
+  if (client && client.needsStop()) {
+    console.log('Stopping existing client before activating new one...')
+    client.stop().catch((e) => console.error('Error stopping existing client:', e))
+  }
+
   client = createLanguageServer(serverOptions, clientOptions)
-  console.log('client created')
-  client.onReady().then(() => {
-    console.log('client ready')
-    clientReady = true
-    client.createDefaultErrorHandler(2)
-    requestDiagnostics()
-    if (isDebugMode()) {
-      client.outputChannel.show(true)
-    }
+  console.log('Language client instance created.')
 
-    // Register all event handlers
-    registerClientEventHandlers(client, context)
+  client
+    .onReady()
+    .then(() => {
+      console.log('Language client is ready.')
+      clientReady = true
 
-    // Check for updates only on initial activation
-    // this will fail otherwise in dev mode if the config where the baml path is hasnt been picked up yet. TODO: pass the config to the server to avoid this.
-    // Immediately check for updates on extension activation
-    void checkForUpdates({ showIfNoUpdates: false })
-    // And check again once every hour
-    intervalTimers.push(
-      setInterval(
-        () => {
-          console.log(`checking for updates ${new Date().toString()}`)
-          checkForUpdates({ showIfNoUpdates: false })
-        },
-        6 * 60 * 60 * 1000 /* 6h in milliseconds: min/hr * secs/min * ms/sec */,
-      ),
-    )
-  })
+      registerClientEventHandlers(client, context)
+      console.log('Client event handlers registered.')
 
+      requestDiagnostics().catch((e) => console.error('Error requesting initial diagnostics:', e))
+
+      if (isDebugMode()) {
+        client.outputChannel.show(true)
+      }
+
+      if (intervalTimers.length === 0) {
+        console.log('Setting up periodic update checks.')
+        checkForUpdates({ showIfNoUpdates: false })
+        intervalTimers.push(
+          setInterval(
+            () => {
+              console.log(`Periodic check for updates triggered: ${new Date().toString()}`)
+              checkForUpdates({ showIfNoUpdates: false })
+            },
+            6 * 60 * 60 * 1000 /* 6h */,
+          ),
+        )
+      }
+    })
+    .catch((error) => {
+      console.error('Language client failed to become ready:', error)
+      clientReady = false
+      window.showErrorMessage('BAML Language Server failed to initialize.')
+    })
+
+  console.log('Starting language client...')
   const disposable = client.start()
+  console.log('Client start initiated.')
 
-  // Start the client. This will also launch the server
   context.subscriptions.push(disposable)
 }
 
@@ -411,170 +459,82 @@ const plugin: BamlVSCodePlugin = {
   enabled: () => true,
   activate: async (context, _outputChannel) => {
     const isDebugOrTest = isDebugOrTestSession()
+    bamlOutputChannel = _outputChannel
+    context.subscriptions.push(bamlOutputChannel)
+    bamlOutputChannel.appendLine('Activating BAML Language Server plugin...')
 
-    // setGenerateWatcher(!!workspace.getConfiguration('baml').get('fileWatcher'))
+    console.log('Activating BAML Language Server plugin...')
+    bamlOutputChannel.appendLine(`Debug/Test Session: ${isDebugOrTest}`)
+    bamlOutputChannel.appendLine(`Bundled Extension Version: ${packageJson.version}`)
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-    // if (packageJson.name === 'prisma-insider-pr-build') {
-    //   console.log('Using local Language Server for prisma-insider-pr-build');
-    //   serverModule = context.asAbsolutePath(path.join('./language-server/dist/src/bin'));
-    // } else if (isDebugMode() || isE2ETestOnPullRequest()) {
-    //   // use Language Server from folder for debugging
-    //   console.log('Using local Language Server from filesystem');
-    //   serverModule = context.asAbsolutePath(path.join('../../packages/language-server/dist/src/bin'));
-    // } else {
-    //   console.log('Using published Language Server (npm)');
-    //   // use published npm package for production
-    //   serverModule = require.resolve('@prisma/language-server/dist/src/bin');
-    // }
-    console.log('debugmode', isDebugMode())
-    // serverModule = context.asAbsolutePath(path.join('../../packages/language-server/dist/src/bin'))
-
-    // The debug options for the server
-    // --inspect=6009: runs the server in Node's Inspector mode so VS Code can attach to the server for debugging
-    const debugOptions = {
-      execArgv: ['--nolazy', '--inspect=6009'],
-      env: {
-        DEBUG: true,
-        // This will show stack traces in VSCODE notifications in debug mode.
-        RUST_BACKTRACE: 'full',
-        ...process.env,
-      },
+    let serverAbsolutePath: string | null = null
+    try {
+      console.log(`Resolving initial CLI path using bundled version: ${packageJson.version}`)
+      bamlOutputChannel.appendLine(`Resolving initial CLI path using bundled version: ${packageJson.version}`)
+      serverAbsolutePath = await resolveCliPath(context, packageJson.version, bamlOutputChannel)
+    } catch (e) {
+      console.error('Error resolving initial CLI path during activation:', e)
+      // Ensure error message is a string
+      const activationErrorMessage = e instanceof Error ? e.message : String(e)
+      bamlOutputChannel.appendLine(
+        `ERROR: Error resolving initial CLI path during activation: ${activationErrorMessage}`,
+      )
     }
 
-    // If the extension is launched in debug mode then the debug server options are used
-    // Otherwise the run options are used
-    // const serverOptions: ServerOptions = {
-    //   run: { module: serverModule, transport: TransportKind.ipc },
-    //   debug: {
-    //     module: serverModule,
-    //     transport: TransportKind.ipc,
-    //     options: debugOptions,
-    //   },
-    // }
-
-    let serverExecutableName = 'baml-cli'
-    let targetTriple = ''
-    const platform = os.platform()
-    const arch = os.arch()
-
-    switch (platform) {
-      case 'win32':
-        serverExecutableName = `${serverExecutableName}.exe`
-        if (arch === 'x64') {
-          targetTriple = 'x86_64-pc-windows-msvc'
-        } else if (arch === 'arm64') {
-          targetTriple = 'aarch64-pc-windows-msvc'
-        }
-        break
-      case 'darwin':
-        if (arch === 'x64') {
-          targetTriple = 'x86_64-apple-darwin'
-        } else if (arch === 'arm64') {
-          targetTriple = 'aarch64-apple-darwin'
-        }
-        break
-      case 'linux':
-        // Defaulting to gnu. Musl detection is complex in VSCode extensions.
-        // Users on musl systems might need a configuration option if this fails.
-        if (arch === 'x64') {
-          targetTriple = 'x86_64-unknown-linux-gnu'
-        } else if (arch === 'arm64') {
-          targetTriple = 'aarch64-unknown-linux-gnu'
-        }
-        break
-      // Add other platforms/arches as needed
+    if (!serverAbsolutePath) {
+      console.error('BAML Language Server activation failed: Could not resolve executable path.')
+      bamlOutputChannel.appendLine('ERROR: BAML Language Server activation failed: Could not resolve executable path.')
+      window.showErrorMessage('BAML Language Server failed to start: Could not find or download required executable.')
+      return
     }
-
-    if (!targetTriple) {
-      throw new Error(`Unsupported platform/architecture combination: ${platform}/${arch}`)
-    }
-
-    let serverAbsolutePath = context.asAbsolutePath(path.join('vscode', 'server', targetTriple, serverExecutableName))
-    // account for windows
-    const devServerPath = context.asAbsolutePath(path.join('vscode', 'server', serverExecutableName)) // Adjust dev path if necessary
-    console.log('devServerPath', devServerPath)
-
-    // If the dev server file exists, overwrite serverAbsolutePath with it for local development.
-    if (fs.existsSync(devServerPath)) {
-      console.log('Using dev server path:', devServerPath)
-      serverAbsolutePath = devServerPath
-    } else {
-      // Check if the bundled server exists at the determined path
-      if (!fs.existsSync(serverAbsolutePath)) {
-        // Fallback or specific error handling if the primary target binary isn't found
-        // For example, try the musl variant on Linux if gnu wasn't found?
-        if (platform === 'linux' && targetTriple.endsWith('-gnu')) {
-          const muslTargetTriple = targetTriple.replace('-gnu', '-musl')
-          const muslServerPath = context.asAbsolutePath(path.join('server', muslTargetTriple, serverExecutableName))
-          if (fs.existsSync(muslServerPath)) {
-            console.log(`GNU variant not found for ${arch}, falling back to MUSL variant.`)
-            serverAbsolutePath = muslServerPath
-            targetTriple = muslTargetTriple // Update targetTriple for clarity if needed elsewhere
-          } else {
-            window.showErrorMessage(
-              `BAML Language Server executable not found for your system (${platform}/${arch}). Tried: ${serverAbsolutePath} and ${muslServerPath}`,
-            )
-            throw new Error(`BAML Language Server executable not found for ${targetTriple} or ${muslTargetTriple}.`)
-          }
-        } else {
-          window.showErrorMessage(
-            `BAML Language Server executable not found for your system (${platform}/${arch}). Expected at: ${serverAbsolutePath}`,
-          )
-          throw new Error(`BAML Language Server executable not found for ${targetTriple}.`)
-        }
-      }
-    }
-
-    console.log(`Using BAML Language Server: ${serverAbsolutePath}`)
-
-    if (platform !== 'win32' && fs.existsSync(serverAbsolutePath)) {
-      try {
-        fs.chmodSync(serverAbsolutePath, '755')
-      } catch (err: any) {
-        console.error(`Failed to chmod server executable: ${err}`)
-        // Decide if this should be a fatal error
-      }
-    }
+    console.log(`Initial BAML Language Server path resolved to: ${serverAbsolutePath}`)
+    bamlOutputChannel.appendLine(`Initial BAML Language Server path resolved to: ${serverAbsolutePath}`)
+    // Initialize the module-level variable with the initial path
+    currentExecutingCliPath = serverAbsolutePath
 
     const serverOptions: ServerOptions = {
-      run: {
-        command: serverAbsolutePath,
-        args: ['lsp'],
-        options: {
-          env: process.env,
-        },
-      },
-      debug: {
-        command: serverAbsolutePath,
-
-        args: ['lsp'],
-        options: debugOptions,
-      },
+      run: { command: serverAbsolutePath, args: ['lsp'], options: { env: process.env } },
+      debug: { command: serverAbsolutePath, args: ['lsp'], options: debugOptions },
     }
-    // Options to control the language client
-    const clientOptions: LanguageClientOptions = {
-      // Register the server for baml docs and python
-      documentSelector: [
-        { scheme: 'file', language: 'baml' },
-        {
-          language: 'json',
-          pattern: '**/baml_src/**',
-        },
-      ],
-      outputChannel: vscode.window.createOutputChannel('Baml Language Server'),
-      // traceOutputChannel: vscode.window.createOutputChannel('Baml Language Server Trace'),
-      revealOutputChannelOn: RevealOutputChannelOn.Never,
-      // initializationOptions // TODO add settings here.
-      synchronize: {
-        fileEvents: workspace.createFileSystemWatcher('**/baml_src/**/*.baml'),
-      },
-    }
+    const clientOptions = getClientOptions()
 
     context.subscriptions.push(
       commands.registerCommand('baml.restartLanguageServer', async () => {
-        client = await restartClient(context, client, serverOptions, clientOptions)
-        window.showInformationMessage('Baml language server restarted.') // eslint-disable-line @typescript-eslint/no-floating-promises
+        console.log("Manual 'baml.restartLanguageServer' command triggered.")
+        window.showInformationMessage('Restarting BAML Language Server...')
+        try {
+          const currentVersion = BAML_CONFIG_SINGLETON.cliVersion || packageJson.version
+          console.log(`Manual restart: Resolving CLI path for version ${currentVersion}`)
+          bamlOutputChannel.appendLine(`Manual restart: Resolving CLI path for version ${currentVersion}`)
+          const resolvedPath = await resolveCliPath(context, currentVersion, bamlOutputChannel)
+
+          if (resolvedPath) {
+            const restartServerOptions: ServerOptions = {
+              run: { command: resolvedPath, args: ['lsp'], options: { env: process.env } },
+              debug: { command: resolvedPath, args: ['lsp'], options: debugOptions },
+            }
+            const restartClientOptions = getClientOptions()
+            client = await restartClient(context, client, restartServerOptions, restartClientOptions)
+            clientReady = true
+            // Update the module-level variable after successful manual restart
+            currentExecutingCliPath = resolvedPath
+            window.showInformationMessage(`BAML Language Server (v${currentVersion}) restarted manually.`)
+            bamlOutputChannel.appendLine(`BAML Language Server (v${currentVersion}) restarted manually.`)
+          } else {
+            window.showErrorMessage(
+              `Manual restart failed: Could not resolve executable path for version ${currentVersion}.`,
+            )
+            bamlOutputChannel.appendLine(
+              `ERROR: Manual restart failed: Could not resolve executable path for version ${currentVersion}.`,
+            )
+          }
+        } catch (e) {
+          console.error('Error during manual restart:', e)
+          // Ensure error message is a string
+          const manualRestartErrorMessage = e instanceof Error ? e.message : String(e)
+          bamlOutputChannel.appendLine(`ERROR: Error during manual restart: ${manualRestartErrorMessage}`)
+          window.showErrorMessage('Failed to manually restart Baml language server.')
+        }
       }),
 
       commands.registerCommand('baml.checkForUpdates', () => {
@@ -583,43 +543,41 @@ const plugin: BamlVSCodePlugin = {
 
       commands.registerCommand(
         'baml.selectTestCase',
-        async (test_request: {
-          functionName?: string
-          testCaseName?: string
-        }) => {
+        async (test_request: { functionName?: string; testCaseName?: string }) => {
           const { functionName, testCaseName } = test_request
           if (!functionName || !testCaseName) {
+            console.warn('selectTestCase command called without functionName or testCaseName')
             return
           }
-
-          console.log('selectTestCase', functionName, testCaseName)
-          await client.sendRequest('selectTestCase', { functionName, testCaseName })
+          if (!clientReady) {
+            console.warn('Client not ready for selectTestCase')
+            return
+          }
+          try {
+            console.log('Sending selectTestCase request:', functionName, testCaseName)
+            await client.sendRequest('selectTestCase', { functionName, testCaseName })
+          } catch (e) {
+            console.error('selectTestCase request failed:', e)
+          }
         },
       ),
 
       commands.registerCommand(
         'baml.jumpToDefinition',
-        async (args: {
-          file_path: string
-          start: number
-          end: number
-        }) => {
-          if (!args.file_path) {
-            vscode.window.showErrorMessage('File path is missing.')
+        async (args: { file_path: string; start: number; end: number }) => {
+          if (!args || !args.file_path) {
+            vscode.window.showErrorMessage('Jump to definition failed: Invalid arguments provided.')
             return
           }
-
           try {
             const uri = vscode.Uri.file(args.file_path)
             const doc = await vscode.workspace.openTextDocument(uri)
-
             const start = doc.positionAt(args.start)
             const end = doc.positionAt(args.end)
             const range = new vscode.Range(start, end)
-
             await vscode.window.showTextDocument(doc, { selection: range, viewColumn: vscode.ViewColumn.Beside })
           } catch (error: any) {
-            vscode.window.showErrorMessage(`Error navigating to function definition: ${error}`)
+            vscode.window.showErrorMessage(`Error navigating to function definition: ${error.message || error}`)
           }
         },
       ),
@@ -632,6 +590,7 @@ const plugin: BamlVSCodePlugin = {
         }
         const selection = await vscode.window.showInformationMessage(
           'Would you like to auto-format BAML files on save?',
+          { modal: true },
           AutoFormatChoice.Yes,
           AutoFormatChoice.OnlyInWorkspace,
           AutoFormatChoice.No,
@@ -671,37 +630,48 @@ const plugin: BamlVSCodePlugin = {
     activateClient(context, serverOptions, clientOptions)
 
     if (!isDebugOrTest) {
-      // eslint-disable-next-line
-      const extensionId = 'Gloo.' + packageJson.name
-      // eslint-disable-next-line
-      const extensionVersion: string = packageJson.version
-
-      telemetry = new TelemetryReporter(extensionId, extensionVersion)
-
-      context.subscriptions.push(telemetry)
-      await telemetry.initialize()
-
-      if (extensionId === 'Boundary.baml-insider') {
-        // checkForOtherExtension()
+      try {
+        const extensionId = 'Boundary.' + packageJson.name
+        const extensionVersion: string = packageJson.version
+        console.log(`Initializing telemetry for ${extensionId} v${extensionVersion}`)
+        telemetry = new TelemetryReporter(extensionId, extensionVersion)
+        context.subscriptions.push(telemetry)
+        await telemetry.initialize()
+        console.log('Telemetry initialized.')
+      } catch (err) {
+        console.error('Failed to initialize telemetry:', err)
       }
     }
 
     checkForMinimalColorTheme()
+    console.log('BAML Language Server plugin activation finished.')
   },
   deactivate: async () => {
-    if (!client) {
-      return undefined
+    console.log('Deactivating BAML Language Server plugin...')
+    if (client && client.needsStop()) {
+      try {
+        await client.stop()
+        console.log('Language client stopped.')
+      } catch (error) {
+        console.error('Error stopping language client:', error)
+      }
+    } else {
+      console.log('Client not running or already stopped.')
     }
 
-    if (!isDebugOrTestSession()) {
-      telemetry.dispose() // eslint-disable-line @typescript-eslint/no-floating-promises
+    if (!isDebugOrTestSession() && telemetry) {
+      console.log('Disposing telemetry.')
+      await telemetry.dispose().catch((err) => {
+        console.error('Error disposing telemetry:', err)
+      })
     }
 
     while (intervalTimers.length > 0) {
       clearInterval(intervalTimers.pop())
     }
-
-    return client.stop()
+    console.log('Cleared interval timers.')
+    console.log('Deactivation finished.')
+    return undefined
   },
 }
 

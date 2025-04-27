@@ -1,15 +1,15 @@
 generator lang_python {
   output_type python/pydantic
   output_dir "../python"
-  version "0.84.4"
+  version "0.85.0"
 }
 
 generator lang_typescript {
   output_type typescript
   output_dir "../typescript"
-  version "0.84.4"
+  version "0.85.0"
 }
-
+ 
 
 // generator lang_typescript_esm {
 //   output_type typescript

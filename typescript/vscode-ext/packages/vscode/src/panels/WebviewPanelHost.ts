@@ -127,7 +127,6 @@ export class WebviewPanelHost {
 
   public postMessage<T>(command: string, content: T) {
     this._panel.webview.postMessage({ command: command, content })
-    console.log('postMessage', command, content)
     this.reporter?.sendTelemetryEvent({
       event: `baml.webview.${command}`,
       properties: {},
