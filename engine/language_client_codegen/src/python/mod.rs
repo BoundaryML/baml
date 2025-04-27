@@ -349,7 +349,11 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
-                    if needed {
+                    // Note: The `false` here preserves potentially bugged codegen
+                    // from before this commit. As the `false` implies, we always
+                    // wrap primitives in `Optional` when generating partial types,
+                    // although we should probably only do this when `!needed`.
+                    if false {
                         (format!("Union[types.{name}, str]"), false)
                     } else {
                         (format!("Optional[Union[types.{name}, str]]"), true)
@@ -412,7 +416,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Union(inner) => {
                 let union_contents = inner
                     .iter()
-                    .map(|t| t.to_partial_type_ref(ir, false).0)
+                    .map(|t| t.to_partial_type_ref(ir, true).0)
                     .collect::<Vec<_>>()
                     .join(", ");
                 // Note: The `false` here preserves potentially bugged codegen

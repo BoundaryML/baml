@@ -5018,7 +5018,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Union[types.DynEnumTwo, str]:
+    ) -> Optional[Union[types.DynEnumTwo, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5038,7 +5038,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Union[types.DynEnumTwo, str], parsed)
+      return cast(Optional[Union[types.DynEnumTwo, str]], parsed)
     
     def ClassifyMessage(
         self,
@@ -5148,7 +5148,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[Optional[partial_types.BookOrder], Optional[partial_types.FlightConfirmation], Optional[partial_types.GroceryReceipt]]]:
+    ) -> Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5168,7 +5168,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Union[Optional[partial_types.BookOrder], Optional[partial_types.FlightConfirmation], Optional[partial_types.GroceryReceipt]]], parsed)
+      return cast(Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], parsed)
     
     def DescribeImage(
         self,
@@ -5304,7 +5304,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[Optional[partial_types.OriginalA], Optional[partial_types.OriginalB]]]:
+    ) -> Optional[Union[partial_types.OriginalA, partial_types.OriginalB]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5324,7 +5324,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Union[Optional[partial_types.OriginalA], Optional[partial_types.OriginalB]]], parsed)
+      return cast(Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], parsed)
     
     def DummyOutputFunction(
         self,
@@ -5798,7 +5798,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[Optional[partial_types.LiteralClassOne], Optional[partial_types.LiteralClassTwo]]]:
+    ) -> Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5818,7 +5818,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Union[Optional[partial_types.LiteralClassOne], Optional[partial_types.LiteralClassTwo]]], parsed)
+      return cast(Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], parsed)
     
     def FnNamedArgsSingleStringOptional(
         self,
@@ -6370,7 +6370,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]]:
+    ) -> Optional[Union[Literal[1], Literal[True], Literal["string output"]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6390,7 +6390,7 @@ class LlmStreamParser:
         __cr__,
       )
 
-      return cast(Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], parsed)
+      return cast(Optional[Union[Literal[1], Literal[True], Literal["string output"]]], parsed)
     
     def MakeBlockConstraint(
         self,
