@@ -267,7 +267,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
 trait ToTypeReferenceInClientDefinition {
     fn to_type_ref(&self, ir: &IntermediateRepr) -> String;
 
-    /// The string representation of a field type, and whether the field is optional during streaming.
+    /// The string representation of a field type.
     fn to_partial_type_ref(&self, ir: &IntermediateRepr, needed: bool) -> String;
 }
 
