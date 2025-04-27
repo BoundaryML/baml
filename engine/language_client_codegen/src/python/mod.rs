@@ -525,7 +525,7 @@ mod tests {
         let ir = make_test_ir("").unwrap();
         let field_type = FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::String)));
         let rep = field_type.to_partial_type_ref(&ir, true);
-        assert_eq!(rep.0, "Optional[str]")
+        assert_eq!(rep, "Optional[str]")
     }
 
     fn mk_ir() -> IntermediateRepr {
