@@ -91,6 +91,9 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
     }
 
     fn resolve(&self, ctx: &impl GetEnvVar) -> Result<ResolvedGcpAuthStrategy> {
+        #[cfg(target_arch = "wasm32")]
+        let ctx = &ctx.set_allow_missing_env_var(false);
+
         Ok(match self {
             UnresolvedGcpAuthStrategy::CredentialsString(s) => {
                 let s = s.resolve(ctx)?;
