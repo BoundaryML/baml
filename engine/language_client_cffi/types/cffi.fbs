@@ -44,6 +44,7 @@ table CFFIValueBool {
 }
 
 table CFFIValueList {
+  field_type: CFFIFieldTypeHolder;
   values: [CFFIValueHolder];
 }
 
@@ -54,6 +55,7 @@ table CFFIMapEntry {
 }
 
 table CFFIValueMap {
+  field_types: CFFIFieldTypeHolder;
   entries: [CFFIMapEntry];
 }
 

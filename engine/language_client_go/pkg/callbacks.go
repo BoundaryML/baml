@@ -97,7 +97,7 @@ func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.
 
 		parsed_data := cffi.CFFIValueHolder{}
 		flatbuffers.GetRootAs(content_bytes, 0, &parsed_data)
-		decoded_data := Decode(&parsed_data, typeMap)
+		decoded_data := Decode(&parsed_data)
 
 		var res ResultCallback
 		if isDone {
