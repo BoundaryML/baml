@@ -2,10 +2,10 @@ package baml_client
 
 var file_map = map[string]string{
 {% for (path, contents) in file_map %}
-{{ path }}: {{ contents }},
+  {{ path }}: {{ contents }},
 {%- endfor %}
 }
 
 func getBamlFiles() map[string]string {
-return file_map
+  return file_map
 }
