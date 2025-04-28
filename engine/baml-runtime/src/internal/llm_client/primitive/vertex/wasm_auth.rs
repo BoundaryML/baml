@@ -5,7 +5,7 @@ use std::{future::Future, pin::Pin, sync::Arc};
 
 use crate::{
     internal::wasm_jwt::encode_jwt,
-    remote_cred_provider::{get_remote_cred_provider, GcpCredResult},
+    js_callback_provider::{get_remote_cred_provider, GcpCredResult},
 };
 
 // pub struct VertexAuth(ServiceAccount);

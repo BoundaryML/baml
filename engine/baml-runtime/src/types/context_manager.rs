@@ -12,7 +12,7 @@ use crate::{
     RuntimeContext, SpanCtx,
 };
 
-use super::remote_cred_provider::AwsCredResult;
+use super::js_callback_provider::AwsCredResult;
 use super::runtime_context::BamlSrcReader;
 pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 

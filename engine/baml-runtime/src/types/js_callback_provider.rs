@@ -36,7 +36,7 @@ pub fn set_remote_cred_provider(aws_cred_provider: JsCallbackProvider) {
     JS_CALLBACK_PROVIDER_SINGLETON.set(aws_cred_provider);
 }
 
-#[derive(serde::Deserialize, Debug, Clone)]
+#[derive(serde::Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum AwsCredResult {
     #[serde(rename = "error", rename_all = "camelCase")]
     Err { name: String, message: String },
@@ -54,7 +54,7 @@ pub enum AwsCredResult {
     },
 }
 
-#[derive(serde::Deserialize, Debug, Clone)]
+#[derive(serde::Deserialize, Debug, Clone, Eq, PartialEq)]
 pub enum GcpCredResult {
     #[serde(rename = "error", rename_all = "camelCase")]
     Err { name: String, message: String },
@@ -145,5 +145,128 @@ impl Clone for JsCallbackProvider {
             gcp_req_tx: self.gcp_req_tx.clone(),
             gcp_resp_rx: self.gcp_resp_rx.resubscribe(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_aws_cred_result_deserialize_ok() {
+        let json = json!({
+            "ok": {
+                "accessKeyId": "AKIATEST",
+                "secretAccessKey": "secret123",
+                "sessionToken": "token123",
+                "credentialScope": "aws/scope",
+                "expiration": "2024-03-21T00:00:00Z",
+                "accountId": "123456789"
+            }
+        });
+
+        let result: AwsCredResult =
+            serde_json::from_value(json).expect("Failed to deserialize AWS credentials result");
+
+        assert_eq!(
+            result,
+            AwsCredResult::Ok {
+                access_key_id: "AKIATEST".into(),
+                secret_access_key: "secret123".into(),
+                session_token: Some("token123".into()),
+                credential_scope: Some("aws/scope".into()),
+                expiration: Some("2024-03-21T00:00:00Z".into()),
+                account_id: Some("123456789".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn test_aws_cred_result_deserialize_ok_minimal() {
+        let json = json!({
+            "ok": {
+                "accessKeyId": "AKIATEST",
+                "secretAccessKey": "secret123"
+            }
+        });
+
+        let result: AwsCredResult = serde_json::from_value(json)
+            .expect("Failed to deserialize minimal AWS credentials result");
+
+        assert_eq!(
+            result,
+            AwsCredResult::Ok {
+                access_key_id: "AKIATEST".into(),
+                secret_access_key: "secret123".into(),
+                session_token: None,
+                credential_scope: None,
+                expiration: None,
+                account_id: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_aws_cred_result_deserialize_error() {
+        let json = json!({
+            "error": {
+                "name": "CredentialError",
+                "message": "Failed to load credentials"
+            }
+        });
+
+        let result: AwsCredResult =
+            serde_json::from_value(json).expect("Failed to deserialize AWS credentials error");
+
+        assert_eq!(
+            result,
+            AwsCredResult::Err {
+                name: "CredentialError".into(),
+                message: "Failed to load credentials".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_gcp_cred_result_deserialize_ok() {
+        let json = json!({
+            "ok": {
+                "accessToken": "ya29.token",
+                "projectId": "my-project-123"
+            }
+        });
+
+        let result: GcpCredResult =
+            serde_json::from_value(json).expect("Failed to deserialize GCP credentials result");
+
+        assert_eq!(
+            result,
+            GcpCredResult::Ok {
+                access_token: "ya29.token".into(),
+                project_id: "my-project-123".into(),
+            }
+        );
+    }
+
+    #[test]
+    fn test_gcp_cred_result_deserialize_error() {
+        let json = json!({
+            "error": {
+                "name": "GcpCredentialError",
+                "message": "Failed to get GCP credentials"
+            }
+        });
+
+        let result: GcpCredResult =
+            serde_json::from_value(json).expect("Failed to deserialize GCP credentials error");
+
+        assert_eq!(
+            result,
+            GcpCredResult::Err {
+                name: "GcpCredentialError".into(),
+                message: "Failed to get GCP credentials".into(),
+            }
+        );
     }
 }
