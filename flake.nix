@@ -186,7 +186,7 @@
 
             meta = with pkgs.lib; {
               description = "Python bindings for BAML";
-              homepage = "https://github.com/baml-lang/baml";
+              homepage = "https://github.com/boundaryml/baml";
               license = licenses.mit;
               platforms = platforms.linux;
             };
