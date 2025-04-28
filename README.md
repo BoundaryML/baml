@@ -14,11 +14,6 @@
 
 
 ## BAML: Basically a Made-up Language
-
-<h6>or "Bad-Ass Machine Learning" if your boss isn't around</h6>
-
-BAML is a simple programming language for building reliable AI workflows and agents.
-
 <h4>
 
 [Homepage](https://www.boundaryml.com/) | [Docs](https://docs.boundaryml.com) | [BAML AI Chat](https://www.boundaryml.com/chat) | [Discord](https://discord.gg/BTNBeXGuaS)
@@ -28,15 +23,17 @@ BAML is a simple programming language for building reliable AI workflows and age
 </h4>
 
 
-**Try BAML**: [Prompt Fiddle](https://www.promptfiddle.com) • [Interactive App Examples](https://baml-examples.vercel.app/)
-
 </div>
 
-|   |     |
-| - | - |
-| Do I need to write my whole app in BAML? | Nope, only the prompts! BAML translates definitions into the language of your choice! [Python](https://docs.boundaryml.com/guide/installation-language/python), [TypeScript](https://docs.boundaryml.com/guide/installation-language/typescript), [Ruby](https://docs.boundaryml.com/guide/installation-language/ruby) and [more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages). |
-| Is BAML stable? | Yes, many companies use it in production! We ship updates weekly! |
-| Why a new language? | [Jump to section](#why-a-new-programming-language) |
+BAML is a simple prompting language for building reliable **AI workflows and agents**.
+
+BAML helps you turn prompt engineering into _schema engineering_ -- where you mostly focus on the models of your prompt -- to get more reliable outputs. 
+You don't need to write your whole app in BAML, only the prompts! You can wire-up your LLM Functions in any language of your choice! See our quickstarts for [Python](https://docs.boundaryml.com/guide/installation-language/python), [TypeScript](https://docs.boundaryml.com/guide/installation-language/typescript), [Ruby](https://docs.boundaryml.com/guide/installation-language/ruby) and [Go, and more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages).
+
+BAML comes with all batteries included -- with full typesafety, streaming, retries, wide model support, even when they don't support native [tool-calling APIs](#enable-reliable-tool-calling-with-any-model-even-when-they-dont-support-it)
+
+**Try BAML**: [Prompt Fiddle](https://www.promptfiddle.com) • [Interactive App Examples](https://baml-examples.vercel.app/)
+
 
 ## The core BAML principle: LLM Prompts are functions
 
@@ -116,7 +113,7 @@ If testing your pipeline took 5 seconds, in 20 minutes, you can test 240 ideas.
 ![resume-attempt2-smaller2](https://github.com/user-attachments/assets/6fc6b8a6-ffed-4cfc-80b8-78bc8a3d66a6)
 No need to login to any website to test things, and no need to copy JSON blobs around.
 
-### Enable reliable tool-calling with any model, even when they don't support it
+### Enable reliable tool-calling with any model
 BAML works even when the models don't support native tool-calling APIs. We created the SAP (schema-aligned parsing) algorithm to support the flexible outputs LLMs can provide, like markdown within a JSON blob or chain-of-thought prior to answering. [Read more about SAP](https://www.boundaryml.com/blog/schema-aligned-parsing)
 
 With BAML, your structured outputs work in Day-1 of a model release. No need to figure out whether a model supports parallel tool calls, or whether it supports recursive schemas, or `anyOf` or `oneOf` etc.
@@ -194,6 +191,13 @@ Full [blog post](https://www.boundaryml.com/blog/ai-agents-need-new-syntax) by u
 ## Conclusion
 
 As models get better, we'll continue expecting even more out of them. But what will never change is that we'll want a way to write maintainable code that uses those models. The current way we all just assemble strings is very reminiscent of the early days PHP/HTML soup in web development. We hope some of the ideas we shared today can make a tiny dent in helping us all shape the way we all code tomorrow.
+
+## FAQ
+|   |   |
+| - | - |
+| Do I need to write my whole app in BAML? | Nope, only the prompts! BAML translates definitions into the language of your choice! [Python](https://docs.boundaryml.com/guide/installation-language/python), [TypeScript](https://docs.boundaryml.com/guide/installation-language/typescript), [Ruby](https://docs.boundaryml.com/guide/installation-language/ruby) and [more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages). |
+| Is BAML stable? | Yes, many companies use it in production! We ship updates weekly! |
+| Why a new language? | [Jump to section](#why-a-new-programming-language) |
 
 
 ## Contributing
