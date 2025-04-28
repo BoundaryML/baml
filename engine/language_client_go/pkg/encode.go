@@ -52,7 +52,6 @@ func EncodeClass(builder *flatbuffers.Builder, name string, fields map[string]an
 	return cffi.CFFIValueUnionCFFIValueClass, cffi.CFFIValueClassEnd(builder), nil
 }
 
-// encodeEnum doesn't need TypeMap internally, but the interface provides it
 func EncodeEnum(builder *flatbuffers.Builder, name string, value string, isDynamic bool) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	nameOffset := builder.CreateString(name)
 	valueOffset := builder.CreateString(value)
@@ -64,10 +63,9 @@ func EncodeEnum(builder *flatbuffers.Builder, name string, value string, isDynam
 	return cffi.CFFIValueUnionCFFIValueEnum, cffi.CFFIValueEnumEnd(builder), nil
 }
 
-// encodeUnion now accepts and passes TypeMap
 func EncodeUnion(builder *flatbuffers.Builder, variantName string, value any) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	nameOffset := builder.CreateString(variantName)
-	valueHolderOffset, err := Encode(builder, value) // Pass typeMap recursively
+	valueHolderOffset, err := Encode(builder, value)
 	if err != nil {
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding inner value for union variant '%s': %w", variantName, err)
 	}
@@ -119,7 +117,7 @@ func encodeValue(builder *flatbuffers.Builder, value any) (cffi.CFFIValueUnion, 
 
 	// Check for custom serializers first using the original value (could be pointer or value)
 	if serializer, ok := originalValue.(BamlSerializer); ok {
-		valueType, offset, err := serializer.Encode(builder) // Pass typeMap
+		valueType, offset, err := serializer.Encode(builder)
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, err
 		}
@@ -128,7 +126,7 @@ func encodeValue(builder *flatbuffers.Builder, value any) (cffi.CFFIValueUnion, 
 
 	switch v := concreteValue.(type) {
 	case Checked[any]: // Use any here, or make encodeValue generic (more complex)
-		offset, err := encodeChecked(builder, v) // Pass typeMap
+		offset, err := encodeChecked(builder, v)
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding Checked value: %w", err)
 		}

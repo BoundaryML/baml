@@ -47,6 +47,11 @@ func TestEncodeDecode(t *testing.T) {
 				Bar: "baz",
 			},
 		}},
+		// TODO: fix this
+		// {map[string]b.Union__float__bool{
+		// 	"a": *b.Union__float__boolNewWithBool(&[]bool{true}[0]),
+		// 	"b": *b.Union__float__boolNewWithFloat(&[]float64{2.2}[0]),
+		// }},
 	}
 
 	for _, test := range tests {
