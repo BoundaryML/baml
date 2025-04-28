@@ -21,14 +21,8 @@ impl Token {
 impl VertexAuth {
     pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Self> {
         Ok(match auth_strategy {
-            ResolvedGcpAuthStrategy::FilePath(path) => {
-                anyhow::bail!(
-                    "Failed to auth - cannot load credentials from a file in WASM (path='{}...', path.len={})",
-                    path.chars().take(5).collect::<String>(),
-                    path.len()
-                )
-            }
-            ResolvedGcpAuthStrategy::JsonString(json) => {
+            ResolvedGcpAuthStrategy::MaybeFilePath(json)
+            | ResolvedGcpAuthStrategy::StringContainingJson(json) => {
                 log::debug!("Attempting to auth using JsonString strategy");
                 Self(Some(serde_json::from_str(&json).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?))
             }

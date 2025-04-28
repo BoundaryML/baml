@@ -35,10 +35,11 @@ pub struct ServiceAccount {
 }
 
 pub enum ResolvedGcpAuthStrategy {
-    /// This is the mechanism that GCP SDKs usually support for GOOGLE_APPLICATION_CREDENTIALS
-    FilePath(String),
+    /// GCP SDKs usually support passing in GOOGLE_APPLICATION_CREDENTIALS as a file path
+    /// In WASM, however, we treat both StringContainingJson and MaybeFilePath as a string
+    MaybeFilePath(String),
     /// Because the WASM playground needs a way to pass in credentials.
-    JsonString(String),
+    StringContainingJson(String),
     /// JsonObject was implemented for a user: https://github.com/BoundaryML/baml/issues/1001
     JsonObject(IndexMap<String, String>),
     /// The normal GCP application default credentials flow, after checking
@@ -94,8 +95,8 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
             UnresolvedGcpAuthStrategy::CredentialsString(s) => {
                 let s = s.resolve(ctx)?;
                 match serde_json::from_str::<serde_json::Value>(&s) {
-                    Ok(_) => ResolvedGcpAuthStrategy::JsonString(s),
-                    Err(_) => ResolvedGcpAuthStrategy::FilePath(s),
+                    Ok(_) => ResolvedGcpAuthStrategy::StringContainingJson(s),
+                    Err(_) => ResolvedGcpAuthStrategy::MaybeFilePath(s),
                 }
             }
             UnresolvedGcpAuthStrategy::CredentialsJsonObject(m) => {
@@ -107,7 +108,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
             }
             UnresolvedGcpAuthStrategy::CredentialsContentString(s) => {
                 let s = s.resolve(ctx)?;
-                ResolvedGcpAuthStrategy::JsonString(s)
+                ResolvedGcpAuthStrategy::StringContainingJson(s)
             }
             UnresolvedGcpAuthStrategy::SystemDefault => {
                 log::debug!("Neither options.credentials nor options.credentials_content are set, falling back to env vars");
@@ -125,8 +126,8 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
                             log::warn!("Resolving GOOGLE_APPLICATION_CREDENTIALS from env, but it is an empty string");
                         }
                         match serde_json::from_str::<serde_json::Value>(&credentials) {
-                            Ok(_) => ResolvedGcpAuthStrategy::JsonString(credentials),
-                            Err(_) => ResolvedGcpAuthStrategy::FilePath(credentials),
+                            Ok(_) => ResolvedGcpAuthStrategy::StringContainingJson(credentials),
+                            Err(_) => ResolvedGcpAuthStrategy::MaybeFilePath(credentials),
                         }
                     }
                     (None, Some(credentials_content)) => {
@@ -134,7 +135,7 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
                         if credentials_content.is_empty() {
                             log::warn!("Resolving GOOGLE_APPLICATION_CREDENTIALS_CONTENT from env, but it is an empty string");
                         }
-                        ResolvedGcpAuthStrategy::JsonString(credentials_content)
+                        ResolvedGcpAuthStrategy::StringContainingJson(credentials_content)
                     }
                     (None, None) => {
                         log::debug!("Using UseSystemDefault strategy");
