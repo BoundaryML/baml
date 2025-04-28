@@ -26,17 +26,18 @@ impl VertexAuth {
             }
             ResolvedGcpAuthStrategy::StringContainingJson(s) => {
                 log::debug!("Attempting to auth using JsonString strategy");
-                let authz_user = gcp_auth::CustomServiceAccount::from_json(&path).context(
-                    format!("Failed to parse credentials as JSON string: {}", {
-                        let s = serde_json::to_string(&path)
+                let authz_user = gcp_auth::CustomServiceAccount::from_json(&s).context(format!(
+                    "Failed to parse credentials as JSON string: {}",
+                    {
+                        let s = serde_json::to_string(&s)
                             .expect("Serialization of string should always succeed");
                         if s.len() > 8 {
                             format!("{}...{}", &s[..4], &s[s.len() - 4..])
                         } else {
                             s
                         }
-                    }),
-                )?;
+                    }
+                ))?;
                 Ok(VertexAuth::CustomServiceAccount(authz_user))
             }
             ResolvedGcpAuthStrategy::JsonObject(o) => {
