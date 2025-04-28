@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use time::OffsetDateTime;
 
-use crate::{remote_cred_provider::get_remote_cred_provider, AwsCredProviderImpl, AwsCredResult};
+use crate::{js_callback_provider::get_remote_cred_provider, AwsCredResult, JsCallbackProvider};
 
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");

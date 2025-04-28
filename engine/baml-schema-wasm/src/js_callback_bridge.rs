@@ -1,6 +1,6 @@
 use baml_runtime::{
-    remote_cred_provider::{set_remote_cred_provider, GcpCredResult},
-    AwsCredProviderImpl, AwsCredResult, RuntimeCallbackError,
+    js_callback_provider::{set_remote_cred_provider, GcpCredResult},
+    AwsCredResult, JsCallbackProvider, RuntimeCallbackError,
 };
 use js_sys::Promise;
 use wasm_bindgen::prelude::*;
@@ -115,7 +115,7 @@ pub fn init_js_callback_bridge(
     let (gcp_resp_tx, gcp_resp_rx) =
         tokio::sync::broadcast::channel::<Result<GcpCredResult, RuntimeCallbackError>>(100);
 
-    set_remote_cred_provider(AwsCredProviderImpl::new(
+    set_remote_cred_provider(JsCallbackProvider::new(
         aws_req_tx,
         aws_resp_rx,
         gcp_req_tx,

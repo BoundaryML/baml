@@ -24,16 +24,16 @@ static_assertions::assert_impl_all!(RuntimeCallbackError: Send, Sync);
 
 pub type RuntimeCallbackResult<T> = Result<T, RuntimeCallbackError>;
 
-static REMOTE_CRED_PROVIDER_SINGLETON: OnceLock<AwsCredProviderImpl> = OnceLock::new();
+static JS_CALLBACK_PROVIDER_SINGLETON: OnceLock<JsCallbackProvider> = OnceLock::new();
 
-pub fn get_remote_cred_provider() -> Result<&'static AwsCredProviderImpl, RuntimeCallbackError> {
-    REMOTE_CRED_PROVIDER_SINGLETON
+pub fn get_remote_cred_provider() -> Result<&'static JsCallbackProvider, RuntimeCallbackError> {
+    JS_CALLBACK_PROVIDER_SINGLETON
         .get()
         .ok_or(RuntimeCallbackError::NoCredProviderBridge)
 }
 
-pub fn set_remote_cred_provider(aws_cred_provider: AwsCredProviderImpl) {
-    REMOTE_CRED_PROVIDER_SINGLETON.set(aws_cred_provider);
+pub fn set_remote_cred_provider(aws_cred_provider: JsCallbackProvider) {
+    JS_CALLBACK_PROVIDER_SINGLETON.set(aws_cred_provider);
 }
 
 #[derive(serde::Deserialize, Debug, Clone)]
@@ -67,14 +67,14 @@ pub enum GcpCredResult {
 }
 
 #[derive(new)]
-pub struct AwsCredProviderImpl {
+pub struct JsCallbackProvider {
     aws_req_tx: tokio::sync::mpsc::Sender<Option<String>>,
     aws_resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<AwsCredResult>>,
     gcp_req_tx: tokio::sync::mpsc::Sender<Option<String>>,
     gcp_resp_rx: tokio::sync::broadcast::Receiver<RuntimeCallbackResult<GcpCredResult>>,
 }
 
-impl AwsCredProviderImpl {
+impl JsCallbackProvider {
     pub async fn aws_req(
         &self,
         profile_name: Option<String>,
@@ -137,7 +137,7 @@ impl AwsCredProviderImpl {
     }
 }
 
-impl Clone for AwsCredProviderImpl {
+impl Clone for JsCallbackProvider {
     fn clone(&self) -> Self {
         Self {
             aws_req_tx: self.aws_req_tx.clone(),
