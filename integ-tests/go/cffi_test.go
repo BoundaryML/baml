@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	b "example.com/integ-tests/baml_client/types"
-	"github.com/bmizerany/assert"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 	"github.com/ghetzel/testify/require"
@@ -50,7 +49,7 @@ func TestEncodeDecode(t *testing.T) {
 			flatbuffers.GetRootAs(encoded, 0, &holder)
 			decoded := baml.Decode(&holder)
 
-			assert.Equal(t, test.input, decoded)
+			require.Equal(t, test.input, decoded)
 		})
 	}
 }
