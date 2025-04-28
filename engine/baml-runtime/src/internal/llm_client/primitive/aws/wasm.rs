@@ -174,41 +174,37 @@ impl std::fmt::Debug for WasmAwsCreds {
 
 impl WasmAwsCreds {
     async fn provide_credentials_impl(&self) -> aws_credential_types::provider::Result {
-        match get_remote_cred_provider() {
-            // match self.aws_cred_provider.clone() {
-            Some(aws_cred_provider) => {
-                match aws_cred_provider.aws_req(self.profile.clone()).await {
-                    Err(e) => {
-                        log::error!("Error calling AWS cred provider: {:?}", e);
-                        return Err(CredentialsError::unhandled(e));
-                    }
-                    Ok(creds) => match creds {
-                        AwsCredResult::Ok {
-                            access_key_id,
-                            secret_access_key,
-                            session_token,
-                            expiration,
-                            ..
-                        } => Ok(Credentials::new(
-                            access_key_id,
-                            secret_access_key,
-                            session_token,
-                            match expiration {
-                                Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
-                                    Ok(dt) => Some(dt.into()),
-                                    Err(_) => None,
-                                },
-                                None => None,
-                            },
-                            "baml-playground-wasm-bridge",
-                        )),
-                        AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(
-                            format!("{}: {}", name, message),
-                        )),
-                    },
-                }
+        let cred_provider = get_remote_cred_provider().map_err(CredentialsError::unhandled)?;
+        match cred_provider.aws_req(self.profile.clone()).await {
+            Err(e) => {
+                log::error!("Error calling AWS cred provider: {:?}", e);
+                return Err(CredentialsError::unhandled(e));
             }
-            None => Err(CredentialsError::not_loaded_no_source()),
+            Ok(creds) => match creds {
+                AwsCredResult::Ok {
+                    access_key_id,
+                    secret_access_key,
+                    session_token,
+                    expiration,
+                    ..
+                } => Ok(Credentials::new(
+                    access_key_id,
+                    secret_access_key,
+                    session_token,
+                    match expiration {
+                        Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
+                            Ok(dt) => Some(dt.into()),
+                            Err(_) => None,
+                        },
+                        None => None,
+                    },
+                    "baml-playground-wasm-bridge",
+                )),
+                AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(format!(
+                    "{}: {}",
+                    name, message
+                ))),
+            },
         }
     }
 }

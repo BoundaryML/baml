@@ -53,69 +53,31 @@ impl VertexAuth {
     }
 
     pub async fn token(&self, scopes: &[&str]) -> Result<Arc<Token>> {
-        match get_remote_cred_provider() {
-            Some(cred_provider) => {
-                tracing::info!("requested gcp creds from vscode");
-                let gcp_creds = cred_provider.gcp_req().await?;
-                tracing::info!(
-                    "got gcp creds from vscode, discarded them because it's really aws creds"
-                );
-                match gcp_creds {
-                    GcpCredResult::Ok { access_token, .. } => Ok(Arc::new(Token(access_token))),
-                    GcpCredResult::Err { name, message } => {
-                        anyhow::bail!("Error occurred while fetching gcp creds: {name}: {message}");
-                    }
-                }
-            }
-            None => {
-                anyhow::bail!("Failed to auth - no remote cred provider found");
-            }
+        let cred_provider = get_remote_cred_provider()?;
+        let gcp_creds = cred_provider.gcp_req().await?;
+        match gcp_creds {
+            GcpCredResult::Ok { access_token, .. } => Ok(Arc::new(Token(access_token))),
+            GcpCredResult::Err { name, message } => Err(anyhow::Error::msg(format!(
+                "Error occurred while fetching gcp creds: {name}: {message}"
+            ))
+            .context(
+                "Failed to load GCP creds: try running `gcloud auth application-default login`",
+            )),
         }
-
-        // let claims = Claims::from_service_account(&self.0);
-
-        // let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.0.private_key)
-        //     .await
-        //     .map_err(|e| anyhow::anyhow!(format!("{e:?}")))?;
-
-        // // Make the token request
-        // let client = reqwest::Client::new();
-        // let params = [
-        //     ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-        //     ("assertion", &jwt),
-        // ];
-        // let res = client
-        //     .post(&self.0.token_uri)
-        //     .form(&params)
-        //     .send()
-        //     .await?
-        //     .text()
-        //     .await?;
-
-        // parse_token_response(&res)
-        //     .context(format!("OAuth2 access token request failed: {res}"))
-        //     .map(Arc::new)
     }
 
     pub async fn project_id(&self) -> Result<String> {
         // Ok(self.0.project_id.clone())
-        match get_remote_cred_provider() {
-            Some(cred_provider) => {
-                tracing::info!("requested gcp creds from vscode");
-                let gcp_creds = cred_provider.gcp_req().await?;
-                tracing::info!(
-                    "got gcp creds from vscode, discarded them because it's really aws creds"
-                );
-                match gcp_creds {
-                    GcpCredResult::Ok { project_id, .. } => Ok(project_id),
-                    GcpCredResult::Err { name, message } => {
-                        anyhow::bail!("Error occurred while fetching gcp creds: {name}: {message}");
-                    }
-                }
-            }
-            None => {
-                anyhow::bail!("Failed to auth - no remote cred provider found");
-            }
+        let cred_provider = get_remote_cred_provider()?;
+        let gcp_creds = cred_provider.gcp_req().await?;
+        match gcp_creds {
+            GcpCredResult::Ok { project_id, .. } => Ok(project_id),
+            GcpCredResult::Err { name, message } => Err(anyhow::Error::msg(format!(
+                "Error occurred while fetching project_id: {name}: {message}"
+            ))
+            .context(
+                "Failed to load GCP creds: try running `gcloud auth application-default login`",
+            )),
         }
     }
 }

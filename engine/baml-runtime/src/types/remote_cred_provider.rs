@@ -15,6 +15,9 @@ pub enum RuntimeCallbackError {
 
     #[error("Failed to load aws creds: {0}")]
     AwsCredProviderError(String),
+
+    #[error("BAML internal error - credential provider bridges not initialized")]
+    NoCredProviderBridge,
 }
 
 static_assertions::assert_impl_all!(RuntimeCallbackError: Send, Sync);
@@ -23,8 +26,10 @@ pub type RuntimeCallbackResult<T> = Result<T, RuntimeCallbackError>;
 
 static REMOTE_CRED_PROVIDER_SINGLETON: OnceLock<AwsCredProviderImpl> = OnceLock::new();
 
-pub fn get_remote_cred_provider() -> Option<&'static AwsCredProviderImpl> {
-    REMOTE_CRED_PROVIDER_SINGLETON.get()
+pub fn get_remote_cred_provider() -> Result<&'static AwsCredProviderImpl, RuntimeCallbackError> {
+    REMOTE_CRED_PROVIDER_SINGLETON
+        .get()
+        .ok_or(RuntimeCallbackError::NoCredProviderBridge)
 }
 
 pub fn set_remote_cred_provider(aws_cred_provider: AwsCredProviderImpl) {
