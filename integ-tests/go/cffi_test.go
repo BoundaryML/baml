@@ -37,6 +37,16 @@ func TestEncodeDecode(t *testing.T) {
 				Bar: "baz",
 			},
 		}},
+		{[]b.BlockConstraint{
+			{
+				Foo: 1,
+				Bar: "bar",
+			},
+			{
+				Foo: 2,
+				Bar: "baz",
+			},
+		}},
 	}
 
 	for _, test := range tests {

@@ -104,7 +104,11 @@ func decodeListValue(valueHolder *cffi.CFFIValueHolder) any {
 	for i := 0; i < length; i++ {
 		var value cffi.CFFIValueHolder
 		if valueList.Values(&value, i) {
-			values.Index(i).Set(reflect.ValueOf(Decode(&value)))
+			rv := reflect.ValueOf(Decode(&value))
+			if rv.Kind() == reflect.Ptr {
+				rv = rv.Elem()
+			}
+			values.Index(i).Set(rv)
 		} else {
 			panic("error decoding value")
 		}
