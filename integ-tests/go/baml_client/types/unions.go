@@ -73,6 +73,10 @@ func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) Encode(builder *fl
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) BamlTypeName() string {
+    return "Union__BookOrder__FlightConfirmation__GroceryReceipt"
+}
+
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) SetBookOrder(v BookOrder) {
     u.variant = "BookOrder"
@@ -225,6 +229,10 @@ func (u Union__List__bool__List__int) Encode(builder *flatbuffers.Builder) (cffi
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__List__bool__List__int) BamlTypeName() string {
+    return "Union__List__bool__List__int"
+}
+
 
 func (u *Union__List__bool__List__int) SetList__bool(v []bool) {
     u.variant = "List__bool"
@@ -331,6 +339,10 @@ func (u Union__LiteralClassOne__LiteralClassTwo) Encode(builder *flatbuffers.Bui
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__LiteralClassOne__LiteralClassTwo) BamlTypeName() string {
+    return "Union__LiteralClassOne__LiteralClassTwo"
+}
+
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) SetLiteralClassOne(v LiteralClassOne) {
     u.variant = "LiteralClassOne"
@@ -435,6 +447,10 @@ func (u Union__Martian__Earthling) Encode(builder *flatbuffers.Builder) (cffi.CF
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__Martian__Earthling) BamlTypeName() string {
+    return "Union__Martian__Earthling"
 }
 
 
@@ -551,6 +567,10 @@ func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) Encode(builder 
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) BamlTypeName() string {
+    return "Union__MemoryObject__ComplexMemoryObject__AnotherObject"
 }
 
 
@@ -701,6 +721,10 @@ func (u Union__Nested__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIVa
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__Nested__string) BamlTypeName() string {
+    return "Union__Nested__string"
+}
+
 
 func (u *Union__Nested__string) SetNested(v Nested) {
     u.variant = "Nested"
@@ -805,6 +829,10 @@ func (u Union__OriginalA__OriginalB) Encode(builder *flatbuffers.Builder) (cffi.
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__OriginalA__OriginalB) BamlTypeName() string {
+    return "Union__OriginalA__OriginalB"
 }
 
 
@@ -913,6 +941,10 @@ func (u Union__PhoneNumber__EmailAddress) Encode(builder *flatbuffers.Builder) (
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__PhoneNumber__EmailAddress) BamlTypeName() string {
+    return "Union__PhoneNumber__EmailAddress"
+}
+
 
 func (u *Union__PhoneNumber__EmailAddress) SetPhoneNumber(v PhoneNumber) {
     u.variant = "PhoneNumber"
@@ -1017,6 +1049,10 @@ func (u Union__Resume__Event) Encode(builder *flatbuffers.Builder) (cffi.CFFIVal
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__Resume__Event) BamlTypeName() string {
+    return "Union__Resume__Event"
 }
 
 
@@ -1125,6 +1161,10 @@ func (u Union__SimpleTag__JsonTemplate) Encode(builder *flatbuffers.Builder) (cf
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__SimpleTag__JsonTemplate) BamlTypeName() string {
+    return "Union__SimpleTag__JsonTemplate"
+}
+
 
 func (u *Union__SimpleTag__JsonTemplate) SetSimpleTag(v SimpleTag) {
     u.variant = "SimpleTag"
@@ -1231,6 +1271,10 @@ func (u Union__Tag__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__Tag__string) BamlTypeName() string {
+    return "Union__Tag__string"
+}
+
 
 func (u *Union__Tag__string) SetTag(v Tag) {
     u.variant = "Tag"
@@ -1335,6 +1379,10 @@ func (u Union__float__bool) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__float__bool) BamlTypeName() string {
+    return "Union__float__bool"
 }
 
 
@@ -1451,6 +1499,10 @@ func (u Union__int_1__bool_true__string_string_output) Encode(builder *flatbuffe
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__int_1__bool_true__string_string_output) BamlTypeName() string {
+    return "Union__int_1__bool_true__string_string_output"
 }
 
 
@@ -1601,6 +1653,10 @@ func (u Union__int__float) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueU
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__int__float) BamlTypeName() string {
+    return "Union__int__float"
+}
+
 
 func (u *Union__int__float) SetInt(v int64) {
     u.variant = "int"
@@ -1705,6 +1761,10 @@ func (u Union__int__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__int__string) BamlTypeName() string {
+    return "Union__int__string"
 }
 
 
@@ -1831,6 +1891,10 @@ func (u Union__int__string__bool__float) Encode(builder *flatbuffers.Builder) (c
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__int__string__bool__float) BamlTypeName() string {
+    return "Union__int__string__bool__float"
 }
 
 
@@ -2069,6 +2133,10 @@ func (u Union__int__string__bool__float__JsonObject__JsonArray) Encode(builder *
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__int__string__bool__float__JsonObject__JsonArray) BamlTypeName() string {
+    return "Union__int__string__bool__float__JsonObject__JsonArray"
 }
 
 
@@ -2435,6 +2503,10 @@ func (u Union__int__string__bool__float__List__string__Map__string_List__string)
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__int__string__bool__float__List__string__Map__string_List__string) BamlTypeName() string {
+    return "Union__int__string__bool__float__List__string__Map__string_List__string"
+}
+
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetInt(v int64) {
     u.variant = "int"
@@ -2759,6 +2831,10 @@ func (u Union__string__List__Nested) Encode(builder *flatbuffers.Builder) (cffi.
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__string__List__Nested) BamlTypeName() string {
+    return "Union__string__List__Nested"
+}
+
 
 func (u *Union__string__List__Nested) SetString(v string) {
     u.variant = "string"
@@ -2863,6 +2939,10 @@ func (u Union__string__Nested) Encode(builder *flatbuffers.Builder) (cffi.CFFIVa
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__string__Nested) BamlTypeName() string {
+    return "Union__string__Nested"
 }
 
 
@@ -2971,6 +3051,10 @@ func (u Union__string__bool) Encode(builder *flatbuffers.Builder) (cffi.CFFIValu
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__string__bool) BamlTypeName() string {
+    return "Union__string__bool"
+}
+
 
 func (u *Union__string__bool) SetString(v string) {
     u.variant = "string"
@@ -3075,6 +3159,10 @@ func (u Union__string__int) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__string__int) BamlTypeName() string {
+    return "Union__string__int"
 }
 
 
@@ -3191,6 +3279,10 @@ func (u Union__string__int__float) Encode(builder *flatbuffers.Builder) (cffi.CF
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__string__int__float) BamlTypeName() string {
+    return "Union__string__int__float"
 }
 
 
@@ -3341,6 +3433,10 @@ func (u Union__string_barisa__string_ox_burger) Encode(builder *flatbuffers.Buil
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__string_barisa__string_ox_burger) BamlTypeName() string {
+    return "Union__string_barisa__string_ox_burger"
+}
+
 
 func (u *Union__string_barisa__string_ox_burger) SetString_barisa(v string) {
     u.variant = "string_barisa"
@@ -3447,6 +3543,10 @@ func (u Union__string_breakfast__string_dinner) Encode(builder *flatbuffers.Buil
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u Union__string_breakfast__string_dinner) BamlTypeName() string {
+    return "Union__string_breakfast__string_dinner"
+}
+
 
 func (u *Union__string_breakfast__string_dinner) SetString_breakfast(v string) {
     u.variant = "string_breakfast"
@@ -3551,6 +3651,10 @@ func (u Union__string_curiosity__string_personal_finance) Encode(builder *flatbu
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__string_curiosity__string_personal_finance) BamlTypeName() string {
+    return "Union__string_curiosity__string_personal_finance"
 }
 
 
@@ -3677,6 +3781,10 @@ func (u Union__string_one__string_two__string_three__string_four) Encode(builder
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__string_one__string_two__string_three__string_four) BamlTypeName() string {
+    return "Union__string_one__string_two__string_three__string_four"
 }
 
 

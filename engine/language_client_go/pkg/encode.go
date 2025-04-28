@@ -10,9 +10,8 @@ import (
 
 // BamlSerializer interface for custom class encoding
 type BamlSerializer interface {
-	// EncodeBamlClass returns the class name and a map of field names to values.
-	// The TypeMap is provided in case the implementation needs it for nested types.
 	Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error)
+	BamlTypeName() string
 }
 
 // implment BamlSerializer for anything that implements BamlClassSerializer, BamlEnumSerializer, or BamlUnionSerializer
@@ -171,7 +170,6 @@ func encodeValue(builder *flatbuffers.Builder, value any) (cffi.CFFIValueUnion, 
 		return cffi.CFFIValueUnionCFFIValueList, offset, nil
 
 	case reflect.Map:
-		// Expect map[string]any
 		if rv.Type().Key().Kind() != reflect.String {
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("map key type must be string, got %s", rv.Type().Key().Kind())
 		}
@@ -396,6 +394,8 @@ func encodeFieldType(builder *flatbuffers.Builder, fieldType reflect.Type) flatb
 	var fieldTypeUnion cffi.CFFIFieldTypeUnion
 
 	switch fieldType.Kind() {
+	case reflect.Ptr:
+		return encodeFieldType(builder, fieldType.Elem())
 	case reflect.String:
 		cffi.CFFIFieldTypeStringStart(builder)
 		fieldTypeOffset = cffi.CFFIFieldTypeStringEnd(builder)
@@ -431,6 +431,18 @@ func encodeFieldType(builder *flatbuffers.Builder, fieldType reflect.Type) flatb
 		cffi.CFFIFieldTypeMapAddValue(builder, valueTypeOffset)
 		fieldTypeOffset = cffi.CFFIFieldTypeMapEnd(builder)
 		fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeMap
+	case reflect.Struct:
+		// determine if the struct implements BamlSerializer
+		if fieldType.Implements(reflect.TypeOf((*BamlSerializer)(nil)).Elem()) {
+			serializer := reflect.New(fieldType).Interface().(BamlSerializer)
+			nameOffset := builder.CreateString(serializer.BamlTypeName())
+			cffi.CFFIFieldTypeClassStart(builder)
+			cffi.CFFIFieldTypeClassAddName(builder, nameOffset)
+			fieldTypeOffset = cffi.CFFIFieldTypeClassEnd(builder)
+			fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeClass
+		} else {
+			panic(fmt.Sprintf("struct %s does not implement BamlSerializer", fieldType.Name()))
+		}
 	default:
 		panic(fmt.Sprintf("unexpected field type: %s", fieldType.Kind()))
 	}

@@ -43,6 +43,10 @@ func (u {{ union.name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
+func (u {{ union.name }}) BamlTypeName() string {
+    return "{{ union.name }}"
+}
+
 {% for variant in union.variants %}
 func (u *{{ union.name }}) Set{{ variant.0|exported_name }}(v {{ variant.1.name }}) {
     u.variant = "{{ variant.0 }}"

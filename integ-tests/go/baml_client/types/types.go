@@ -76,6 +76,10 @@ func (c AnotherObject) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion
 	return baml.EncodeClass(builder, "AnotherObject", fields, nil)
 }
 
+func (c AnotherObject) BamlTypeName() string {
+	return "AnotherObject"
+}
+
 
 type BigNumbers struct {
 
@@ -122,6 +126,10 @@ func (c BigNumbers) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
 	fields["b"] = c.B
 	
 	return baml.EncodeClass(builder, "BigNumbers", fields, nil)
+}
+
+func (c BigNumbers) BamlTypeName() string {
+	return "BigNumbers"
 }
 
 
@@ -179,6 +187,10 @@ func (c BinaryNode) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
 	return baml.EncodeClass(builder, "BinaryNode", fields, nil)
 }
 
+func (c BinaryNode) BamlTypeName() string {
+	return "BinaryNode"
+}
+
 
 type Blah struct {
 
@@ -218,6 +230,10 @@ func (c Blah) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuf
 	fields["prop4"] = c.Prop4
 	
 	return baml.EncodeClass(builder, "Blah", fields, nil)
+}
+
+func (c Blah) BamlTypeName() string {
+	return "Blah"
 }
 
 
@@ -268,6 +284,10 @@ func (c BlockConstraint) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	return baml.EncodeClass(builder, "BlockConstraint", fields, nil)
 }
 
+func (c BlockConstraint) BamlTypeName() string {
+	return "BlockConstraint"
+}
+
 
 type BlockConstraintForParam struct {
 
@@ -314,6 +334,10 @@ func (c BlockConstraintForParam) Encode(builder *flatbuffers.Builder) (cffi.CFFI
 	fields["bcfp2"] = c.Bcfp2
 	
 	return baml.EncodeClass(builder, "BlockConstraintForParam", fields, nil)
+}
+
+func (c BlockConstraintForParam) BamlTypeName() string {
+	return "BlockConstraintForParam"
 }
 
 
@@ -378,6 +402,10 @@ func (c BookOrder) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	return baml.EncodeClass(builder, "BookOrder", fields, nil)
 }
 
+func (c BookOrder) BamlTypeName() string {
+	return "BookOrder"
+}
+
 
 type ClassForNullLiteral struct {
 
@@ -417,6 +445,10 @@ func (c ClassForNullLiteral) Encode(builder *flatbuffers.Builder) (cffi.CFFIValu
 	fields["a"] = c.A
 	
 	return baml.EncodeClass(builder, "ClassForNullLiteral", fields, nil)
+}
+
+func (c ClassForNullLiteral) BamlTypeName() string {
+	return "ClassForNullLiteral"
 }
 
 
@@ -465,6 +497,10 @@ func (c ClassOptionalOutput) Encode(builder *flatbuffers.Builder) (cffi.CFFIValu
 	fields["prop2"] = c.Prop2
 	
 	return baml.EncodeClass(builder, "ClassOptionalOutput", fields, nil)
+}
+
+func (c ClassOptionalOutput) BamlTypeName() string {
+	return "ClassOptionalOutput"
 }
 
 
@@ -522,6 +558,10 @@ func (c ClassOptionalOutput2) Encode(builder *flatbuffers.Builder) (cffi.CFFIVal
 	return baml.EncodeClass(builder, "ClassOptionalOutput2", fields, nil)
 }
 
+func (c ClassOptionalOutput2) BamlTypeName() string {
+	return "ClassOptionalOutput2"
+}
+
 
 type ClassToRecAlias struct {
 
@@ -561,6 +601,10 @@ func (c ClassToRecAlias) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	fields["list"] = c.List
 	
 	return baml.EncodeClass(builder, "ClassToRecAlias", fields, nil)
+}
+
+func (c ClassToRecAlias) BamlTypeName() string {
+	return "ClassToRecAlias"
 }
 
 
@@ -609,6 +653,10 @@ func (c ClassWithBlockDone) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	fields["s_20_words"] = c.S_20_words
 	
 	return baml.EncodeClass(builder, "ClassWithBlockDone", fields, nil)
+}
+
+func (c ClassWithBlockDone) BamlTypeName() string {
+	return "ClassWithBlockDone"
 }
 
 
@@ -666,6 +714,10 @@ func (c ClassWithImage) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	return baml.EncodeClass(builder, "ClassWithImage", fields, nil)
 }
 
+func (c ClassWithImage) BamlTypeName() string {
+	return "ClassWithImage"
+}
+
 
 type ClassWithoutDone struct {
 
@@ -712,6 +764,10 @@ func (c ClassWithoutDone) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
 	fields["s_20_words"] = c.S_20_words
 	
 	return baml.EncodeClass(builder, "ClassWithoutDone", fields, nil)
+}
+
+func (c ClassWithoutDone) BamlTypeName() string {
+	return "ClassWithoutDone"
 }
 
 
@@ -797,6 +853,10 @@ func (c ClientDetails1559) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueU
 	return baml.EncodeClass(builder, "ClientDetails1559", fields, nil)
 }
 
+func (c ClientDetails1559) BamlTypeName() string {
+	return "ClientDetails1559"
+}
+
 
 type ComplexMemoryObject struct {
 
@@ -861,6 +921,10 @@ func (c ComplexMemoryObject) Encode(builder *flatbuffers.Builder) (cffi.CFFIValu
 	return baml.EncodeClass(builder, "ComplexMemoryObject", fields, nil)
 }
 
+func (c ComplexMemoryObject) BamlTypeName() string {
+	return "ComplexMemoryObject"
+}
+
 
 type CompoundBigNumbers struct {
 
@@ -918,6 +982,10 @@ func (c CompoundBigNumbers) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	return baml.EncodeClass(builder, "CompoundBigNumbers", fields, nil)
 }
 
+func (c CompoundBigNumbers) BamlTypeName() string {
+	return "CompoundBigNumbers"
+}
+
 
 type ContactInfo struct {
 
@@ -964,6 +1032,10 @@ func (c ContactInfo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
 	fields["secondary"] = c.Secondary
 	
 	return baml.EncodeClass(builder, "ContactInfo", fields, nil)
+}
+
+func (c ContactInfo) BamlTypeName() string {
+	return "ContactInfo"
 }
 
 
@@ -1023,6 +1095,10 @@ func (c CustomStory) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
 	return baml.EncodeClass(builder, "CustomStory", fields, nil)
 }
 
+func (c CustomStory) BamlTypeName() string {
+	return "CustomStory"
+}
+
 
 type CustomTaskResult struct {
 
@@ -1078,6 +1154,10 @@ func (c CustomTaskResult) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
 	return baml.EncodeClass(builder, "CustomTaskResult", fields, nil)
 }
 
+func (c CustomTaskResult) BamlTypeName() string {
+	return "CustomTaskResult"
+}
+
 
 type Document1559 struct {
 
@@ -1126,6 +1206,10 @@ func (c Document1559) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion,
 	fields["notes"] = c.Notes
 	
 	return baml.EncodeClass(builder, "Document1559", fields, nil)
+}
+
+func (c Document1559) BamlTypeName() string {
+	return "Document1559"
 }
 
 
@@ -1187,6 +1271,10 @@ func (c DummyOutput) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
 	return baml.EncodeClass(builder, "DummyOutput", fields, &c.DynamicProperties)
 }
 
+func (c DummyOutput) BamlTypeName() string {
+	return "DummyOutput"
+}
+
 
 type DynInputOutput struct {
 
@@ -1239,6 +1327,10 @@ func (c DynInputOutput) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	return baml.EncodeClass(builder, "DynInputOutput", fields, &c.DynamicProperties)
 }
 
+func (c DynInputOutput) BamlTypeName() string {
+	return "DynInputOutput"
+}
+
 
 type DynamicClassOne struct {
 
@@ -1271,6 +1363,10 @@ func (c DynamicClassOne) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	fields := map[string]any{}
 	
 	return baml.EncodeClass(builder, "DynamicClassOne", fields, &c.DynamicProperties)
+}
+
+func (c DynamicClassOne) BamlTypeName() string {
+	return "DynamicClassOne"
 }
 
 
@@ -1339,6 +1435,10 @@ func (c DynamicClassTwo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	return baml.EncodeClass(builder, "DynamicClassTwo", fields, &c.DynamicProperties)
 }
 
+func (c DynamicClassTwo) BamlTypeName() string {
+	return "DynamicClassTwo"
+}
+
 
 type DynamicOutput struct {
 
@@ -1373,6 +1473,10 @@ func (c DynamicOutput) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion
 	return baml.EncodeClass(builder, "DynamicOutput", fields, &c.DynamicProperties)
 }
 
+func (c DynamicOutput) BamlTypeName() string {
+	return "DynamicOutput"
+}
+
 
 type DynamicSchema struct {
 
@@ -1405,6 +1509,10 @@ func (c DynamicSchema) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion
 	fields := map[string]any{}
 	
 	return baml.EncodeClass(builder, "DynamicSchema", fields, &c.DynamicProperties)
+}
+
+func (c DynamicSchema) BamlTypeName() string {
+	return "DynamicSchema"
 }
 
 
@@ -1446,6 +1554,10 @@ func (c Earthling) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	fields["age"] = c.Age
 	
 	return baml.EncodeClass(builder, "Earthling", fields, nil)
+}
+
+func (c Earthling) BamlTypeName() string {
+	return "Earthling"
 }
 
 
@@ -1519,6 +1631,10 @@ func (c Education) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	return baml.EncodeClass(builder, "Education", fields, nil)
 }
 
+func (c Education) BamlTypeName() string {
+	return "Education"
+}
+
 
 type Email struct {
 
@@ -1574,6 +1690,10 @@ func (c Email) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbu
 	return baml.EncodeClass(builder, "Email", fields, nil)
 }
 
+func (c Email) BamlTypeName() string {
+	return "Email"
+}
+
 
 type EmailAddress struct {
 
@@ -1613,6 +1733,10 @@ func (c EmailAddress) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion,
 	fields["value"] = c.Value
 	
 	return baml.EncodeClass(builder, "EmailAddress", fields, nil)
+}
+
+func (c EmailAddress) BamlTypeName() string {
+	return "EmailAddress"
 }
 
 
@@ -1677,6 +1801,10 @@ func (c Event) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbu
 	return baml.EncodeClass(builder, "Event", fields, nil)
 }
 
+func (c Event) BamlTypeName() string {
+	return "Event"
+}
+
 
 type FakeImage struct {
 
@@ -1716,6 +1844,10 @@ func (c FakeImage) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	fields["url"] = c.Url
 	
 	return baml.EncodeClass(builder, "FakeImage", fields, nil)
+}
+
+func (c FakeImage) BamlTypeName() string {
+	return "FakeImage"
 }
 
 
@@ -1787,6 +1919,10 @@ func (c FlightConfirmation) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	return baml.EncodeClass(builder, "FlightConfirmation", fields, nil)
 }
 
+func (c FlightConfirmation) BamlTypeName() string {
+	return "FlightConfirmation"
+}
+
 
 type FooAny struct {
 
@@ -1842,6 +1978,10 @@ func (c FooAny) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
 	return baml.EncodeClass(builder, "FooAny", fields, nil)
 }
 
+func (c FooAny) BamlTypeName() string {
+	return "FooAny"
+}
+
 
 type Forest struct {
 
@@ -1883,6 +2023,10 @@ func (c Forest) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
 	fields["trees"] = c.Trees
 	
 	return baml.EncodeClass(builder, "Forest", fields, nil)
+}
+
+func (c Forest) BamlTypeName() string {
+	return "Forest"
 }
 
 
@@ -1933,6 +2077,10 @@ func (c FormatterTest0) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	return baml.EncodeClass(builder, "FormatterTest0", fields, nil)
 }
 
+func (c FormatterTest0) BamlTypeName() string {
+	return "FormatterTest0"
+}
+
 
 type FormatterTest1 struct {
 
@@ -1979,6 +2127,10 @@ func (c FormatterTest1) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	fields["ipsum"] = c.Ipsum
 	
 	return baml.EncodeClass(builder, "FormatterTest1", fields, nil)
+}
+
+func (c FormatterTest1) BamlTypeName() string {
+	return "FormatterTest1"
 }
 
 
@@ -2029,6 +2181,10 @@ func (c FormatterTest2) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	return baml.EncodeClass(builder, "FormatterTest2", fields, nil)
 }
 
+func (c FormatterTest2) BamlTypeName() string {
+	return "FormatterTest2"
+}
+
 
 type FormatterTest3 struct {
 
@@ -2075,6 +2231,10 @@ func (c FormatterTest3) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	fields["ipsum"] = c.Ipsum
 	
 	return baml.EncodeClass(builder, "FormatterTest3", fields, nil)
+}
+
+func (c FormatterTest3) BamlTypeName() string {
+	return "FormatterTest3"
 }
 
 
@@ -2141,6 +2301,10 @@ func (c GroceryReceipt) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	return baml.EncodeClass(builder, "GroceryReceipt", fields, nil)
 }
 
+func (c GroceryReceipt) BamlTypeName() string {
+	return "GroceryReceipt"
+}
+
 
 type Haiku struct {
 
@@ -2194,6 +2358,10 @@ func (c Haiku) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbu
 	fields["line3"] = c.Line3
 	
 	return baml.EncodeClass(builder, "Haiku", fields, nil)
+}
+
+func (c Haiku) BamlTypeName() string {
+	return "Haiku"
 }
 
 
@@ -2251,6 +2419,10 @@ func (c InnerClass) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
 	return baml.EncodeClass(builder, "InnerClass", fields, nil)
 }
 
+func (c InnerClass) BamlTypeName() string {
+	return "InnerClass"
+}
+
 
 type InnerClass2 struct {
 
@@ -2297,6 +2469,10 @@ func (c InnerClass2) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
 	fields["prop3"] = c.Prop3
 	
 	return baml.EncodeClass(builder, "InnerClass2", fields, nil)
+}
+
+func (c InnerClass2) BamlTypeName() string {
+	return "InnerClass2"
 }
 
 
@@ -2347,6 +2523,10 @@ func (c InputClass) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
 	return baml.EncodeClass(builder, "InputClass", fields, nil)
 }
 
+func (c InputClass) BamlTypeName() string {
+	return "InputClass"
+}
+
 
 type InputClassNested struct {
 
@@ -2393,6 +2573,10 @@ func (c InputClassNested) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
 	fields["nested"] = c.Nested
 	
 	return baml.EncodeClass(builder, "InputClassNested", fields, nil)
+}
+
+func (c InputClassNested) BamlTypeName() string {
+	return "InputClassNested"
 }
 
 
@@ -2443,6 +2627,10 @@ func (c LinkedList) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
 	return baml.EncodeClass(builder, "LinkedList", fields, nil)
 }
 
+func (c LinkedList) BamlTypeName() string {
+	return "LinkedList"
+}
+
 
 type LinkedListAliasNode struct {
 
@@ -2491,6 +2679,10 @@ func (c LinkedListAliasNode) Encode(builder *flatbuffers.Builder) (cffi.CFFIValu
 	return baml.EncodeClass(builder, "LinkedListAliasNode", fields, nil)
 }
 
+func (c LinkedListAliasNode) BamlTypeName() string {
+	return "LinkedListAliasNode"
+}
+
 
 type LiteralClassHello struct {
 
@@ -2530,6 +2722,10 @@ func (c LiteralClassHello) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueU
 	fields["prop"] = c.Prop
 	
 	return baml.EncodeClass(builder, "LiteralClassHello", fields, nil)
+}
+
+func (c LiteralClassHello) BamlTypeName() string {
+	return "LiteralClassHello"
 }
 
 
@@ -2573,6 +2769,10 @@ func (c LiteralClassOne) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	return baml.EncodeClass(builder, "LiteralClassOne", fields, nil)
 }
 
+func (c LiteralClassOne) BamlTypeName() string {
+	return "LiteralClassOne"
+}
+
 
 type LiteralClassTwo struct {
 
@@ -2612,6 +2812,10 @@ func (c LiteralClassTwo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	fields["prop"] = c.Prop
 	
 	return baml.EncodeClass(builder, "LiteralClassTwo", fields, nil)
+}
+
+func (c LiteralClassTwo) BamlTypeName() string {
+	return "LiteralClassTwo"
 }
 
 
@@ -2655,6 +2859,10 @@ func (c MalformedConstraints) Encode(builder *flatbuffers.Builder) (cffi.CFFIVal
 	return baml.EncodeClass(builder, "MalformedConstraints", fields, nil)
 }
 
+func (c MalformedConstraints) BamlTypeName() string {
+	return "MalformedConstraints"
+}
+
 
 type MalformedConstraints2 struct {
 
@@ -2694,6 +2902,10 @@ func (c MalformedConstraints2) Encode(builder *flatbuffers.Builder) (cffi.CFFIVa
 	fields["foo"] = c.Foo
 	
 	return baml.EncodeClass(builder, "MalformedConstraints2", fields, nil)
+}
+
+func (c MalformedConstraints2) BamlTypeName() string {
+	return "MalformedConstraints2"
 }
 
 
@@ -2738,6 +2950,10 @@ func (c Martian) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flat
 	fields["age"] = c.Age
 	
 	return baml.EncodeClass(builder, "Martian", fields, nil)
+}
+
+func (c Martian) BamlTypeName() string {
+	return "Martian"
 }
 
 
@@ -2795,6 +3011,10 @@ func (c MemoryObject) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion,
 	return baml.EncodeClass(builder, "MemoryObject", fields, nil)
 }
 
+func (c MemoryObject) BamlTypeName() string {
+	return "MemoryObject"
+}
+
 
 type MergeAttrs struct {
 
@@ -2834,6 +3054,10 @@ func (c MergeAttrs) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
 	fields["amount"] = c.Amount
 	
 	return baml.EncodeClass(builder, "MergeAttrs", fields, nil)
+}
+
+func (c MergeAttrs) BamlTypeName() string {
+	return "MergeAttrs"
 }
 
 
@@ -2891,6 +3115,10 @@ func (c NamedArgsSingleClass) Encode(builder *flatbuffers.Builder) (cffi.CFFIVal
 	return baml.EncodeClass(builder, "NamedArgsSingleClass", fields, nil)
 }
 
+func (c NamedArgsSingleClass) BamlTypeName() string {
+	return "NamedArgsSingleClass"
+}
+
 
 type Nested struct {
 
@@ -2946,6 +3174,10 @@ func (c Nested) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
 	return baml.EncodeClass(builder, "Nested", fields, nil)
 }
 
+func (c Nested) BamlTypeName() string {
+	return "Nested"
+}
+
 
 type Nested2 struct {
 
@@ -2994,6 +3226,10 @@ func (c Nested2) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flat
 	return baml.EncodeClass(builder, "Nested2", fields, nil)
 }
 
+func (c Nested2) BamlTypeName() string {
+	return "Nested2"
+}
+
 
 type NestedBlockConstraint struct {
 
@@ -3035,6 +3271,10 @@ func (c NestedBlockConstraint) Encode(builder *flatbuffers.Builder) (cffi.CFFIVa
 	return baml.EncodeClass(builder, "NestedBlockConstraint", fields, nil)
 }
 
+func (c NestedBlockConstraint) BamlTypeName() string {
+	return "NestedBlockConstraint"
+}
+
 
 type NestedBlockConstraintForParam struct {
 
@@ -3074,6 +3314,10 @@ func (c NestedBlockConstraintForParam) Encode(builder *flatbuffers.Builder) (cff
 	fields["nbcfp"] = c.Nbcfp
 	
 	return baml.EncodeClass(builder, "NestedBlockConstraintForParam", fields, nil)
+}
+
+func (c NestedBlockConstraintForParam) BamlTypeName() string {
+	return "NestedBlockConstraintForParam"
 }
 
 
@@ -3124,6 +3368,10 @@ func (c Node) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuf
 	return baml.EncodeClass(builder, "Node", fields, nil)
 }
 
+func (c Node) BamlTypeName() string {
+	return "Node"
+}
+
 
 type NodeWithAliasIndirection struct {
 
@@ -3170,6 +3418,10 @@ func (c NodeWithAliasIndirection) Encode(builder *flatbuffers.Builder) (cffi.CFF
 	fields["next"] = c.Next
 	
 	return baml.EncodeClass(builder, "NodeWithAliasIndirection", fields, nil)
+}
+
+func (c NodeWithAliasIndirection) BamlTypeName() string {
+	return "NodeWithAliasIndirection"
 }
 
 
@@ -3227,6 +3479,10 @@ func (c Note1599) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fla
 	return baml.EncodeClass(builder, "Note1599", fields, nil)
 }
 
+func (c Note1599) BamlTypeName() string {
+	return "Note1599"
+}
+
 
 type OptionalListAndMap struct {
 
@@ -3275,6 +3531,10 @@ func (c OptionalListAndMap) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	return baml.EncodeClass(builder, "OptionalListAndMap", fields, nil)
 }
 
+func (c OptionalListAndMap) BamlTypeName() string {
+	return "OptionalListAndMap"
+}
+
 
 type OptionalTest_Prop1 struct {
 
@@ -3321,6 +3581,10 @@ func (c OptionalTest_Prop1) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	fields["omega_b"] = c.Omega_b
 	
 	return baml.EncodeClass(builder, "OptionalTest_Prop1", fields, nil)
+}
+
+func (c OptionalTest_Prop1) BamlTypeName() string {
+	return "OptionalTest_Prop1"
 }
 
 
@@ -3380,6 +3644,10 @@ func (c OptionalTest_ReturnType) Encode(builder *flatbuffers.Builder) (cffi.CFFI
 	return baml.EncodeClass(builder, "OptionalTest_ReturnType", fields, nil)
 }
 
+func (c OptionalTest_ReturnType) BamlTypeName() string {
+	return "OptionalTest_ReturnType"
+}
+
 
 type OrderInfo struct {
 
@@ -3435,6 +3703,10 @@ func (c OrderInfo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	return baml.EncodeClass(builder, "OrderInfo", fields, nil)
 }
 
+func (c OrderInfo) BamlTypeName() string {
+	return "OrderInfo"
+}
+
 
 type OriginalA struct {
 
@@ -3474,6 +3746,10 @@ func (c OriginalA) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	fields["value"] = c.Value
 	
 	return baml.EncodeClass(builder, "OriginalA", fields, nil)
+}
+
+func (c OriginalA) BamlTypeName() string {
+	return "OriginalA"
 }
 
 
@@ -3526,6 +3802,10 @@ func (c OriginalB) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	fields["value"] = c.Value
 	
 	return baml.EncodeClass(builder, "OriginalB", fields, &c.DynamicProperties)
+}
+
+func (c OriginalB) BamlTypeName() string {
+	return "OriginalB"
 }
 
 
@@ -3587,6 +3867,10 @@ func (c Person) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
 	return baml.EncodeClass(builder, "Person", fields, &c.DynamicProperties)
 }
 
+func (c Person) BamlTypeName() string {
+	return "Person"
+}
+
 
 type PhoneNumber struct {
 
@@ -3626,6 +3910,10 @@ func (c PhoneNumber) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
 	fields["value"] = c.Value
 	
 	return baml.EncodeClass(builder, "PhoneNumber", fields, nil)
+}
+
+func (c PhoneNumber) BamlTypeName() string {
+	return "PhoneNumber"
 }
 
 
@@ -3676,6 +3964,10 @@ func (c Quantity) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fla
 	return baml.EncodeClass(builder, "Quantity", fields, nil)
 }
 
+func (c Quantity) BamlTypeName() string {
+	return "Quantity"
+}
+
 
 type RaysData struct {
 
@@ -3722,6 +4014,10 @@ func (c RaysData) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fla
 	fields["value"] = c.Value
 	
 	return baml.EncodeClass(builder, "RaysData", fields, nil)
+}
+
+func (c RaysData) BamlTypeName() string {
+	return "RaysData"
 }
 
 
@@ -3779,6 +4075,10 @@ func (c ReceiptInfo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
 	fields["venue"] = c.Venue
 	
 	return baml.EncodeClass(builder, "ReceiptInfo", fields, nil)
+}
+
+func (c ReceiptInfo) BamlTypeName() string {
+	return "ReceiptInfo"
 }
 
 
@@ -3843,6 +4143,10 @@ func (c ReceiptItem) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
 	return baml.EncodeClass(builder, "ReceiptItem", fields, nil)
 }
 
+func (c ReceiptItem) BamlTypeName() string {
+	return "ReceiptItem"
+}
+
 
 type Recipe struct {
 
@@ -3891,6 +4195,10 @@ func (c Recipe) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
 	return baml.EncodeClass(builder, "Recipe", fields, nil)
 }
 
+func (c Recipe) BamlTypeName() string {
+	return "Recipe"
+}
+
 
 type RecursiveAliasDependency struct {
 
@@ -3930,6 +4238,10 @@ func (c RecursiveAliasDependency) Encode(builder *flatbuffers.Builder) (cffi.CFF
 	fields["value"] = c.Value
 	
 	return baml.EncodeClass(builder, "RecursiveAliasDependency", fields, nil)
+}
+
+func (c RecursiveAliasDependency) BamlTypeName() string {
+	return "RecursiveAliasDependency"
 }
 
 
@@ -4012,6 +4324,10 @@ func (c Resume) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
 	fields["skills"] = c.Skills
 	
 	return baml.EncodeClass(builder, "Resume", fields, nil)
+}
+
+func (c Resume) BamlTypeName() string {
+	return "Resume"
 }
 
 
@@ -4101,6 +4417,10 @@ func (c Schema) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
 	return baml.EncodeClass(builder, "Schema", fields, nil)
 }
 
+func (c Schema) BamlTypeName() string {
+	return "Schema"
+}
+
 
 type SearchParams struct {
 
@@ -4181,6 +4501,10 @@ func (c SearchParams) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion,
 	fields["tags"] = c.Tags
 	
 	return baml.EncodeClass(builder, "SearchParams", fields, nil)
+}
+
+func (c SearchParams) BamlTypeName() string {
+	return "SearchParams"
 }
 
 
@@ -4275,6 +4599,10 @@ func (c SemanticContainer) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueU
 	return baml.EncodeClass(builder, "SemanticContainer", fields, nil)
 }
 
+func (c SemanticContainer) BamlTypeName() string {
+	return "SemanticContainer"
+}
+
 
 type SimpleTag struct {
 
@@ -4314,6 +4642,10 @@ func (c SimpleTag) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
 	fields["field"] = c.Field
 	
 	return baml.EncodeClass(builder, "SimpleTag", fields, nil)
+}
+
+func (c SimpleTag) BamlTypeName() string {
+	return "SimpleTag"
 }
 
 
@@ -4362,6 +4694,10 @@ func (c SmallThing) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
 	fields["i_8_digits"] = c.I_8_digits
 	
 	return baml.EncodeClass(builder, "SmallThing", fields, nil)
+}
+
+func (c SmallThing) BamlTypeName() string {
+	return "SmallThing"
 }
 
 
@@ -4416,6 +4752,10 @@ func (c SomeClassNestedDynamic) Encode(builder *flatbuffers.Builder) (cffi.CFFIV
 	return baml.EncodeClass(builder, "SomeClassNestedDynamic", fields, &c.DynamicProperties)
 }
 
+func (c SomeClassNestedDynamic) BamlTypeName() string {
+	return "SomeClassNestedDynamic"
+}
+
 
 type StringToClassEntry struct {
 
@@ -4455,6 +4795,10 @@ func (c StringToClassEntry) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	fields["word"] = c.Word
 	
 	return baml.EncodeClass(builder, "StringToClassEntry", fields, nil)
+}
+
+func (c StringToClassEntry) BamlTypeName() string {
+	return "StringToClassEntry"
 }
 
 
@@ -4526,6 +4870,10 @@ func (c TestClassAlias) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnio
 	return baml.EncodeClass(builder, "TestClassAlias", fields, nil)
 }
 
+func (c TestClassAlias) BamlTypeName() string {
+	return "TestClassAlias"
+}
+
 
 type TestClassNested struct {
 
@@ -4574,6 +4922,10 @@ func (c TestClassNested) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	return baml.EncodeClass(builder, "TestClassNested", fields, nil)
 }
 
+func (c TestClassNested) BamlTypeName() string {
+	return "TestClassNested"
+}
+
 
 type TestClassWithEnum struct {
 
@@ -4620,6 +4972,10 @@ func (c TestClassWithEnum) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueU
 	fields["prop2"] = c.Prop2
 	
 	return baml.EncodeClass(builder, "TestClassWithEnum", fields, nil)
+}
+
+func (c TestClassWithEnum) BamlTypeName() string {
+	return "TestClassWithEnum"
 }
 
 
@@ -4674,6 +5030,10 @@ func (c TestMemoryOutput) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
 	return baml.EncodeClass(builder, "TestMemoryOutput", fields, nil)
 }
 
+func (c TestMemoryOutput) BamlTypeName() string {
+	return "TestMemoryOutput"
+}
+
 
 type TestOutputClass struct {
 
@@ -4722,6 +5082,10 @@ func (c TestOutputClass) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUni
 	return baml.EncodeClass(builder, "TestOutputClass", fields, nil)
 }
 
+func (c TestOutputClass) BamlTypeName() string {
+	return "TestOutputClass"
+}
+
 
 type Tree struct {
 
@@ -4768,6 +5132,10 @@ func (c Tree) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuf
 	fields["children"] = c.Children
 	
 	return baml.EncodeClass(builder, "Tree", fields, nil)
+}
+
+func (c Tree) BamlTypeName() string {
+	return "Tree"
 }
 
 
@@ -4825,6 +5193,10 @@ func (c TwoStoriesOneTitle) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	return baml.EncodeClass(builder, "TwoStoriesOneTitle", fields, nil)
 }
 
+func (c TwoStoriesOneTitle) BamlTypeName() string {
+	return "TwoStoriesOneTitle"
+}
+
 
 type TwoStoriesOneTitleCheck struct {
 
@@ -4878,6 +5250,10 @@ func (c TwoStoriesOneTitleCheck) Encode(builder *flatbuffers.Builder) (cffi.CFFI
 	fields["story_b"] = c.Story_b
 	
 	return baml.EncodeClass(builder, "TwoStoriesOneTitleCheck", fields, nil)
+}
+
+func (c TwoStoriesOneTitleCheck) BamlTypeName() string {
+	return "TwoStoriesOneTitleCheck"
 }
 
 
@@ -4937,6 +5313,10 @@ func (c UnionTest_ReturnType) Encode(builder *flatbuffers.Builder) (cffi.CFFIVal
 	return baml.EncodeClass(builder, "UnionTest_ReturnType", fields, nil)
 }
 
+func (c UnionTest_ReturnType) BamlTypeName() string {
+	return "UnionTest_ReturnType"
+}
+
 
 // my docs
 type UniverseQuestion struct {
@@ -4986,6 +5366,10 @@ func (c UniverseQuestion) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
 	return baml.EncodeClass(builder, "UniverseQuestion", fields, nil)
 }
 
+func (c UniverseQuestion) BamlTypeName() string {
+	return "UniverseQuestion"
+}
+
 
 type UniverseQuestionInput struct {
 
@@ -5025,6 +5409,10 @@ func (c UniverseQuestionInput) Encode(builder *flatbuffers.Builder) (cffi.CFFIVa
 	fields["question"] = c.Question
 	
 	return baml.EncodeClass(builder, "UniverseQuestionInput", fields, nil)
+}
+
+func (c UniverseQuestionInput) BamlTypeName() string {
+	return "UniverseQuestionInput"
 }
 
 
@@ -5073,6 +5461,10 @@ func (c WithReasoning) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion
 	fields["reasoning"] = c.Reasoning
 	
 	return baml.EncodeClass(builder, "WithReasoning", fields, nil)
+}
+
+func (c WithReasoning) BamlTypeName() string {
+	return "WithReasoning"
 }
 
 

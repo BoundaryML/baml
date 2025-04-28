@@ -27,17 +27,16 @@ func TestEncodeDecode(t *testing.T) {
 			Foo: 1,
 			Bar: "bar",
 		}},
-		// TODO: fix this
-		// {map[string]b.BlockConstraint{
-		// 	"a": {
-		// 		Foo: 1,
-		// 		Bar: "bar",
-		// 	},
-		// 	"b": {
-		// 		Foo: 2,
-		// 		Bar: "baz",
-		// 	},
-		// }},
+		{map[string]b.BlockConstraint{
+			"a": {
+				Foo: 1,
+				Bar: "bar",
+			},
+			"b": {
+				Foo: 2,
+				Bar: "baz",
+			},
+		}},
 	}
 
 	for _, test := range tests {

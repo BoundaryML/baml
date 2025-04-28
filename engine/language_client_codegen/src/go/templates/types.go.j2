@@ -69,6 +69,10 @@ func (c {{ class.name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
 	return baml.EncodeClass(builder, "{{ class.name }}", fields, {% if class.dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
 }
 
+func (c {{ class.name }}) BamlTypeName() string {
+	return "{{ class.name }}"
+}
+
 {% endfor %}
 
 {#- Type Aliases -#}

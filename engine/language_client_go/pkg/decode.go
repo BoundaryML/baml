@@ -146,7 +146,12 @@ func decodeMapValue(valueHolder *cffi.CFFIValueHolder) any {
 		if valueMap.Entries(&value, i) {
 			key := string(value.Key())
 			valueHolder := value.Value(nil)
-			values.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(Decode(valueHolder)))
+
+			rv := reflect.ValueOf(Decode(valueHolder))
+			if rv.Kind() == reflect.Ptr {
+				rv = rv.Elem()
+			}
+			values.SetMapIndex(reflect.ValueOf(key), rv)
 		} else {
 			panic("error decoding value")
 		}
@@ -361,6 +366,21 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type 
 		return reflect.TypeOf(f)
 	case cffi.CFFIFieldTypeUnionCFFIFieldTypeBool:
 		return reflect.TypeOf(false)
+	case cffi.CFFIFieldTypeUnionCFFIFieldTypeClass:
+		var classTable flatbuffers.Table
+		if !fieldType.Type(&classTable) {
+			panic("error decoding value")
+		}
+
+		var classType cffi.CFFIFieldTypeClass
+		classType.Init(classTable.Bytes, classTable.Pos)
+
+		goType, ok := typeMap[string(classType.Name())]
+		if !ok {
+			panic("error decoding value")
+		}
+
+		return goType
 	default:
 		panic(fmt.Sprintf("unexpected field type %d", fieldType.TypeType()))
 	}

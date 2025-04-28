@@ -81,6 +81,10 @@ func (e AliasedEnum) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
     return baml.EncodeEnum(builder, "AliasedEnum", string(e), false)
 }
 
+func (e AliasedEnum) BamlTypeName() string {
+    return "AliasedEnum"
+}
+
 type Category string
 
 const (
@@ -146,6 +150,10 @@ func (e *Category) Decode(holder cffi.CFFIValueEnum) {
 
 func (e Category) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "Category", string(e), false)
+}
+
+func (e Category) BamlTypeName() string {
+    return "Category"
 }
 
 type Category2 string
@@ -215,6 +223,10 @@ func (e Category2) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
     return baml.EncodeEnum(builder, "Category2", string(e), false)
 }
 
+func (e Category2) BamlTypeName() string {
+    return "Category2"
+}
+
 type Category3 string
 
 const (
@@ -282,6 +294,10 @@ func (e Category3) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fl
     return baml.EncodeEnum(builder, "Category3", string(e), false)
 }
 
+func (e Category3) BamlTypeName() string {
+    return "Category3"
+}
+
 type Color string
 
 const (
@@ -347,6 +363,10 @@ func (e Color) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbu
     return baml.EncodeEnum(builder, "Color", string(e), false)
 }
 
+func (e Color) BamlTypeName() string {
+    return "Color"
+}
+
 type DataType string
 
 const (
@@ -408,6 +428,10 @@ func (e DataType) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, fla
     return baml.EncodeEnum(builder, "DataType", string(e), false)
 }
 
+func (e DataType) BamlTypeName() string {
+    return "DataType"
+}
+
 type DynEnumOne string
 
 const (
@@ -462,6 +486,10 @@ func (e DynEnumOne) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
     return baml.EncodeEnum(builder, "DynEnumOne", string(e), false)
 }
 
+func (e DynEnumOne) BamlTypeName() string {
+    return "DynEnumOne"
+}
+
 type DynEnumTwo string
 
 const (
@@ -514,6 +542,10 @@ func (e *DynEnumTwo) Decode(holder cffi.CFFIValueEnum) {
 
 func (e DynEnumTwo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "DynEnumTwo", string(e), false)
+}
+
+func (e DynEnumTwo) BamlTypeName() string {
+    return "DynEnumTwo"
 }
 
 type EnumInClass string
@@ -575,6 +607,10 @@ func (e *EnumInClass) Decode(holder cffi.CFFIValueEnum) {
 
 func (e EnumInClass) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "EnumInClass", string(e), false)
+}
+
+func (e EnumInClass) BamlTypeName() string {
+    return "EnumInClass"
 }
 
 // An enum with three values,
@@ -644,6 +680,10 @@ func (e EnumOutput) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, f
     return baml.EncodeEnum(builder, "EnumOutput", string(e), false)
 }
 
+func (e EnumOutput) BamlTypeName() string {
+    return "EnumOutput"
+}
+
 type Hobby string
 
 const (
@@ -701,6 +741,10 @@ func (e *Hobby) Decode(holder cffi.CFFIValueEnum) {
 
 func (e Hobby) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "Hobby", string(e), false)
+}
+
+func (e Hobby) BamlTypeName() string {
+    return "Hobby"
 }
 
 type MapKey string
@@ -766,6 +810,10 @@ func (e MapKey) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatb
     return baml.EncodeEnum(builder, "MapKey", string(e), false)
 }
 
+func (e MapKey) BamlTypeName() string {
+    return "MapKey"
+}
+
 type NamedArgsSingleEnum string
 
 const (
@@ -825,6 +873,10 @@ func (e *NamedArgsSingleEnum) Decode(holder cffi.CFFIValueEnum) {
 
 func (e NamedArgsSingleEnum) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "NamedArgsSingleEnum", string(e), false)
+}
+
+func (e NamedArgsSingleEnum) BamlTypeName() string {
+    return "NamedArgsSingleEnum"
 }
 
 type NamedArgsSingleEnumList string
@@ -888,6 +940,10 @@ func (e NamedArgsSingleEnumList) Encode(builder *flatbuffers.Builder) (cffi.CFFI
     return baml.EncodeEnum(builder, "NamedArgsSingleEnumList", string(e), false)
 }
 
+func (e NamedArgsSingleEnumList) BamlTypeName() string {
+    return "NamedArgsSingleEnumList"
+}
+
 type OptionalTest_CategoryType string
 
 const (
@@ -949,6 +1005,10 @@ func (e *OptionalTest_CategoryType) Decode(holder cffi.CFFIValueEnum) {
 
 func (e OptionalTest_CategoryType) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "OptionalTest_CategoryType", string(e), false)
+}
+
+func (e OptionalTest_CategoryType) BamlTypeName() string {
+    return "OptionalTest_CategoryType"
 }
 
 type OrderStatus string
@@ -1016,6 +1076,10 @@ func (e OrderStatus) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, 
     return baml.EncodeEnum(builder, "OrderStatus", string(e), false)
 }
 
+func (e OrderStatus) BamlTypeName() string {
+    return "OrderStatus"
+}
+
 type Tag string
 
 const (
@@ -1077,6 +1141,10 @@ func (e *Tag) Decode(holder cffi.CFFIValueEnum) {
 
 func (e Tag) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "Tag", string(e), false)
+}
+
+func (e Tag) BamlTypeName() string {
+    return "Tag"
 }
 
 type TestEnum string
@@ -1148,4 +1216,8 @@ func (e *TestEnum) Decode(holder cffi.CFFIValueEnum) {
 
 func (e TestEnum) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "TestEnum", string(e), false)
+}
+
+func (e TestEnum) BamlTypeName() string {
+    return "TestEnum"
 }
