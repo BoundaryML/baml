@@ -4,7 +4,7 @@ use anyhow::Result;
 use baml_types::{Constraint, FieldType, StreamingBehavior, TypeValue};
 use indexmap::{IndexMap, IndexSet};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Name {
     name: String,
     rendered_name: Option<String>,

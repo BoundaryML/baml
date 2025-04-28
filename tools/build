@@ -130,7 +130,7 @@ case "$_path" in
       #command="wasm-pack test --chrome . --features=wasm"
       #command="wasm-pack test --node . --features=wasm"
       # command="cargo test --features=no_wasm,internal internal --verbose -- --nocapture"
-      command="cargo test --features=internal internal -- --nocapture"
+      command="cargo test --package baml-runtime --test test_runtime --features "internal" -- internal_tests::test_enums --show-output"
     else
       command="cargo build --features=wasm --target=wasm32-unknown-unknown"
       command="cargo build"

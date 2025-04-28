@@ -2,6 +2,7 @@ use baml_types::{BamlMedia, BamlValue, EvaluationContext};
 use colored::*;
 mod chat_message_part;
 
+mod enum_definition_to_jinja_value;
 mod output_format;
 use internal_baml_core::ir::jinja_helpers::get_env;
 use internal_baml_core::ir::repr::IntermediateRepr;
@@ -53,6 +54,7 @@ fn render_minijinja(
     template_string_macros: &[TemplateStringMacro],
     default_role: String,
     allowed_roles: Vec<String>,
+    enum_definitions: HashMap<String, minijinja::Value>,
 ) -> Result<RenderedPrompt, minijinja::Error> {
     let mut env = get_env();
 
@@ -167,6 +169,9 @@ fn render_minijinja(
             role => role_fn
         },
     );
+    for (key, value) in enum_definitions {
+        env.add_global(key, value);
+    }
 
     let tmpl = env.get_template("prompt")?;
 
@@ -416,6 +421,12 @@ pub fn render_prompt(
     }
     let eval_ctx = EvaluationContext::new(env_vars, false);
     let minijinja_args: minijinja::Value = args.clone().to_minijinja_value(ir, &eval_ctx);
+    let enum_definitions = ctx
+        .output_format
+        .enums
+        .iter()
+        .map(|(k, v)| (k.clone(), v.to_minijinja_value(ir, &eval_ctx)))
+        .collect();
     let default_role = ctx.client.default_role.clone();
     let allowed_roles = ctx.client.allowed_roles.clone();
     let rendered = render_minijinja(
@@ -425,6 +436,7 @@ pub fn render_prompt(
         template_string_macros,
         default_role,
         allowed_roles,
+        enum_definitions,
     );
 
     match rendered {
@@ -2119,6 +2131,7 @@ mod render_tests {
             &[],
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
+            HashMap::new(),
         )
         .expect("Rendering should succeed");
         match result {
@@ -2201,6 +2214,7 @@ mod render_tests {
             &[],
             "user".to_string(),
             vec!["user".to_string(), "system".to_string()],
+            HashMap::new(),
         )
         .expect("Rendering should succeed");
         match result {
