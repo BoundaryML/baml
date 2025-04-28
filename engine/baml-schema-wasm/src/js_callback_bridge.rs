@@ -15,46 +15,43 @@ trait WasmCallbackBridge {
         arg: Option<String>,
     ) -> Result<Self::TCallbackResult, RuntimeCallbackError> {
         let Ok(load) = callback.call1(&JsValue::NULL, &JsValue::from(arg)) else {
-            return Err(RuntimeCallbackError::AwsCredProviderError(format!(
+            return Err(RuntimeCallbackError::JsCallbackTypeError(format!(
                 "{} did not return a promise",
                 Self::CALLBACK_NAME
             )));
         };
 
-        let load = JsFuture::from(Promise::unchecked_from_js(load)).await;
-
-        let load = match load {
-            Ok(load) => load,
-            Err(err) => {
-                if let Some(e) = err.dyn_ref::<js_sys::Error>() {
-                    if let Some(e_str) = e.message().as_string() {
+        let load = match JsFuture::from(Promise::unchecked_from_js(load)).await {
+            Err(e) => {
+                if let Some(e_as_error) = e.dyn_ref::<js_sys::Error>() {
+                    if let Some(e_as_str) = e_as_error.message().as_string() {
                         return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                            "{} failure: {}",
+                            "{} rejected during promise await: {}",
                             Self::CALLBACK_NAME,
-                            e_str
+                            e_as_str
                         )));
                     }
                 }
-
-                return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                    "{} rejected: {:?}",
+                return Err(RuntimeCallbackError::JsCallbackTypeError(format!(
+                    "{} rejected during promise await: {:?}",
                     Self::CALLBACK_NAME,
-                    err
+                    e
                 )));
             }
+            Ok(load) => load,
         };
 
-        let creds_result = match serde_wasm_bindgen::from_value::<Self::TCallbackResult>(load) {
+        let callback_result = match serde_wasm_bindgen::from_value::<Self::TCallbackResult>(load) {
             Ok(creds) => Ok(creds),
-            Err(e) => Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                "Expected {} to return an {}: {:?}",
+            Err(e) => Err(RuntimeCallbackError::JsCallbackTypeError(format!(
+                "Failed to deserialize {} return value into {}: {:?}",
                 Self::CALLBACK_NAME,
                 std::any::type_name::<Self::TCallbackResult>(),
                 e
             ))),
         };
 
-        creds_result
+        callback_result
     }
 }
 
@@ -72,6 +69,7 @@ impl WasmCallbackBridge for GcpCredProvider {
     const CALLBACK_NAME: &'static str = "loadGcpCreds";
 }
 
+// TODO: trait-ify the loop method (but I think it's actually more boilerplate to trait-ify it than to just copy-paste right now)
 async fn loop_aws_cred_provider(
     load_aws_creds_cb: js_sys::Function,
     mut req_rx: tokio::sync::mpsc::Receiver<Option<String>>,

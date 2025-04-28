@@ -16,6 +16,9 @@ pub enum RuntimeCallbackError {
     #[error("Failed to load aws creds: {0}")]
     AwsCredProviderError(String),
 
+    #[error("Failed in JS callback: {0}")]
+    JsCallbackTypeError(String),
+
     #[error("BAML internal error - credential provider bridges not initialized")]
     NoCredProviderBridge,
 }
