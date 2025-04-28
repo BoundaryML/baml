@@ -16,7 +16,7 @@
 
 <h3>
 
-[Homepage](https://www.boundaryml.com/) | [Docs](https://docs.boundaryml.com) | [BAML Chat](https://www.boundaryml.com/chat) | [Discord](https://discord.gg/BTNBeXGuaS)
+[Homepage](https://www.boundaryml.com/) | [Docs](https://docs.boundaryml.com) | [BAML AI Chat](https://www.boundaryml.com/chat) | [Discord](https://discord.gg/BTNBeXGuaS)
 
 </h3>
 
@@ -34,8 +34,8 @@
 
 |   |     |
 | - | - |
-| What is BAML? | BAML is a new programming language for building AI applications. |
-| Do I need to write my whole app in BAML? | Nope, only the AI parts, you can then use BAML with any existing language of your choice! [python](https://docs.boundaryml.com/guide/installation-language/python), [typescript](https://docs.boundaryml.com/guide/installation-language/typescript), and [more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages). |
+| What is BAML? | BAML is a simple programming language for building AI workflows and agents reliably |
+| Do I need to write my whole app in BAML? | Nope, only the prompts! BAML translates definitions into the language of your choice! [python](https://docs.boundaryml.com/guide/installation-language/python), [typescript](https://docs.boundaryml.com/guide/installation-language/typescript), and [more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages). |
 | Is BAML stable? | Yes, many companies use it in production! We ship updates weekly and rarely have breaking changes |
 | Why a new language? | [Jump to section](#why-a-new-programming-language) |
 | Why a lamb? | Baaaaa-ml. LAMB == BAML |
@@ -83,7 +83,7 @@ class StopTool {
 }
 ```
 
-Then in any language of your choice you can do the following:
+Then in any language of your choice you can write an agentic loop or a workflow with these functions.
 
 ```python
 from baml_client import b
@@ -103,62 +103,52 @@ while True:
     messages.append(Message(role="assistant", content=tool.response))
 ```
 
-### Making prompts easy to find and read
+### Test prompts 10x faster, right in your IDE
+BAML comes with native tooling for VSCode (jetbrains + neovim coming soon). 
 
-Since every prompt is a function, we can build tools to find every prompt you've written. But we've taken BAML one step further and built native tooling for VSCode (jetbrains + neovim coming soon).
+**Visualize full prompt (including any multi-modal assets), and the API request**. BAML gives you full transparency and control of the prompt.
 
-1. You can see the full prompt (including any multi-modal assets)
-![Multi Modal](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/02-multi-modal.gif)
-2. You can see the exact network request we are making
-![Token Preview](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/03-curl-token-preview.gif)
-3. You can see every function you've ever written
+![raw-curl](https://github.com/user-attachments/assets/c0b34db9-80cd-45a7-a356-6b5ab4a9c5b7)
 
-![Functions](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/04-functions-preview.png)
-
-### Swapping models: 1-line change
-
-It's just 1 line (ok, maybe 2). [Docs](https://docs.boundaryml.com/guide/baml-basics/switching-llms)
-![Sorry Sam](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/05-sorry-sam.png)
-
-[Retry policies](https://docs.boundaryml.com/ref/llm-client-strategies/retry-policy) • [fallbacks](https://docs.boundaryml.com/ref/llm-client-strategies/fallback) • [model rotations](https://docs.boundaryml.com/ref/llm-client-strategies/round-robin). All statically defined.
-![Fallback Retry](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/06-fallback-retry.gif)
-
-> Want to do pick models at runtime? Check out [Client Registry](https://docs.boundaryml.com/guide/baml-advanced/llm-client-registry).
-
-We currently support: [OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai) • [Anthropic](https://docs.boundaryml.com/ref/llm-client-providers/anthropic) • [Gemini](https://docs.boundaryml.com/ref/llm-client-providers/google-ai-gemini) • [Vertex](https://docs.boundaryml.com/ref/llm-client-providers/google-vertex) • [Bedrock](https://docs.boundaryml.com/ref/llm-client-providers/aws-bedrock) • [Azure OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai-from-azure) • [Anything OpenAI Compatible](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic) ([Ollama](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-ollama), [OpenRouter](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-open-router), [VLLM](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-v-llm), [LMStudio](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-lm-studio), [TogetherAI](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-together-ai), and more)
-
-### Hot-reloading for prompts
-
-Using AI is all about iteration speed.
+**Using AI is all about iteration speed.**
 
 If testing your pipeline takes 2 minutes, in 20 minutes, you can only test 10 ideas.
 
 If testing your pipeline took 5 seconds, in 20 minutes, you can test 240 ideas.
+![resume-attempt2-smaller2](https://github.com/user-attachments/assets/6fc6b8a6-ffed-4cfc-80b8-78bc8a3d66a6)
+No need to login to any website to test things, and no need to copy JSON blobs around.
 
-Introducing testing, for prompts.
+### Enable reliable tool-calling with any model, even when they don't support it
+BAML works even when the models don't support native tool-calling APIs. We created the SAP (schema-aligned parsing) algorithm to support the flexible outputs LLMs can provide, like markdown within a JSON blob or chain-of-thought prior to answering. [Read more about SAP](https://www.boundaryml.com/blog/schema-aligned-parsing)
 
-![Hot Reload](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/07-hotreload.gif)
+With BAML, your structured outputs work in Day-1 of a model release. No need to figure out whether a model supports parallel tool calls, or whether it supports recursive schemas, or `anyOf` or `oneOf` etc.
 
-### Structured outputs with any LLM
+See it in action with: **[Deepseek-R1](https://www.boundaryml.com/blog/deepseek-r1-function-calling)** and [OpenAI O1](https://www.boundaryml.com/blog/openai-o1).
 
-JSON is amazing for REST APIs, but way too strict and verbose for LLMs. LLMs need something flexible. We created the SAP (schema-aligned parsing) algorithm to support the flexible outputs LLMs can provide, like markdown within a JSON blob or chain-of-thought prior to answering.
 
-![Chain of Thought](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/09-cot.gif)
 
-SAP works with any model on day-1, without depending on tool-use or function-calling APIs.
+### Switch from 100s of models in a couple lines
+```diff
+function Extract() -> Resume {
++  client openai/o3-mini
+  prompt #"
+    ....
+  "#
+}
+```
+[Retry policies](https://docs.boundaryml.com/ref/llm-client-strategies/retry-policy) • [fallbacks](https://docs.boundaryml.com/ref/llm-client-strategies/fallback) • [model rotations](https://docs.boundaryml.com/ref/llm-client-strategies/round-robin). All statically defined.
+![Fallback Retry](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/06-fallback-retry.gif)
+Want to do pick models at runtime? Check out the [Client Registry](https://docs.boundaryml.com/guide/baml-advanced/llm-client-registry).
 
-To learn more about SAP you can read this post: [Schema-Aligned Parsing](https://www.boundaryml.com/blog/schema-aligned-parsing).
+We support: [OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai) • [Anthropic](https://docs.boundaryml.com/ref/llm-client-providers/anthropic) • [Gemini](https://docs.boundaryml.com/ref/llm-client-providers/google-ai-gemini) • [Vertex](https://docs.boundaryml.com/ref/llm-client-providers/google-vertex) • [Bedrock](https://docs.boundaryml.com/ref/llm-client-providers/aws-bedrock) • [Azure OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai-from-azure) • [Anything OpenAI Compatible](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic) ([Ollama](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-ollama), [OpenRouter](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-open-router), [VLLM](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-v-llm), [LMStudio](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-lm-studio), [TogetherAI](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-together-ai), and more)
 
-See it in action with: [Deepseek-R1](https://www.boundaryml.com/blog/deepseek-r1-function-calling) and [OpenAI O1](https://www.boundaryml.com/blog/openai-o1).
+### Build beautiful streaming UIs
+BAML generates a ton of utilities for NextJS, Python (and any language) to make streaming UIs easy.
+![recipe-generator](https://github.com/user-attachments/assets/cf82495b-21fc-40bf-ae98-93eef923d620)
 
-### Streaming (when it's a first class citizen)
+BAML's streaming interfaces are fully type-safe. Check out the [Streaming Docs](https://docs.boundaryml.com/guide/baml-basics/streaming), and our [React hooks](https://docs.boundaryml.com/guide/framework-integration/react-next-js/quick-start)
 
-Streaming is way harder than it should be. With our [Python/Typescript/Ruby] generated code, streaming becomes natural and type-safe.
-
-![Streaming](https://www.boundaryml.com/blog/2025-01-24-ai-agents-need-a-new-syntax/10-streaming-client.gif#still)
-
-### No strings attached
-
+### Fully Open-Source, and offline
 - 100% open-source (Apache 2)
 - 100% private. AGI will not require an internet connection, neither will BAML
     - No network requests beyond model calls you explicitly set
