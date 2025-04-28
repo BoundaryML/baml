@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use time::OffsetDateTime;
 
-use crate::{js_callback_provider::get_remote_cred_provider, AwsCredResult, JsCallbackProvider};
+use crate::{js_callback_provider::get_js_callback_provider, AwsCredResult, JsCallbackProvider};
 
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");
@@ -174,37 +174,25 @@ impl std::fmt::Debug for WasmAwsCreds {
 
 impl WasmAwsCreds {
     async fn provide_credentials_impl(&self) -> aws_credential_types::provider::Result {
-        let cred_provider = get_remote_cred_provider().map_err(CredentialsError::unhandled)?;
+        let cred_provider = get_js_callback_provider().map_err(CredentialsError::unhandled)?;
         match cred_provider.aws_req(self.profile.clone()).await {
             Err(e) => {
                 log::error!("Error calling AWS cred provider: {:?}", e);
                 return Err(CredentialsError::unhandled(e));
             }
-            Ok(creds) => match creds {
-                AwsCredResult::Ok {
-                    access_key_id,
-                    secret_access_key,
-                    session_token,
-                    expiration,
-                    ..
-                } => Ok(Credentials::new(
-                    access_key_id,
-                    secret_access_key,
-                    session_token,
-                    match expiration {
-                        Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
-                            Ok(dt) => Some(dt.into()),
-                            Err(_) => None,
-                        },
-                        None => None,
+            Ok(aws_creds) => Ok(Credentials::new(
+                aws_creds.access_key_id,
+                aws_creds.secret_access_key,
+                aws_creds.session_token,
+                match aws_creds.expiration {
+                    Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
+                        Ok(dt) => Some(dt.into()),
+                        Err(_) => None,
                     },
-                    "baml-playground-wasm-bridge",
-                )),
-                AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(format!(
-                    "{}: {}",
-                    name, message
-                ))),
-            },
+                    None => None,
+                },
+                "baml-playground-wasm-bridge",
+            )),
         }
     }
 }

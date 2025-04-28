@@ -128,6 +128,7 @@ export type LoadAwsCredsResponse =
     }
   | {
       error: {
+        name: string
         message: string
       }
     }
@@ -145,6 +146,7 @@ export type LoadGcpCredsResponse =
     }
   | {
       error: {
+        name: string
         message: string
       }
     }

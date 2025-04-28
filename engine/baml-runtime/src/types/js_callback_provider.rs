@@ -3,6 +3,22 @@ use std::sync::OnceLock;
 use derive_new::new;
 use thiserror::Error;
 
+#[derive(Debug, serde::Deserialize, Eq, PartialEq)]
+/// Deserialization helper for js_callback_bridge; declared here to enable testing.
+pub enum JsCallbackResult<T> {
+    #[serde(rename = "ok")]
+    Ok(T),
+    #[serde(rename = "error")]
+    Err(JsCallbackError),
+}
+
+#[derive(Debug, serde::Deserialize, Eq, PartialEq)]
+/// Deserialization helper for js_callback_bridge; declared here to enable deserialization unit testing.
+pub struct JsCallbackError {
+    pub name: String,
+    pub message: String,
+}
+
 #[derive(Debug, Error, Clone)]
 /// For baml-src-reader and aws-cred-provider, provide a statically defined type which is Send + Sync
 /// anyhow::Error is not Send + Sync, so it's convoluted to use it in this callback context
@@ -13,11 +29,11 @@ pub enum RuntimeCallbackError {
     #[error("Failed to recv cred response across WASM bridge: {0}")]
     RecvError(String),
 
-    #[error("Failed to load aws creds: {0}")]
-    AwsCredProviderError(String),
-
-    #[error("Failed in JS callback: {0}")]
+    #[error("Type error in JS callback: {0}")]
     JsCallbackTypeError(String),
+
+    #[error("JS callback error: {name}: {message}")]
+    JsCallbackRuntimeError { name: String, message: String },
 
     #[error("BAML internal error - credential provider bridges not initialized")]
     NoCredProviderBridge,
@@ -29,44 +45,41 @@ pub type RuntimeCallbackResult<T> = Result<T, RuntimeCallbackError>;
 
 static JS_CALLBACK_PROVIDER_SINGLETON: OnceLock<JsCallbackProvider> = OnceLock::new();
 
-pub fn get_remote_cred_provider() -> Result<&'static JsCallbackProvider, RuntimeCallbackError> {
+pub fn get_js_callback_provider() -> Result<&'static JsCallbackProvider, RuntimeCallbackError> {
     JS_CALLBACK_PROVIDER_SINGLETON
         .get()
         .ok_or(RuntimeCallbackError::NoCredProviderBridge)
 }
 
-pub fn set_remote_cred_provider(aws_cred_provider: JsCallbackProvider) {
-    JS_CALLBACK_PROVIDER_SINGLETON.set(aws_cred_provider);
+pub fn set_js_callback_provider(aws_cred_provider: JsCallbackProvider) {
+    match JS_CALLBACK_PROVIDER_SINGLETON.set(aws_cred_provider) {
+        Ok(_) => {
+            tracing::info!("Successfully set JS callback provider");
+        }
+        Err(_) => {
+            tracing::error!("Failed to set JS callback provider");
+        }
+    }
 }
 
 #[derive(serde::Deserialize, Debug, Clone, Eq, PartialEq)]
-pub enum AwsCredResult {
-    #[serde(rename = "error", rename_all = "camelCase")]
-    Err { name: String, message: String },
-
-    #[serde(rename = "ok", rename_all = "camelCase")]
-    /// This is 1:1 with AwsCredentialIdentity in @smithy/types
-    /// https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-smithy-types/Interface/AwsCredentialIdentity/
-    Ok {
-        access_key_id: String,
-        secret_access_key: String,
-        session_token: Option<String>,
-        credential_scope: Option<String>,
-        expiration: Option<String>,
-        account_id: Option<String>,
-    },
+/// This is 1:1 with AwsCredentialIdentity in @smithy/types
+/// https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/Package/-smithy-types/Interface/AwsCredentialIdentity/
+#[serde(rename_all = "camelCase")]
+pub struct AwsCredResult {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: Option<String>,
+    pub credential_scope: Option<String>,
+    pub expiration: Option<String>,
+    pub account_id: Option<String>,
 }
 
 #[derive(serde::Deserialize, Debug, Clone, Eq, PartialEq)]
-pub enum GcpCredResult {
-    #[serde(rename = "error", rename_all = "camelCase")]
-    Err { name: String, message: String },
-
-    #[serde(rename = "ok", rename_all = "camelCase")]
-    Ok {
-        access_token: String,
-        project_id: String,
-    },
+#[serde(rename_all = "camelCase")]
+pub struct GcpCredResult {
+    pub access_token: String,
+    pub project_id: String,
 }
 
 #[derive(new)]
@@ -169,19 +182,19 @@ mod tests {
             }
         });
 
-        let result: AwsCredResult =
+        let result: JsCallbackResult<AwsCredResult> =
             serde_json::from_value(json).expect("Failed to deserialize AWS credentials result");
 
         assert_eq!(
             result,
-            AwsCredResult::Ok {
+            JsCallbackResult::Ok(AwsCredResult {
                 access_key_id: "AKIATEST".into(),
                 secret_access_key: "secret123".into(),
                 session_token: Some("token123".into()),
                 credential_scope: Some("aws/scope".into()),
                 expiration: Some("2024-03-21T00:00:00Z".into()),
                 account_id: Some("123456789".into()),
-            }
+            })
         );
     }
 
@@ -194,19 +207,19 @@ mod tests {
             }
         });
 
-        let result: AwsCredResult = serde_json::from_value(json)
+        let result: JsCallbackResult<AwsCredResult> = serde_json::from_value(json)
             .expect("Failed to deserialize minimal AWS credentials result");
 
         assert_eq!(
             result,
-            AwsCredResult::Ok {
+            JsCallbackResult::Ok(AwsCredResult {
                 access_key_id: "AKIATEST".into(),
                 secret_access_key: "secret123".into(),
                 session_token: None,
                 credential_scope: None,
                 expiration: None,
                 account_id: None,
-            }
+            })
         );
     }
 
@@ -219,15 +232,15 @@ mod tests {
             }
         });
 
-        let result: AwsCredResult =
+        let result: JsCallbackResult<AwsCredResult> =
             serde_json::from_value(json).expect("Failed to deserialize AWS credentials error");
 
         assert_eq!(
             result,
-            AwsCredResult::Err {
+            JsCallbackResult::Err(JsCallbackError {
                 name: "CredentialError".into(),
                 message: "Failed to load credentials".into(),
-            }
+            })
         );
     }
 
@@ -240,15 +253,15 @@ mod tests {
             }
         });
 
-        let result: GcpCredResult =
+        let result: JsCallbackResult<GcpCredResult> =
             serde_json::from_value(json).expect("Failed to deserialize GCP credentials result");
 
         assert_eq!(
             result,
-            GcpCredResult::Ok {
+            JsCallbackResult::Ok(GcpCredResult {
                 access_token: "ya29.token".into(),
                 project_id: "my-project-123".into(),
-            }
+            })
         );
     }
 
@@ -261,15 +274,15 @@ mod tests {
             }
         });
 
-        let result: GcpCredResult =
+        let result: JsCallbackResult<GcpCredResult> =
             serde_json::from_value(json).expect("Failed to deserialize GCP credentials error");
 
         assert_eq!(
             result,
-            GcpCredResult::Err {
+            JsCallbackResult::Err(JsCallbackError {
                 name: "GcpCredentialError".into(),
                 message: "Failed to get GCP credentials".into(),
-            }
+            })
         );
     }
 }

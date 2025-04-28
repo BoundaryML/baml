@@ -1,12 +1,15 @@
 use baml_runtime::{
-    js_callback_provider::{set_remote_cred_provider, GcpCredResult},
+    js_callback_provider::{set_js_callback_provider, GcpCredResult, JsCallbackResult},
     AwsCredResult, JsCallbackProvider, RuntimeCallbackError,
 };
 use js_sys::Promise;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
-trait WasmCallbackBridge {
+/// A trait for invoking JS callbacks from Rust WASM.
+///
+/// See `init_js_callback_bridge` for more details.
+trait JsCallbackBridge {
     type TCallbackResult: serde::de::DeserializeOwned;
     const CALLBACK_NAME: &'static str;
 
@@ -25,9 +28,10 @@ trait WasmCallbackBridge {
             Err(e) => {
                 if let Some(e_as_error) = e.dyn_ref::<js_sys::Error>() {
                     if let Some(e_as_str) = e_as_error.message().as_string() {
-                        return Err(RuntimeCallbackError::AwsCredProviderError(format!(
-                            "{} rejected during promise await: {}",
+                        return Err(RuntimeCallbackError::JsCallbackTypeError(format!(
+                            "{} rejected during promise await with {}: {}",
                             Self::CALLBACK_NAME,
+                            e_as_error.name(),
                             e_as_str
                         )));
                     }
@@ -41,30 +45,34 @@ trait WasmCallbackBridge {
             Ok(load) => load,
         };
 
-        let callback_result = match serde_wasm_bindgen::from_value::<Self::TCallbackResult>(load) {
-            Ok(creds) => Ok(creds),
+        match serde_wasm_bindgen::from_value::<JsCallbackResult<Self::TCallbackResult>>(load) {
+            Ok(retval) => match retval {
+                JsCallbackResult::Ok(retval) => Ok(retval),
+                JsCallbackResult::Err(e) => Err(RuntimeCallbackError::JsCallbackRuntimeError {
+                    name: e.name,
+                    message: e.message,
+                }),
+            },
             Err(e) => Err(RuntimeCallbackError::JsCallbackTypeError(format!(
                 "Failed to deserialize {} return value into {}: {:?}",
                 Self::CALLBACK_NAME,
                 std::any::type_name::<Self::TCallbackResult>(),
                 e
             ))),
-        };
-
-        callback_result
+        }
     }
 }
 
 struct AwsCredProvider;
 
-impl WasmCallbackBridge for AwsCredProvider {
+impl JsCallbackBridge for AwsCredProvider {
     type TCallbackResult = AwsCredResult;
     const CALLBACK_NAME: &'static str = "loadAwsCreds";
 }
 
 struct GcpCredProvider;
 
-impl WasmCallbackBridge for GcpCredProvider {
+impl JsCallbackBridge for GcpCredProvider {
     type TCallbackResult = GcpCredResult;
     const CALLBACK_NAME: &'static str = "loadGcpCreds";
 }
@@ -113,7 +121,7 @@ pub fn init_js_callback_bridge(
     let (gcp_resp_tx, gcp_resp_rx) =
         tokio::sync::broadcast::channel::<Result<GcpCredResult, RuntimeCallbackError>>(100);
 
-    set_remote_cred_provider(JsCallbackProvider::new(
+    set_js_callback_provider(JsCallbackProvider::new(
         aws_req_tx,
         aws_resp_rx,
         gcp_req_tx,
