@@ -5,41 +5,38 @@
     <img src="fern/assets/baml-lamb-white.png" height="64" id="top">
   </picture>
 </a>
+
 </div>
 
 <div align="center">
 
-## BAML: Basically a Made-up Language
-
-*or "Bad-Ass Machine Learning" if your boss isn't around*
-
-
-<h3>
-
-[Homepage](https://www.boundaryml.com/) | [Docs](https://docs.boundaryml.com) | [BAML AI Chat](https://www.boundaryml.com/chat) | [Discord](https://discord.gg/BTNBeXGuaS)
-
-</h3>
-
-[![GitHub Repo stars](https://img.shields.io/github/stars/boundaryml/baml)](https://github.com/boundaryml/baml)
-[![License: Apache-2](https://img.shields.io/badge/License-Apache-green.svg)](https://opensource.org/licenses/Apache-2)
 [![BAML Version](https://img.shields.io/pypi/v/baml-py?color=006dad&label=BAML%20Version)](https://pypi.org/project/baml-py/)
 
 
-**Try BAML**: [Prompt Fiddle](https://www.promptfiddle.com) • [Examples](https://baml-examples.vercel.app/) • [Example Source Code](https://github.com/BoundaryML/baml-examples)
+## BAML: Basically a Made-up Language
 
-**5 minute quickstarts**
-[Python](https://docs.boundaryml.com/guide/installation-language/python) • [Typescript](https://docs.boundaryml.com/guide/installation-language/typescript) • [NextJS](https://docs.boundaryml.com/guide/framework-integration/react-next-js/quick-start) • [Ruby](https://docs.boundaryml.com/guide/installation-language/ruby) • [Others](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages) (Go, Java, C++, Rust, PHP, etc)
+<h6>or "Bad-Ass Machine Learning" if your boss isn't around</h6>
+
+BAML is a simple programming language for building reliable AI workflows and agents.
+
+<h4>
+
+[Homepage](https://www.boundaryml.com/) | [Docs](https://docs.boundaryml.com) | [BAML AI Chat](https://www.boundaryml.com/chat) | [Discord](https://discord.gg/BTNBeXGuaS)
+
+
+
+</h4>
+
+
+**Try BAML**: [Prompt Fiddle](https://www.promptfiddle.com) • [Interactive App Examples](https://baml-examples.vercel.app/)
 
 </div>
 
 |   |     |
 | - | - |
-| What is BAML? | BAML is a simple programming language for building AI workflows and agents reliably |
-| Do I need to write my whole app in BAML? | Nope, only the prompts! BAML translates definitions into the language of your choice! [python](https://docs.boundaryml.com/guide/installation-language/python), [typescript](https://docs.boundaryml.com/guide/installation-language/typescript), and [more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages). |
-| Is BAML stable? | Yes, many companies use it in production! We ship updates weekly and rarely have breaking changes |
+| Do I need to write my whole app in BAML? | Nope, only the prompts! BAML translates definitions into the language of your choice! [Python](https://docs.boundaryml.com/guide/installation-language/python), [TypeScript](https://docs.boundaryml.com/guide/installation-language/typescript), [Ruby](https://docs.boundaryml.com/guide/installation-language/ruby) and [more](https://docs.boundaryml.com/guide/installation-language/rest-api-other-languages). |
+| Is BAML stable? | Yes, many companies use it in production! We ship updates weekly! |
 | Why a new language? | [Jump to section](#why-a-new-programming-language) |
-| Why a lamb? | Baaaaa-ml. LAMB == BAML |
-
 
 ## The core BAML principle: LLM Prompts are functions
 
@@ -102,6 +99,7 @@ while True:
   else:
     messages.append(Message(role="assistant", content=tool.response))
 ```
+You can write any kind of agent or workflow using chained BAML functions.
 
 ### Test prompts 10x faster, right in your IDE
 BAML comes with native tooling for VSCode (jetbrains + neovim coming soon). 
