@@ -10,23 +10,19 @@ import (
 
 // BamlSerializer interface for custom class encoding
 type BamlSerializer interface {
-	// EncodeBamlClass returns the class name and a map of field names to values.
-	// The TypeMap is provided in case the implementation needs it for nested types.
-	Encode(builder *flatbuffers.Builder, typeMap TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error)
+	Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error)
+	BamlTypeName() string
 }
 
 // implment BamlSerializer for anything that implements BamlClassSerializer, BamlEnumSerializer, or BamlUnionSerializer
-func EncodeClass(builder *flatbuffers.Builder, typeMap TypeMap,
-	name string, fields map[string]any, dynamicFields *map[string]any) (valueType cffi.CFFIValueUnion, offset flatbuffers.UOffsetT, err error) {
+func EncodeClass(builder *flatbuffers.Builder, name string, fields map[string]any, dynamicFields *map[string]any) (valueType cffi.CFFIValueUnion, offset flatbuffers.UOffsetT, err error) {
 
 	nameOffset := builder.CreateString(name)
 
 	// Encode Static Fields
 	var staticFieldsVectorOffset flatbuffers.UOffsetT
 	if len(fields) > 0 {
-		// Use the specific Start function before creating the vector
-		cffi.CFFIValueClassStartFieldsVector(builder, len(fields))
-		staticFieldsVectorOffset, err = encodeMapEntries(builder, fields, typeMap, "static class")
+		staticFieldsVectorOffset, err = encodeMapEntries(builder, fields, "static class")
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, err // Error already includes context
 		}
@@ -35,9 +31,7 @@ func EncodeClass(builder *flatbuffers.Builder, typeMap TypeMap,
 	// Encode Dynamic Fields
 	var dynamicFieldsVectorOffset flatbuffers.UOffsetT
 	if dynamicFields != nil && len(*dynamicFields) > 0 {
-		// Use the specific Start function before creating the vector
-		cffi.CFFIValueClassStartDynamicFieldsVector(builder, len(*dynamicFields))
-		dynamicFieldsVectorOffset, err = encodeMapEntries(builder, *dynamicFields, typeMap, "dynamic class")
+		dynamicFieldsVectorOffset, err = encodeMapEntries(builder, *dynamicFields, "dynamic class")
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, err // Error already includes context
 		}
@@ -58,7 +52,6 @@ func EncodeClass(builder *flatbuffers.Builder, typeMap TypeMap,
 	return cffi.CFFIValueUnionCFFIValueClass, cffi.CFFIValueClassEnd(builder), nil
 }
 
-// encodeEnum doesn't need TypeMap internally, but the interface provides it
 func EncodeEnum(builder *flatbuffers.Builder, name string, value string, isDynamic bool) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	nameOffset := builder.CreateString(name)
 	valueOffset := builder.CreateString(value)
@@ -70,10 +63,9 @@ func EncodeEnum(builder *flatbuffers.Builder, name string, value string, isDynam
 	return cffi.CFFIValueUnionCFFIValueEnum, cffi.CFFIValueEnumEnd(builder), nil
 }
 
-// encodeUnion now accepts and passes TypeMap
-func EncodeUnion(builder *flatbuffers.Builder, typeMap TypeMap, variantName string, value any) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+func EncodeUnion(builder *flatbuffers.Builder, variantName string, value any) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	nameOffset := builder.CreateString(variantName)
-	valueHolderOffset, err := Encode(builder, value, typeMap) // Pass typeMap recursively
+	valueHolderOffset, err := Encode(builder, value)
 	if err != nil {
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding inner value for union variant '%s': %w", variantName, err)
 	}
@@ -97,7 +89,7 @@ func EncodeUnion(builder *flatbuffers.Builder, typeMap TypeMap, variantName stri
 // 1. The CFFIValueUnion type enum value matching the encoded type.
 // 2. The FlatBuffers offset (UOffsetT) of the encoded value table (e.g., CFFIValueString).
 // 3. An error if encoding fails.
-func encodeValue(builder *flatbuffers.Builder, value any, typeMap TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+func encodeValue(builder *flatbuffers.Builder, value any) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	if value == nil {
 		// For nil, we don't create a specific value table.
 		// The CFFIValueHolder will have ValueType=NONE and Value=0.
@@ -125,7 +117,7 @@ func encodeValue(builder *flatbuffers.Builder, value any, typeMap TypeMap) (cffi
 
 	// Check for custom serializers first using the original value (could be pointer or value)
 	if serializer, ok := originalValue.(BamlSerializer); ok {
-		valueType, offset, err := serializer.Encode(builder, typeMap) // Pass typeMap
+		valueType, offset, err := serializer.Encode(builder)
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, err
 		}
@@ -134,13 +126,13 @@ func encodeValue(builder *flatbuffers.Builder, value any, typeMap TypeMap) (cffi
 
 	switch v := concreteValue.(type) {
 	case Checked[any]: // Use any here, or make encodeValue generic (more complex)
-		offset, err := encodeChecked(builder, v, typeMap) // Pass typeMap
+		offset, err := encodeChecked(builder, v)
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding Checked value: %w", err)
 		}
 		return cffi.CFFIValueUnionCFFIValueChecked, offset, nil
 	case StreamState[any]: // Use any here
-		offset, err := encodeStreamState(builder, v, typeMap) // Pass typeMap
+		offset, err := encodeStreamState(builder, v) // Pass typeMap
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding StreamState value: %w", err)
 		}
@@ -169,51 +161,18 @@ func encodeValue(builder *flatbuffers.Builder, value any, typeMap TypeMap) (cffi
 		return cffi.CFFIValueUnionCFFIValueBool, offset, nil
 
 	case reflect.Slice, reflect.Array:
-		// Ensure elements are of type 'any' for encoding
-		// We need to convert the slice rv to []any if it's not already
-		var anySlice []any
-		if rv.Type().Elem().Kind() == reflect.Interface && rv.Type().Elem().NumMethod() == 0 {
-			// Attempt direct assertion if it looks like []any
-			rawSlice, ok := rv.Interface().([]any)
-			if !ok {
-				// Fallback to element-by-element conversion if assertion fails
-				count := rv.Len()
-				anySlice = make([]any, count)
-				for i := 0; i < count; i++ {
-					anySlice[i] = rv.Index(i).Interface()
-				}
-			} else {
-				anySlice = rawSlice
-			}
-		} else {
-			// Convert slice elements to any
-			count := rv.Len()
-			anySlice = make([]any, count)
-			for i := 0; i < count; i++ {
-				anySlice[i] = rv.Index(i).Interface()
-			}
-		}
-		offset, err := encodeList(builder, anySlice, typeMap) // Pass typeMap
+		offset, err := encodeList(builder, rv)
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding list: %w", err)
 		}
 		return cffi.CFFIValueUnionCFFIValueList, offset, nil
 
 	case reflect.Map:
-		// Expect map[string]any
 		if rv.Type().Key().Kind() != reflect.String {
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("map key type must be string, got %s", rv.Type().Key().Kind())
 		}
 
-		// Convert map to map[string]any
-		stringAnyMap := make(map[string]any)
-		iter := rv.MapRange()
-		for iter.Next() {
-			key := iter.Key().String()
-			stringAnyMap[key] = iter.Value().Interface()
-		}
-
-		offset, err := encodeMap(builder, stringAnyMap, typeMap) // Pass typeMap
+		offset, err := encodeMap(builder, rv)
 		if err != nil {
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding map: %w", err)
 		}
@@ -257,10 +216,10 @@ func encodeBool(builder *flatbuffers.Builder, val bool) flatbuffers.UOffsetT {
 }
 
 // encodeList now accepts and passes TypeMap
-func encodeList(builder *flatbuffers.Builder, values []any, typeMap TypeMap) (flatbuffers.UOffsetT, error) {
-	elemOffsets := make([]flatbuffers.UOffsetT, len(values))
-	for i := len(values) - 1; i >= 0; i-- { // Build elements backwards for FlatBuffers vector
-		elemOffset, err := Encode(builder, values[i], typeMap) // Pass typeMap recursively
+func encodeList(builder *flatbuffers.Builder, value reflect.Value) (flatbuffers.UOffsetT, error) {
+	elemOffsets := make([]flatbuffers.UOffsetT, value.Len())
+	for i := value.Len() - 1; i >= 0; i-- { // Build elements backwards for FlatBuffers vector
+		elemOffset, err := Encode(builder, value.Index(i).Interface()) // Pass typeMap recursively
 		if err != nil {
 			return 0, fmt.Errorf("encoding list element %d: %w", i, err)
 		}
@@ -274,21 +233,28 @@ func encodeList(builder *flatbuffers.Builder, values []any, typeMap TypeMap) (fl
 	}
 	valuesVectorOffset := builder.EndVector(len(elemOffsets))
 
+	fieldTypeOffset := encodeFieldType(builder, value.Type())
+
 	// Create the CFFIValueList table
 	cffi.CFFIValueListStart(builder)
 	cffi.CFFIValueListAddValues(builder, valuesVectorOffset)
+	cffi.CFFIValueListAddFieldType(builder, fieldTypeOffset)
 	return cffi.CFFIValueListEnd(builder), nil
 }
 
 // encodeMap now accepts and passes TypeMap
-func encodeMap(builder *flatbuffers.Builder, kv map[string]any, typeMap TypeMap) (flatbuffers.UOffsetT, error) {
-	entryOffsets := make([]flatbuffers.UOffsetT, 0, len(kv))
+func encodeMap(builder *flatbuffers.Builder, mapValue reflect.Value) (flatbuffers.UOffsetT, error) {
+	mapLength := mapValue.Len()
+	entryOffsets := make([]flatbuffers.UOffsetT, 0, mapLength)
 	// Iterate map and build entries (order doesn't strictly matter for map, but FB requires building bottom-up)
-	for k, v := range kv {
-		keyOffset := builder.CreateString(k)
-		valueHolderOffset, err := Encode(builder, v, typeMap) // Pass typeMap recursively
+	mapIter := mapValue.MapRange()
+	for mapIter.Next() {
+		key := mapIter.Key().String()
+		value := mapIter.Value()
+		keyOffset := builder.CreateString(key)
+		valueHolderOffset, err := Encode(builder, value.Interface())
 		if err != nil {
-			return 0, fmt.Errorf("encoding map value for key '%s': %w", k, err)
+			return 0, fmt.Errorf("encoding map value for key '%s': %w", key, err)
 		}
 
 		cffi.CFFIMapEntryStart(builder)
@@ -306,14 +272,17 @@ func encodeMap(builder *flatbuffers.Builder, kv map[string]any, typeMap TypeMap)
 	}
 	entriesVectorOffset := builder.EndVector(len(entryOffsets))
 
+	fieldTypeOffset := encodeFieldType(builder, mapValue.Type())
+
 	// Create the CFFIValueMap table
 	cffi.CFFIValueMapStart(builder)
+	cffi.CFFIValueMapAddFieldTypes(builder, fieldTypeOffset)
 	cffi.CFFIValueMapAddEntries(builder, entriesVectorOffset)
 	return cffi.CFFIValueMapEnd(builder), nil
 }
 
 // Helper function to encode map entries into a vector offset
-func encodeMapEntries(builder *flatbuffers.Builder, fields map[string]any, typeMap TypeMap, context string) (flatbuffers.UOffsetT, error) {
+func encodeMapEntries(builder *flatbuffers.Builder, fields map[string]any, context string) (flatbuffers.UOffsetT, error) {
 	if len(fields) == 0 {
 		return 0, nil // Return 0 offset for empty vector
 	}
@@ -322,7 +291,7 @@ func encodeMapEntries(builder *flatbuffers.Builder, fields map[string]any, typeM
 	// Build entries (order doesn't strictly matter, but need to build bottom-up)
 	for k, v := range fields {
 		keyOffset := builder.CreateString(k)
-		valueHolderOffset, err := Encode(builder, v, typeMap) // Pass typeMap recursively
+		valueHolderOffset, err := Encode(builder, v)
 		if err != nil {
 			return 0, fmt.Errorf("encoding %s field '%s': %w", context, k, err)
 		}
@@ -347,8 +316,8 @@ func encodeMapEntries(builder *flatbuffers.Builder, fields map[string]any, typeM
 }
 
 // encodeChecked now accepts and passes TypeMap
-func encodeChecked(builder *flatbuffers.Builder, checkedVal Checked[any], typeMap TypeMap) (flatbuffers.UOffsetT, error) {
-	valueHolderOffset, err := Encode(builder, checkedVal.Value, typeMap) // Pass typeMap
+func encodeChecked(builder *flatbuffers.Builder, checkedVal Checked[any]) (flatbuffers.UOffsetT, error) {
+	valueHolderOffset, err := Encode(builder, checkedVal.Value)
 	if err != nil {
 		return 0, fmt.Errorf("encoding inner value for Checked: %w", err)
 	}
@@ -404,8 +373,8 @@ func encodeStreamStateType(state StreamStateType) cffi.CFFIStreamState {
 }
 
 // encodeStreamState now accepts and passes TypeMap
-func encodeStreamState(builder *flatbuffers.Builder, streamStateVal StreamState[any], typeMap TypeMap) (flatbuffers.UOffsetT, error) {
-	valueHolderOffset, err := Encode(builder, streamStateVal.Value, typeMap) // Pass typeMap
+func encodeStreamState(builder *flatbuffers.Builder, streamStateVal StreamState[any]) (flatbuffers.UOffsetT, error) {
+	valueHolderOffset, err := Encode(builder, streamStateVal.Value) // Pass typeMap
 	if err != nil {
 		return 0, fmt.Errorf("encoding inner value for StreamState: %w", err)
 	}
@@ -418,12 +387,76 @@ func encodeStreamState(builder *flatbuffers.Builder, streamStateVal StreamState[
 	return cffi.CFFIValueStreamingStateEnd(builder), nil
 }
 
+func encodeFieldType(builder *flatbuffers.Builder, fieldType reflect.Type) flatbuffers.UOffsetT {
+	var fieldTypeOffset flatbuffers.UOffsetT
+	var fieldTypeUnion cffi.CFFIFieldTypeUnion
+
+	switch fieldType.Kind() {
+	case reflect.Ptr:
+		return encodeFieldType(builder, fieldType.Elem())
+	case reflect.String:
+		cffi.CFFIFieldTypeStringStart(builder)
+		fieldTypeOffset = cffi.CFFIFieldTypeStringEnd(builder)
+		fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeString
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		cffi.CFFIFieldTypeIntStart(builder)
+		fieldTypeOffset = cffi.CFFIFieldTypeIntEnd(builder)
+		fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeInt
+	case reflect.Float32, reflect.Float64:
+		cffi.CFFIFieldTypeFloatStart(builder)
+		fieldTypeOffset = cffi.CFFIFieldTypeFloatEnd(builder)
+		fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeFloat
+	case reflect.Bool:
+		cffi.CFFIFieldTypeBoolStart(builder)
+		fieldTypeOffset = cffi.CFFIFieldTypeBoolEnd(builder)
+		fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeBool
+	case reflect.Slice, reflect.Array:
+		sliceFieldTypeOffset := encodeFieldType(builder, fieldType.Elem())
+
+		cffi.CFFIFieldTypeListStart(builder)
+		cffi.CFFIFieldTypeListAddElement(builder, sliceFieldTypeOffset)
+		fieldTypeOffset = cffi.CFFIFieldTypeListEnd(builder)
+		fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeList
+	case reflect.Map:
+		keyType := fieldType.Key()
+		valueType := fieldType.Elem()
+
+		keyTypeOffset := encodeFieldType(builder, keyType)
+		valueTypeOffset := encodeFieldType(builder, valueType)
+
+		cffi.CFFIFieldTypeMapStart(builder)
+		cffi.CFFIFieldTypeMapAddKey(builder, keyTypeOffset)
+		cffi.CFFIFieldTypeMapAddValue(builder, valueTypeOffset)
+		fieldTypeOffset = cffi.CFFIFieldTypeMapEnd(builder)
+		fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeMap
+	case reflect.Struct:
+		// determine if the struct implements BamlSerializer
+		if fieldType.Implements(reflect.TypeOf((*BamlSerializer)(nil)).Elem()) {
+			serializer := reflect.New(fieldType).Interface().(BamlSerializer)
+			nameOffset := builder.CreateString(serializer.BamlTypeName())
+			cffi.CFFIFieldTypeClassStart(builder)
+			cffi.CFFIFieldTypeClassAddName(builder, nameOffset)
+			fieldTypeOffset = cffi.CFFIFieldTypeClassEnd(builder)
+			fieldTypeUnion = cffi.CFFIFieldTypeUnionCFFIFieldTypeClass
+		} else {
+			panic(fmt.Sprintf("struct %s does not implement BamlSerializer", fieldType.Name()))
+		}
+	default:
+		panic(fmt.Sprintf("unexpected field type: %s", fieldType.Kind()))
+	}
+
+	cffi.CFFIFieldTypeHolderStart(builder)
+	cffi.CFFIFieldTypeHolderAddType(builder, fieldTypeOffset)
+	cffi.CFFIFieldTypeHolderAddTypeType(builder, fieldTypeUnion)
+	return cffi.CFFIFieldTypeHolderEnd(builder)
+}
+
 // EncodeRoot now accepts a TypeMap.
 // Encode takes a Go value and returns the FlatBuffers encoded bytes for a CFFIValueHolder.
 // It creates a new builder internally.
-func EncodeRoot(value any, typeMap TypeMap) ([]byte, error) {
-	builder := flatbuffers.NewBuilder(1024)            // Initial buffer size
-	rootOffset, err := Encode(builder, value, typeMap) // Pass typeMap
+func EncodeRoot(value any) ([]byte, error) {
+	builder := flatbuffers.NewBuilder(1024) // Initial buffer size
+	rootOffset, err := Encode(builder, value)
 	if err != nil {
 		return nil, err
 	}
@@ -434,8 +467,8 @@ func EncodeRoot(value any, typeMap TypeMap) ([]byte, error) {
 // Encode now accepts and passes TypeMap.
 // Encode takes a builder and a Go value, encodes the value, wraps it in a CFFIValueHolder,
 // and returns the offset of the holder.
-func Encode(builder *flatbuffers.Builder, value any, typeMap TypeMap) (flatbuffers.UOffsetT, error) {
-	valueType, valueOffset, err := encodeValue(builder, value, typeMap) // Pass typeMap
+func Encode(builder *flatbuffers.Builder, value any) (flatbuffers.UOffsetT, error) {
+	valueType, valueOffset, err := encodeValue(builder, value)
 	if err != nil {
 		return 0, err // Propagate error
 	}

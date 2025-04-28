@@ -27,7 +27,7 @@ type {{ class.name }} struct {
 {% endif %}
 }
 
-func (c *{{ class.name }}) Decode(holder cffi.CFFIValueClass, typeMap baml.TypeMap) {
+func (c *{{ class.name }}) Decode(holder cffi.CFFIValueClass) {
 	if string(holder.Name()) != "{{ class.name }}" {
 		panic(fmt.Sprintf("expected {{ class.name }}, got %s", string(holder.Name())))
 	}
@@ -55,18 +55,22 @@ func (c *{{ class.name }}) Decode(holder cffi.CFFIValueClass, typeMap baml.TypeM
 		if holder.DynamicFields(&field, i) {
 			key := string(field.Key())
 			valueHolder := field.Value(nil)
-			c.DynamicProperties[key] = baml.Decode(valueHolder, typeMap)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
 		}
 	}
 {% endif %}
 }
 
-func (c {{ class.name }}) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+func (c {{ class.name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	fields := map[string]any{}
 	{% for field in class.fields %}
 	fields["{{ field.name }}"] = c.{{ field.name|exported_name }}
 	{% endfor %}
-	return baml.EncodeClass(builder, typeMap, "{{ class.name }}", fields, {% if class.dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
+	return baml.EncodeClass(builder, "{{ class.name }}", fields, {% if class.dynamic %}&c.DynamicProperties{% else %}nil{% endif %})
+}
+
+func (c {{ class.name }}) BamlTypeName() string {
+	return "{{ class.name }}"
 }
 
 {% endfor %}
