@@ -21,10 +21,24 @@ impl Token {
 impl VertexAuth {
     pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Self> {
         Ok(match auth_strategy {
-            ResolvedGcpAuthStrategy::MaybeFilePath(json)
-            | ResolvedGcpAuthStrategy::StringContainingJson(json) => {
+            ResolvedGcpAuthStrategy::MaybeFilePath(str)
+            | ResolvedGcpAuthStrategy::StringContainingJson(str) => {
+                if str.starts_with("$") {
+                    anyhow::bail!("Failed to resolve {}", str);
+                }
+
+                let debug_str = {
+                    let s = serde_json::to_string(&serde_json::Value::String(str.clone()))
+                        .expect("Serialization of string should always succeed");
+                    if s.len() > 8 {
+                        format!("{}...{}", &s[..4], &s[s.len() - 4..])
+                    } else {
+                        s
+                    }
+                };
+
                 log::debug!("Attempting to auth using JsonString strategy");
-                Self(Some(serde_json::from_str(&json).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?))
+                Self(Some(serde_json::from_str(str).context(format!("Failed to parse 'credentials' as GCP service account creds (are you using JSON format creds?); credentials={}", debug_str))?))
             }
             ResolvedGcpAuthStrategy::JsonObject(json) => {
                 // NB: this should never happen in WASM, there's no way to pass a JSON object in

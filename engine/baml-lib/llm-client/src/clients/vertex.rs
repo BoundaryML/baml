@@ -9,8 +9,6 @@ use anyhow::Result;
 use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use either::Either;
 use indexmap::IndexMap;
-use secrecy::SecretString;
-use serde::Deserialize;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
@@ -24,14 +22,6 @@ enum UnresolvedGcpAuthStrategy<Meta> {
     CredentialsContentString(StringOr),
     /// This will always be resolved as UseSystemDefault
     SystemDefault,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ServiceAccount {
-    pub token_uri: String,
-    pub project_id: String,
-    pub client_email: String,
-    pub private_key: SecretString,
 }
 
 pub enum ResolvedGcpAuthStrategy {
@@ -91,9 +81,6 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
     }
 
     fn resolve(&self, ctx: &impl GetEnvVar) -> Result<ResolvedGcpAuthStrategy> {
-        #[cfg(target_arch = "wasm32")]
-        let ctx = &ctx.set_allow_missing_env_var(false);
-
         Ok(match self {
             UnresolvedGcpAuthStrategy::CredentialsString(s) => {
                 let s = s.resolve(ctx)?;
