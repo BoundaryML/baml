@@ -12,15 +12,15 @@ import (
 type TypeMap map[string]reflect.Type
 
 type BamlClassDeserializer interface {
-	Decode(holder cffi.CFFIValueClass, typeMap TypeMap)
+	Decode(holder cffi.CFFIValueClass)
 }
 
 type BamlEnumDeserializer interface {
-	Decode(holder cffi.CFFIValueEnum, typeMap TypeMap)
+	Decode(holder cffi.CFFIValueEnum)
 }
 
 type BamlUnionDeserializer interface {
-	Decode(holder *cffi.CFFIValueUnionVariant, typeMap TypeMap)
+	Decode(holder *cffi.CFFIValueUnionVariant)
 }
 
 type cffiValue[U any] interface {
@@ -33,7 +33,7 @@ type DynamicClass struct {
 	Fields map[string]any
 }
 
-func (d *DynamicClass) Decode(holder cffi.CFFIValueClass, typeMap TypeMap) {
+func (d *DynamicClass) Decode(holder cffi.CFFIValueClass) {
 	d.Name = string(holder.Name())
 	if holder.FieldsLength() > 0 {
 		panic("error decoding value")
@@ -45,7 +45,7 @@ func (d *DynamicClass) Decode(holder cffi.CFFIValueClass, typeMap TypeMap) {
 		if holder.DynamicFields(&field, i) {
 			key := string(field.Key())
 			valueHolder := field.Value(nil)
-			d.Fields[key] = Decode(valueHolder, typeMap)
+			d.Fields[key] = Decode(valueHolder)
 		} else {
 			panic("error decoding value")
 		}
@@ -57,7 +57,7 @@ type DynamicEnum struct {
 	Value string
 }
 
-func (d *DynamicEnum) Decode(holder cffi.CFFIValueEnum, typeMap TypeMap) {
+func (d *DynamicEnum) Decode(holder cffi.CFFIValueEnum) {
 	d.Name = string(holder.Name())
 	d.Value = string(holder.Value())
 }
@@ -72,7 +72,7 @@ func decodePrimitiveValue[U any, T cffiValue[U]](valueHolder *cffi.CFFIValueHold
 	return t.Value()
 }
 
-func decodeListValue(valueHolder *cffi.CFFIValueHolder, typeMap TypeMap) []any {
+func decodeListValue(valueHolder *cffi.CFFIValueHolder) any {
 	var tbl flatbuffers.Table
 	if !valueHolder.Value(&tbl) {
 		panic("error decoding value")
@@ -80,46 +80,94 @@ func decodeListValue(valueHolder *cffi.CFFIValueHolder, typeMap TypeMap) []any {
 
 	var valueList cffi.CFFIValueList
 	valueList.Init(tbl.Bytes, tbl.Pos)
+
+	fieldType := valueList.FieldType(nil)
+	if fieldType.TypeType() != cffi.CFFIFieldTypeUnionCFFIFieldTypeList {
+		panic("error decoding value, expected list got " + fieldType.TypeType().String())
+	}
+
+	var listFieldTable flatbuffers.Table
+	if !fieldType.Type(&listFieldTable) {
+		panic("error decoding value")
+	}
+
+	var listFieldType cffi.CFFIFieldTypeList
+	listFieldType.Init(listFieldTable.Bytes, listFieldTable.Pos)
+
+	elementType := listFieldType.Element(nil)
+
+	goElementType := convertFieldTypeToGoType(elementType)
+
 	length := valueList.ValuesLength()
-	values := make([]any, length)
-	for i := range values {
+	values := reflect.MakeSlice(reflect.SliceOf(goElementType), length, length)
+
+	for i := 0; i < length; i++ {
 		var value cffi.CFFIValueHolder
 		if valueList.Values(&value, i) {
-			values[i] = Decode(&value, typeMap)
+			rv := reflect.ValueOf(Decode(&value))
+			if rv.Kind() == reflect.Ptr {
+				rv = rv.Elem()
+			}
+			values.Index(i).Set(rv)
 		} else {
 			panic("error decoding value")
 		}
 	}
-	return values
+	return values.Interface()
 }
 
-func decodeMapValue(valueHolder *cffi.CFFIValueHolder, typeMap TypeMap) map[string]any {
+func decodeMapValue(valueHolder *cffi.CFFIValueHolder) any {
 	var tbl flatbuffers.Table
 	if !valueHolder.Value(&tbl) {
 		panic("error decoding value")
 	}
 	var valueMap cffi.CFFIValueMap
 	valueMap.Init(tbl.Bytes, tbl.Pos)
+
+	fieldTypes := valueMap.FieldTypes(nil)
+	if fieldTypes.TypeType() != cffi.CFFIFieldTypeUnionCFFIFieldTypeMap {
+		panic("error decoding value")
+	}
+
+	var mapFieldTable flatbuffers.Table
+	if !fieldTypes.Type(&mapFieldTable) {
+		panic("error decoding value")
+	}
+	var mapFieldType cffi.CFFIFieldTypeMap
+	mapFieldType.Init(mapFieldTable.Bytes, mapFieldTable.Pos)
+
+	keyType := mapFieldType.Key(nil)
+	valueType := mapFieldType.Value(nil)
+
+	goKeyType := convertFieldTypeToGoType(keyType)
+	goValueType := convertFieldTypeToGoType(valueType)
+
+	values := reflect.MakeMap(reflect.MapOf(goKeyType, goValueType))
+
 	length := valueMap.EntriesLength()
-	values := make(map[string]any)
 	for i := 0; i < length; i++ {
 		var value cffi.CFFIMapEntry
 		if valueMap.Entries(&value, i) {
 			key := string(value.Key())
 			valueHolder := value.Value(nil)
-			values[key] = Decode(valueHolder, typeMap)
+
+			rv := reflect.ValueOf(Decode(valueHolder))
+			if rv.Kind() == reflect.Ptr {
+				rv = rv.Elem()
+			}
+			values.SetMapIndex(reflect.ValueOf(key), rv)
 		} else {
 			panic("error decoding value")
 		}
 	}
-	return values
+	return values.Interface()
 }
 
 type BamlDecoder interface {
 	BamlDecode(decodedMap map[string]any)
 }
 
-func decodeClassValue(valueHolder *cffi.CFFIValueHolder, typeMap TypeMap) any {
+func decodeClassValue(valueHolder *cffi.CFFIValueHolder) any {
 	var tbl flatbuffers.Table
 	if !valueHolder.Value(&tbl) {
 		panic("error decoding value")
@@ -131,17 +179,17 @@ func decodeClassValue(valueHolder *cffi.CFFIValueHolder, typeMap TypeMap) any {
 	if !ok {
 		// This is a fully dynamic class, so we need to decode it as a map
 		dynamicClass := DynamicClass{}
-		dynamicClass.Decode(valueClass, typeMap)
+		dynamicClass.Decode(valueClass)
 		return &dynamicClass
 	}
 
 	cls := reflect.New(found)
 	as_interface := cls.Interface().(BamlClassDeserializer)
-	as_interface.Decode(valueClass, typeMap)
+	as_interface.Decode(valueClass)
 	return as_interface
 }
 
-func decodeEnumValue(valueHolder *cffi.CFFIValueHolder, typeMap TypeMap) any {
+func decodeEnumValue(valueHolder *cffi.CFFIValueHolder) any {
 	var tbl flatbuffers.Table
 	if !valueHolder.Value(&tbl) {
 		panic("error decoding value")
@@ -156,11 +204,11 @@ func decodeEnumValue(valueHolder *cffi.CFFIValueHolder, typeMap TypeMap) any {
 	}
 	enum := reflect.New(found)
 	as_interface := enum.Interface().(BamlEnumDeserializer)
-	as_interface.Decode(valueEnum, typeMap)
+	as_interface.Decode(valueEnum)
 	return as_interface
 }
 
-func decodeUnionValue(holder *cffi.CFFIValueHolder, typeMap TypeMap) any {
+func decodeUnionValue(holder *cffi.CFFIValueHolder) any {
 	var tbl flatbuffers.Table
 	if !holder.Value(&tbl) {
 		panic("error decoding value")
@@ -175,11 +223,11 @@ func decodeUnionValue(holder *cffi.CFFIValueHolder, typeMap TypeMap) any {
 		// decode the value as the value and drop
 		// union type information
 		value := valueUnion.Value(nil)
-		return Decode(value, typeMap)
+		return Decode(value)
 	}
 	union := reflect.New(found)
 	as_interface := union.Interface().(BamlUnionDeserializer)
-	as_interface.Decode(&valueUnion, typeMap)
+	as_interface.Decode(&valueUnion)
 	return as_interface
 
 }
@@ -198,7 +246,7 @@ type Checked[T any] struct {
 	Checks map[string]Check `json:"checks"`
 }
 
-func decodeCheckedValue(holder *cffi.CFFIValueHolder, typeMap TypeMap) Checked[any] {
+func decodeCheckedValue(holder *cffi.CFFIValueHolder) Checked[any] {
 	var tbl flatbuffers.Table
 	if !holder.Value(&tbl) {
 		panic("error decoding value")
@@ -221,7 +269,7 @@ func decodeCheckedValue(holder *cffi.CFFIValueHolder, typeMap TypeMap) Checked[a
 		}
 	}
 	return Checked[any]{
-		Value:  Decode(value, typeMap),
+		Value:  Decode(value),
 		Checks: checks,
 	}
 }
@@ -294,7 +342,7 @@ func decodeStreamStateType(state cffi.CFFIStreamState) StreamStateType {
 	}
 }
 
-func decodeStreamingStateValue(holder *cffi.CFFIValueHolder, typeMap TypeMap) StreamState[any] {
+func decodeStreamingStateValue(holder *cffi.CFFIValueHolder) StreamState[any] {
 	var tbl flatbuffers.Table
 	if !holder.Value(&tbl) {
 		panic("error decoding value")
@@ -305,12 +353,44 @@ func decodeStreamingStateValue(holder *cffi.CFFIValueHolder, typeMap TypeMap) St
 	value := valueStreamingState.Value(nil)
 
 	return StreamState[any]{
-		Value: Decode(value, typeMap),
+		Value: Decode(value),
 		State: decodeStreamStateType(valueStreamingState.State()),
 	}
 }
 
-func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) any {
+func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type {
+	switch fieldType.TypeType() {
+	case cffi.CFFIFieldTypeUnionCFFIFieldTypeString:
+		return reflect.TypeOf("")
+	case cffi.CFFIFieldTypeUnionCFFIFieldTypeInt:
+		var i int64
+		return reflect.TypeOf(i)
+	case cffi.CFFIFieldTypeUnionCFFIFieldTypeFloat:
+		var f float64
+		return reflect.TypeOf(f)
+	case cffi.CFFIFieldTypeUnionCFFIFieldTypeBool:
+		return reflect.TypeOf(false)
+	case cffi.CFFIFieldTypeUnionCFFIFieldTypeClass:
+		var classTable flatbuffers.Table
+		if !fieldType.Type(&classTable) {
+			panic("error decoding value")
+		}
+
+		var classType cffi.CFFIFieldTypeClass
+		classType.Init(classTable.Bytes, classTable.Pos)
+
+		goType, ok := typeMap[string(classType.Name())]
+		if !ok {
+			panic("error decoding value")
+		}
+
+		return goType
+	default:
+		panic(fmt.Sprintf("unexpected field type %d", fieldType.TypeType()))
+	}
+}
+
+func Decode(holder *cffi.CFFIValueHolder) any {
 	valueType := holder.ValueType()
 	switch valueType {
 	case cffi.CFFIValueUnionNONE:
@@ -325,19 +405,19 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) any {
 	case cffi.CFFIValueUnionCFFIValueBool:
 		return decodePrimitiveValue(holder, &cffi.CFFIValueBool{})
 	case cffi.CFFIValueUnionCFFIValueList:
-		return decodeListValue(holder, typeMap)
+		return decodeListValue(holder)
 	case cffi.CFFIValueUnionCFFIValueMap:
-		return decodeMapValue(holder, typeMap)
+		return decodeMapValue(holder)
 	case cffi.CFFIValueUnionCFFIValueClass:
-		return decodeClassValue(holder, typeMap)
+		return decodeClassValue(holder)
 	case cffi.CFFIValueUnionCFFIValueEnum:
-		return decodeEnumValue(holder, typeMap)
+		return decodeEnumValue(holder)
 	case cffi.CFFIValueUnionCFFIValueUnionVariant:
-		return decodeUnionValue(holder, typeMap)
+		return decodeUnionValue(holder)
 	case cffi.CFFIValueUnionCFFIValueChecked:
-		return decodeCheckedValue(holder, typeMap)
+		return decodeCheckedValue(holder)
 	case cffi.CFFIValueUnionCFFIValueStreamingState:
-		return decodeStreamingStateValue(holder, typeMap)
+		return decodeStreamingStateValue(holder)
 	case cffi.CFFIValueUnionCFFIValueMedia:
 		panic("media not implemented")
 	case cffi.CFFIValueUnionCFFIValueTuple:
@@ -347,15 +427,15 @@ func Decode(holder *cffi.CFFIValueHolder, typeMap TypeMap) any {
 	}
 }
 
-func DecodeOptional[T any](valueHolder *cffi.CFFIValueHolder, typeMap TypeMap, decodeFunc func(*cffi.CFFIValueHolder, TypeMap) T) *T {
-	value := Decode(valueHolder, typeMap)
+func DecodeOptional[T any](valueHolder *cffi.CFFIValueHolder, decodeFunc func(*cffi.CFFIValueHolder) T) *T {
+	value := Decode(valueHolder)
 	if value == nil {
 		return nil
 	}
 	return value.(*T)
 }
 
-func DecodeList[T any](valueHolder *cffi.CFFIValueHolder, typeMap TypeMap, decodeFunc func(*cffi.CFFIValueHolder, TypeMap) T) []T {
+func DecodeList[T any](valueHolder *cffi.CFFIValueHolder, decodeFunc func(*cffi.CFFIValueHolder) T) []T {
 	var tbl flatbuffers.Table
 	if !valueHolder.Value(&tbl) {
 		panic("error decoding value")
@@ -368,7 +448,7 @@ func DecodeList[T any](valueHolder *cffi.CFFIValueHolder, typeMap TypeMap, decod
 	for i := range length {
 		var value cffi.CFFIValueHolder
 		if valueList.Values(&value, i) {
-			values[i] = decodeFunc(&value, typeMap)
+			values[i] = decodeFunc(&value)
 		} else {
 			panic("error decoding value")
 		}
@@ -376,7 +456,7 @@ func DecodeList[T any](valueHolder *cffi.CFFIValueHolder, typeMap TypeMap, decod
 	return values
 }
 
-func DecodeMap[T any](valueHolder cffi.CFFIValueHolder, typeMap TypeMap, decodeFunc func(*cffi.CFFIValueHolder, TypeMap) T) map[string]T {
+func DecodeMap[T any](valueHolder cffi.CFFIValueHolder, decodeFunc func(*cffi.CFFIValueHolder, TypeMap) T) map[string]T {
 	var tbl flatbuffers.Table
 	if !valueHolder.Value(&tbl) {
 		panic("error decoding value")

@@ -277,9 +277,12 @@ where
 
             let values = builder.create_vector_from_iter(items.into_iter());
 
+            let field_type = field_type_to_cffi_value_holder(value.field_type(), &mut builder);
+
             let value_list = CFFIValueList::create(
                 &mut builder,
                 &CFFIValueListArgs {
+                    field_type: Some(field_type),
                     values: Some(values),
                 },
             );
@@ -303,9 +306,12 @@ where
 
             let entries = builder.create_vector_from_iter(items.into_iter());
 
+            let field_types = field_type_to_cffi_value_holder(value.field_type(), &mut builder);
+
             let value_map = CFFIValueMap::create(
                 &mut builder,
                 &CFFIValueMapArgs {
+                    field_types: Some(field_types),
                     entries: Some(entries),
                 },
             );

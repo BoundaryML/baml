@@ -53,7 +53,7 @@ use crate::internal::llm_client::{
     ModelFeatures, ResolveMediaUrls,
 };
 use crate::tracingv2::storage::storage::BAML_TRACER;
-use crate::{json_body, AwsCredProvider, JsonBodyInput, RenderCurlSettings, RuntimeContext};
+use crate::{json_body, JsonBodyInput, RenderCurlSettings, RuntimeContext};
 // See https://github.com/awslabs/aws-sdk-rust/issues/169
 use super::custom_http_client;
 #[cfg(target_arch = "wasm32")]
@@ -340,7 +340,6 @@ impl AwsClient {
         &self,
         span_id: Option<Uuid>,
         http_request_id: &HttpRequestId,
-        aws_cred_provider: AwsCredProvider,
     ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
         let loader = super::wasm::load_aws_config();
@@ -357,7 +356,6 @@ impl AwsClient {
                 #[cfg(target_arch = "wasm32")]
                 {
                     loader.credentials_provider(WasmAwsCreds {
-                        aws_cred_provider: aws_cred_provider.clone(),
                         profile: self.properties.profile.clone(),
                     })
                 }
@@ -632,11 +630,7 @@ impl WithStreamChat for AwsClient {
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
         let aws_client = match self
-            .client_anyhow(
-                ctx.span_id.clone(),
-                &http_request_id,
-                ctx.aws_cred_provider.clone(),
-            )
+            .client_anyhow(ctx.span_id.clone(), &http_request_id)
             .await
         {
             Ok(c) => c,
@@ -935,11 +929,7 @@ impl WithChat for AwsClient {
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
         let aws_client = match self
-            .client_anyhow(
-                ctx.span_id.clone(),
-                &http_request_id,
-                ctx.aws_cred_provider.clone(),
-            )
+            .client_anyhow(ctx.span_id.clone(), &http_request_id)
             .await
         {
             Ok(c) => c,

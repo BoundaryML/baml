@@ -30,9 +30,7 @@ use chrono::{Duration, Utc};
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
 use gcp_auth::TokenProvider;
-use internal_llm_client::vertex::{
-    BaseUrlOrLocation, ResolvedGcpAuthStrategy, ResolvedVertex, ServiceAccount,
-};
+use internal_llm_client::vertex::{BaseUrlOrLocation, ResolvedGcpAuthStrategy, ResolvedVertex};
 use internal_llm_client::{
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };

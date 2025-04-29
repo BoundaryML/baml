@@ -14,14 +14,30 @@ pub enum VertexAuth {
 impl VertexAuth {
     pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<VertexAuth> {
         match auth_strategy {
-            ResolvedGcpAuthStrategy::FilePath(path) => {
+            ResolvedGcpAuthStrategy::MaybeFilePath(path) => {
                 log::debug!("Attempting to auth using JsonFile strategy");
-                let authz_user = gcp_auth::CustomServiceAccount::from_file(&path)?;
+                let authz_user =
+                    gcp_auth::CustomServiceAccount::from_file(&path).context(format!(
+                        "Failed to parse credentials as JSON file: {}",
+                        serde_json::to_string(&path)
+                            .expect("Serialization of string should always succeed")
+                    ))?;
                 Ok(VertexAuth::CustomServiceAccount(authz_user))
             }
-            ResolvedGcpAuthStrategy::JsonString(s) => {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
                 log::debug!("Attempting to auth using JsonString strategy");
-                let authz_user = gcp_auth::CustomServiceAccount::from_json(&s)?;
+                let authz_user = gcp_auth::CustomServiceAccount::from_json(&s).context(format!(
+                    "Failed to parse credentials as JSON string: {}",
+                    {
+                        let s = serde_json::to_string(&s)
+                            .expect("Serialization of string should always succeed");
+                        if s.len() > 8 {
+                            format!("{}...{}", &s[..4], &s[s.len() - 4..])
+                        } else {
+                            s
+                        }
+                    }
+                ))?;
                 Ok(VertexAuth::CustomServiceAccount(authz_user))
             }
             ResolvedGcpAuthStrategy::JsonObject(o) => {

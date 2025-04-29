@@ -1493,7 +1493,8 @@ impl<'a> flatbuffers::Follow<'a> for CFFIValueList<'a> {
 }
 
 impl<'a> CFFIValueList<'a> {
-  pub const VT_VALUES: flatbuffers::VOffsetT = 4;
+  pub const VT_FIELD_TYPE: flatbuffers::VOffsetT = 4;
+  pub const VT_VALUES: flatbuffers::VOffsetT = 6;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1506,10 +1507,18 @@ impl<'a> CFFIValueList<'a> {
   ) -> flatbuffers::WIPOffset<CFFIValueList<'bldr>> {
     let mut builder = CFFIValueListBuilder::new(_fbb);
     if let Some(x) = args.values { builder.add_values(x); }
+    if let Some(x) = args.field_type { builder.add_field_type(x); }
     builder.finish()
   }
 
 
+  #[inline]
+  pub fn field_type(&self) -> Option<CFFIFieldTypeHolder<'a>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder>>(CFFIValueList::VT_FIELD_TYPE, None)}
+  }
   #[inline]
   pub fn values(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIValueHolder<'a>>>> {
     // Safety:
@@ -1526,18 +1535,21 @@ impl flatbuffers::Verifiable for CFFIValueList<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder>>("field_type", Self::VT_FIELD_TYPE, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIValueHolder>>>>("values", Self::VT_VALUES, false)?
      .finish();
     Ok(())
   }
 }
 pub struct CFFIValueListArgs<'a> {
+    pub field_type: Option<flatbuffers::WIPOffset<CFFIFieldTypeHolder<'a>>>,
     pub values: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIValueHolder<'a>>>>>,
 }
 impl<'a> Default for CFFIValueListArgs<'a> {
   #[inline]
   fn default() -> Self {
     CFFIValueListArgs {
+      field_type: None,
       values: None,
     }
   }
@@ -1548,6 +1560,10 @@ pub struct CFFIValueListBuilder<'a: 'b, 'b> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b> CFFIValueListBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_field_type(&mut self, field_type: flatbuffers::WIPOffset<CFFIFieldTypeHolder<'b >>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<CFFIFieldTypeHolder>>(CFFIValueList::VT_FIELD_TYPE, field_type);
+  }
   #[inline]
   pub fn add_values(&mut self, values: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIValueHolder<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIValueList::VT_VALUES, values);
@@ -1570,6 +1586,7 @@ impl<'a: 'b, 'b> CFFIValueListBuilder<'a, 'b> {
 impl core::fmt::Debug for CFFIValueList<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("CFFIValueList");
+      ds.field("field_type", &self.field_type());
       ds.field("values", &self.values());
       ds.finish()
   }
@@ -1704,7 +1721,8 @@ impl<'a> flatbuffers::Follow<'a> for CFFIValueMap<'a> {
 }
 
 impl<'a> CFFIValueMap<'a> {
-  pub const VT_ENTRIES: flatbuffers::VOffsetT = 4;
+  pub const VT_FIELD_TYPES: flatbuffers::VOffsetT = 4;
+  pub const VT_ENTRIES: flatbuffers::VOffsetT = 6;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -1717,10 +1735,18 @@ impl<'a> CFFIValueMap<'a> {
   ) -> flatbuffers::WIPOffset<CFFIValueMap<'bldr>> {
     let mut builder = CFFIValueMapBuilder::new(_fbb);
     if let Some(x) = args.entries { builder.add_entries(x); }
+    if let Some(x) = args.field_types { builder.add_field_types(x); }
     builder.finish()
   }
 
 
+  #[inline]
+  pub fn field_types(&self) -> Option<CFFIFieldTypeHolder<'a>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder>>(CFFIValueMap::VT_FIELD_TYPES, None)}
+  }
   #[inline]
   pub fn entries(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>> {
     // Safety:
@@ -1737,18 +1763,21 @@ impl flatbuffers::Verifiable for CFFIValueMap<'_> {
   ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder>>("field_types", Self::VT_FIELD_TYPES, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>("entries", Self::VT_ENTRIES, false)?
      .finish();
     Ok(())
   }
 }
 pub struct CFFIValueMapArgs<'a> {
+    pub field_types: Option<flatbuffers::WIPOffset<CFFIFieldTypeHolder<'a>>>,
     pub entries: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>>>,
 }
 impl<'a> Default for CFFIValueMapArgs<'a> {
   #[inline]
   fn default() -> Self {
     CFFIValueMapArgs {
+      field_types: None,
       entries: None,
     }
   }
@@ -1759,6 +1788,10 @@ pub struct CFFIValueMapBuilder<'a: 'b, 'b> {
   start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b> CFFIValueMapBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_field_types(&mut self, field_types: flatbuffers::WIPOffset<CFFIFieldTypeHolder<'b >>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<CFFIFieldTypeHolder>>(CFFIValueMap::VT_FIELD_TYPES, field_types);
+  }
   #[inline]
   pub fn add_entries(&mut self, entries: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIMapEntry<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIValueMap::VT_ENTRIES, entries);
@@ -1781,6 +1814,7 @@ impl<'a: 'b, 'b> CFFIValueMapBuilder<'a, 'b> {
 impl core::fmt::Debug for CFFIValueMap<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("CFFIValueMap");
+      ds.field("field_types", &self.field_types());
       ds.field("entries", &self.entries());
       ds.finish()
   }

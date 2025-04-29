@@ -74,7 +74,7 @@ func (e *{{ enum.name }}) UnmarshalJSON(data []byte) error {
     return nil
 }
 
-func (e *{{ enum.name }}) Decode(holder cffi.CFFIValueEnum, typeMap baml.TypeMap) {
+func (e *{{ enum.name }}) Decode(holder cffi.CFFIValueEnum) {
     if string(holder.Name()) != "{{ enum.name }}" {
         panic(fmt.Sprintf("expected {{ enum.name }}, got %s", string(holder.Name())))
     }
@@ -82,7 +82,11 @@ func (e *{{ enum.name }}) Decode(holder cffi.CFFIValueEnum, typeMap baml.TypeMap
     *e = {{ enum.name }}(value)
 }
 
-func (e {{ enum.name }}) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+func (e {{ enum.name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     return baml.EncodeEnum(builder, "{{ enum.name }}", string(e), false)
+}
+
+func (e {{ enum.name }}) BamlTypeName() string {
+    return "{{ enum.name }}"
 }
 {% endfor %}

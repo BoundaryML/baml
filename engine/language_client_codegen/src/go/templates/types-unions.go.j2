@@ -17,7 +17,7 @@ type {{ union.name }} struct {
     {% endfor %}
 }
 
-func (u *{{ union.name }}) Decode(holder *cffi.CFFIValueUnionVariant, typeMap baml.TypeMap) {
+func (u *{{ union.name }}) Decode(holder *cffi.CFFIValueUnionVariant) {
     valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
     {% for variant in union.variants %}
@@ -30,17 +30,21 @@ func (u *{{ union.name }}) Decode(holder *cffi.CFFIValueUnionVariant, typeMap ba
 }
 
 
-func (u {{ union.name }}) Encode(builder *flatbuffers.Builder, typeMap baml.TypeMap) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+func (u {{ union.name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
     switch u.variant {
     {% for variant in union.variants %}
     case "{{ variant.0 }}":
-        return baml.EncodeUnion(builder, typeMap, u.variant, u.variant_{{ variant.0 }})
+        return baml.EncodeUnion(builder, u.variant, u.variant_{{ variant.0 }})
     {% endfor %}
     case "":
         return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
     }
 
     return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u {{ union.name }}) BamlTypeName() string {
+    return "{{ union.name }}"
 }
 
 {% for variant in union.variants %}

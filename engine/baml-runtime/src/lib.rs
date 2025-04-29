@@ -81,9 +81,7 @@ use web_time::SystemTime;
 use crate::internal::llm_client::LLMCompleteResponseMetadata;
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
-pub use runtime_context::{
-    AwsCredProvider, AwsCredProviderImpl, AwsCredResult, BamlSrcReader, RuntimeCallbackError,
-};
+pub use runtime_context::BamlSrcReader;
 use runtime_interface::ExperimentalTracingInterface;
 use runtime_interface::RuntimeConstructor;
 use runtime_interface::RuntimeInterface;
@@ -226,8 +224,7 @@ impl BamlRuntime {
         // A callback that can be implemented in JS to read files that are referred in tests.
         baml_src_reader: BamlSrcReader,
     ) -> RuntimeContextManager {
-        let ctx =
-            RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader, None);
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
         let tags: HashMap<String, BamlValue> = [("baml.language", language)]
             .into_iter()
             .map(|(k, v)| (k.to_string(), v))
@@ -239,23 +236,18 @@ impl BamlRuntime {
     // Another way of creating a context that uses some
     // helper functions to load AWS SSO profile and creds.
     // These functions are implemented in Node for example, and used by the vscode playground to make aws sso work.
-    pub fn create_ctx_manager_with_env_var_loaders(
+    pub fn create_ctx_manager_for_wasm(
         &self,
-        language: BamlValue,
         // This callback reads files that are added in tests
         baml_src_reader: BamlSrcReader,
-        // This callback can be implemented in JS to load AWS SSO profile and creds.
-        aws_cred_provider: AwsCredProvider,
     ) -> RuntimeContextManager {
-        let ctx = RuntimeContextManager::new_from_env_vars(
-            self.env_vars.clone(),
-            baml_src_reader,
-            aws_cred_provider,
-        );
-        let tags: HashMap<String, BamlValue> = [("baml.language", language)]
-            .into_iter()
-            .map(|(k, v)| (k.to_string(), v))
-            .collect();
+        let ctx = RuntimeContextManager::new_from_env_vars(self.env_vars.clone(), baml_src_reader);
+        let tags: HashMap<String, BamlValue> = [(
+            "baml.language".to_string(),
+            BamlValue::String("wasm".to_string()),
+        )]
+        .into_iter()
+        .collect();
         ctx.upsert_tags(tags);
         ctx
     }

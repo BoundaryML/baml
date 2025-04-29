@@ -4,9 +4,7 @@ title: vertex-ai
 
 The `vertex-ai` provider is used to interact with the Google Vertex AI services.
 
-<Warning>
-  `vertex-ai` support for Anthropic models is coming soon.
-</Warning>
+<Tip>As of BAML 0.85.0, `vertex-ai` now supports Anthropic models!</Tip>
 
 
 Example: 
@@ -36,31 +34,17 @@ can expect authentication to work out of the box.
 Setting [`options.credentials`](#credentials) will take precedence and force `vertex-ai` to load
 service account credentials from that file path.
 
-Setting [`options.credentials_content`](#credentials_content) will also take precedence and force
-`vertex-ai` to load service account credentials from that string.
-
-<Accordion title='Using a `vertex-ai` client in the playground'>
-
-To use a `vertex-ai` client in the playground, you'll need to create service account credentials.
-
-1. Go to [IAM & Admin > Service Accounts](https://console.cloud.google.com/iam-admin/serviceaccounts) in the Google Cloud Console.
-2. Choose the project you want to use.
-5. Select an existing service account or create a new one.
-6. Click on the service account, navigate to the `Keys` tab, select `Add Key`, and select `Create new key`.
-7. Confirm that the key type will be `JSON` and click `Create`.
-1. Copy the contents of the downloaded JSON key.
-1. Open the BAML playground, and click `API Keys` in the top right.
-9. Paste the JSON key into the `GOOGLE_APPLICATION_CREDENTIALS` field.
-
-You should now be able to use a `vertex-ai` client in the playground!
-</Accordion>
-
+### Playground
+To use a `vertex-ai` client in the playground, all you need to do is run `gcloud
+auth application-default login` in the terminal. The playground will then use these
+credentials to auth all Vertex API calls.
 
 ## Debugging
 
 <Accordion title='Authentication'>
 
-If you're having issues with `vertex-ai` authentication, you can try setting `BAML_LOG=debug` to see more detailed logs.
+If you're having issues with `vertex-ai` authentication, you can try setting
+`BAML_INTERNAL_LOG=debug` to see more detailed logs.
 
 To understand these logs, it'll help to understand the auth implementation of the `vertex-ai` provider.
 
@@ -79,17 +63,13 @@ The `vertex-ai` provider uses one of 3 strategies to authenticate with Google Cl
 We choose one of the three strategies based on the following rules, in order:
 
 1. Is `credentials` provided?
-     - If so, and it's a string containing a JSON object, we use `AuthStrategy::JsonFile` with `credentials`.
+     - If so, and it's a string containing a JSON object, we use `AuthStrategy::JsonString` with `credentials`.
      - If so, and it's a JSON object, we use `AuthStrategy::JsonObject` with `credentials` (this is probably only
        relevant if you're using the [`ClientRegistry`](/ref/baml_client/client-registry) API in `baml_client`).
      - If so, but it's just a regular string, use `AuthStrategy::JsonFile` with `credentials`.
-1. Is `credentials_content` provided?
-     - If so, we use `AuthStrategy::JsonString` with `credentials_content`
 1. Is `GOOGLE_APPLICATION_CREDENTIALS` set?
      - If so, and it looks like a JSON object, we use `AuthStrategy::JsonString` with `GOOGLE_APPLICATION_CREDENTIALS`
      - If so, but it's just a regular string, use `AuthStrategy::JsonFile` with `GOOGLE_APPLICATION_CREDENTIALS`
-1. Is `GOOGLE_APPLICATION_CREDENTIALS_CONTENT` set?
-     - If so, we use `AuthStrategy::JsonString` with `GOOGLE_APPLICATION_CREDENTIALS_CONTENT`
 1. Else, we use `AuthStrategy::SystemDefault`
 
 </Accordion>
@@ -259,6 +239,11 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
   path="credentials_content"
   type="string"
 >
+  <Warning>
+    Since the BAML playground now allows using `gcloud auth application-default login`, to
+    authenticate wih GCP, we will soon be deprecating `credentials_content`.
+  </Warning>
+
   A string containing service account credentials in JSON format.
 
   See [Authentication](#authentication) and [Debugging](#debugging) for more information.
@@ -293,11 +278,6 @@ visible on-screen when the user navigates to #credentials_content, due to how Fe
 
     ```
   </Accordion>
-
-  <Warning>
-    We do not recommend using `credentials_content` in production; it is only
-    intended for use in the BAML playground.
-  </Warning>
 </ParamField>
 
 

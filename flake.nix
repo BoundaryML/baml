@@ -48,21 +48,6 @@
           inherit (fenix.packages.${system}.latest) rust-std;
         };
 
-	# wasm-bindgen-cli = pkgs.rustPlatform.buildRustPackage rec {
-	#   pname = "wasm-bindgen-cli";
-	#   version = "0.2.92";
-	#   src = pkgs.fetchFromGitHub {
-	#     owner = "rustwasm";
-	#     repo = "wasm-bindgen";
-	#     rev = "${version}";
-	#     sha256 = "sha256-VMt+J5sazHPqmAdsoueS2WW6Pn1tvugaJaPnSJq9038=";
-	#   };
-	#   cargoHash = "sha256-+iIHleftJ+Yl9QHEBVI91NOhBw9qtUZfgooHKoyY1w4=";
-	#   buildInputs = with pkgs; [ openssl ];
-	#   nativeBuildInputs = with pkgs; [ pkg-config ];
-	#   cargoBuildFlags = ["--package wasm-bindgen-cli"];
-	# };
-
         buildInputs = (with pkgs; [
           cmake
           git
@@ -73,9 +58,11 @@
           ruby
           ruby.devEnv
           maturin
+          pnpm
           vsce # VSCode extension packaging tool
           toolchain
           nodejs
+          nodePackages.typescript
           pkgs-unstable.uv
           pkgs-unstable.flatbuffers
           wasm-pack
@@ -103,69 +90,48 @@
           pkgs.gcc
         ];
 
-        wheelName = "baml-${version}-cp39-cp39-manylinux_2_28_x86_64.whl";
+        wheelName = "baml_py-${version}-cp38-abi3-linux_x86_64.whl";
 
-        
-      in
-        rec {
-          packages.default = rustPlatform.buildRustPackage {
-
-            # Disable tests in this build - FFI is a little tricky.
-            doCheck = false;
-
-            # Temporary: do a debug build instead of a release build, to speed up the dev cycle.
-            buildType = "debug";
-
-            pname = "baml-cli";
-            version = version;
-            src = ./engine;
-            LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
-            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
-            else
-              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
-
-            cargoLock = { lockFile = ./engine/Cargo.lock; outputHashes = {
-            }; };
-
-            # Add build-time environment variables
-            RUSTFLAGS = if pkgs.stdenv.isDarwin
-              then
-                "--cfg tracing_unstable -C linker=lld"
+        bamlRustPackage = {
+          pname,
+          buildPhase ? null,
+          installPhase ? null,
+          nativeBuildInputsExtra ? [],
+          buildType,
+          extraAttrs ? {},
+        }:
+          rustPlatform.buildRustPackage ({
+              inherit pname version;
+              src = ./engine;
+              LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
+              BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
+                "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
               else
-                "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
+                "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
+              RUSTFLAGS = if pkgs.stdenv.isDarwin
+                then "--cfg tracing_unstable -C linker=lld"
+                else "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
+              OPENSSL_STATIC = "1";
+              OPENSSL_DIR = "${pkgs.openssl.dev}";
+              OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
+              OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
+              inherit buildInputs;
+              nativeBuildInputs = nativeBuildInputs ++ nativeBuildInputsExtra;
+              doCheck = false;
+              inherit buildType;
+              cargoLock = { lockFile = ./engine/Cargo.lock; outputHashes = {}; };
+              SKIP_BAML_VALIDATION = "1";
+          }
+          // (if buildPhase != null then { inherit buildPhase; } else {})
+          // (if installPhase != null then { inherit installPhase; } else {})
+          // extraAttrs);
+        in
 
-            OPENSSL_STATIC = "1";
-            OPENSSL_DIR = "${pkgs.openssl.dev}";
-            OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
-            OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
+        rec {
 
-            # Modify the test phase to only run library tests
-            checkPhase = ''
-              runHook preCheck
-              echo "Running cargo test --lib"
-              cargo test --lib
-              runHook postCheck
-            '';
-
-            postPatch = ''
-              # Disable baml syntax validation tests in build. They require too much
-              # file system access to run.
-              cat > baml-lib/baml/build.rs << 'EOF'
-                fn main() {
-                  println!("cargo:warning=Skipping baml syntax validation tests");
-                }
-              EOF
-            '';
-
-            inherit buildInputs;
-            inherit nativeBuildInputs;
-
-            PYTHON_SYS_EXECUTABLE="${pythonEnv}/bin/python3";
-            LD_LIBRARY_PATH="${pythonEnv}/lib";
-            PYTHONPATH="${pythonEnv}/${pythonEnv.sitePackages}";
-            # CC="${clang}/bin/clang"; # Temporarily commented out for linux testing.
-
+          packages.default = bamlRustPackage {
+            pname = "baml-cli";
+            buildType = "debug";
             installPhase = ''
               runHook preInstall
               echo "Listing baml binaries in target/debug:"
@@ -176,53 +142,31 @@
               cp "$BINARY_NAME" $out/bin/baml-cli
               runHook postInstall
             '';
+            extraAttrs = {
+              PYTHON_SYS_EXECUTABLE = "${pythonEnv}/bin/python3";
+              LD_LIBRARY_PATH = "${pythonEnv}/lib";
+              PYTHONPATH = "${pythonEnv}/${pythonEnv.sitePackages}";
+              # CC="${clang}/bin/clang"; # Temporarily commented out for linux testing.
+            };
           };
 
-          packages.pyLib = rustPlatform.buildRustPackage {
+          packages.pyLib = bamlRustPackage {
             pname = "baml-cli";
-            inherit version;
-            src = ./engine;
-            cargoLock.lockFile = ./engine/Cargo.lock;
-
-            LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
-            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
-            else
-              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
-
             buildType = "debug";
-            doCheck = false;
-
-            # Skip BAML validation during build
-            SKIP_BAML_VALIDATION = "1";
-
-            RUSTFLAGS = if pkgs.stdenv.isDarwin
-              then
-                "--cfg tracing_unstable -C linker=lld"
-              else
-                "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
-
-            OPENSSL_STATIC = "1";
-            OPENSSL_DIR = "${pkgs.openssl.dev}";
-            OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
-            OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
-
-            nativeBuildInputs = nativeBuildInputs ++ [
-              pkgs.maturin
-              pythonEnv
-            ];
-
-            buildInputs = buildInputs;
-
+            nativeBuildInputsExtra = [ pkgs.maturin pythonEnv ];
             buildPhase = ''
               cargo build
               cd language_client_python
               maturin build --offline --target-dir ../target
             '';
-
             installPhase = ''
               mkdir -p $out/lib
-              cp ../target/wheels/baml_py-${version}-cp38-abi3-linux_x86_64.whl $out/lib/
+              ls ../target/wheels
+              cp ../target/wheels/${wheelName} $out/lib/
+              touch $out/results.txt
+              ls -la $out >> $out/results.txt
+              ls -la $out/lib >> $out/results.txt
+              ls -la $out/lib/${wheelName} >> $out/results.txt
             '';
           };
 
@@ -230,10 +174,9 @@
             pname = "baml-py";
             inherit version;
             format = "wheel";
-            
-            src = "${packages.pyLib}/lib/baml_py-${version}-cp38-abi3-linux_x86_64.whl";
-            
-            propagatedBuildInputs = with pkgs.python39Packages; [
+
+            src = "${packages.pyLib}/lib/${wheelName}";
+            propagatedBuildInputs = with pkgs.python39.pkgs; [
               pydantic
               typing-extensions
             ];
@@ -243,70 +186,64 @@
 
             meta = with pkgs.lib; {
               description = "Python bindings for BAML";
-              homepage = "https://github.com/BoundaryML/baml";
+              homepage = "https://github.com/boundaryml/baml";
               license = licenses.mit;
-              maintainers = [];
+              platforms = platforms.linux;
             };
           };
 
-          packages.tsLib = rustPlatform.buildRustPackage {
+          packages.tsLib = bamlRustPackage {
             pname = "baml-ts";
-            inherit version;
-            src = ./engine;
-            cargoLock.lockFile = ./engine/Cargo.lock;
-
-            LIBCLANG_PATH = pkgs.libclang.lib + "/lib/";
-            BINDGEN_EXTRA_CLANG_ARGS = if pkgs.stdenv.isDarwin then
-              "-I${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/headers "
-            else
-              "-isystem ${pkgs.llvmPackages_17.libclang.lib}/lib/clang/17/include -isystem ${pkgs.llvmPackages_17.libclang.lib}/include -isystem ${pkgs.glibc.dev}/include";
-
-            doCheck = false;
-
-            # Skip BAML validation during build
-            SKIP_BAML_VALIDATION = "1";
-
-            RUSTFLAGS = if pkgs.stdenv.isDarwin
-              then
-                "--cfg tracing_unstable -C linker=lld"
-              else
-                "--cfg tracing_unstable -Zlinker-features=+lld -C linker=gcc";
-
-            nativeBuildInputs = nativeBuildInputs ++ [ 
-              pkgs.nodejs
-              pkgs.napi-rs-cli
-            ];
-
-            buildInputs = buildInputs;
-
+            buildType = "debug";
+            nativeBuildInputsExtra = [ pkgs.nodejs pkgs.napi-rs-cli pkgs.pnpm ];
             buildPhase = ''
+              # Build the CLI
+              echo "Building the CLI"
+              cargo build -p baml-cli
+
               # Build specifically the typescript FFI crate
+              echo "Building the typescript FFI crate"
               cargo build -p baml-typescript-ffi
               cd language_client_typescript
-              
-              echo "Listing target directory contents:"
-              ls -R ../target
               
               echo "Listing current directory contents:"
               ls -la
               
               # Copy the built library to where napi expects it
+              echo "Copying the built library to where napi expects it"
               mkdir -p target/debug
               find ../target -name "*.so" -o -name "*.dylib" -o -name "*.dll"
               cp ../target/debug/libbaml.so target/debug/libbaml_typescript_ffi.so
-              echo "Running napi build..."
-              napi build --platform 2>&1
-              mkdir -p dist
-              cp index.js index.d.ts native.js native.d.ts stream.js stream.d.ts type_builder.js type_builder.d.ts dist/
+              
+              # Build the native module directly with release flag
+              napi build --platform --js ./native.js --dts ./native.d.ts
+              
+              # Compile TypeScript files using the Nix-provided TypeScript
+              ${pkgs.nodePackages.typescript}/bin/tsc ./typescript_src/*.ts --outDir ./dist --module commonjs --allowJs --declaration true || true
+              
+              # Copy any pre-existing JavaScript files that might be needed
+              cp *.js dist/ || true
+              
+              # Copy TypeScript declarations
+              cp *.d.ts dist/ || true
+              
+              # Copy the native modules
+              cp *.node dist/
               
               # Create minimal package.json and package-lock.json
               cat > dist/package.json << EOF
               {
-                "name": "baml-ts",
+                "name": "@boundaryml/baml",
                 "version": "${version}",
                 "bin": {
                   "baml-cli": "./bin/baml-cli"
                 },
+                "files": [
+                  "*.js",
+                  "*.ts",
+                  "*.node", 
+                  "bin/baml-cli"
+                ],
                 "dependencies": {},
                 "os": ["linux"],
                 "cpu": ["x64"]
@@ -315,13 +252,13 @@
               
               cat > dist/package-lock.json << EOF
               {
-                "name": "baml-ts",
+                "name": "@boundaryml/baml",
                 "version": "${version}",
                 "lockfileVersion": 2,
                 "requires": true,
                 "packages": {
                   "": {
-                    "name": "baml-ts",
+                    "name": "@boundaryml/baml",
                     "version": "${version}",
                     "dependencies": {},
                     "bin": {
@@ -331,16 +268,19 @@
                 }
               }
               EOF
-
+  
               # Copy the CLI binary
               mkdir -p dist/bin
-              cp ${packages.default}/bin/baml-cli dist/bin/baml-cli
+              cp ../target/debug/baml-cli dist/bin/baml-cli
             '';
-
             installPhase = ''
               mkdir -p $out/lib
               cp -r dist/* $out/lib/
             '';
+            extraAttrs = {
+              SKIP_BAML_VALIDATION = "1";
+              cargoLock = { lockFile = ./engine/Cargo.lock; };
+            };
           };
 
           packages.baml-ts = let
@@ -355,7 +295,7 @@
             
             src = npmSource;
 
-            npmDepsHash = "sha256-VCrDNrdYv0X5XtPA8iLwpji8+bla1vK4M8p9mfMIP5w=";
+            npmDepsHash = "sha256-p7AxgJSqngcwHwKsjF6u+fS0E27KY6/ulGIIRlZLsFU=";
             forceEmptyCache = true;
 
             buildInputs = [ pkgs.nodejs ];
@@ -373,7 +313,10 @@
 
             installPhase = ''
               mkdir -p $out/lib
-              cp baml-ts-${version}.tgz $out/lib/
+              touch $out/results.txt
+              ls -lha
+              ls -la  >> $out/results.txt
+              cp boundaryml-baml-${version}.tgz $out/lib/
             '';
           };
 
@@ -389,4 +332,5 @@
           };
         }
     );
+  
 }

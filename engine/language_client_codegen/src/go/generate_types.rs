@@ -56,7 +56,7 @@ pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> 
 fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> String {
     if field_type.is_class {
         return format!(
-            "*baml.Decode({}, typeMap).(*{})",
+            "*baml.Decode({}).(*{})",
             container_variable_name,
             filters::type_name_without_pointer(&field_type.name)
                 .ok()
@@ -65,7 +65,7 @@ fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> 
     } else if field_type.is_slice {
         let inner_type = field_type.underlying_type.as_ref().unwrap();
         return format!(
-            r#"baml.DecodeList({container_variable_name}, typeMap, func(__holder *cffi.CFFIValueHolder, typeMap baml.TypeMap) {} {{
+            r#"baml.DecodeList({container_variable_name}, func(__holder *cffi.CFFIValueHolder) {} {{
     return {}
 }})"#,
             inner_type.name,
@@ -73,12 +73,12 @@ fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> 
         );
     } else if field_type.is_union {
         return format!(
-            "*baml.Decode({container_variable_name}, typeMap).(*{})",
+            "*baml.Decode({container_variable_name}).(*{})",
             field_type.name
         );
     } else {
         return format!(
-            "baml.Decode({container_variable_name}, typeMap).({})",
+            "baml.Decode({container_variable_name}).({})",
             field_type.name
         );
     }

@@ -24,7 +24,7 @@ dependencies = ["cbindgen"]
 
 [tasks.build-local]
 script = '''
-python build.py --targets aarch64-apple-darwin --debug
+cargo build
 '''
 dependencies = ["cbindgen"]
 

@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 use time::OffsetDateTime;
 
-use crate::{AwsCredProvider, AwsCredProviderImpl, AwsCredResult};
+use crate::{js_callback_provider::get_js_callback_provider, AwsCredResult, JsCallbackProvider};
 
 pub fn load_aws_config() -> ConfigLoader {
     log::debug!("Loading AWS config for wasm specifically");
@@ -160,8 +160,6 @@ impl HttpClient for BrowserHttp2 {
 }
 
 pub(super) struct WasmAwsCreds {
-    // pub default_chain: aws_config::default_provider::credentials::DefaultCredentialsChain,
-    pub aws_cred_provider: AwsCredProvider,
     pub profile: Option<String>,
 }
 
@@ -176,59 +174,25 @@ impl std::fmt::Debug for WasmAwsCreds {
 
 impl WasmAwsCreds {
     async fn provide_credentials_impl(&self) -> aws_credential_types::provider::Result {
-        match self.aws_cred_provider.clone() {
-            Some(AwsCredProviderImpl {
-                req_tx,
-                mut resp_rx,
-            }) => {
-                if let Err(e) = req_tx.send(self.profile.clone()).await {
-                    log::error!(
-                        "Failed to send AWS cred request across WASM bridge: {:?}",
-                        e
-                    );
-                    return Err(CredentialsError::unhandled(e));
-                };
-                let creds = match resp_rx.recv().await {
-                    Ok(Ok(creds)) => creds,
-                    Ok(Err(e)) => {
-                        log::error!("Error in AWS cred provider: {:?}", e);
-                        return Err(CredentialsError::unhandled(e));
-                    }
-                    Err(e) => {
-                        log::error!(
-                            "Failed to recv AWS cred response across WASM bridge: {:?}",
-                            e
-                        );
-                        return Err(CredentialsError::unhandled(e));
-                    }
-                };
-
-                match creds {
-                    AwsCredResult::Ok {
-                        access_key_id,
-                        secret_access_key,
-                        session_token,
-                        expiration,
-                        ..
-                    } => Ok(Credentials::new(
-                        access_key_id,
-                        secret_access_key,
-                        session_token,
-                        match expiration {
-                            Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
-                                Ok(dt) => Some(dt.into()),
-                                Err(_) => None,
-                            },
-                            None => None,
-                        },
-                        "baml-playground-wasm-bridge",
-                    )),
-                    AwsCredResult::Err { name, message } => Err(CredentialsError::unhandled(
-                        format!("{}: {}", name, message),
-                    )),
-                }
+        let cred_provider = get_js_callback_provider().map_err(CredentialsError::unhandled)?;
+        match cred_provider.aws_req(self.profile.clone()).await {
+            Err(e) => {
+                log::error!("Error calling AWS cred provider: {:?}", e);
+                return Err(CredentialsError::unhandled(e));
             }
-            None => Err(CredentialsError::not_loaded_no_source()),
+            Ok(aws_creds) => Ok(Credentials::new(
+                aws_creds.access_key_id,
+                aws_creds.secret_access_key,
+                aws_creds.session_token,
+                match aws_creds.expiration {
+                    Some(expiration) => match expiration.parse::<DateTime<Utc>>() {
+                        Ok(dt) => Some(dt.into()),
+                        Err(_) => None,
+                    },
+                    None => None,
+                },
+                "baml-playground-wasm-bridge",
+            )),
         }
     }
 }

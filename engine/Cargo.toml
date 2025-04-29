@@ -50,6 +50,7 @@ bytes = "1.6.0"
 cfg-if = "1.0.0"
 clap = { version = "4.4.6", features = ["cargo", "derive"] }
 dashmap = "5.5.3"
+derive-new = "0.7"
 derive_builder = "0.20.0"
 derive_more = { version = "0.99.18", features = ["constructor"] }
 either = "1.8.1"

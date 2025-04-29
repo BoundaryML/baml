@@ -28,6 +28,7 @@ import * as dotenv from 'dotenv'
 import * as fs from 'fs'
 import { AwsCredentialIdentity } from '@smithy/types'
 import { refreshBamlConfigSingleton } from '../plugins/language-server-client/bamlConfig'
+import { GoogleAuth } from 'google-auth-library'
 // import { CredentialsProviderError } from '@aws-sdk/credential-providers'
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -369,6 +370,52 @@ export class WebviewPanelHost {
                 })
               } catch (error) {
                 console.error('Error loading aws creds:', error)
+                if (error instanceof Error) {
+                  this._panel.webview.postMessage({
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: {
+                      error: {
+                        ...error,
+                        name: error.name,
+                        message: error.message,
+                      },
+                    },
+                  })
+                } else {
+                  this._panel.webview.postMessage({
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: { error },
+                  })
+                }
+              }
+            })()
+            return
+          case 'LOAD_GCP_CREDS':
+            ;(async () => {
+              try {
+                const auth = new GoogleAuth({
+                  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+                })
+
+                const client = await auth.getClient()
+                const projectId = await auth.getProjectId()
+
+                const tokenResponse = await client.getAccessToken()
+
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: {
+                    ok: {
+                      accessToken: tokenResponse.token,
+                      projectId,
+                    },
+                  },
+                })
+              } catch (error) {
+                console.error('Error loading gcp creds:', error)
                 if (error instanceof Error) {
                   this._panel.webview.postMessage({
                     rpcId: message.rpcId,

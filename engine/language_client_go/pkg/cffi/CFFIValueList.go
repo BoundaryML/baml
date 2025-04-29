@@ -41,8 +41,21 @@ func (rcv *CFFIValueList) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *CFFIValueList) Values(obj *CFFIValueHolder, j int) bool {
+func (rcv *CFFIValueList) FieldType(obj *CFFIFieldTypeHolder) *CFFIFieldTypeHolder {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(CFFIFieldTypeHolder)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
+func (rcv *CFFIValueList) Values(obj *CFFIValueHolder, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -54,7 +67,7 @@ func (rcv *CFFIValueList) Values(obj *CFFIValueHolder, j int) bool {
 }
 
 func (rcv *CFFIValueList) ValuesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -62,10 +75,13 @@ func (rcv *CFFIValueList) ValuesLength() int {
 }
 
 func CFFIValueListStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+	builder.StartObject(2)
+}
+func CFFIValueListAddFieldType(builder *flatbuffers.Builder, fieldType flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(fieldType), 0)
 }
 func CFFIValueListAddValues(builder *flatbuffers.Builder, values flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(values), 0)
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(values), 0)
 }
 func CFFIValueListStartValuesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
