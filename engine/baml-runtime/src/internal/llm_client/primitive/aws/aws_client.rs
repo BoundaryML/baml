@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 use aws_config::Region;
 use aws_config::{identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader};
@@ -10,7 +11,7 @@ use aws_credential_types::{
     },
     Credentials,
 };
-use aws_sdk_bedrockruntime::config::Intercept;
+use aws_sdk_bedrockruntime::config::{Intercept, StalledStreamProtectionConfig};
 use aws_sdk_bedrockruntime::Client as BedrockRuntimeClient;
 use aws_sdk_bedrockruntime::{self as bedrock, operation::converse::ConverseOutput};
 
@@ -19,6 +20,7 @@ use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::Blob;
+use aws_smithy_types::Document;
 use baml_types::tracing::events::{
     ContentId, FunctionId, HTTPBody, HTTPRequest, HTTPResponse, HttpRequestId, TraceData,
     TraceEvent, TraceLevel,
@@ -90,6 +92,37 @@ fn resolve_properties(
     };
 
     Ok(props)
+}
+
+// Helper function to convert serde_json::Value to aws_smithy_types::Document
+fn serde_json_to_aws_document(value: serde_json::Value) -> Document {
+    match value {
+        serde_json::Value::Null => Document::Null,
+        serde_json::Value::Bool(b) => Document::Bool(b),
+        serde_json::Value::Number(n) => {
+            if n.is_i64() {
+                Document::Number(aws_smithy_types::Number::NegInt(n.as_i64().unwrap()))
+            } else if n.is_u64() {
+                Document::Number(aws_smithy_types::Number::PosInt(n.as_u64().unwrap()))
+            } else {
+                // Fallback to f64
+                Document::Number(aws_smithy_types::Number::Float(
+                    n.as_f64().unwrap_or(f64::NAN),
+                ))
+            }
+        }
+        serde_json::Value::String(s) => Document::String(s),
+        serde_json::Value::Array(arr) => {
+            Document::Array(arr.into_iter().map(serde_json_to_aws_document).collect())
+        }
+        serde_json::Value::Object(map) => {
+            let converted_map: HashMap<String, Document> = map
+                .into_iter()
+                .map(|(k, v)| (k, serde_json_to_aws_document(v)))
+                .collect();
+            Document::Object(converted_map)
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -394,37 +427,57 @@ impl AwsClient {
         let bedrock_config = aws_sdk_bedrockruntime::config::Builder::from(&config)
             // To support HTTPS_PROXY https://github.com/awslabs/aws-sdk-rust/issues/169
             .http_client(http_client)
+            // Adding a custom http client (above) breaks the stalled stream protection for some reason. If a bedrock request takes longer than 5s (the default grace period, it makes it error out), so we disable it.
+            .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
             .interceptor(CollectorInterceptor::new(span_id, http_request_id.clone()))
             .build();
         Ok(BedrockRuntimeClient::from_conf(bedrock_config))
     }
 
-    async fn chat_anyhow<'r>(&self, response: &'r ConverseOutput) -> Result<&'r String> {
+    async fn chat_anyhow<'r>(&self, response: &'r ConverseOutput) -> Result<String> {
         let Some(bedrock::types::ConverseOutput::Message(ref message)) = response.output else {
             anyhow::bail!(
                 "Expected message output in response, but is type {}",
                 "unknown"
             );
         };
-        let content = message
-            .content
-            .first()
-            .context("Expected message output to have content")?;
-        let bedrock::types::ContentBlock::Text(ref content) = content else {
-            anyhow::bail!(
-                "Expected message output to be text, got {}",
-                match content {
-                    bedrock::types::ContentBlock::Image(_) => "image",
-                    bedrock::types::ContentBlock::GuardContent(_) => "guardContent",
-                    bedrock::types::ContentBlock::ToolResult(_) => "toolResult",
-                    bedrock::types::ContentBlock::ToolUse(_) => "toolUse",
-                    bedrock::types::ContentBlock::Text(_) => "text",
-                    _ => "unknown",
-                }
-            );
-        };
+        // Try to extract text from all content blocks
+        let mut extracted_text = String::new();
+        let mut has_text = false;
 
-        Ok(content)
+        if message.content.is_empty() {
+            anyhow::bail!("Expected message output to have content, but content is empty");
+        }
+
+        for content_block in &message.content {
+            if let bedrock::types::ContentBlock::Text(text) = content_block {
+                has_text = true;
+                extracted_text.push_str(text);
+            }
+        }
+
+        // If we found at least one text block, return the concatenated text
+        if has_text {
+            let content = extracted_text;
+            return Ok(content);
+        }
+
+        // If we didn't find any text blocks, return an error with details about the content
+        anyhow::bail!(
+            "Expected message output to contain at least one text block, but found none. Content: {:?}",
+            message.content.iter().map(|block| match block {
+                bedrock::types::ContentBlock::Image(_) => "image",
+                bedrock::types::ContentBlock::GuardContent(_) => "guardContent",
+                bedrock::types::ContentBlock::ToolResult(_) => "toolResult",
+                bedrock::types::ContentBlock::ToolUse(_) => "toolUse",
+                bedrock::types::ContentBlock::Text(_) => "text",
+                bedrock::types::ContentBlock::ReasoningContent(_) => "reasoningContent",
+                bedrock::types::ContentBlock::CachePoint(_) => "cachePoint",
+                bedrock::types::ContentBlock::Document(_) => "document",
+                bedrock::types::ContentBlock::Video(_) => "video",
+                _ => "unknown",
+            }).collect::<Vec<_>>()
+        );
     }
 
     fn build_request(
@@ -462,8 +515,23 @@ impl AwsClient {
                 .build()
         });
 
+        let additional_fields_doc = self
+            .properties
+            .additional_model_request_fields
+            .as_ref()
+            .map(|map| {
+                // Convert IndexMap<String, serde_json::Value> to serde_json::Value::Object
+                let json_map: serde_json::Map<String, serde_json::Value> =
+                    map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let json_value = serde_json::Value::Object(json_map);
+                // Convert serde_json::Value to aws_smithy_types::Document
+                serde_json_to_aws_document(json_value)
+            })
+            .unwrap_or_else(|| Document::Object(HashMap::new())); // Default to empty object
+
         bedrock::operation::converse::ConverseInput::builder()
             .set_inference_config(inference_config)
+            .set_additional_model_request_fields(Some(additional_fields_doc))
             .set_model_id(Some(self.properties.model.clone()))
             .set_system(system_message)
             .set_messages(Some(converse_messages))
@@ -602,12 +670,15 @@ impl WithStreamChat for AwsClient {
             }
         };
 
+        let additional_model_request_fields = request.additional_model_request_fields;
+
         let request = aws_client
             .converse_stream()
             .set_model_id(request.model_id)
             .set_inference_config(request.inference_config)
             .set_system(request.system)
-            .set_messages(request.messages);
+            .set_messages(request.messages)
+            .set_additional_model_request_fields(additional_model_request_fields);
 
         let system_start = SystemTime::now();
         let instant_start = Instant::now();
@@ -904,6 +975,7 @@ impl WithChat for AwsClient {
         let request = aws_client
             .converse()
             .set_model_id(request.model_id)
+            .set_additional_model_request_fields(request.additional_model_request_fields)
             .set_inference_config(request.inference_config)
             .set_system(request.system)
             .set_messages(request.messages);

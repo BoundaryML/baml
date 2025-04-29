@@ -23,7 +23,7 @@ pub mod vertex;
 pub enum UnresolvedClientProperty<Meta> {
     OpenAI(openai::UnresolvedOpenAI<Meta>),
     Anthropic(anthropic::UnresolvedAnthropic<Meta>),
-    AWSBedrock(aws_bedrock::UnresolvedAwsBedrock),
+    AWSBedrock(aws_bedrock::UnresolvedAwsBedrock<Meta>),
     Vertex(vertex::UnresolvedVertex<Meta>),
     GoogleAI(google_ai::UnresolvedGoogleAI<Meta>),
     RoundRobin(round_robin::UnresolvedRoundRobin<Meta>),
@@ -106,7 +106,7 @@ impl<Meta: Clone> UnresolvedClientProperty<Meta> {
                 UnresolvedClientProperty::Anthropic(a.without_meta())
             }
             UnresolvedClientProperty::AWSBedrock(a) => {
-                UnresolvedClientProperty::AWSBedrock(a.clone())
+                UnresolvedClientProperty::AWSBedrock(a.without_meta())
             }
             UnresolvedClientProperty::Vertex(v) => {
                 UnresolvedClientProperty::Vertex(v.without_meta())

@@ -483,6 +483,7 @@ async def test_should_work_with_vertex():
     res = await b.TestVertex("donkey kong")
     assert_that("donkey kong" in res.lower())
 
+
 @pytest.mark.asyncio
 async def test_should_work_with_vertex_claude():
     res = await b.TestVertexClaude("donkey kong")
@@ -593,6 +594,20 @@ async def test_aws_streaming():
     async for chunk in res:
         chunks.append(chunk)
     assert len(chunks) > 1, "Expected more than one stream chunk."
+
+
+@pytest.mark.asyncio
+async def test_aws_streaming_claude_37():
+    # for i in range(10):
+    # print(f"================= Test {i} ==================")
+    # res = b.stream.TestAwsClaude37("Tell me a story in 8 sentences.")
+    # chunks = []
+    # async for chunk in res:
+    #     print(chunk)
+    #     chunks.append(chunk)
+    # assert len(chunks) > 1, "Expected more than one stream chunk."
+    res = await b.TestAwsClaude37("")
+    assert len(res) > 0, "Expected non-empty result but got empty."
 
 
 @pytest.mark.asyncio

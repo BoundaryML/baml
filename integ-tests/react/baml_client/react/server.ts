@@ -2031,6 +2031,24 @@ export const TestAws = async (
 };
 
 /**
+ * Executes the "TestAwsClaude37" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestAwsClaude37"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestAwsClaude37 = async (
+  input: string,
+): Promise<string> => {
+  return b.TestAwsClaude37(
+    input,
+  );
+};
+
+/**
  * Executes the "TestAwsInferenceProfile" BAML action.
  *
  * This server action calls the underlying BAML function "TestAwsInferenceProfile"

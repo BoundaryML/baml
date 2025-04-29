@@ -1566,6 +1566,19 @@ paths:
                 title: TestAwsResponse
                 type: string
       operationId: TestAws
+  /call/TestAwsClaude37:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsClaude37'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsClaude37Response
+                type: string
+      operationId: TestAwsClaude37
   /call/TestAwsInferenceProfile:
     post:
       requestBody:
@@ -4259,6 +4272,22 @@ components:
         application/json:
           schema:
             title: TestAwsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsClaude37:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsClaude37Request
             type: object
             properties:
               input:

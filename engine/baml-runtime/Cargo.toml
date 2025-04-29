@@ -108,8 +108,8 @@ tempfile = "3.19.0"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-aws-config = { version = "1.5.3", default-features = false, features = [] }
-aws-sdk-bedrockruntime = { version = "1.37.0", default-features = false, features = [
+aws-config = { version = "1.6.2", default-features = false, features = [] }
+aws-sdk-bedrockruntime = { version = "1.85.0", default-features = false, features = [
 ] }
 colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
@@ -144,8 +144,8 @@ web-sys = { version = "0.3.69", features = [
 wasmtimer = "0.4.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-aws-config = "1.5.3"
-aws-sdk-bedrockruntime = "1.37.0"
+aws-config = "1.6.2"
+aws-sdk-bedrockruntime = "1.85.0"
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 criterion = "0.5.1"

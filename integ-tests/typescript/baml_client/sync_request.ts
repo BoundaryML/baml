@@ -2231,6 +2231,26 @@ export class HttpRequest {
     }
   }
   
+  TestAwsClaude37(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestAwsClaude37",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestAwsInferenceProfile(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -5764,6 +5784,26 @@ export class HttpStreamRequest {
     try {
       return this.runtime.buildRequestSync(
         "TestAws",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestAwsClaude37(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestAwsClaude37",
         {
           "input": input
         },

@@ -5,14 +5,16 @@ use crate::{
     UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
 };
 use anyhow::Result;
+use indexmap::IndexMap;
 use secrecy::SecretString;
 
-use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr};
+use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr, UnresolvedValue};
+use serde_json::Value;
 
 use super::helpers::{Error, PropertyHandler};
 
 #[derive(Debug, Clone)]
-pub struct UnresolvedAwsBedrock {
+pub struct UnresolvedAwsBedrock<Meta> {
     model: Option<StringOr>,
     region: Option<StringOr>,
     access_key_id: Option<StringOr>,
@@ -24,6 +26,7 @@ pub struct UnresolvedAwsBedrock {
     supported_request_modes: SupportedRequestModes,
     inference_config: Option<UnresolvedInferenceConfiguration>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
+    additional_model_request_fields: Option<IndexMap<String, (Meta, UnresolvedValue<Meta>)>>,
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +79,7 @@ pub struct ResolvedAwsBedrock {
     pub allowed_role_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
     pub finish_reason_filter: FinishReasonFilter,
+    pub additional_model_request_fields: Option<IndexMap<String, Value>>,
 }
 
 impl std::fmt::Debug for ResolvedAwsBedrock {
@@ -92,6 +96,10 @@ impl std::fmt::Debug for ResolvedAwsBedrock {
             .field("allowed_role_metadata", &self.allowed_role_metadata)
             .field("supported_request_modes", &self.supported_request_modes)
             .field("finish_reason_filter", &self.finish_reason_filter)
+            .field(
+                "additional_model_request_fields",
+                &self.additional_model_request_fields,
+            )
             .finish()
     }
 }
@@ -122,7 +130,33 @@ impl ResolvedAwsBedrock {
     }
 }
 
-impl UnresolvedAwsBedrock {
+impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
+    pub fn without_meta(&self) -> UnresolvedAwsBedrock<()> {
+        UnresolvedAwsBedrock {
+            model: self.model.clone(),
+            region: self.region.clone(),
+            access_key_id: self.access_key_id.clone(),
+            secret_access_key: self.secret_access_key.clone(),
+            session_token: self.session_token.clone(),
+            profile: self.profile.clone(),
+            role_selection: self.role_selection.clone(),
+            allowed_role_metadata: self.allowed_role_metadata.clone(),
+            supported_request_modes: self.supported_request_modes.clone(),
+            inference_config: self.inference_config.clone(),
+            finish_reason_filter: self.finish_reason_filter.clone(),
+            additional_model_request_fields: self.additional_model_request_fields.as_ref().map(
+                |fields| {
+                    fields
+                        .iter()
+                        .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
+                        .collect::<IndexMap<_, _>>()
+                },
+            ),
+        }
+    }
+}
+
+impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
     pub fn required_env_vars(&self) -> HashSet<String> {
         let mut env_vars = HashSet::new();
         if let Some(m) = self.model.as_ref() {
@@ -309,6 +343,17 @@ impl UnresolvedAwsBedrock {
             }
         }
 
+        let additional_model_request_fields = self
+            .additional_model_request_fields
+            .as_ref()
+            .map(|fields| {
+                fields
+                    .iter()
+                    .map(|(k, (_, v))| Ok((k.clone(), v.resolve_serde::<serde_json::Value>(ctx)?)))
+                    .collect::<Result<IndexMap<_, _>>>()
+            })
+            .transpose()?;
+
         Ok(ResolvedAwsBedrock {
             model: model.resolve(ctx)?,
             region,
@@ -325,12 +370,11 @@ impl UnresolvedAwsBedrock {
                 .map(|c| c.resolve(ctx))
                 .transpose()?,
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
+            additional_model_request_fields,
         })
     }
 
-    pub fn create_from<Meta: Clone>(
-        mut properties: PropertyHandler<Meta>,
-    ) -> Result<Self, Vec<Error<Meta>>> {
+    pub fn create_from(mut properties: PropertyHandler<Meta>) -> Result<Self, Vec<Error<Meta>>> {
         let model = {
             // Add AWS Bedrock-specific validation logic here
             let model_id = properties.ensure_string("model_id", false);
@@ -374,6 +418,9 @@ impl UnresolvedAwsBedrock {
         let role_selection = properties.ensure_roles_selection();
         let allowed_metadata = properties.ensure_allowed_metadata();
         let supported_request_modes = properties.ensure_supported_request_modes();
+        let additional_model_request_fields = properties
+            .ensure_map("additional_model_request_fields", false)
+            .map(|(_, map, _)| map);
 
         let inference_config = {
             let mut inference_config = UnresolvedInferenceConfiguration {
@@ -452,6 +499,7 @@ impl UnresolvedAwsBedrock {
             supported_request_modes,
             inference_config,
             finish_reason_filter,
+            additional_model_request_fields,
         })
     }
 }

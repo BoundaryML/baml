@@ -5650,6 +5650,54 @@ export function useTestAws(
   return useBamlAction(action, props)
 }
 /**
+ * A specialized hook for the TestAwsClaude37 BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestAwsClaude37({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestAwsClaude37({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestAwsClaude37(props: HookInput<'TestAwsClaude37', { stream: false }>): HookOutput<'TestAwsClaude37', { stream: false }>
+export function useTestAwsClaude37(props?: HookInput<'TestAwsClaude37', { stream?: true }>): HookOutput<'TestAwsClaude37', { stream: true }>
+export function useTestAwsClaude37(
+  props: HookInput<'TestAwsClaude37', { stream?: boolean }> = {},
+): HookOutput<'TestAwsClaude37', { stream: true }> | HookOutput<'TestAwsClaude37', { stream: false }> {
+  let action = Actions.TestAwsClaude37;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestAwsClaude37;
+  }
+  return useBamlAction(action, props)
+}
+/**
  * A specialized hook for the TestAwsInferenceProfile BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
