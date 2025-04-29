@@ -166,9 +166,9 @@ impl TestExecutor for BamlRuntime {
 
             println!(
                 "{}",
-                "To run these tests, rerun using the \"run\" command:".blue()
+                "To run these tests, rerun without the --list arg:".blue()
             );
-            println!("{}", "baml-cli test run [args]".blue());
+            println!("{}", "baml-cli test [args]".blue());
         }
 
         Ok(())
