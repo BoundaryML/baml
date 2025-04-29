@@ -77,7 +77,8 @@ class StopTool {
 }
 ```
 
-Then in any language of your choice you can write an agentic loop or a workflow with these functions.
+## BAML Functions can be called from any language
+Below we call the ChatAgent function we defined in BAML through Python. BAML's Rust compiler generates a "baml_client" to access and call them.
 
 ```python
 from baml_client import b
@@ -96,9 +97,21 @@ while True:
   else:
     messages.append(Message(role="assistant", content=tool.response))
 ```
-You can write any kind of agent or workflow using chained BAML functions.
+You can write any kind of agent or workflow using chained BAML functions. An agent is a while loop that calls a Chat BAML Function with some state.
 
-### Test prompts 10x faster, right in your IDE
+And if you need to stream, add a couple more lines:
+```python
+stream = b.stream.ChatAgent(messages, "happy")
+# partial is a Partial type with all Optional fields
+for tool in stream:
+    if isinstance(tool, StopTool):
+      ...
+    
+final = stream.get_final_response()
+```
+And get fully type-safe outputs for each chunk in the stream.
+
+## Test prompts 10x faster, right in your IDE
 BAML comes with native tooling for VSCode (jetbrains + neovim coming soon). 
 
 **Visualize full prompt (including any multi-modal assets), and the API request**. BAML gives you full transparency and control of the prompt.
@@ -113,7 +126,7 @@ If testing your pipeline took 5 seconds, in 20 minutes, you can test 240 ideas.
 ![resume-attempt2-smaller2](https://github.com/user-attachments/assets/6fc6b8a6-ffed-4cfc-80b8-78bc8a3d66a6)
 No need to login to any website to test things, and no need to copy JSON blobs around.
 
-### Enable reliable tool-calling with any model
+## Enable reliable tool-calling with any model
 BAML works even when the models don't support native tool-calling APIs. We created the SAP (schema-aligned parsing) algorithm to support the flexible outputs LLMs can provide, like markdown within a JSON blob or chain-of-thought prior to answering. [Read more about SAP](https://www.boundaryml.com/blog/schema-aligned-parsing)
 
 With BAML, your structured outputs work in Day-1 of a model release. No need to figure out whether a model supports parallel tool calls, or whether it supports recursive schemas, or `anyOf` or `oneOf` etc.
@@ -122,7 +135,7 @@ See it in action with: **[Deepseek-R1](https://www.boundaryml.com/blog/deepseek-
 
 
 
-### Switch from 100s of models in a couple lines
+## Switch from 100s of models in a couple lines
 ```diff
 function Extract() -> Resume {
 +  client openai/o3-mini
@@ -137,13 +150,13 @@ Want to do pick models at runtime? Check out the [Client Registry](https://docs.
 
 We support: [OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai) • [Anthropic](https://docs.boundaryml.com/ref/llm-client-providers/anthropic) • [Gemini](https://docs.boundaryml.com/ref/llm-client-providers/google-ai-gemini) • [Vertex](https://docs.boundaryml.com/ref/llm-client-providers/google-vertex) • [Bedrock](https://docs.boundaryml.com/ref/llm-client-providers/aws-bedrock) • [Azure OpenAI](https://docs.boundaryml.com/ref/llm-client-providers/open-ai-from-azure) • [Anything OpenAI Compatible](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic) ([Ollama](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-ollama), [OpenRouter](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-open-router), [VLLM](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-v-llm), [LMStudio](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-lm-studio), [TogetherAI](https://docs.boundaryml.com/ref/llm-client-providers/openai-generic-together-ai), and more)
 
-### Build beautiful streaming UIs
+## Build beautiful streaming UIs
 BAML generates a ton of utilities for NextJS, Python (and any language) to make streaming UIs easy.
 ![recipe-generator](https://github.com/user-attachments/assets/cf82495b-21fc-40bf-ae98-93eef923d620)
 
 BAML's streaming interfaces are fully type-safe. Check out the [Streaming Docs](https://docs.boundaryml.com/guide/baml-basics/streaming), and our [React hooks](https://docs.boundaryml.com/guide/framework-integration/react-next-js/quick-start)
 
-### Fully Open-Source, and offline
+## Fully Open-Source, and offline
 - 100% open-source (Apache 2)
 - 100% private. AGI will not require an internet connection, neither will BAML
     - No network requests beyond model calls you explicitly set
