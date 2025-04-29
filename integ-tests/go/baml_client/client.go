@@ -6684,7 +6684,7 @@ func (*stream) TestAws(ctx context.Context, input string) <-chan string {
 
 func TestAwsClaude37(ctx context.Context, input string) (*string, error) {
 	args := map[string]any{ "input": input, }
-	encoded, err := baml.EncodeRoot(args, typeMap)
+	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
@@ -6708,7 +6708,7 @@ func TestAwsClaude37(ctx context.Context, input string) (*string, error) {
 
 func (*stream) TestAwsClaude37(ctx context.Context, input string) <-chan string {
 	args := map[string]any{ "input": input, }
-	encoded, err := baml.EncodeRoot(args, typeMap)
+	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
