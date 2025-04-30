@@ -21,10 +21,10 @@ pub mod cffi {
 #[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
 pub const ENUM_MIN_CFFIVALUE_UNION: u8 = 0;
 #[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
-pub const ENUM_MAX_CFFIVALUE_UNION: u8 = 13;
+pub const ENUM_MAX_CFFIVALUE_UNION: u8 = 14;
 #[deprecated(since = "2.0.0", note = "Use associated constants instead. This will no longer be generated in 2021.")]
 #[allow(non_camel_case_types)]
-pub const ENUM_VALUES_CFFIVALUE_UNION: [CFFIValueUnion; 14] = [
+pub const ENUM_VALUES_CFFIVALUE_UNION: [CFFIValueUnion; 15] = [
   CFFIValueUnion::NONE,
   CFFIValueUnion::CFFIValueString,
   CFFIValueUnion::CFFIValueInt,
@@ -39,6 +39,7 @@ pub const ENUM_VALUES_CFFIVALUE_UNION: [CFFIValueUnion; 14] = [
   CFFIValueUnion::CFFIValueUnionVariant,
   CFFIValueUnion::CFFIValueChecked,
   CFFIValueUnion::CFFIValueStreamingState,
+  CFFIValueUnion::CFFIFunctionArguments,
 ];
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
@@ -60,9 +61,10 @@ impl CFFIValueUnion {
   pub const CFFIValueUnionVariant: Self = Self(11);
   pub const CFFIValueChecked: Self = Self(12);
   pub const CFFIValueStreamingState: Self = Self(13);
+  pub const CFFIFunctionArguments: Self = Self(14);
 
   pub const ENUM_MIN: u8 = 0;
-  pub const ENUM_MAX: u8 = 13;
+  pub const ENUM_MAX: u8 = 14;
   pub const ENUM_VALUES: &'static [Self] = &[
     Self::NONE,
     Self::CFFIValueString,
@@ -78,6 +80,7 @@ impl CFFIValueUnion {
     Self::CFFIValueUnionVariant,
     Self::CFFIValueChecked,
     Self::CFFIValueStreamingState,
+    Self::CFFIFunctionArguments,
   ];
   /// Returns the variant's name or "" if unknown.
   pub fn variant_name(self) -> Option<&'static str> {
@@ -96,6 +99,7 @@ impl CFFIValueUnion {
       Self::CFFIValueUnionVariant => Some("CFFIValueUnionVariant"),
       Self::CFFIValueChecked => Some("CFFIValueChecked"),
       Self::CFFIValueStreamingState => Some("CFFIValueStreamingState"),
+      Self::CFFIFunctionArguments => Some("CFFIFunctionArguments"),
       _ => None,
     }
   }
@@ -912,6 +916,21 @@ impl<'a> CFFIValueHolder<'a> {
     }
   }
 
+  #[inline]
+  #[allow(non_snake_case)]
+  pub fn value_as_cffifunction_arguments(&self) -> Option<CFFIFunctionArguments<'a>> {
+    if self.value_type() == CFFIValueUnion::CFFIFunctionArguments {
+      self.value().map(|t| {
+       // Safety:
+       // Created from a valid Table for this object
+       // Which contains a valid union in this slot
+       unsafe { CFFIFunctionArguments::init_from_table(t) }
+     })
+    } else {
+      None
+    }
+  }
+
 }
 
 impl flatbuffers::Verifiable for CFFIValueHolder<'_> {
@@ -936,6 +955,7 @@ impl flatbuffers::Verifiable for CFFIValueHolder<'_> {
           CFFIValueUnion::CFFIValueUnionVariant => v.verify_union_variant::<flatbuffers::ForwardsUOffset<CFFIValueUnionVariant>>("CFFIValueUnion::CFFIValueUnionVariant", pos),
           CFFIValueUnion::CFFIValueChecked => v.verify_union_variant::<flatbuffers::ForwardsUOffset<CFFIValueChecked>>("CFFIValueUnion::CFFIValueChecked", pos),
           CFFIValueUnion::CFFIValueStreamingState => v.verify_union_variant::<flatbuffers::ForwardsUOffset<CFFIValueStreamingState>>("CFFIValueUnion::CFFIValueStreamingState", pos),
+          CFFIValueUnion::CFFIFunctionArguments => v.verify_union_variant::<flatbuffers::ForwardsUOffset<CFFIFunctionArguments>>("CFFIValueUnion::CFFIFunctionArguments", pos),
           _ => Ok(()),
         }
      })?
@@ -1076,6 +1096,13 @@ impl core::fmt::Debug for CFFIValueHolder<'_> {
         },
         CFFIValueUnion::CFFIValueStreamingState => {
           if let Some(x) = self.value_as_cffivalue_streaming_state() {
+            ds.field("value", &x)
+          } else {
+            ds.field("value", &"InvalidFlatbuffer: Union discriminant does not match value.")
+          }
+        },
+        CFFIValueUnion::CFFIFunctionArguments => {
+          if let Some(x) = self.value_as_cffifunction_arguments() {
             ds.field("value", &x)
           } else {
             ds.field("value", &"InvalidFlatbuffer: Union discriminant does not match value.")
@@ -5535,6 +5562,103 @@ impl core::fmt::Debug for CFFIFieldTypeStreamState<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("CFFIFieldTypeStreamState");
       ds.field("value", &self.value());
+      ds.finish()
+  }
+}
+pub enum CFFIFunctionArgumentsOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct CFFIFunctionArguments<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for CFFIFunctionArguments<'a> {
+  type Inner = CFFIFunctionArguments<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> CFFIFunctionArguments<'a> {
+  pub const VT_KWARGS: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    CFFIFunctionArguments { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args CFFIFunctionArgumentsArgs<'args>
+  ) -> flatbuffers::WIPOffset<CFFIFunctionArguments<'bldr>> {
+    let mut builder = CFFIFunctionArgumentsBuilder::new(_fbb);
+    if let Some(x) = args.kwargs { builder.add_kwargs(x); }
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn kwargs(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>(CFFIFunctionArguments::VT_KWARGS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for CFFIFunctionArguments<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>("kwargs", Self::VT_KWARGS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct CFFIFunctionArgumentsArgs<'a> {
+    pub kwargs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>>>,
+}
+impl<'a> Default for CFFIFunctionArgumentsArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    CFFIFunctionArgumentsArgs {
+      kwargs: None,
+    }
+  }
+}
+
+pub struct CFFIFunctionArgumentsBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> CFFIFunctionArgumentsBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_kwargs(&mut self, kwargs: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIMapEntry<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIFunctionArguments::VT_KWARGS, kwargs);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CFFIFunctionArgumentsBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    CFFIFunctionArgumentsBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<CFFIFunctionArguments<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for CFFIFunctionArguments<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("CFFIFunctionArguments");
+      ds.field("kwargs", &self.kwargs());
       ds.finish()
   }
 }

@@ -23,6 +23,10 @@ type BamlRuntime struct {
 	runtime unsafe.Pointer
 }
 
+type BamlFunctionArguments struct {
+	Kwargs map[string]any
+}
+
 var instance *BamlRuntime
 var once sync.Once
 

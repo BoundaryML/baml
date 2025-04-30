@@ -422,6 +422,8 @@ func Decode(holder *cffi.CFFIValueHolder) any {
 		panic("media not implemented")
 	case cffi.CFFIValueUnionCFFIValueTuple:
 		panic("tuple not implemented")
+	case cffi.CFFIValueUnionCFFIFunctionArguments:
+		panic("function arguments are never decoded")
 	default:
 		panic("unexpected value type")
 	}

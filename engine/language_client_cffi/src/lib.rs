@@ -9,6 +9,10 @@ use once_cell::sync::{Lazy, OnceCell};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+struct BamlFunctionArguments {
+    kwargs: baml_types::BamlMap<String, BamlValue>,
+}
+
 #[no_mangle]
 pub extern "C" fn version() -> *const libc::c_char {
     let version = CString::new(VERSION).unwrap();
@@ -81,21 +85,7 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-use baml_types::{BamlMap, BamlValue};
-
-/// Convert Flatbuffers encoded arguments to a BamlMap<String, BamlValue>
-fn ckwargs_to_map(
-    encoded_args: *const libc::c_char,
-    length: usize,
-) -> Result<BamlMap<String, BamlValue>> {
-    let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
-    let value = ctypes::buffer_to_cffi_value_holder(buffer)?;
-    if let Some(map) = value.as_map_owned() {
-        Ok(map)
-    } else {
-        Err(anyhow::anyhow!("Invalid encoded arguments"))
-    }
-}
+use baml_types::BamlValue;
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: bool, content: *const i8, length: usize);
 
@@ -192,7 +182,8 @@ fn call_function_from_c_inner(
     };
 
     // Convert keyword arguments.
-    let keyword_args = ckwargs_to_map(encoded_args, length)?;
+    let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
+    let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
@@ -201,7 +192,7 @@ fn call_function_from_c_inner(
     let rt = RUNTIME.clone();
     rt.spawn(async move {
         let (result, _) = runtime
-            .call_function(func_name, &keyword_args, &ctx, None, None, None)
+            .call_function(func_name, &function_args.kwargs, &ctx, None, None, None)
             .await;
         safe_trigger_callback(id, true, result);
     });
@@ -246,16 +237,17 @@ fn call_function_stream_from_c_inner(
     };
 
     // Convert keyword arguments.
-    let keyword_args = ckwargs_to_map(encoded_args, length)?;
+    let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
+    let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
-    let mut stream = match runtime.stream_function(func_name, &keyword_args, &ctx, None, None, None)
-    {
-        Ok(stream) => stream,
-        Err(e) => {
-            return Err(anyhow::anyhow!("Failed to stream function: {}", e));
-        }
-    };
+    let mut stream =
+        match runtime.stream_function(func_name, &function_args.kwargs, &ctx, None, None, None) {
+            Ok(stream) => stream,
+            Err(e) => {
+                return Err(anyhow::anyhow!("Failed to stream function: {}", e));
+            }
+        };
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
