@@ -15,7 +15,7 @@ impl super::SyncNotificationHandler for DidChangeConfiguration {
     fn run(
         _session: &mut Session,
         notifier: Notifier,
-        _requester: &mut Requester,
+        requester: &mut Requester,
         params: types::DidChangeConfigurationParams,
     ) -> Result<()> {
         tracing::info!("*** DID CHANGE CONFIGURATION: {:?}", params);
@@ -41,7 +41,7 @@ impl super::SyncNotificationHandler for DidChangeConfiguration {
 
         // Also manually schedule a request for latest settings since sometimes the above params just have Null (not sure why)
         // note that the task will run after this current task is done.
-        _requester.request::<types::request::WorkspaceConfiguration>(
+        requester.request::<types::request::WorkspaceConfiguration>(
             ConfigurationParams {
                 items: vec![types::ConfigurationItem {
                     scope_uri: None,

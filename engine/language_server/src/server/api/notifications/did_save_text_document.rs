@@ -68,9 +68,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             },
             |e| {
                 tracing::error!("Error generating: {e}");
-                notifier
-                    .notify_baml_error(&format!("Error generating: {e}"))
-                    .unwrap_or(())
+                notifier.notify_baml_error(&format!("{e}")).unwrap_or(())
             },
         );
 
@@ -111,9 +109,7 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
                 },
                 |e| {
                     tracing::error!("Error generating: {e}");
-                    notifier
-                        .notify_baml_error(&format!("Error generating: {e}"))
-                        .unwrap_or(())
+                    notifier.notify_baml_error(&format!("{e}")).unwrap_or(())
                 },
             );
         } else {

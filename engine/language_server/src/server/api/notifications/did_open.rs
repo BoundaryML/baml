@@ -21,7 +21,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
     fn run(
         session: &mut Session,
         notifier: Notifier,
-        _requester: &mut Requester,
+        requester: &mut Requester,
         params: DidOpenTextDocumentParams,
     ) -> Result<()> {
         tracing::info!("DidOpenTextDocumentHandler");
@@ -30,7 +30,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         // TODO: do this when server initializes instead of every time a file is opened
         // note this just schedules the task. It will run after the current task is done.
-        _requester.request::<types::request::WorkspaceConfiguration>(
+        requester.request::<types::request::WorkspaceConfiguration>(
             ConfigurationParams {
                 items: vec![types::ConfigurationItem {
                     scope_uri: None,
