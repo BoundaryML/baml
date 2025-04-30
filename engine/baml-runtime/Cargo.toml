@@ -109,8 +109,15 @@ tempfile = "3.19.0"
 
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-aws-config = { version = "1.6.2", default-features = false, features = [] }
-aws-sdk-bedrockruntime = { version = "1.85.0", default-features = false, features = [
+aws-config = { version = "=1.5.3", default-features = false, features = [] }
+# You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
+# but depending on ring and aws_lc_rs leads to issues.
+# https://github.com/rustls/rustls/issues/1877
+# https://github.com/awslabs/aws-sdk-rust/issues/1263 
+# same goes for aws-config.
+# Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
+aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
+
 ] }
 colored = { version = "2.1.0", default-features = false, features = [
   "no-color",
@@ -145,11 +152,20 @@ web-sys = { version = "0.3.69", features = [
 wasmtimer = "0.4.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-aws-config = "1.6.2"
-aws-sdk-bedrockruntime = "1.85.0"
+aws-config = "=1.5.3"
+# You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
+# but depending on ring and aws_lc_rs leads to issues.
+# https://github.com/rustls/rustls/issues/1877
+# https://github.com/awslabs/aws-sdk-rust/issues/1263 
+# same goes for aws-config.
+# Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
+aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
+
+] }
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }
 criterion = "0.5.1"
+# depends on ring
 gcp_auth = "0.12.3"
 hostname = "0.3.1"
 jsonwebtoken = { version = "9.3.0" }
