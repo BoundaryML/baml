@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.86.1](https://github.com/boundaryml/baml/compare/0.86.0..0.86.1) - 2025-04-30
+
+
+### Bugs
+- Fix arguments for functions from go (#1884) - ([b83557c](https://github.com/boundaryml/baml/commit/b83557c2c2ff279e49a7e589f5d6f06e1bd59fba)) - Todd Berman
+- Bump version to 0.86.1 - ([af4c366](https://github.com/boundaryml/baml/commit/af4c366c2633b6049dbdb87b8a8e0fb4ad08c286)) - Aaron Villalpando
+
 ## [0.86.0](https://github.com/boundaryml/baml/compare/0.85.0..0.86.0) - 2025-04-30
 
 ### Bug Fixes
