@@ -4,6 +4,23 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.86.0](https://github.com/boundaryml/baml/compare/0.85.0..0.86.0) - 2025-04-30
+
+### Bug Fixes
+
+- fix union streaming bug where unions wouldn't stream until they were done (#1858)
+- Fix codegen when streaming done types (#1861) - ([d6c4ff3](https://github.com/boundaryml/baml/commit/d6c4ff30ebdaa4b90440b92b2d2045eca0205775)) - Greg Hale
+- Go Encode/Decode fixes (#1865) - ([8ecb065](https://github.com/boundaryml/baml/commit/8ecb065d89cc10b9e306c6155146122ee3427a0f)) - Todd Berman
+- Fix bedrock stalled stream protection not working with custom http client, and support additional_model_request_fields (#1877) - ([da15434](https://github.com/boundaryml/baml/commit/da1543470ff2a3601808e6ebc04548c1a56a445f)) - aaronvg
+- Remove run command from CLI (#1879) - ([7684d71](https://github.com/boundaryml/baml/commit/7684d71c615c0dc4d093a2316cf06054292c74ae)) - hellovai
+- [Rust LSP] Support generateCodeOnSave setting, clean up error messages (#1881) - ([784f1b1](https://github.com/boundaryml/baml/commit/784f1b1ccbb2361254020a2a389f8b2633c8a39a)) - aaronvg
+
+
+### Features
+- Download the right LSP and CLI depending on the project version (#1738) - ([429936d](https://github.com/boundaryml/baml/commit/429936dcfa802db5a51b9c250ce52ca5657fd3de)) - Antonio Sarosi
+- make gcp auth work seamlessly from vscode (#1860) - ([484c449](https://github.com/boundaryml/baml/commit/484c44987dcf5b87512d333cc71bc2f2717c58a7)) - Samuel Lijin
+
+
 ## [0.85.0](https://github.com/boundaryml/baml/compare/0.84.4..0.85.0) - 2025-04-23
 
 ### Bug Fixes
