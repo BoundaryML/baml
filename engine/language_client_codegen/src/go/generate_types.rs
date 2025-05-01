@@ -54,7 +54,20 @@ pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> 
 }
 
 fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> String {
-    if field_type.is_class {
+    if field_type.is_pointer {
+        let inner_type = field_type.underlying_type.as_ref().unwrap();
+        return format!(
+            "func () {} {{
+    val := baml.Decode({})
+    if val == nil {{
+        return nil
+    }}
+    castVal := val.({})
+    return &castVal
+}}()",
+            field_type.name, container_variable_name, inner_type.name,
+        );
+    } else if field_type.is_class {
         return format!(
             "*baml.Decode({}).(*{})",
             container_variable_name,

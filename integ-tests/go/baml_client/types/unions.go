@@ -13,3931 +13,3362 @@ package types
 import (
 	"fmt"
 
-    flatbuffers "github.com/google/flatbuffers/go"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
+	flatbuffers "github.com/google/flatbuffers/go"
 )
 
-
-
 type Union__BookOrder__FlightConfirmation__GroceryReceipt struct {
-    variant string
-    
-    variant_BookOrder *BookOrder
-    
-    variant_FlightConfirmation *FlightConfirmation
-    
-    variant_GroceryReceipt *GroceryReceipt
-    
+	variant string
+
+	variant_BookOrder *BookOrder
+
+	variant_FlightConfirmation *FlightConfirmation
+
+	variant_GroceryReceipt *GroceryReceipt
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "BookOrder"
-            value := *baml.Decode(valueHolder).(*BookOrder)
-            u.variant_BookOrder = &value
-    
-	    case 1:
-            u.variant = "FlightConfirmation"
-            value := *baml.Decode(valueHolder).(*FlightConfirmation)
-            u.variant_FlightConfirmation = &value
-    
-	    case 2:
-            u.variant = "GroceryReceipt"
-            value := *baml.Decode(valueHolder).(*GroceryReceipt)
-            u.variant_GroceryReceipt = &value
-    
+
+	case 0:
+		u.variant = "BookOrder"
+		value := *baml.Decode(valueHolder).(*BookOrder)
+		u.variant_BookOrder = &value
+
+	case 1:
+		u.variant = "FlightConfirmation"
+		value := *baml.Decode(valueHolder).(*FlightConfirmation)
+		u.variant_FlightConfirmation = &value
+
+	case 2:
+		u.variant = "GroceryReceipt"
+		value := *baml.Decode(valueHolder).(*GroceryReceipt)
+		u.variant_GroceryReceipt = &value
+
 	}
 }
 
-
 func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "BookOrder":
-        return baml.EncodeUnion(builder, u.variant, u.variant_BookOrder)
-    
-    case "FlightConfirmation":
-        return baml.EncodeUnion(builder, u.variant, u.variant_FlightConfirmation)
-    
-    case "GroceryReceipt":
-        return baml.EncodeUnion(builder, u.variant, u.variant_GroceryReceipt)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "BookOrder":
+		return baml.EncodeUnion(builder, u.variant, u.variant_BookOrder)
+
+	case "FlightConfirmation":
+		return baml.EncodeUnion(builder, u.variant, u.variant_FlightConfirmation)
+
+	case "GroceryReceipt":
+		return baml.EncodeUnion(builder, u.variant, u.variant_GroceryReceipt)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) BamlTypeName() string {
-    return "Union__BookOrder__FlightConfirmation__GroceryReceipt"
+	return "Union__BookOrder__FlightConfirmation__GroceryReceipt"
 }
 
-
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) SetBookOrder(v BookOrder) {
-    u.variant = "BookOrder"
-    u.variant_BookOrder = &v
-    
-    
-    
-    
-        u.variant_FlightConfirmation = nil
-    
-    
-    
-        u.variant_GroceryReceipt = nil
-    
-    
+	u.variant = "BookOrder"
+	u.variant_BookOrder = &v
+
+	u.variant_FlightConfirmation = nil
+
+	u.variant_GroceryReceipt = nil
+
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) IsBookOrder() bool {
-    return u.variant == "BookOrder"
+	return u.variant == "BookOrder"
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) BookOrder() *BookOrder {
-    if !u.IsBookOrder() {
-        return nil
-    }
-    return u.variant_BookOrder
+	if !u.IsBookOrder() {
+		return nil
+	}
+	return u.variant_BookOrder
 }
 
 func Union__BookOrder__FlightConfirmation__GroceryReceiptNewWithBookOrder(v *BookOrder) *Union__BookOrder__FlightConfirmation__GroceryReceipt {
-    return &Union__BookOrder__FlightConfirmation__GroceryReceipt{
-        variant: "BookOrder",
-        variant_BookOrder: v,
-    }
+	return &Union__BookOrder__FlightConfirmation__GroceryReceipt{
+		variant:           "BookOrder",
+		variant_BookOrder: v,
+	}
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) SetFlightConfirmation(v FlightConfirmation) {
-    u.variant = "FlightConfirmation"
-    u.variant_FlightConfirmation = &v
-    
-    
-        u.variant_BookOrder = nil
-    
-    
-    
-    
-    
-        u.variant_GroceryReceipt = nil
-    
-    
+	u.variant = "FlightConfirmation"
+	u.variant_FlightConfirmation = &v
+
+	u.variant_BookOrder = nil
+
+	u.variant_GroceryReceipt = nil
+
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) IsFlightConfirmation() bool {
-    return u.variant == "FlightConfirmation"
+	return u.variant == "FlightConfirmation"
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) FlightConfirmation() *FlightConfirmation {
-    if !u.IsFlightConfirmation() {
-        return nil
-    }
-    return u.variant_FlightConfirmation
+	if !u.IsFlightConfirmation() {
+		return nil
+	}
+	return u.variant_FlightConfirmation
 }
 
 func Union__BookOrder__FlightConfirmation__GroceryReceiptNewWithFlightConfirmation(v *FlightConfirmation) *Union__BookOrder__FlightConfirmation__GroceryReceipt {
-    return &Union__BookOrder__FlightConfirmation__GroceryReceipt{
-        variant: "FlightConfirmation",
-        variant_FlightConfirmation: v,
-    }
+	return &Union__BookOrder__FlightConfirmation__GroceryReceipt{
+		variant:                    "FlightConfirmation",
+		variant_FlightConfirmation: v,
+	}
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) SetGroceryReceipt(v GroceryReceipt) {
-    u.variant = "GroceryReceipt"
-    u.variant_GroceryReceipt = &v
-    
-    
-        u.variant_BookOrder = nil
-    
-    
-    
-        u.variant_FlightConfirmation = nil
-    
-    
-    
-    
+	u.variant = "GroceryReceipt"
+	u.variant_GroceryReceipt = &v
+
+	u.variant_BookOrder = nil
+
+	u.variant_FlightConfirmation = nil
+
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) IsGroceryReceipt() bool {
-    return u.variant == "GroceryReceipt"
+	return u.variant == "GroceryReceipt"
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) GroceryReceipt() *GroceryReceipt {
-    if !u.IsGroceryReceipt() {
-        return nil
-    }
-    return u.variant_GroceryReceipt
+	if !u.IsGroceryReceipt() {
+		return nil
+	}
+	return u.variant_GroceryReceipt
 }
 
 func Union__BookOrder__FlightConfirmation__GroceryReceiptNewWithGroceryReceipt(v *GroceryReceipt) *Union__BookOrder__FlightConfirmation__GroceryReceipt {
-    return &Union__BookOrder__FlightConfirmation__GroceryReceipt{
-        variant: "GroceryReceipt",
-        variant_GroceryReceipt: v,
-    }
+	return &Union__BookOrder__FlightConfirmation__GroceryReceipt{
+		variant:                "GroceryReceipt",
+		variant_GroceryReceipt: v,
+	}
 }
 
-
-
 type Union__List__bool__List__int struct {
-    variant string
-    
-    variant_List__bool *[]bool
-    
-    variant_List__int *[]int64
-    
+	variant string
+
+	variant_List__bool *[]bool
+
+	variant_List__int *[]int64
 }
 
 func (u *Union__List__bool__List__int) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "List__bool"
-            value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) bool {
-    return baml.Decode(__holder).(bool)
-})
-            u.variant_List__bool = &value
-    
-	    case 1:
-            u.variant = "List__int"
-            value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) int64 {
-    return baml.Decode(__holder).(int64)
-})
-            u.variant_List__int = &value
-    
+
+	case 0:
+		u.variant = "List__bool"
+		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) bool {
+			return baml.Decode(__holder).(bool)
+		})
+		u.variant_List__bool = &value
+
+	case 1:
+		u.variant = "List__int"
+		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) int64 {
+			return baml.Decode(__holder).(int64)
+		})
+		u.variant_List__int = &value
+
 	}
 }
 
-
 func (u Union__List__bool__List__int) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "List__bool":
-        return baml.EncodeUnion(builder, u.variant, u.variant_List__bool)
-    
-    case "List__int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_List__int)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "List__bool":
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__bool)
+
+	case "List__int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__int)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__List__bool__List__int) BamlTypeName() string {
-    return "Union__List__bool__List__int"
+	return "Union__List__bool__List__int"
 }
 
-
 func (u *Union__List__bool__List__int) SetList__bool(v []bool) {
-    u.variant = "List__bool"
-    u.variant_List__bool = &v
-    
-    
-    
-    
-        u.variant_List__int = nil
-    
-    
+	u.variant = "List__bool"
+	u.variant_List__bool = &v
+
+	u.variant_List__int = nil
+
 }
 
 func (u *Union__List__bool__List__int) IsList__bool() bool {
-    return u.variant == "List__bool"
+	return u.variant == "List__bool"
 }
 
 func (u *Union__List__bool__List__int) List__bool() *[]bool {
-    if !u.IsList__bool() {
-        return nil
-    }
-    return u.variant_List__bool
+	if !u.IsList__bool() {
+		return nil
+	}
+	return u.variant_List__bool
 }
 
 func Union__List__bool__List__intNewWithList__bool(v *[]bool) *Union__List__bool__List__int {
-    return &Union__List__bool__List__int{
-        variant: "List__bool",
-        variant_List__bool: v,
-    }
+	return &Union__List__bool__List__int{
+		variant:            "List__bool",
+		variant_List__bool: v,
+	}
 }
 
 func (u *Union__List__bool__List__int) SetList__int(v []int64) {
-    u.variant = "List__int"
-    u.variant_List__int = &v
-    
-    
-        u.variant_List__bool = nil
-    
-    
-    
-    
+	u.variant = "List__int"
+	u.variant_List__int = &v
+
+	u.variant_List__bool = nil
+
 }
 
 func (u *Union__List__bool__List__int) IsList__int() bool {
-    return u.variant == "List__int"
+	return u.variant == "List__int"
 }
 
 func (u *Union__List__bool__List__int) List__int() *[]int64 {
-    if !u.IsList__int() {
-        return nil
-    }
-    return u.variant_List__int
+	if !u.IsList__int() {
+		return nil
+	}
+	return u.variant_List__int
 }
 
 func Union__List__bool__List__intNewWithList__int(v *[]int64) *Union__List__bool__List__int {
-    return &Union__List__bool__List__int{
-        variant: "List__int",
-        variant_List__int: v,
-    }
+	return &Union__List__bool__List__int{
+		variant:           "List__int",
+		variant_List__int: v,
+	}
 }
 
-
-
 type Union__LiteralClassOne__LiteralClassTwo struct {
-    variant string
-    
-    variant_LiteralClassOne *LiteralClassOne
-    
-    variant_LiteralClassTwo *LiteralClassTwo
-    
+	variant string
+
+	variant_LiteralClassOne *LiteralClassOne
+
+	variant_LiteralClassTwo *LiteralClassTwo
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "LiteralClassOne"
-            value := *baml.Decode(valueHolder).(*LiteralClassOne)
-            u.variant_LiteralClassOne = &value
-    
-	    case 1:
-            u.variant = "LiteralClassTwo"
-            value := *baml.Decode(valueHolder).(*LiteralClassTwo)
-            u.variant_LiteralClassTwo = &value
-    
+
+	case 0:
+		u.variant = "LiteralClassOne"
+		value := *baml.Decode(valueHolder).(*LiteralClassOne)
+		u.variant_LiteralClassOne = &value
+
+	case 1:
+		u.variant = "LiteralClassTwo"
+		value := *baml.Decode(valueHolder).(*LiteralClassTwo)
+		u.variant_LiteralClassTwo = &value
+
 	}
 }
 
-
 func (u Union__LiteralClassOne__LiteralClassTwo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "LiteralClassOne":
-        return baml.EncodeUnion(builder, u.variant, u.variant_LiteralClassOne)
-    
-    case "LiteralClassTwo":
-        return baml.EncodeUnion(builder, u.variant, u.variant_LiteralClassTwo)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "LiteralClassOne":
+		return baml.EncodeUnion(builder, u.variant, u.variant_LiteralClassOne)
+
+	case "LiteralClassTwo":
+		return baml.EncodeUnion(builder, u.variant, u.variant_LiteralClassTwo)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__LiteralClassOne__LiteralClassTwo) BamlTypeName() string {
-    return "Union__LiteralClassOne__LiteralClassTwo"
+	return "Union__LiteralClassOne__LiteralClassTwo"
 }
 
-
 func (u *Union__LiteralClassOne__LiteralClassTwo) SetLiteralClassOne(v LiteralClassOne) {
-    u.variant = "LiteralClassOne"
-    u.variant_LiteralClassOne = &v
-    
-    
-    
-    
-        u.variant_LiteralClassTwo = nil
-    
-    
+	u.variant = "LiteralClassOne"
+	u.variant_LiteralClassOne = &v
+
+	u.variant_LiteralClassTwo = nil
+
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) IsLiteralClassOne() bool {
-    return u.variant == "LiteralClassOne"
+	return u.variant == "LiteralClassOne"
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) LiteralClassOne() *LiteralClassOne {
-    if !u.IsLiteralClassOne() {
-        return nil
-    }
-    return u.variant_LiteralClassOne
+	if !u.IsLiteralClassOne() {
+		return nil
+	}
+	return u.variant_LiteralClassOne
 }
 
 func Union__LiteralClassOne__LiteralClassTwoNewWithLiteralClassOne(v *LiteralClassOne) *Union__LiteralClassOne__LiteralClassTwo {
-    return &Union__LiteralClassOne__LiteralClassTwo{
-        variant: "LiteralClassOne",
-        variant_LiteralClassOne: v,
-    }
+	return &Union__LiteralClassOne__LiteralClassTwo{
+		variant:                 "LiteralClassOne",
+		variant_LiteralClassOne: v,
+	}
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) SetLiteralClassTwo(v LiteralClassTwo) {
-    u.variant = "LiteralClassTwo"
-    u.variant_LiteralClassTwo = &v
-    
-    
-        u.variant_LiteralClassOne = nil
-    
-    
-    
-    
+	u.variant = "LiteralClassTwo"
+	u.variant_LiteralClassTwo = &v
+
+	u.variant_LiteralClassOne = nil
+
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) IsLiteralClassTwo() bool {
-    return u.variant == "LiteralClassTwo"
+	return u.variant == "LiteralClassTwo"
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) LiteralClassTwo() *LiteralClassTwo {
-    if !u.IsLiteralClassTwo() {
-        return nil
-    }
-    return u.variant_LiteralClassTwo
+	if !u.IsLiteralClassTwo() {
+		return nil
+	}
+	return u.variant_LiteralClassTwo
 }
 
 func Union__LiteralClassOne__LiteralClassTwoNewWithLiteralClassTwo(v *LiteralClassTwo) *Union__LiteralClassOne__LiteralClassTwo {
-    return &Union__LiteralClassOne__LiteralClassTwo{
-        variant: "LiteralClassTwo",
-        variant_LiteralClassTwo: v,
-    }
+	return &Union__LiteralClassOne__LiteralClassTwo{
+		variant:                 "LiteralClassTwo",
+		variant_LiteralClassTwo: v,
+	}
 }
 
-
-
 type Union__Martian__Earthling struct {
-    variant string
-    
-    variant_Martian *Martian
-    
-    variant_Earthling *Earthling
-    
+	variant string
+
+	variant_Martian *Martian
+
+	variant_Earthling *Earthling
 }
 
 func (u *Union__Martian__Earthling) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "Martian"
-            value := *baml.Decode(valueHolder).(*Martian)
-            u.variant_Martian = &value
-    
-	    case 1:
-            u.variant = "Earthling"
-            value := *baml.Decode(valueHolder).(*Earthling)
-            u.variant_Earthling = &value
-    
+
+	case 0:
+		u.variant = "Martian"
+		value := *baml.Decode(valueHolder).(*Martian)
+		u.variant_Martian = &value
+
+	case 1:
+		u.variant = "Earthling"
+		value := *baml.Decode(valueHolder).(*Earthling)
+		u.variant_Earthling = &value
+
 	}
 }
 
-
 func (u Union__Martian__Earthling) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "Martian":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Martian)
-    
-    case "Earthling":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Earthling)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Martian":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Martian)
+
+	case "Earthling":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Earthling)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__Martian__Earthling) BamlTypeName() string {
-    return "Union__Martian__Earthling"
+	return "Union__Martian__Earthling"
 }
 
-
 func (u *Union__Martian__Earthling) SetMartian(v Martian) {
-    u.variant = "Martian"
-    u.variant_Martian = &v
-    
-    
-    
-    
-        u.variant_Earthling = nil
-    
-    
+	u.variant = "Martian"
+	u.variant_Martian = &v
+
+	u.variant_Earthling = nil
+
 }
 
 func (u *Union__Martian__Earthling) IsMartian() bool {
-    return u.variant == "Martian"
+	return u.variant == "Martian"
 }
 
 func (u *Union__Martian__Earthling) Martian() *Martian {
-    if !u.IsMartian() {
-        return nil
-    }
-    return u.variant_Martian
+	if !u.IsMartian() {
+		return nil
+	}
+	return u.variant_Martian
 }
 
 func Union__Martian__EarthlingNewWithMartian(v *Martian) *Union__Martian__Earthling {
-    return &Union__Martian__Earthling{
-        variant: "Martian",
-        variant_Martian: v,
-    }
+	return &Union__Martian__Earthling{
+		variant:         "Martian",
+		variant_Martian: v,
+	}
 }
 
 func (u *Union__Martian__Earthling) SetEarthling(v Earthling) {
-    u.variant = "Earthling"
-    u.variant_Earthling = &v
-    
-    
-        u.variant_Martian = nil
-    
-    
-    
-    
+	u.variant = "Earthling"
+	u.variant_Earthling = &v
+
+	u.variant_Martian = nil
+
 }
 
 func (u *Union__Martian__Earthling) IsEarthling() bool {
-    return u.variant == "Earthling"
+	return u.variant == "Earthling"
 }
 
 func (u *Union__Martian__Earthling) Earthling() *Earthling {
-    if !u.IsEarthling() {
-        return nil
-    }
-    return u.variant_Earthling
+	if !u.IsEarthling() {
+		return nil
+	}
+	return u.variant_Earthling
 }
 
 func Union__Martian__EarthlingNewWithEarthling(v *Earthling) *Union__Martian__Earthling {
-    return &Union__Martian__Earthling{
-        variant: "Earthling",
-        variant_Earthling: v,
-    }
+	return &Union__Martian__Earthling{
+		variant:           "Earthling",
+		variant_Earthling: v,
+	}
 }
 
-
-
 type Union__MemoryObject__ComplexMemoryObject__AnotherObject struct {
-    variant string
-    
-    variant_MemoryObject *MemoryObject
-    
-    variant_ComplexMemoryObject *ComplexMemoryObject
-    
-    variant_AnotherObject *AnotherObject
-    
+	variant string
+
+	variant_MemoryObject *MemoryObject
+
+	variant_ComplexMemoryObject *ComplexMemoryObject
+
+	variant_AnotherObject *AnotherObject
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "MemoryObject"
-            value := *baml.Decode(valueHolder).(*MemoryObject)
-            u.variant_MemoryObject = &value
-    
-	    case 1:
-            u.variant = "ComplexMemoryObject"
-            value := *baml.Decode(valueHolder).(*ComplexMemoryObject)
-            u.variant_ComplexMemoryObject = &value
-    
-	    case 2:
-            u.variant = "AnotherObject"
-            value := *baml.Decode(valueHolder).(*AnotherObject)
-            u.variant_AnotherObject = &value
-    
+
+	case 0:
+		u.variant = "MemoryObject"
+		value := *baml.Decode(valueHolder).(*MemoryObject)
+		u.variant_MemoryObject = &value
+
+	case 1:
+		u.variant = "ComplexMemoryObject"
+		value := *baml.Decode(valueHolder).(*ComplexMemoryObject)
+		u.variant_ComplexMemoryObject = &value
+
+	case 2:
+		u.variant = "AnotherObject"
+		value := *baml.Decode(valueHolder).(*AnotherObject)
+		u.variant_AnotherObject = &value
+
 	}
 }
 
-
 func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "MemoryObject":
-        return baml.EncodeUnion(builder, u.variant, u.variant_MemoryObject)
-    
-    case "ComplexMemoryObject":
-        return baml.EncodeUnion(builder, u.variant, u.variant_ComplexMemoryObject)
-    
-    case "AnotherObject":
-        return baml.EncodeUnion(builder, u.variant, u.variant_AnotherObject)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "MemoryObject":
+		return baml.EncodeUnion(builder, u.variant, u.variant_MemoryObject)
+
+	case "ComplexMemoryObject":
+		return baml.EncodeUnion(builder, u.variant, u.variant_ComplexMemoryObject)
+
+	case "AnotherObject":
+		return baml.EncodeUnion(builder, u.variant, u.variant_AnotherObject)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) BamlTypeName() string {
-    return "Union__MemoryObject__ComplexMemoryObject__AnotherObject"
+	return "Union__MemoryObject__ComplexMemoryObject__AnotherObject"
 }
 
-
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) SetMemoryObject(v MemoryObject) {
-    u.variant = "MemoryObject"
-    u.variant_MemoryObject = &v
-    
-    
-    
-    
-        u.variant_ComplexMemoryObject = nil
-    
-    
-    
-        u.variant_AnotherObject = nil
-    
-    
+	u.variant = "MemoryObject"
+	u.variant_MemoryObject = &v
+
+	u.variant_ComplexMemoryObject = nil
+
+	u.variant_AnotherObject = nil
+
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) IsMemoryObject() bool {
-    return u.variant == "MemoryObject"
+	return u.variant == "MemoryObject"
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) MemoryObject() *MemoryObject {
-    if !u.IsMemoryObject() {
-        return nil
-    }
-    return u.variant_MemoryObject
+	if !u.IsMemoryObject() {
+		return nil
+	}
+	return u.variant_MemoryObject
 }
 
 func Union__MemoryObject__ComplexMemoryObject__AnotherObjectNewWithMemoryObject(v *MemoryObject) *Union__MemoryObject__ComplexMemoryObject__AnotherObject {
-    return &Union__MemoryObject__ComplexMemoryObject__AnotherObject{
-        variant: "MemoryObject",
-        variant_MemoryObject: v,
-    }
+	return &Union__MemoryObject__ComplexMemoryObject__AnotherObject{
+		variant:              "MemoryObject",
+		variant_MemoryObject: v,
+	}
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) SetComplexMemoryObject(v ComplexMemoryObject) {
-    u.variant = "ComplexMemoryObject"
-    u.variant_ComplexMemoryObject = &v
-    
-    
-        u.variant_MemoryObject = nil
-    
-    
-    
-    
-    
-        u.variant_AnotherObject = nil
-    
-    
+	u.variant = "ComplexMemoryObject"
+	u.variant_ComplexMemoryObject = &v
+
+	u.variant_MemoryObject = nil
+
+	u.variant_AnotherObject = nil
+
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) IsComplexMemoryObject() bool {
-    return u.variant == "ComplexMemoryObject"
+	return u.variant == "ComplexMemoryObject"
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) ComplexMemoryObject() *ComplexMemoryObject {
-    if !u.IsComplexMemoryObject() {
-        return nil
-    }
-    return u.variant_ComplexMemoryObject
+	if !u.IsComplexMemoryObject() {
+		return nil
+	}
+	return u.variant_ComplexMemoryObject
 }
 
 func Union__MemoryObject__ComplexMemoryObject__AnotherObjectNewWithComplexMemoryObject(v *ComplexMemoryObject) *Union__MemoryObject__ComplexMemoryObject__AnotherObject {
-    return &Union__MemoryObject__ComplexMemoryObject__AnotherObject{
-        variant: "ComplexMemoryObject",
-        variant_ComplexMemoryObject: v,
-    }
+	return &Union__MemoryObject__ComplexMemoryObject__AnotherObject{
+		variant:                     "ComplexMemoryObject",
+		variant_ComplexMemoryObject: v,
+	}
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) SetAnotherObject(v AnotherObject) {
-    u.variant = "AnotherObject"
-    u.variant_AnotherObject = &v
-    
-    
-        u.variant_MemoryObject = nil
-    
-    
-    
-        u.variant_ComplexMemoryObject = nil
-    
-    
-    
-    
+	u.variant = "AnotherObject"
+	u.variant_AnotherObject = &v
+
+	u.variant_MemoryObject = nil
+
+	u.variant_ComplexMemoryObject = nil
+
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) IsAnotherObject() bool {
-    return u.variant == "AnotherObject"
+	return u.variant == "AnotherObject"
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) AnotherObject() *AnotherObject {
-    if !u.IsAnotherObject() {
-        return nil
-    }
-    return u.variant_AnotherObject
+	if !u.IsAnotherObject() {
+		return nil
+	}
+	return u.variant_AnotherObject
 }
 
 func Union__MemoryObject__ComplexMemoryObject__AnotherObjectNewWithAnotherObject(v *AnotherObject) *Union__MemoryObject__ComplexMemoryObject__AnotherObject {
-    return &Union__MemoryObject__ComplexMemoryObject__AnotherObject{
-        variant: "AnotherObject",
-        variant_AnotherObject: v,
-    }
+	return &Union__MemoryObject__ComplexMemoryObject__AnotherObject{
+		variant:               "AnotherObject",
+		variant_AnotherObject: v,
+	}
 }
 
-
-
 type Union__Nested__string struct {
-    variant string
-    
-    variant_Nested *Nested
-    
-    variant_string *string
-    
+	variant string
+
+	variant_Nested *Nested
+
+	variant_string *string
 }
 
 func (u *Union__Nested__string) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "Nested"
-            value := *baml.Decode(valueHolder).(*Nested)
-            u.variant_Nested = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
+
+	case 0:
+		u.variant = "Nested"
+		value := *baml.Decode(valueHolder).(*Nested)
+		u.variant_Nested = &value
+
+	case 1:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
 	}
 }
 
-
 func (u Union__Nested__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "Nested":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Nested)
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Nested":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Nested)
+
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__Nested__string) BamlTypeName() string {
-    return "Union__Nested__string"
+	return "Union__Nested__string"
 }
 
-
 func (u *Union__Nested__string) SetNested(v Nested) {
-    u.variant = "Nested"
-    u.variant_Nested = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
+	u.variant = "Nested"
+	u.variant_Nested = &v
+
+	u.variant_string = nil
+
 }
 
 func (u *Union__Nested__string) IsNested() bool {
-    return u.variant == "Nested"
+	return u.variant == "Nested"
 }
 
 func (u *Union__Nested__string) Nested() *Nested {
-    if !u.IsNested() {
-        return nil
-    }
-    return u.variant_Nested
+	if !u.IsNested() {
+		return nil
+	}
+	return u.variant_Nested
 }
 
 func Union__Nested__stringNewWithNested(v *Nested) *Union__Nested__string {
-    return &Union__Nested__string{
-        variant: "Nested",
-        variant_Nested: v,
-    }
+	return &Union__Nested__string{
+		variant:        "Nested",
+		variant_Nested: v,
+	}
 }
 
 func (u *Union__Nested__string) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_Nested = nil
-    
-    
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_Nested = nil
+
 }
 
 func (u *Union__Nested__string) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__Nested__string) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__Nested__stringNewWithString(v *string) *Union__Nested__string {
-    return &Union__Nested__string{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__Nested__string{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
-
-
 type Union__OriginalA__OriginalB struct {
-    variant string
-    
-    variant_OriginalA *OriginalA
-    
-    variant_OriginalB *OriginalB
-    
+	variant string
+
+	variant_OriginalA *OriginalA
+
+	variant_OriginalB *OriginalB
 }
 
 func (u *Union__OriginalA__OriginalB) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "OriginalA"
-            value := *baml.Decode(valueHolder).(*OriginalA)
-            u.variant_OriginalA = &value
-    
-	    case 1:
-            u.variant = "OriginalB"
-            value := *baml.Decode(valueHolder).(*OriginalB)
-            u.variant_OriginalB = &value
-    
+
+	case 0:
+		u.variant = "OriginalA"
+		value := *baml.Decode(valueHolder).(*OriginalA)
+		u.variant_OriginalA = &value
+
+	case 1:
+		u.variant = "OriginalB"
+		value := *baml.Decode(valueHolder).(*OriginalB)
+		u.variant_OriginalB = &value
+
 	}
 }
 
-
 func (u Union__OriginalA__OriginalB) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "OriginalA":
-        return baml.EncodeUnion(builder, u.variant, u.variant_OriginalA)
-    
-    case "OriginalB":
-        return baml.EncodeUnion(builder, u.variant, u.variant_OriginalB)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "OriginalA":
+		return baml.EncodeUnion(builder, u.variant, u.variant_OriginalA)
+
+	case "OriginalB":
+		return baml.EncodeUnion(builder, u.variant, u.variant_OriginalB)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__OriginalA__OriginalB) BamlTypeName() string {
-    return "Union__OriginalA__OriginalB"
+	return "Union__OriginalA__OriginalB"
 }
 
-
 func (u *Union__OriginalA__OriginalB) SetOriginalA(v OriginalA) {
-    u.variant = "OriginalA"
-    u.variant_OriginalA = &v
-    
-    
-    
-    
-        u.variant_OriginalB = nil
-    
-    
+	u.variant = "OriginalA"
+	u.variant_OriginalA = &v
+
+	u.variant_OriginalB = nil
+
 }
 
 func (u *Union__OriginalA__OriginalB) IsOriginalA() bool {
-    return u.variant == "OriginalA"
+	return u.variant == "OriginalA"
 }
 
 func (u *Union__OriginalA__OriginalB) OriginalA() *OriginalA {
-    if !u.IsOriginalA() {
-        return nil
-    }
-    return u.variant_OriginalA
+	if !u.IsOriginalA() {
+		return nil
+	}
+	return u.variant_OriginalA
 }
 
 func Union__OriginalA__OriginalBNewWithOriginalA(v *OriginalA) *Union__OriginalA__OriginalB {
-    return &Union__OriginalA__OriginalB{
-        variant: "OriginalA",
-        variant_OriginalA: v,
-    }
+	return &Union__OriginalA__OriginalB{
+		variant:           "OriginalA",
+		variant_OriginalA: v,
+	}
 }
 
 func (u *Union__OriginalA__OriginalB) SetOriginalB(v OriginalB) {
-    u.variant = "OriginalB"
-    u.variant_OriginalB = &v
-    
-    
-        u.variant_OriginalA = nil
-    
-    
-    
-    
+	u.variant = "OriginalB"
+	u.variant_OriginalB = &v
+
+	u.variant_OriginalA = nil
+
 }
 
 func (u *Union__OriginalA__OriginalB) IsOriginalB() bool {
-    return u.variant == "OriginalB"
+	return u.variant == "OriginalB"
 }
 
 func (u *Union__OriginalA__OriginalB) OriginalB() *OriginalB {
-    if !u.IsOriginalB() {
-        return nil
-    }
-    return u.variant_OriginalB
+	if !u.IsOriginalB() {
+		return nil
+	}
+	return u.variant_OriginalB
 }
 
 func Union__OriginalA__OriginalBNewWithOriginalB(v *OriginalB) *Union__OriginalA__OriginalB {
-    return &Union__OriginalA__OriginalB{
-        variant: "OriginalB",
-        variant_OriginalB: v,
-    }
+	return &Union__OriginalA__OriginalB{
+		variant:           "OriginalB",
+		variant_OriginalB: v,
+	}
 }
 
-
-
 type Union__PhoneNumber__EmailAddress struct {
-    variant string
-    
-    variant_PhoneNumber *PhoneNumber
-    
-    variant_EmailAddress *EmailAddress
-    
+	variant string
+
+	variant_PhoneNumber *PhoneNumber
+
+	variant_EmailAddress *EmailAddress
 }
 
 func (u *Union__PhoneNumber__EmailAddress) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "PhoneNumber"
-            value := *baml.Decode(valueHolder).(*PhoneNumber)
-            u.variant_PhoneNumber = &value
-    
-	    case 1:
-            u.variant = "EmailAddress"
-            value := *baml.Decode(valueHolder).(*EmailAddress)
-            u.variant_EmailAddress = &value
-    
+
+	case 0:
+		u.variant = "PhoneNumber"
+		value := *baml.Decode(valueHolder).(*PhoneNumber)
+		u.variant_PhoneNumber = &value
+
+	case 1:
+		u.variant = "EmailAddress"
+		value := *baml.Decode(valueHolder).(*EmailAddress)
+		u.variant_EmailAddress = &value
+
 	}
 }
 
-
 func (u Union__PhoneNumber__EmailAddress) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "PhoneNumber":
-        return baml.EncodeUnion(builder, u.variant, u.variant_PhoneNumber)
-    
-    case "EmailAddress":
-        return baml.EncodeUnion(builder, u.variant, u.variant_EmailAddress)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "PhoneNumber":
+		return baml.EncodeUnion(builder, u.variant, u.variant_PhoneNumber)
+
+	case "EmailAddress":
+		return baml.EncodeUnion(builder, u.variant, u.variant_EmailAddress)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__PhoneNumber__EmailAddress) BamlTypeName() string {
-    return "Union__PhoneNumber__EmailAddress"
+	return "Union__PhoneNumber__EmailAddress"
 }
 
-
 func (u *Union__PhoneNumber__EmailAddress) SetPhoneNumber(v PhoneNumber) {
-    u.variant = "PhoneNumber"
-    u.variant_PhoneNumber = &v
-    
-    
-    
-    
-        u.variant_EmailAddress = nil
-    
-    
+	u.variant = "PhoneNumber"
+	u.variant_PhoneNumber = &v
+
+	u.variant_EmailAddress = nil
+
 }
 
 func (u *Union__PhoneNumber__EmailAddress) IsPhoneNumber() bool {
-    return u.variant == "PhoneNumber"
+	return u.variant == "PhoneNumber"
 }
 
 func (u *Union__PhoneNumber__EmailAddress) PhoneNumber() *PhoneNumber {
-    if !u.IsPhoneNumber() {
-        return nil
-    }
-    return u.variant_PhoneNumber
+	if !u.IsPhoneNumber() {
+		return nil
+	}
+	return u.variant_PhoneNumber
 }
 
 func Union__PhoneNumber__EmailAddressNewWithPhoneNumber(v *PhoneNumber) *Union__PhoneNumber__EmailAddress {
-    return &Union__PhoneNumber__EmailAddress{
-        variant: "PhoneNumber",
-        variant_PhoneNumber: v,
-    }
+	return &Union__PhoneNumber__EmailAddress{
+		variant:             "PhoneNumber",
+		variant_PhoneNumber: v,
+	}
 }
 
 func (u *Union__PhoneNumber__EmailAddress) SetEmailAddress(v EmailAddress) {
-    u.variant = "EmailAddress"
-    u.variant_EmailAddress = &v
-    
-    
-        u.variant_PhoneNumber = nil
-    
-    
-    
-    
+	u.variant = "EmailAddress"
+	u.variant_EmailAddress = &v
+
+	u.variant_PhoneNumber = nil
+
 }
 
 func (u *Union__PhoneNumber__EmailAddress) IsEmailAddress() bool {
-    return u.variant == "EmailAddress"
+	return u.variant == "EmailAddress"
 }
 
 func (u *Union__PhoneNumber__EmailAddress) EmailAddress() *EmailAddress {
-    if !u.IsEmailAddress() {
-        return nil
-    }
-    return u.variant_EmailAddress
+	if !u.IsEmailAddress() {
+		return nil
+	}
+	return u.variant_EmailAddress
 }
 
 func Union__PhoneNumber__EmailAddressNewWithEmailAddress(v *EmailAddress) *Union__PhoneNumber__EmailAddress {
-    return &Union__PhoneNumber__EmailAddress{
-        variant: "EmailAddress",
-        variant_EmailAddress: v,
-    }
+	return &Union__PhoneNumber__EmailAddress{
+		variant:              "EmailAddress",
+		variant_EmailAddress: v,
+	}
 }
 
-
-
 type Union__Resume__Event struct {
-    variant string
-    
-    variant_Resume *Resume
-    
-    variant_Event *Event
-    
+	variant string
+
+	variant_Resume *Resume
+
+	variant_Event *Event
 }
 
 func (u *Union__Resume__Event) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "Resume"
-            value := *baml.Decode(valueHolder).(*Resume)
-            u.variant_Resume = &value
-    
-	    case 1:
-            u.variant = "Event"
-            value := *baml.Decode(valueHolder).(*Event)
-            u.variant_Event = &value
-    
+
+	case 0:
+		u.variant = "Resume"
+		value := *baml.Decode(valueHolder).(*Resume)
+		u.variant_Resume = &value
+
+	case 1:
+		u.variant = "Event"
+		value := *baml.Decode(valueHolder).(*Event)
+		u.variant_Event = &value
+
 	}
 }
 
-
 func (u Union__Resume__Event) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "Resume":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Resume)
-    
-    case "Event":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Event)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Resume":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Resume)
+
+	case "Event":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Event)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__Resume__Event) BamlTypeName() string {
-    return "Union__Resume__Event"
+	return "Union__Resume__Event"
 }
 
-
 func (u *Union__Resume__Event) SetResume(v Resume) {
-    u.variant = "Resume"
-    u.variant_Resume = &v
-    
-    
-    
-    
-        u.variant_Event = nil
-    
-    
+	u.variant = "Resume"
+	u.variant_Resume = &v
+
+	u.variant_Event = nil
+
 }
 
 func (u *Union__Resume__Event) IsResume() bool {
-    return u.variant == "Resume"
+	return u.variant == "Resume"
 }
 
 func (u *Union__Resume__Event) Resume() *Resume {
-    if !u.IsResume() {
-        return nil
-    }
-    return u.variant_Resume
+	if !u.IsResume() {
+		return nil
+	}
+	return u.variant_Resume
 }
 
 func Union__Resume__EventNewWithResume(v *Resume) *Union__Resume__Event {
-    return &Union__Resume__Event{
-        variant: "Resume",
-        variant_Resume: v,
-    }
+	return &Union__Resume__Event{
+		variant:        "Resume",
+		variant_Resume: v,
+	}
 }
 
 func (u *Union__Resume__Event) SetEvent(v Event) {
-    u.variant = "Event"
-    u.variant_Event = &v
-    
-    
-        u.variant_Resume = nil
-    
-    
-    
-    
+	u.variant = "Event"
+	u.variant_Event = &v
+
+	u.variant_Resume = nil
+
 }
 
 func (u *Union__Resume__Event) IsEvent() bool {
-    return u.variant == "Event"
+	return u.variant == "Event"
 }
 
 func (u *Union__Resume__Event) Event() *Event {
-    if !u.IsEvent() {
-        return nil
-    }
-    return u.variant_Event
+	if !u.IsEvent() {
+		return nil
+	}
+	return u.variant_Event
 }
 
 func Union__Resume__EventNewWithEvent(v *Event) *Union__Resume__Event {
-    return &Union__Resume__Event{
-        variant: "Event",
-        variant_Event: v,
-    }
+	return &Union__Resume__Event{
+		variant:       "Event",
+		variant_Event: v,
+	}
 }
 
-
-
 type Union__SimpleTag__JsonTemplate struct {
-    variant string
-    
-    variant_SimpleTag *SimpleTag
-    
-    variant_JsonTemplate *JsonTemplate
-    
+	variant string
+
+	variant_SimpleTag *SimpleTag
+
+	variant_JsonTemplate *JsonTemplate
 }
 
 func (u *Union__SimpleTag__JsonTemplate) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "SimpleTag"
-            value := *baml.Decode(valueHolder).(*SimpleTag)
-            u.variant_SimpleTag = &value
-    
-	    case 1:
-            u.variant = "JsonTemplate"
-            value := baml.Decode(valueHolder).(JsonTemplate)
-            u.variant_JsonTemplate = &value
-    
+
+	case 0:
+		u.variant = "SimpleTag"
+		value := *baml.Decode(valueHolder).(*SimpleTag)
+		u.variant_SimpleTag = &value
+
+	case 1:
+		u.variant = "JsonTemplate"
+		value := baml.Decode(valueHolder).(JsonTemplate)
+		u.variant_JsonTemplate = &value
+
 	}
 }
 
-
 func (u Union__SimpleTag__JsonTemplate) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "SimpleTag":
-        return baml.EncodeUnion(builder, u.variant, u.variant_SimpleTag)
-    
-    case "JsonTemplate":
-        return baml.EncodeUnion(builder, u.variant, u.variant_JsonTemplate)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "SimpleTag":
+		return baml.EncodeUnion(builder, u.variant, u.variant_SimpleTag)
+
+	case "JsonTemplate":
+		return baml.EncodeUnion(builder, u.variant, u.variant_JsonTemplate)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__SimpleTag__JsonTemplate) BamlTypeName() string {
-    return "Union__SimpleTag__JsonTemplate"
+	return "Union__SimpleTag__JsonTemplate"
 }
 
-
 func (u *Union__SimpleTag__JsonTemplate) SetSimpleTag(v SimpleTag) {
-    u.variant = "SimpleTag"
-    u.variant_SimpleTag = &v
-    
-    
-    
-    
-        u.variant_JsonTemplate = nil
-    
-    
+	u.variant = "SimpleTag"
+	u.variant_SimpleTag = &v
+
+	u.variant_JsonTemplate = nil
+
 }
 
 func (u *Union__SimpleTag__JsonTemplate) IsSimpleTag() bool {
-    return u.variant == "SimpleTag"
+	return u.variant == "SimpleTag"
 }
 
 func (u *Union__SimpleTag__JsonTemplate) SimpleTag() *SimpleTag {
-    if !u.IsSimpleTag() {
-        return nil
-    }
-    return u.variant_SimpleTag
+	if !u.IsSimpleTag() {
+		return nil
+	}
+	return u.variant_SimpleTag
 }
 
 func Union__SimpleTag__JsonTemplateNewWithSimpleTag(v *SimpleTag) *Union__SimpleTag__JsonTemplate {
-    return &Union__SimpleTag__JsonTemplate{
-        variant: "SimpleTag",
-        variant_SimpleTag: v,
-    }
+	return &Union__SimpleTag__JsonTemplate{
+		variant:           "SimpleTag",
+		variant_SimpleTag: v,
+	}
 }
 
 func (u *Union__SimpleTag__JsonTemplate) SetJsonTemplate(v JsonTemplate) {
-    u.variant = "JsonTemplate"
-    u.variant_JsonTemplate = &v
-    
-    
-        u.variant_SimpleTag = nil
-    
-    
-    
-    
+	u.variant = "JsonTemplate"
+	u.variant_JsonTemplate = &v
+
+	u.variant_SimpleTag = nil
+
 }
 
 func (u *Union__SimpleTag__JsonTemplate) IsJsonTemplate() bool {
-    return u.variant == "JsonTemplate"
+	return u.variant == "JsonTemplate"
 }
 
 func (u *Union__SimpleTag__JsonTemplate) JsonTemplate() *JsonTemplate {
-    if !u.IsJsonTemplate() {
-        return nil
-    }
-    return u.variant_JsonTemplate
+	if !u.IsJsonTemplate() {
+		return nil
+	}
+	return u.variant_JsonTemplate
 }
 
 func Union__SimpleTag__JsonTemplateNewWithJsonTemplate(v *JsonTemplate) *Union__SimpleTag__JsonTemplate {
-    return &Union__SimpleTag__JsonTemplate{
-        variant: "JsonTemplate",
-        variant_JsonTemplate: v,
-    }
+	return &Union__SimpleTag__JsonTemplate{
+		variant:              "JsonTemplate",
+		variant_JsonTemplate: v,
+	}
 }
 
-
-
 type Union__Tag__string struct {
-    variant string
-    
-    variant_Tag *Tag
-    
-    variant_string *string
-    
+	variant string
+
+	variant_Tag *Tag
+
+	variant_string *string
 }
 
 func (u *Union__Tag__string) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "Tag"
-            value := baml.Decode(valueHolder).(Tag)
-            u.variant_Tag = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
+
+	case 0:
+		u.variant = "Tag"
+		value := baml.Decode(valueHolder).(Tag)
+		u.variant_Tag = &value
+
+	case 1:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
 	}
 }
 
-
 func (u Union__Tag__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "Tag":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Tag)
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "Tag":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Tag)
+
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__Tag__string) BamlTypeName() string {
-    return "Union__Tag__string"
+	return "Union__Tag__string"
 }
 
-
 func (u *Union__Tag__string) SetTag(v Tag) {
-    u.variant = "Tag"
-    u.variant_Tag = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
+	u.variant = "Tag"
+	u.variant_Tag = &v
+
+	u.variant_string = nil
+
 }
 
 func (u *Union__Tag__string) IsTag() bool {
-    return u.variant == "Tag"
+	return u.variant == "Tag"
 }
 
 func (u *Union__Tag__string) Tag() *Tag {
-    if !u.IsTag() {
-        return nil
-    }
-    return u.variant_Tag
+	if !u.IsTag() {
+		return nil
+	}
+	return u.variant_Tag
 }
 
 func Union__Tag__stringNewWithTag(v *Tag) *Union__Tag__string {
-    return &Union__Tag__string{
-        variant: "Tag",
-        variant_Tag: v,
-    }
+	return &Union__Tag__string{
+		variant:     "Tag",
+		variant_Tag: v,
+	}
 }
 
 func (u *Union__Tag__string) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_Tag = nil
-    
-    
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_Tag = nil
+
 }
 
 func (u *Union__Tag__string) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__Tag__string) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__Tag__stringNewWithString(v *string) *Union__Tag__string {
-    return &Union__Tag__string{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__Tag__string{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
-
-
 type Union__float__bool struct {
-    variant string
-    
-    variant_float *float64
-    
-    variant_bool *bool
-    
+	variant string
+
+	variant_float *float64
+
+	variant_bool *bool
 }
 
 func (u *Union__float__bool) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "float"
-            value := baml.Decode(valueHolder).(float64)
-            u.variant_float = &value
-    
-	    case 1:
-            u.variant = "bool"
-            value := baml.Decode(valueHolder).(bool)
-            u.variant_bool = &value
-    
+
+	case 0:
+		u.variant = "float"
+		value := baml.Decode(valueHolder).(float64)
+		u.variant_float = &value
+
+	case 1:
+		u.variant = "bool"
+		value := baml.Decode(valueHolder).(bool)
+		u.variant_bool = &value
+
 	}
 }
 
-
 func (u Union__float__bool) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "float":
-        return baml.EncodeUnion(builder, u.variant, u.variant_float)
-    
-    case "bool":
-        return baml.EncodeUnion(builder, u.variant, u.variant_bool)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "float":
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
+
+	case "bool":
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__float__bool) BamlTypeName() string {
-    return "Union__float__bool"
+	return "Union__float__bool"
 }
 
-
 func (u *Union__float__bool) SetFloat(v float64) {
-    u.variant = "float"
-    u.variant_float = &v
-    
-    
-    
-    
-        u.variant_bool = nil
-    
-    
+	u.variant = "float"
+	u.variant_float = &v
+
+	u.variant_bool = nil
+
 }
 
 func (u *Union__float__bool) IsFloat() bool {
-    return u.variant == "float"
+	return u.variant == "float"
 }
 
 func (u *Union__float__bool) Float() *float64 {
-    if !u.IsFloat() {
-        return nil
-    }
-    return u.variant_float
+	if !u.IsFloat() {
+		return nil
+	}
+	return u.variant_float
 }
 
 func Union__float__boolNewWithFloat(v *float64) *Union__float__bool {
-    return &Union__float__bool{
-        variant: "float",
-        variant_float: v,
-    }
+	return &Union__float__bool{
+		variant:       "float",
+		variant_float: v,
+	}
 }
 
 func (u *Union__float__bool) SetBool(v bool) {
-    u.variant = "bool"
-    u.variant_bool = &v
-    
-    
-        u.variant_float = nil
-    
-    
-    
-    
+	u.variant = "bool"
+	u.variant_bool = &v
+
+	u.variant_float = nil
+
 }
 
 func (u *Union__float__bool) IsBool() bool {
-    return u.variant == "bool"
+	return u.variant == "bool"
 }
 
 func (u *Union__float__bool) Bool() *bool {
-    if !u.IsBool() {
-        return nil
-    }
-    return u.variant_bool
+	if !u.IsBool() {
+		return nil
+	}
+	return u.variant_bool
 }
 
 func Union__float__boolNewWithBool(v *bool) *Union__float__bool {
-    return &Union__float__bool{
-        variant: "bool",
-        variant_bool: v,
-    }
+	return &Union__float__bool{
+		variant:      "bool",
+		variant_bool: v,
+	}
 }
 
-
-
 type Union__int_1__bool_true__string_string_output struct {
-    variant string
-    
-    variant_int_1 *int
-    
-    variant_bool_true *bool
-    
-    variant_string_string_output *string
-    
+	variant string
+
+	variant_int_1 *int
+
+	variant_bool_true *bool
+
+	variant_string_string_output *string
 }
 
 func (u *Union__int_1__bool_true__string_string_output) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "int_1"
-            value := baml.Decode(valueHolder).(int)
-            u.variant_int_1 = &value
-    
-	    case 1:
-            u.variant = "bool_true"
-            value := baml.Decode(valueHolder).(bool)
-            u.variant_bool_true = &value
-    
-	    case 2:
-            u.variant = "string_string_output"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_string_output = &value
-    
+
+	case 0:
+		u.variant = "int_1"
+		value := baml.Decode(valueHolder).(int)
+		u.variant_int_1 = &value
+
+	case 1:
+		u.variant = "bool_true"
+		value := baml.Decode(valueHolder).(bool)
+		u.variant_bool_true = &value
+
+	case 2:
+		u.variant = "string_string_output"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_string_output = &value
+
 	}
 }
 
-
 func (u Union__int_1__bool_true__string_string_output) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "int_1":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int_1)
-    
-    case "bool_true":
-        return baml.EncodeUnion(builder, u.variant, u.variant_bool_true)
-    
-    case "string_string_output":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_string_output)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "int_1":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int_1)
+
+	case "bool_true":
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool_true)
+
+	case "string_string_output":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_string_output)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__int_1__bool_true__string_string_output) BamlTypeName() string {
-    return "Union__int_1__bool_true__string_string_output"
+	return "Union__int_1__bool_true__string_string_output"
 }
 
-
 func (u *Union__int_1__bool_true__string_string_output) SetInt_1(v int) {
-    u.variant = "int_1"
-    u.variant_int_1 = &v
-    
-    
-    
-    
-        u.variant_bool_true = nil
-    
-    
-    
-        u.variant_string_string_output = nil
-    
-    
+	u.variant = "int_1"
+	u.variant_int_1 = &v
+
+	u.variant_bool_true = nil
+
+	u.variant_string_string_output = nil
+
 }
 
 func (u *Union__int_1__bool_true__string_string_output) IsInt_1() bool {
-    return u.variant == "int_1"
+	return u.variant == "int_1"
 }
 
 func (u *Union__int_1__bool_true__string_string_output) Int_1() *int {
-    if !u.IsInt_1() {
-        return nil
-    }
-    return u.variant_int_1
+	if !u.IsInt_1() {
+		return nil
+	}
+	return u.variant_int_1
 }
 
 func Union__int_1__bool_true__string_string_outputNewWithInt_1(v *int) *Union__int_1__bool_true__string_string_output {
-    return &Union__int_1__bool_true__string_string_output{
-        variant: "int_1",
-        variant_int_1: v,
-    }
+	return &Union__int_1__bool_true__string_string_output{
+		variant:       "int_1",
+		variant_int_1: v,
+	}
 }
 
 func (u *Union__int_1__bool_true__string_string_output) SetBool_true(v bool) {
-    u.variant = "bool_true"
-    u.variant_bool_true = &v
-    
-    
-        u.variant_int_1 = nil
-    
-    
-    
-    
-    
-        u.variant_string_string_output = nil
-    
-    
+	u.variant = "bool_true"
+	u.variant_bool_true = &v
+
+	u.variant_int_1 = nil
+
+	u.variant_string_string_output = nil
+
 }
 
 func (u *Union__int_1__bool_true__string_string_output) IsBool_true() bool {
-    return u.variant == "bool_true"
+	return u.variant == "bool_true"
 }
 
 func (u *Union__int_1__bool_true__string_string_output) Bool_true() *bool {
-    if !u.IsBool_true() {
-        return nil
-    }
-    return u.variant_bool_true
+	if !u.IsBool_true() {
+		return nil
+	}
+	return u.variant_bool_true
 }
 
 func Union__int_1__bool_true__string_string_outputNewWithBool_true(v *bool) *Union__int_1__bool_true__string_string_output {
-    return &Union__int_1__bool_true__string_string_output{
-        variant: "bool_true",
-        variant_bool_true: v,
-    }
+	return &Union__int_1__bool_true__string_string_output{
+		variant:           "bool_true",
+		variant_bool_true: v,
+	}
 }
 
 func (u *Union__int_1__bool_true__string_string_output) SetString_string_output(v string) {
-    u.variant = "string_string_output"
-    u.variant_string_string_output = &v
-    
-    
-        u.variant_int_1 = nil
-    
-    
-    
-        u.variant_bool_true = nil
-    
-    
-    
-    
+	u.variant = "string_string_output"
+	u.variant_string_string_output = &v
+
+	u.variant_int_1 = nil
+
+	u.variant_bool_true = nil
+
 }
 
 func (u *Union__int_1__bool_true__string_string_output) IsString_string_output() bool {
-    return u.variant == "string_string_output"
+	return u.variant == "string_string_output"
 }
 
 func (u *Union__int_1__bool_true__string_string_output) String_string_output() *string {
-    if !u.IsString_string_output() {
-        return nil
-    }
-    return u.variant_string_string_output
+	if !u.IsString_string_output() {
+		return nil
+	}
+	return u.variant_string_string_output
 }
 
 func Union__int_1__bool_true__string_string_outputNewWithString_string_output(v *string) *Union__int_1__bool_true__string_string_output {
-    return &Union__int_1__bool_true__string_string_output{
-        variant: "string_string_output",
-        variant_string_string_output: v,
-    }
+	return &Union__int_1__bool_true__string_string_output{
+		variant:                      "string_string_output",
+		variant_string_string_output: v,
+	}
 }
 
-
-
 type Union__int__float struct {
-    variant string
-    
-    variant_int *int64
-    
-    variant_float *float64
-    
+	variant string
+
+	variant_int *int64
+
+	variant_float *float64
 }
 
 func (u *Union__int__float) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "int"
-            value := baml.Decode(valueHolder).(int64)
-            u.variant_int = &value
-    
-	    case 1:
-            u.variant = "float"
-            value := baml.Decode(valueHolder).(float64)
-            u.variant_float = &value
-    
+
+	case 0:
+		u.variant = "int"
+		value := baml.Decode(valueHolder).(int64)
+		u.variant_int = &value
+
+	case 1:
+		u.variant = "float"
+		value := baml.Decode(valueHolder).(float64)
+		u.variant_float = &value
+
 	}
 }
 
-
 func (u Union__int__float) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int)
-    
-    case "float":
-        return baml.EncodeUnion(builder, u.variant, u.variant_float)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
+
+	case "float":
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__int__float) BamlTypeName() string {
-    return "Union__int__float"
+	return "Union__int__float"
 }
 
-
 func (u *Union__int__float) SetInt(v int64) {
-    u.variant = "int"
-    u.variant_int = &v
-    
-    
-    
-    
-        u.variant_float = nil
-    
-    
+	u.variant = "int"
+	u.variant_int = &v
+
+	u.variant_float = nil
+
 }
 
 func (u *Union__int__float) IsInt() bool {
-    return u.variant == "int"
+	return u.variant == "int"
 }
 
 func (u *Union__int__float) Int() *int64 {
-    if !u.IsInt() {
-        return nil
-    }
-    return u.variant_int
+	if !u.IsInt() {
+		return nil
+	}
+	return u.variant_int
 }
 
 func Union__int__floatNewWithInt(v *int64) *Union__int__float {
-    return &Union__int__float{
-        variant: "int",
-        variant_int: v,
-    }
+	return &Union__int__float{
+		variant:     "int",
+		variant_int: v,
+	}
 }
 
 func (u *Union__int__float) SetFloat(v float64) {
-    u.variant = "float"
-    u.variant_float = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-    
+	u.variant = "float"
+	u.variant_float = &v
+
+	u.variant_int = nil
+
 }
 
 func (u *Union__int__float) IsFloat() bool {
-    return u.variant == "float"
+	return u.variant == "float"
 }
 
 func (u *Union__int__float) Float() *float64 {
-    if !u.IsFloat() {
-        return nil
-    }
-    return u.variant_float
+	if !u.IsFloat() {
+		return nil
+	}
+	return u.variant_float
 }
 
 func Union__int__floatNewWithFloat(v *float64) *Union__int__float {
-    return &Union__int__float{
-        variant: "float",
-        variant_float: v,
-    }
+	return &Union__int__float{
+		variant:       "float",
+		variant_float: v,
+	}
 }
 
-
-
 type Union__int__string struct {
-    variant string
-    
-    variant_int *int64
-    
-    variant_string *string
-    
+	variant string
+
+	variant_int *int64
+
+	variant_string *string
 }
 
 func (u *Union__int__string) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "int"
-            value := baml.Decode(valueHolder).(int64)
-            u.variant_int = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
+
+	case 0:
+		u.variant = "int"
+		value := baml.Decode(valueHolder).(int64)
+		u.variant_int = &value
+
+	case 1:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
 	}
 }
 
-
 func (u Union__int__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int)
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
+
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__int__string) BamlTypeName() string {
-    return "Union__int__string"
+	return "Union__int__string"
 }
 
-
 func (u *Union__int__string) SetInt(v int64) {
-    u.variant = "int"
-    u.variant_int = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
+	u.variant = "int"
+	u.variant_int = &v
+
+	u.variant_string = nil
+
 }
 
 func (u *Union__int__string) IsInt() bool {
-    return u.variant == "int"
+	return u.variant == "int"
 }
 
 func (u *Union__int__string) Int() *int64 {
-    if !u.IsInt() {
-        return nil
-    }
-    return u.variant_int
+	if !u.IsInt() {
+		return nil
+	}
+	return u.variant_int
 }
 
 func Union__int__stringNewWithInt(v *int64) *Union__int__string {
-    return &Union__int__string{
-        variant: "int",
-        variant_int: v,
-    }
+	return &Union__int__string{
+		variant:     "int",
+		variant_int: v,
+	}
 }
 
 func (u *Union__int__string) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_int = nil
+
 }
 
 func (u *Union__int__string) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__int__string) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__int__stringNewWithString(v *string) *Union__int__string {
-    return &Union__int__string{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__int__string{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
-
-
 type Union__int__string__bool__float struct {
-    variant string
-    
-    variant_int *int64
-    
-    variant_string *string
-    
-    variant_bool *bool
-    
-    variant_float *float64
-    
+	variant string
+
+	variant_int *int64
+
+	variant_string *string
+
+	variant_bool *bool
+
+	variant_float *float64
 }
 
 func (u *Union__int__string__bool__float) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "int"
-            value := baml.Decode(valueHolder).(int64)
-            u.variant_int = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 2:
-            u.variant = "bool"
-            value := baml.Decode(valueHolder).(bool)
-            u.variant_bool = &value
-    
-	    case 3:
-            u.variant = "float"
-            value := baml.Decode(valueHolder).(float64)
-            u.variant_float = &value
-    
+
+	case 0:
+		u.variant = "int"
+		value := baml.Decode(valueHolder).(int64)
+		u.variant_int = &value
+
+	case 1:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 2:
+		u.variant = "bool"
+		value := baml.Decode(valueHolder).(bool)
+		u.variant_bool = &value
+
+	case 3:
+		u.variant = "float"
+		value := baml.Decode(valueHolder).(float64)
+		u.variant_float = &value
+
 	}
 }
 
-
 func (u Union__int__string__bool__float) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int)
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "bool":
-        return baml.EncodeUnion(builder, u.variant, u.variant_bool)
-    
-    case "float":
-        return baml.EncodeUnion(builder, u.variant, u.variant_float)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
+
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "bool":
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
+
+	case "float":
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__int__string__bool__float) BamlTypeName() string {
-    return "Union__int__string__bool__float"
+	return "Union__int__string__bool__float"
 }
 
-
 func (u *Union__int__string__bool__float) SetInt(v int64) {
-    u.variant = "int"
-    u.variant_int = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
+	u.variant = "int"
+	u.variant_int = &v
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
 }
 
 func (u *Union__int__string__bool__float) IsInt() bool {
-    return u.variant == "int"
+	return u.variant == "int"
 }
 
 func (u *Union__int__string__bool__float) Int() *int64 {
-    if !u.IsInt() {
-        return nil
-    }
-    return u.variant_int
+	if !u.IsInt() {
+		return nil
+	}
+	return u.variant_int
 }
 
 func Union__int__string__bool__floatNewWithInt(v *int64) *Union__int__string__bool__float {
-    return &Union__int__string__bool__float{
-        variant: "int",
-        variant_int: v,
-    }
+	return &Union__int__string__bool__float{
+		variant:     "int",
+		variant_int: v,
+	}
 }
 
 func (u *Union__int__string__bool__float) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_int = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
 }
 
 func (u *Union__int__string__bool__float) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__int__string__bool__float) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__int__string__bool__floatNewWithString(v *string) *Union__int__string__bool__float {
-    return &Union__int__string__bool__float{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__int__string__bool__float{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__int__string__bool__float) SetBool(v bool) {
-    u.variant = "bool"
-    u.variant_bool = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
-    
-        u.variant_float = nil
-    
-    
+	u.variant = "bool"
+	u.variant_bool = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_float = nil
+
 }
 
 func (u *Union__int__string__bool__float) IsBool() bool {
-    return u.variant == "bool"
+	return u.variant == "bool"
 }
 
 func (u *Union__int__string__bool__float) Bool() *bool {
-    if !u.IsBool() {
-        return nil
-    }
-    return u.variant_bool
+	if !u.IsBool() {
+		return nil
+	}
+	return u.variant_bool
 }
 
 func Union__int__string__bool__floatNewWithBool(v *bool) *Union__int__string__bool__float {
-    return &Union__int__string__bool__float{
-        variant: "bool",
-        variant_bool: v,
-    }
+	return &Union__int__string__bool__float{
+		variant:      "bool",
+		variant_bool: v,
+	}
 }
 
 func (u *Union__int__string__bool__float) SetFloat(v float64) {
-    u.variant = "float"
-    u.variant_float = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-    
+	u.variant = "float"
+	u.variant_float = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
 }
 
 func (u *Union__int__string__bool__float) IsFloat() bool {
-    return u.variant == "float"
+	return u.variant == "float"
 }
 
 func (u *Union__int__string__bool__float) Float() *float64 {
-    if !u.IsFloat() {
-        return nil
-    }
-    return u.variant_float
+	if !u.IsFloat() {
+		return nil
+	}
+	return u.variant_float
 }
 
 func Union__int__string__bool__floatNewWithFloat(v *float64) *Union__int__string__bool__float {
-    return &Union__int__string__bool__float{
-        variant: "float",
-        variant_float: v,
-    }
+	return &Union__int__string__bool__float{
+		variant:       "float",
+		variant_float: v,
+	}
 }
 
-
-
 type Union__int__string__bool__float__JsonObject__JsonArray struct {
-    variant string
-    
-    variant_int *int64
-    
-    variant_string *string
-    
-    variant_bool *bool
-    
-    variant_float *float64
-    
-    variant_JsonObject *JsonObject
-    
-    variant_JsonArray *JsonArray
-    
+	variant string
+
+	variant_int *int64
+
+	variant_string *string
+
+	variant_bool *bool
+
+	variant_float *float64
+
+	variant_JsonObject *JsonObject
+
+	variant_JsonArray *JsonArray
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "int"
-            value := baml.Decode(valueHolder).(int64)
-            u.variant_int = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 2:
-            u.variant = "bool"
-            value := baml.Decode(valueHolder).(bool)
-            u.variant_bool = &value
-    
-	    case 3:
-            u.variant = "float"
-            value := baml.Decode(valueHolder).(float64)
-            u.variant_float = &value
-    
-	    case 4:
-            u.variant = "JsonObject"
-            value := baml.Decode(valueHolder).(JsonObject)
-            u.variant_JsonObject = &value
-    
-	    case 5:
-            u.variant = "JsonArray"
-            value := baml.Decode(valueHolder).(JsonArray)
-            u.variant_JsonArray = &value
-    
+
+	case 0:
+		u.variant = "int"
+		value := baml.Decode(valueHolder).(int64)
+		u.variant_int = &value
+
+	case 1:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 2:
+		u.variant = "bool"
+		value := baml.Decode(valueHolder).(bool)
+		u.variant_bool = &value
+
+	case 3:
+		u.variant = "float"
+		value := baml.Decode(valueHolder).(float64)
+		u.variant_float = &value
+
+	case 4:
+		u.variant = "JsonObject"
+		value := baml.Decode(valueHolder).(JsonObject)
+		u.variant_JsonObject = &value
+
+	case 5:
+		u.variant = "JsonArray"
+		value := baml.Decode(valueHolder).(JsonArray)
+		u.variant_JsonArray = &value
+
 	}
 }
 
-
 func (u Union__int__string__bool__float__JsonObject__JsonArray) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int)
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "bool":
-        return baml.EncodeUnion(builder, u.variant, u.variant_bool)
-    
-    case "float":
-        return baml.EncodeUnion(builder, u.variant, u.variant_float)
-    
-    case "JsonObject":
-        return baml.EncodeUnion(builder, u.variant, u.variant_JsonObject)
-    
-    case "JsonArray":
-        return baml.EncodeUnion(builder, u.variant, u.variant_JsonArray)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
+
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "bool":
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
+
+	case "float":
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
+
+	case "JsonObject":
+		return baml.EncodeUnion(builder, u.variant, u.variant_JsonObject)
+
+	case "JsonArray":
+		return baml.EncodeUnion(builder, u.variant, u.variant_JsonArray)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__int__string__bool__float__JsonObject__JsonArray) BamlTypeName() string {
-    return "Union__int__string__bool__float__JsonObject__JsonArray"
+	return "Union__int__string__bool__float__JsonObject__JsonArray"
 }
 
-
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetInt(v int64) {
-    u.variant = "int"
-    u.variant_int = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_JsonObject = nil
-    
-    
-    
-        u.variant_JsonArray = nil
-    
-    
+	u.variant = "int"
+	u.variant_int = &v
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_JsonObject = nil
+
+	u.variant_JsonArray = nil
+
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) IsInt() bool {
-    return u.variant == "int"
+	return u.variant == "int"
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) Int() *int64 {
-    if !u.IsInt() {
-        return nil
-    }
-    return u.variant_int
+	if !u.IsInt() {
+		return nil
+	}
+	return u.variant_int
 }
 
 func Union__int__string__bool__float__JsonObject__JsonArrayNewWithInt(v *int64) *Union__int__string__bool__float__JsonObject__JsonArray {
-    return &Union__int__string__bool__float__JsonObject__JsonArray{
-        variant: "int",
-        variant_int: v,
-    }
+	return &Union__int__string__bool__float__JsonObject__JsonArray{
+		variant:     "int",
+		variant_int: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_JsonObject = nil
-    
-    
-    
-        u.variant_JsonArray = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_int = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_JsonObject = nil
+
+	u.variant_JsonArray = nil
+
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__int__string__bool__float__JsonObject__JsonArrayNewWithString(v *string) *Union__int__string__bool__float__JsonObject__JsonArray {
-    return &Union__int__string__bool__float__JsonObject__JsonArray{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__int__string__bool__float__JsonObject__JsonArray{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetBool(v bool) {
-    u.variant = "bool"
-    u.variant_bool = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_JsonObject = nil
-    
-    
-    
-        u.variant_JsonArray = nil
-    
-    
+	u.variant = "bool"
+	u.variant_bool = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_float = nil
+
+	u.variant_JsonObject = nil
+
+	u.variant_JsonArray = nil
+
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) IsBool() bool {
-    return u.variant == "bool"
+	return u.variant == "bool"
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) Bool() *bool {
-    if !u.IsBool() {
-        return nil
-    }
-    return u.variant_bool
+	if !u.IsBool() {
+		return nil
+	}
+	return u.variant_bool
 }
 
 func Union__int__string__bool__float__JsonObject__JsonArrayNewWithBool(v *bool) *Union__int__string__bool__float__JsonObject__JsonArray {
-    return &Union__int__string__bool__float__JsonObject__JsonArray{
-        variant: "bool",
-        variant_bool: v,
-    }
+	return &Union__int__string__bool__float__JsonObject__JsonArray{
+		variant:      "bool",
+		variant_bool: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetFloat(v float64) {
-    u.variant = "float"
-    u.variant_float = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-    
-    
-        u.variant_JsonObject = nil
-    
-    
-    
-        u.variant_JsonArray = nil
-    
-    
+	u.variant = "float"
+	u.variant_float = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_JsonObject = nil
+
+	u.variant_JsonArray = nil
+
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) IsFloat() bool {
-    return u.variant == "float"
+	return u.variant == "float"
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) Float() *float64 {
-    if !u.IsFloat() {
-        return nil
-    }
-    return u.variant_float
+	if !u.IsFloat() {
+		return nil
+	}
+	return u.variant_float
 }
 
 func Union__int__string__bool__float__JsonObject__JsonArrayNewWithFloat(v *float64) *Union__int__string__bool__float__JsonObject__JsonArray {
-    return &Union__int__string__bool__float__JsonObject__JsonArray{
-        variant: "float",
-        variant_float: v,
-    }
+	return &Union__int__string__bool__float__JsonObject__JsonArray{
+		variant:       "float",
+		variant_float: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetJsonObject(v JsonObject) {
-    u.variant = "JsonObject"
-    u.variant_JsonObject = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-    
-    
-        u.variant_JsonArray = nil
-    
-    
+	u.variant = "JsonObject"
+	u.variant_JsonObject = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_JsonArray = nil
+
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) IsJsonObject() bool {
-    return u.variant == "JsonObject"
+	return u.variant == "JsonObject"
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) JsonObject() *JsonObject {
-    if !u.IsJsonObject() {
-        return nil
-    }
-    return u.variant_JsonObject
+	if !u.IsJsonObject() {
+		return nil
+	}
+	return u.variant_JsonObject
 }
 
 func Union__int__string__bool__float__JsonObject__JsonArrayNewWithJsonObject(v *JsonObject) *Union__int__string__bool__float__JsonObject__JsonArray {
-    return &Union__int__string__bool__float__JsonObject__JsonArray{
-        variant: "JsonObject",
-        variant_JsonObject: v,
-    }
+	return &Union__int__string__bool__float__JsonObject__JsonArray{
+		variant:            "JsonObject",
+		variant_JsonObject: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetJsonArray(v JsonArray) {
-    u.variant = "JsonArray"
-    u.variant_JsonArray = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_JsonObject = nil
-    
-    
-    
-    
+	u.variant = "JsonArray"
+	u.variant_JsonArray = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_JsonObject = nil
+
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) IsJsonArray() bool {
-    return u.variant == "JsonArray"
+	return u.variant == "JsonArray"
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) JsonArray() *JsonArray {
-    if !u.IsJsonArray() {
-        return nil
-    }
-    return u.variant_JsonArray
+	if !u.IsJsonArray() {
+		return nil
+	}
+	return u.variant_JsonArray
 }
 
 func Union__int__string__bool__float__JsonObject__JsonArrayNewWithJsonArray(v *JsonArray) *Union__int__string__bool__float__JsonObject__JsonArray {
-    return &Union__int__string__bool__float__JsonObject__JsonArray{
-        variant: "JsonArray",
-        variant_JsonArray: v,
-    }
+	return &Union__int__string__bool__float__JsonObject__JsonArray{
+		variant:           "JsonArray",
+		variant_JsonArray: v,
+	}
 }
 
-
-
 type Union__int__string__bool__float__List__string__Map__string_List__string struct {
-    variant string
-    
-    variant_int *int64
-    
-    variant_string *string
-    
-    variant_bool *bool
-    
-    variant_float *float64
-    
-    variant_List__string *[]string
-    
-    variant_Map__string_List__string *map[string][]string
-    
+	variant string
+
+	variant_int *int64
+
+	variant_string *string
+
+	variant_bool *bool
+
+	variant_float *float64
+
+	variant_List__string *[]string
+
+	variant_Map__string_List__string *map[string][]string
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "int"
-            value := baml.Decode(valueHolder).(int64)
-            u.variant_int = &value
-    
-	    case 1:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 2:
-            u.variant = "bool"
-            value := baml.Decode(valueHolder).(bool)
-            u.variant_bool = &value
-    
-	    case 3:
-            u.variant = "float"
-            value := baml.Decode(valueHolder).(float64)
-            u.variant_float = &value
-    
-	    case 4:
-            u.variant = "List__string"
-            value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) string {
-    return baml.Decode(__holder).(string)
-})
-            u.variant_List__string = &value
-    
-	    case 5:
-            u.variant = "Map__string_List__string"
-            value := baml.Decode(valueHolder).(map[string][]string)
-            u.variant_Map__string_List__string = &value
-    
+
+	case 0:
+		u.variant = "int"
+		value := baml.Decode(valueHolder).(int64)
+		u.variant_int = &value
+
+	case 1:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 2:
+		u.variant = "bool"
+		value := baml.Decode(valueHolder).(bool)
+		u.variant_bool = &value
+
+	case 3:
+		u.variant = "float"
+		value := baml.Decode(valueHolder).(float64)
+		u.variant_float = &value
+
+	case 4:
+		u.variant = "List__string"
+		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) string {
+			return baml.Decode(__holder).(string)
+		})
+		u.variant_List__string = &value
+
+	case 5:
+		u.variant = "Map__string_List__string"
+		value := baml.Decode(valueHolder).(map[string][]string)
+		u.variant_Map__string_List__string = &value
+
 	}
 }
 
-
 func (u Union__int__string__bool__float__List__string__Map__string_List__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int)
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "bool":
-        return baml.EncodeUnion(builder, u.variant, u.variant_bool)
-    
-    case "float":
-        return baml.EncodeUnion(builder, u.variant, u.variant_float)
-    
-    case "List__string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_List__string)
-    
-    case "Map__string_List__string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Map__string_List__string)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
+
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "bool":
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
+
+	case "float":
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
+
+	case "List__string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__string)
+
+	case "Map__string_List__string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Map__string_List__string)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__int__string__bool__float__List__string__Map__string_List__string) BamlTypeName() string {
-    return "Union__int__string__bool__float__List__string__Map__string_List__string"
+	return "Union__int__string__bool__float__List__string__Map__string_List__string"
 }
 
-
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetInt(v int64) {
-    u.variant = "int"
-    u.variant_int = &v
-    
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_List__string = nil
-    
-    
-    
-        u.variant_Map__string_List__string = nil
-    
-    
+	u.variant = "int"
+	u.variant_int = &v
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_List__string = nil
+
+	u.variant_Map__string_List__string = nil
+
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) IsInt() bool {
-    return u.variant == "int"
+	return u.variant == "int"
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) Int() *int64 {
-    if !u.IsInt() {
-        return nil
-    }
-    return u.variant_int
+	if !u.IsInt() {
+		return nil
+	}
+	return u.variant_int
 }
 
 func Union__int__string__bool__float__List__string__Map__string_List__stringNewWithInt(v *int64) *Union__int__string__bool__float__List__string__Map__string_List__string {
-    return &Union__int__string__bool__float__List__string__Map__string_List__string{
-        variant: "int",
-        variant_int: v,
-    }
+	return &Union__int__string__bool__float__List__string__Map__string_List__string{
+		variant:     "int",
+		variant_int: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_List__string = nil
-    
-    
-    
-        u.variant_Map__string_List__string = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_int = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_List__string = nil
+
+	u.variant_Map__string_List__string = nil
+
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__int__string__bool__float__List__string__Map__string_List__stringNewWithString(v *string) *Union__int__string__bool__float__List__string__Map__string_List__string {
-    return &Union__int__string__bool__float__List__string__Map__string_List__string{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__int__string__bool__float__List__string__Map__string_List__string{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetBool(v bool) {
-    u.variant = "bool"
-    u.variant_bool = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_List__string = nil
-    
-    
-    
-        u.variant_Map__string_List__string = nil
-    
-    
+	u.variant = "bool"
+	u.variant_bool = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_float = nil
+
+	u.variant_List__string = nil
+
+	u.variant_Map__string_List__string = nil
+
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) IsBool() bool {
-    return u.variant == "bool"
+	return u.variant == "bool"
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) Bool() *bool {
-    if !u.IsBool() {
-        return nil
-    }
-    return u.variant_bool
+	if !u.IsBool() {
+		return nil
+	}
+	return u.variant_bool
 }
 
 func Union__int__string__bool__float__List__string__Map__string_List__stringNewWithBool(v *bool) *Union__int__string__bool__float__List__string__Map__string_List__string {
-    return &Union__int__string__bool__float__List__string__Map__string_List__string{
-        variant: "bool",
-        variant_bool: v,
-    }
+	return &Union__int__string__bool__float__List__string__Map__string_List__string{
+		variant:      "bool",
+		variant_bool: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetFloat(v float64) {
-    u.variant = "float"
-    u.variant_float = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-    
-    
-        u.variant_List__string = nil
-    
-    
-    
-        u.variant_Map__string_List__string = nil
-    
-    
+	u.variant = "float"
+	u.variant_float = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_List__string = nil
+
+	u.variant_Map__string_List__string = nil
+
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) IsFloat() bool {
-    return u.variant == "float"
+	return u.variant == "float"
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) Float() *float64 {
-    if !u.IsFloat() {
-        return nil
-    }
-    return u.variant_float
+	if !u.IsFloat() {
+		return nil
+	}
+	return u.variant_float
 }
 
 func Union__int__string__bool__float__List__string__Map__string_List__stringNewWithFloat(v *float64) *Union__int__string__bool__float__List__string__Map__string_List__string {
-    return &Union__int__string__bool__float__List__string__Map__string_List__string{
-        variant: "float",
-        variant_float: v,
-    }
+	return &Union__int__string__bool__float__List__string__Map__string_List__string{
+		variant:       "float",
+		variant_float: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetList__string(v []string) {
-    u.variant = "List__string"
-    u.variant_List__string = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-    
-    
-        u.variant_Map__string_List__string = nil
-    
-    
+	u.variant = "List__string"
+	u.variant_List__string = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_Map__string_List__string = nil
+
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) IsList__string() bool {
-    return u.variant == "List__string"
+	return u.variant == "List__string"
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) List__string() *[]string {
-    if !u.IsList__string() {
-        return nil
-    }
-    return u.variant_List__string
+	if !u.IsList__string() {
+		return nil
+	}
+	return u.variant_List__string
 }
 
 func Union__int__string__bool__float__List__string__Map__string_List__stringNewWithList__string(v *[]string) *Union__int__string__bool__float__List__string__Map__string_List__string {
-    return &Union__int__string__bool__float__List__string__Map__string_List__string{
-        variant: "List__string",
-        variant_List__string: v,
-    }
+	return &Union__int__string__bool__float__List__string__Map__string_List__string{
+		variant:              "List__string",
+		variant_List__string: v,
+	}
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetMap__string_List__string(v map[string][]string) {
-    u.variant = "Map__string_List__string"
-    u.variant_Map__string_List__string = &v
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_bool = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
-    
-        u.variant_List__string = nil
-    
-    
-    
-    
+	u.variant = "Map__string_List__string"
+	u.variant_Map__string_List__string = &v
+
+	u.variant_int = nil
+
+	u.variant_string = nil
+
+	u.variant_bool = nil
+
+	u.variant_float = nil
+
+	u.variant_List__string = nil
+
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) IsMap__string_List__string() bool {
-    return u.variant == "Map__string_List__string"
+	return u.variant == "Map__string_List__string"
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) Map__string_List__string() *map[string][]string {
-    if !u.IsMap__string_List__string() {
-        return nil
-    }
-    return u.variant_Map__string_List__string
+	if !u.IsMap__string_List__string() {
+		return nil
+	}
+	return u.variant_Map__string_List__string
 }
 
 func Union__int__string__bool__float__List__string__Map__string_List__stringNewWithMap__string_List__string(v *map[string][]string) *Union__int__string__bool__float__List__string__Map__string_List__string {
-    return &Union__int__string__bool__float__List__string__Map__string_List__string{
-        variant: "Map__string_List__string",
-        variant_Map__string_List__string: v,
-    }
+	return &Union__int__string__bool__float__List__string__Map__string_List__string{
+		variant:                          "Map__string_List__string",
+		variant_Map__string_List__string: v,
+	}
 }
 
-
-
 type Union__string__List__Nested struct {
-    variant string
-    
-    variant_string *string
-    
-    variant_List__Nested *[]Nested
-    
+	variant string
+
+	variant_string *string
+
+	variant_List__Nested *[]Nested
 }
 
 func (u *Union__string__List__Nested) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 1:
-            u.variant = "List__Nested"
-            value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Nested {
-    return *baml.Decode(__holder).(*Nested)
-})
-            u.variant_List__Nested = &value
-    
+
+	case 0:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 1:
+		u.variant = "List__Nested"
+		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Nested {
+			return *baml.Decode(__holder).(*Nested)
+		})
+		u.variant_List__Nested = &value
+
 	}
 }
 
-
 func (u Union__string__List__Nested) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "List__Nested":
-        return baml.EncodeUnion(builder, u.variant, u.variant_List__Nested)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "List__Nested":
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__Nested)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string__List__Nested) BamlTypeName() string {
-    return "Union__string__List__Nested"
+	return "Union__string__List__Nested"
 }
 
-
 func (u *Union__string__List__Nested) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-    
-    
-        u.variant_List__Nested = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_List__Nested = nil
+
 }
 
 func (u *Union__string__List__Nested) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__string__List__Nested) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__string__List__NestedNewWithString(v *string) *Union__string__List__Nested {
-    return &Union__string__List__Nested{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__string__List__Nested{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__string__List__Nested) SetList__Nested(v []Nested) {
-    u.variant = "List__Nested"
-    u.variant_List__Nested = &v
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
+	u.variant = "List__Nested"
+	u.variant_List__Nested = &v
+
+	u.variant_string = nil
+
 }
 
 func (u *Union__string__List__Nested) IsList__Nested() bool {
-    return u.variant == "List__Nested"
+	return u.variant == "List__Nested"
 }
 
 func (u *Union__string__List__Nested) List__Nested() *[]Nested {
-    if !u.IsList__Nested() {
-        return nil
-    }
-    return u.variant_List__Nested
+	if !u.IsList__Nested() {
+		return nil
+	}
+	return u.variant_List__Nested
 }
 
 func Union__string__List__NestedNewWithList__Nested(v *[]Nested) *Union__string__List__Nested {
-    return &Union__string__List__Nested{
-        variant: "List__Nested",
-        variant_List__Nested: v,
-    }
+	return &Union__string__List__Nested{
+		variant:              "List__Nested",
+		variant_List__Nested: v,
+	}
 }
 
-
-
 type Union__string__Nested struct {
-    variant string
-    
-    variant_string *string
-    
-    variant_Nested *Nested
-    
+	variant string
+
+	variant_string *string
+
+	variant_Nested *Nested
 }
 
 func (u *Union__string__Nested) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 1:
-            u.variant = "Nested"
-            value := *baml.Decode(valueHolder).(*Nested)
-            u.variant_Nested = &value
-    
+
+	case 0:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 1:
+		u.variant = "Nested"
+		value := *baml.Decode(valueHolder).(*Nested)
+		u.variant_Nested = &value
+
 	}
 }
 
-
 func (u Union__string__Nested) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "Nested":
-        return baml.EncodeUnion(builder, u.variant, u.variant_Nested)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "Nested":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Nested)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string__Nested) BamlTypeName() string {
-    return "Union__string__Nested"
+	return "Union__string__Nested"
 }
 
-
 func (u *Union__string__Nested) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-    
-    
-        u.variant_Nested = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_Nested = nil
+
 }
 
 func (u *Union__string__Nested) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__string__Nested) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__string__NestedNewWithString(v *string) *Union__string__Nested {
-    return &Union__string__Nested{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__string__Nested{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__string__Nested) SetNested(v Nested) {
-    u.variant = "Nested"
-    u.variant_Nested = &v
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
+	u.variant = "Nested"
+	u.variant_Nested = &v
+
+	u.variant_string = nil
+
 }
 
 func (u *Union__string__Nested) IsNested() bool {
-    return u.variant == "Nested"
+	return u.variant == "Nested"
 }
 
 func (u *Union__string__Nested) Nested() *Nested {
-    if !u.IsNested() {
-        return nil
-    }
-    return u.variant_Nested
+	if !u.IsNested() {
+		return nil
+	}
+	return u.variant_Nested
 }
 
 func Union__string__NestedNewWithNested(v *Nested) *Union__string__Nested {
-    return &Union__string__Nested{
-        variant: "Nested",
-        variant_Nested: v,
-    }
+	return &Union__string__Nested{
+		variant:        "Nested",
+		variant_Nested: v,
+	}
 }
 
-
-
 type Union__string__bool struct {
-    variant string
-    
-    variant_string *string
-    
-    variant_bool *bool
-    
+	variant string
+
+	variant_string *string
+
+	variant_bool *bool
 }
 
 func (u *Union__string__bool) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 1:
-            u.variant = "bool"
-            value := baml.Decode(valueHolder).(bool)
-            u.variant_bool = &value
-    
+
+	case 0:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 1:
+		u.variant = "bool"
+		value := baml.Decode(valueHolder).(bool)
+		u.variant_bool = &value
+
 	}
 }
 
-
 func (u Union__string__bool) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "bool":
-        return baml.EncodeUnion(builder, u.variant, u.variant_bool)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "bool":
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string__bool) BamlTypeName() string {
-    return "Union__string__bool"
+	return "Union__string__bool"
 }
 
-
 func (u *Union__string__bool) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-    
-    
-        u.variant_bool = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_bool = nil
+
 }
 
 func (u *Union__string__bool) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__string__bool) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__string__boolNewWithString(v *string) *Union__string__bool {
-    return &Union__string__bool{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__string__bool{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__string__bool) SetBool(v bool) {
-    u.variant = "bool"
-    u.variant_bool = &v
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
+	u.variant = "bool"
+	u.variant_bool = &v
+
+	u.variant_string = nil
+
 }
 
 func (u *Union__string__bool) IsBool() bool {
-    return u.variant == "bool"
+	return u.variant == "bool"
 }
 
 func (u *Union__string__bool) Bool() *bool {
-    if !u.IsBool() {
-        return nil
-    }
-    return u.variant_bool
+	if !u.IsBool() {
+		return nil
+	}
+	return u.variant_bool
 }
 
 func Union__string__boolNewWithBool(v *bool) *Union__string__bool {
-    return &Union__string__bool{
-        variant: "bool",
-        variant_bool: v,
-    }
+	return &Union__string__bool{
+		variant:      "bool",
+		variant_bool: v,
+	}
 }
 
-
-
 type Union__string__int struct {
-    variant string
-    
-    variant_string *string
-    
-    variant_int *int64
-    
+	variant string
+
+	variant_string *string
+
+	variant_int *int64
 }
 
 func (u *Union__string__int) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 1:
-            u.variant = "int"
-            value := baml.Decode(valueHolder).(int64)
-            u.variant_int = &value
-    
+
+	case 0:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 1:
+		u.variant = "int"
+		value := baml.Decode(valueHolder).(int64)
+		u.variant_int = &value
+
 	}
 }
 
-
 func (u Union__string__int) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string__int) BamlTypeName() string {
-    return "Union__string__int"
+	return "Union__string__int"
 }
 
-
 func (u *Union__string__int) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-    
-    
-        u.variant_int = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_int = nil
+
 }
 
 func (u *Union__string__int) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__string__int) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__string__intNewWithString(v *string) *Union__string__int {
-    return &Union__string__int{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__string__int{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__string__int) SetInt(v int64) {
-    u.variant = "int"
-    u.variant_int = &v
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
+	u.variant = "int"
+	u.variant_int = &v
+
+	u.variant_string = nil
+
 }
 
 func (u *Union__string__int) IsInt() bool {
-    return u.variant == "int"
+	return u.variant == "int"
 }
 
 func (u *Union__string__int) Int() *int64 {
-    if !u.IsInt() {
-        return nil
-    }
-    return u.variant_int
+	if !u.IsInt() {
+		return nil
+	}
+	return u.variant_int
 }
 
 func Union__string__intNewWithInt(v *int64) *Union__string__int {
-    return &Union__string__int{
-        variant: "int",
-        variant_int: v,
-    }
+	return &Union__string__int{
+		variant:     "int",
+		variant_int: v,
+	}
 }
 
-
-
 type Union__string__int__float struct {
-    variant string
-    
-    variant_string *string
-    
-    variant_int *int64
-    
-    variant_float *float64
-    
+	variant string
+
+	variant_string *string
+
+	variant_int *int64
+
+	variant_float *float64
 }
 
 func (u *Union__string__int__float) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string = &value
-    
-	    case 1:
-            u.variant = "int"
-            value := baml.Decode(valueHolder).(int64)
-            u.variant_int = &value
-    
-	    case 2:
-            u.variant = "float"
-            value := baml.Decode(valueHolder).(float64)
-            u.variant_float = &value
-    
+
+	case 0:
+		u.variant = "string"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string = &value
+
+	case 1:
+		u.variant = "int"
+		value := baml.Decode(valueHolder).(int64)
+		u.variant_int = &value
+
+	case 2:
+		u.variant = "float"
+		value := baml.Decode(valueHolder).(float64)
+		u.variant_float = &value
+
 	}
 }
 
-
 func (u Union__string__int__float) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string)
-    
-    case "int":
-        return baml.EncodeUnion(builder, u.variant, u.variant_int)
-    
-    case "float":
-        return baml.EncodeUnion(builder, u.variant, u.variant_float)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "int":
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
+
+	case "float":
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string__int__float) BamlTypeName() string {
-    return "Union__string__int__float"
+	return "Union__string__int__float"
 }
 
-
 func (u *Union__string__int__float) SetString(v string) {
-    u.variant = "string"
-    u.variant_string = &v
-    
-    
-    
-    
-        u.variant_int = nil
-    
-    
-    
-        u.variant_float = nil
-    
-    
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_int = nil
+
+	u.variant_float = nil
+
 }
 
 func (u *Union__string__int__float) IsString() bool {
-    return u.variant == "string"
+	return u.variant == "string"
 }
 
 func (u *Union__string__int__float) String() *string {
-    if !u.IsString() {
-        return nil
-    }
-    return u.variant_string
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
 }
 
 func Union__string__int__floatNewWithString(v *string) *Union__string__int__float {
-    return &Union__string__int__float{
-        variant: "string",
-        variant_string: v,
-    }
+	return &Union__string__int__float{
+		variant:        "string",
+		variant_string: v,
+	}
 }
 
 func (u *Union__string__int__float) SetInt(v int64) {
-    u.variant = "int"
-    u.variant_int = &v
-    
-    
-        u.variant_string = nil
-    
-    
-    
-    
-    
-        u.variant_float = nil
-    
-    
+	u.variant = "int"
+	u.variant_int = &v
+
+	u.variant_string = nil
+
+	u.variant_float = nil
+
 }
 
 func (u *Union__string__int__float) IsInt() bool {
-    return u.variant == "int"
+	return u.variant == "int"
 }
 
 func (u *Union__string__int__float) Int() *int64 {
-    if !u.IsInt() {
-        return nil
-    }
-    return u.variant_int
+	if !u.IsInt() {
+		return nil
+	}
+	return u.variant_int
 }
 
 func Union__string__int__floatNewWithInt(v *int64) *Union__string__int__float {
-    return &Union__string__int__float{
-        variant: "int",
-        variant_int: v,
-    }
+	return &Union__string__int__float{
+		variant:     "int",
+		variant_int: v,
+	}
 }
 
 func (u *Union__string__int__float) SetFloat(v float64) {
-    u.variant = "float"
-    u.variant_float = &v
-    
-    
-        u.variant_string = nil
-    
-    
-    
-        u.variant_int = nil
-    
-    
-    
-    
+	u.variant = "float"
+	u.variant_float = &v
+
+	u.variant_string = nil
+
+	u.variant_int = nil
+
 }
 
 func (u *Union__string__int__float) IsFloat() bool {
-    return u.variant == "float"
+	return u.variant == "float"
 }
 
 func (u *Union__string__int__float) Float() *float64 {
-    if !u.IsFloat() {
-        return nil
-    }
-    return u.variant_float
+	if !u.IsFloat() {
+		return nil
+	}
+	return u.variant_float
 }
 
 func Union__string__int__floatNewWithFloat(v *float64) *Union__string__int__float {
-    return &Union__string__int__float{
-        variant: "float",
-        variant_float: v,
-    }
+	return &Union__string__int__float{
+		variant:       "float",
+		variant_float: v,
+	}
 }
 
-
-
 type Union__string_barisa__string_ox_burger struct {
-    variant string
-    
-    variant_string_barisa *string
-    
-    variant_string_ox_burger *string
-    
+	variant string
+
+	variant_string_barisa *string
+
+	variant_string_ox_burger *string
 }
 
 func (u *Union__string_barisa__string_ox_burger) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string_barisa"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_barisa = &value
-    
-	    case 1:
-            u.variant = "string_ox_burger"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_ox_burger = &value
-    
+
+	case 0:
+		u.variant = "string_barisa"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_barisa = &value
+
+	case 1:
+		u.variant = "string_ox_burger"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_ox_burger = &value
+
 	}
 }
 
-
 func (u Union__string_barisa__string_ox_burger) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string_barisa":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_barisa)
-    
-    case "string_ox_burger":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_ox_burger)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string_barisa":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_barisa)
+
+	case "string_ox_burger":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_ox_burger)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string_barisa__string_ox_burger) BamlTypeName() string {
-    return "Union__string_barisa__string_ox_burger"
+	return "Union__string_barisa__string_ox_burger"
 }
 
-
 func (u *Union__string_barisa__string_ox_burger) SetString_barisa(v string) {
-    u.variant = "string_barisa"
-    u.variant_string_barisa = &v
-    
-    
-    
-    
-        u.variant_string_ox_burger = nil
-    
-    
+	u.variant = "string_barisa"
+	u.variant_string_barisa = &v
+
+	u.variant_string_ox_burger = nil
+
 }
 
 func (u *Union__string_barisa__string_ox_burger) IsString_barisa() bool {
-    return u.variant == "string_barisa"
+	return u.variant == "string_barisa"
 }
 
 func (u *Union__string_barisa__string_ox_burger) String_barisa() *string {
-    if !u.IsString_barisa() {
-        return nil
-    }
-    return u.variant_string_barisa
+	if !u.IsString_barisa() {
+		return nil
+	}
+	return u.variant_string_barisa
 }
 
 func Union__string_barisa__string_ox_burgerNewWithString_barisa(v *string) *Union__string_barisa__string_ox_burger {
-    return &Union__string_barisa__string_ox_burger{
-        variant: "string_barisa",
-        variant_string_barisa: v,
-    }
+	return &Union__string_barisa__string_ox_burger{
+		variant:               "string_barisa",
+		variant_string_barisa: v,
+	}
 }
 
 func (u *Union__string_barisa__string_ox_burger) SetString_ox_burger(v string) {
-    u.variant = "string_ox_burger"
-    u.variant_string_ox_burger = &v
-    
-    
-        u.variant_string_barisa = nil
-    
-    
-    
-    
+	u.variant = "string_ox_burger"
+	u.variant_string_ox_burger = &v
+
+	u.variant_string_barisa = nil
+
 }
 
 func (u *Union__string_barisa__string_ox_burger) IsString_ox_burger() bool {
-    return u.variant == "string_ox_burger"
+	return u.variant == "string_ox_burger"
 }
 
 func (u *Union__string_barisa__string_ox_burger) String_ox_burger() *string {
-    if !u.IsString_ox_burger() {
-        return nil
-    }
-    return u.variant_string_ox_burger
+	if !u.IsString_ox_burger() {
+		return nil
+	}
+	return u.variant_string_ox_burger
 }
 
 func Union__string_barisa__string_ox_burgerNewWithString_ox_burger(v *string) *Union__string_barisa__string_ox_burger {
-    return &Union__string_barisa__string_ox_burger{
-        variant: "string_ox_burger",
-        variant_string_ox_burger: v,
-    }
+	return &Union__string_barisa__string_ox_burger{
+		variant:                  "string_ox_burger",
+		variant_string_ox_burger: v,
+	}
 }
 
-
-
 type Union__string_breakfast__string_dinner struct {
-    variant string
-    
-    variant_string_breakfast *string
-    
-    variant_string_dinner *string
-    
+	variant string
+
+	variant_string_breakfast *string
+
+	variant_string_dinner *string
 }
 
 func (u *Union__string_breakfast__string_dinner) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string_breakfast"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_breakfast = &value
-    
-	    case 1:
-            u.variant = "string_dinner"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_dinner = &value
-    
+
+	case 0:
+		u.variant = "string_breakfast"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_breakfast = &value
+
+	case 1:
+		u.variant = "string_dinner"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_dinner = &value
+
 	}
 }
 
-
 func (u Union__string_breakfast__string_dinner) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string_breakfast":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_breakfast)
-    
-    case "string_dinner":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_dinner)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string_breakfast":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_breakfast)
+
+	case "string_dinner":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_dinner)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string_breakfast__string_dinner) BamlTypeName() string {
-    return "Union__string_breakfast__string_dinner"
+	return "Union__string_breakfast__string_dinner"
 }
 
-
 func (u *Union__string_breakfast__string_dinner) SetString_breakfast(v string) {
-    u.variant = "string_breakfast"
-    u.variant_string_breakfast = &v
-    
-    
-    
-    
-        u.variant_string_dinner = nil
-    
-    
+	u.variant = "string_breakfast"
+	u.variant_string_breakfast = &v
+
+	u.variant_string_dinner = nil
+
 }
 
 func (u *Union__string_breakfast__string_dinner) IsString_breakfast() bool {
-    return u.variant == "string_breakfast"
+	return u.variant == "string_breakfast"
 }
 
 func (u *Union__string_breakfast__string_dinner) String_breakfast() *string {
-    if !u.IsString_breakfast() {
-        return nil
-    }
-    return u.variant_string_breakfast
+	if !u.IsString_breakfast() {
+		return nil
+	}
+	return u.variant_string_breakfast
 }
 
 func Union__string_breakfast__string_dinnerNewWithString_breakfast(v *string) *Union__string_breakfast__string_dinner {
-    return &Union__string_breakfast__string_dinner{
-        variant: "string_breakfast",
-        variant_string_breakfast: v,
-    }
+	return &Union__string_breakfast__string_dinner{
+		variant:                  "string_breakfast",
+		variant_string_breakfast: v,
+	}
 }
 
 func (u *Union__string_breakfast__string_dinner) SetString_dinner(v string) {
-    u.variant = "string_dinner"
-    u.variant_string_dinner = &v
-    
-    
-        u.variant_string_breakfast = nil
-    
-    
-    
-    
+	u.variant = "string_dinner"
+	u.variant_string_dinner = &v
+
+	u.variant_string_breakfast = nil
+
 }
 
 func (u *Union__string_breakfast__string_dinner) IsString_dinner() bool {
-    return u.variant == "string_dinner"
+	return u.variant == "string_dinner"
 }
 
 func (u *Union__string_breakfast__string_dinner) String_dinner() *string {
-    if !u.IsString_dinner() {
-        return nil
-    }
-    return u.variant_string_dinner
+	if !u.IsString_dinner() {
+		return nil
+	}
+	return u.variant_string_dinner
 }
 
 func Union__string_breakfast__string_dinnerNewWithString_dinner(v *string) *Union__string_breakfast__string_dinner {
-    return &Union__string_breakfast__string_dinner{
-        variant: "string_dinner",
-        variant_string_dinner: v,
-    }
+	return &Union__string_breakfast__string_dinner{
+		variant:               "string_dinner",
+		variant_string_dinner: v,
+	}
 }
 
-
-
 type Union__string_curiosity__string_personal_finance struct {
-    variant string
-    
-    variant_string_curiosity *string
-    
-    variant_string_personal_finance *string
-    
+	variant string
+
+	variant_string_curiosity *string
+
+	variant_string_personal_finance *string
 }
 
 func (u *Union__string_curiosity__string_personal_finance) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
+	valueHolder := holder.Value(nil)
 	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string_curiosity"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_curiosity = &value
-    
-	    case 1:
-            u.variant = "string_personal_finance"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_personal_finance = &value
-    
+
+	case 0:
+		u.variant = "string_curiosity"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_curiosity = &value
+
+	case 1:
+		u.variant = "string_personal_finance"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_personal_finance = &value
+
 	}
 }
 
-
 func (u Union__string_curiosity__string_personal_finance) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string_curiosity":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_curiosity)
-    
-    case "string_personal_finance":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_personal_finance)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string_curiosity":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_curiosity)
+
+	case "string_personal_finance":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_personal_finance)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string_curiosity__string_personal_finance) BamlTypeName() string {
-    return "Union__string_curiosity__string_personal_finance"
+	return "Union__string_curiosity__string_personal_finance"
 }
 
-
 func (u *Union__string_curiosity__string_personal_finance) SetString_curiosity(v string) {
-    u.variant = "string_curiosity"
-    u.variant_string_curiosity = &v
-    
-    
-    
-    
-        u.variant_string_personal_finance = nil
-    
-    
+	u.variant = "string_curiosity"
+	u.variant_string_curiosity = &v
+
+	u.variant_string_personal_finance = nil
+
 }
 
 func (u *Union__string_curiosity__string_personal_finance) IsString_curiosity() bool {
-    return u.variant == "string_curiosity"
+	return u.variant == "string_curiosity"
 }
 
 func (u *Union__string_curiosity__string_personal_finance) String_curiosity() *string {
-    if !u.IsString_curiosity() {
-        return nil
-    }
-    return u.variant_string_curiosity
+	if !u.IsString_curiosity() {
+		return nil
+	}
+	return u.variant_string_curiosity
 }
 
 func Union__string_curiosity__string_personal_financeNewWithString_curiosity(v *string) *Union__string_curiosity__string_personal_finance {
-    return &Union__string_curiosity__string_personal_finance{
-        variant: "string_curiosity",
-        variant_string_curiosity: v,
-    }
-}
-
-func (u *Union__string_curiosity__string_personal_finance) SetString_personal_finance(v string) {
-    u.variant = "string_personal_finance"
-    u.variant_string_personal_finance = &v
-    
-    
-        u.variant_string_curiosity = nil
-    
-    
-    
-    
-}
-
-func (u *Union__string_curiosity__string_personal_finance) IsString_personal_finance() bool {
-    return u.variant == "string_personal_finance"
-}
-
-func (u *Union__string_curiosity__string_personal_finance) String_personal_finance() *string {
-    if !u.IsString_personal_finance() {
-        return nil
-    }
-    return u.variant_string_personal_finance
-}
-
-func Union__string_curiosity__string_personal_financeNewWithString_personal_finance(v *string) *Union__string_curiosity__string_personal_finance {
-    return &Union__string_curiosity__string_personal_finance{
-        variant: "string_personal_finance",
-        variant_string_personal_finance: v,
-    }
-}
-
-
-
-type Union__string_one__string_two__string_three__string_four struct {
-    variant string
-    
-    variant_string_one *string
-    
-    variant_string_two *string
-    
-    variant_string_three *string
-    
-    variant_string_four *string
-    
-}
-
-func (u *Union__string_one__string_two__string_three__string_four) Decode(holder *cffi.CFFIValueUnionVariant) {
-    valueHolder := holder.Value(nil)
-	switch holder.ValueTypeIndex() {
-    
-	    case 0:
-            u.variant = "string_one"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_one = &value
-    
-	    case 1:
-            u.variant = "string_two"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_two = &value
-    
-	    case 2:
-            u.variant = "string_three"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_three = &value
-    
-	    case 3:
-            u.variant = "string_four"
-            value := baml.Decode(valueHolder).(string)
-            u.variant_string_four = &value
-    
+	return &Union__string_curiosity__string_personal_finance{
+		variant:                  "string_curiosity",
+		variant_string_curiosity: v,
 	}
 }
 
+func (u *Union__string_curiosity__string_personal_finance) SetString_personal_finance(v string) {
+	u.variant = "string_personal_finance"
+	u.variant_string_personal_finance = &v
+
+	u.variant_string_curiosity = nil
+
+}
+
+func (u *Union__string_curiosity__string_personal_finance) IsString_personal_finance() bool {
+	return u.variant == "string_personal_finance"
+}
+
+func (u *Union__string_curiosity__string_personal_finance) String_personal_finance() *string {
+	if !u.IsString_personal_finance() {
+		return nil
+	}
+	return u.variant_string_personal_finance
+}
+
+func Union__string_curiosity__string_personal_financeNewWithString_personal_finance(v *string) *Union__string_curiosity__string_personal_finance {
+	return &Union__string_curiosity__string_personal_finance{
+		variant:                         "string_personal_finance",
+		variant_string_personal_finance: v,
+	}
+}
+
+type Union__string_one__string_two__string_three__string_four struct {
+	variant string
+
+	variant_string_one *string
+
+	variant_string_two *string
+
+	variant_string_three *string
+
+	variant_string_four *string
+}
+
+func (u *Union__string_one__string_two__string_three__string_four) Decode(holder *cffi.CFFIValueUnionVariant) {
+	valueHolder := holder.Value(nil)
+	switch holder.ValueTypeIndex() {
+
+	case 0:
+		u.variant = "string_one"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_one = &value
+
+	case 1:
+		u.variant = "string_two"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_two = &value
+
+	case 2:
+		u.variant = "string_three"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_three = &value
+
+	case 3:
+		u.variant = "string_four"
+		value := baml.Decode(valueHolder).(string)
+		u.variant_string_four = &value
+
+	}
+}
 
 func (u Union__string_one__string_two__string_three__string_four) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-    switch u.variant {
-    
-    case "string_one":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_one)
-    
-    case "string_two":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_two)
-    
-    case "string_three":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_three)
-    
-    case "string_four":
-        return baml.EncodeUnion(builder, u.variant, u.variant_string_four)
-    
-    case "":
-        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-    }
+	switch u.variant {
 
-    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+	case "string_one":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_one)
+
+	case "string_two":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_two)
+
+	case "string_three":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_three)
+
+	case "string_four":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_four)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
 func (u Union__string_one__string_two__string_three__string_four) BamlTypeName() string {
-    return "Union__string_one__string_two__string_three__string_four"
+	return "Union__string_one__string_two__string_three__string_four"
 }
 
-
 func (u *Union__string_one__string_two__string_three__string_four) SetString_one(v string) {
-    u.variant = "string_one"
-    u.variant_string_one = &v
-    
-    
-    
-    
-        u.variant_string_two = nil
-    
-    
-    
-        u.variant_string_three = nil
-    
-    
-    
-        u.variant_string_four = nil
-    
-    
+	u.variant = "string_one"
+	u.variant_string_one = &v
+
+	u.variant_string_two = nil
+
+	u.variant_string_three = nil
+
+	u.variant_string_four = nil
+
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) IsString_one() bool {
-    return u.variant == "string_one"
+	return u.variant == "string_one"
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) String_one() *string {
-    if !u.IsString_one() {
-        return nil
-    }
-    return u.variant_string_one
+	if !u.IsString_one() {
+		return nil
+	}
+	return u.variant_string_one
 }
 
 func Union__string_one__string_two__string_three__string_fourNewWithString_one(v *string) *Union__string_one__string_two__string_three__string_four {
-    return &Union__string_one__string_two__string_three__string_four{
-        variant: "string_one",
-        variant_string_one: v,
-    }
+	return &Union__string_one__string_two__string_three__string_four{
+		variant:            "string_one",
+		variant_string_one: v,
+	}
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) SetString_two(v string) {
-    u.variant = "string_two"
-    u.variant_string_two = &v
-    
-    
-        u.variant_string_one = nil
-    
-    
-    
-    
-    
-        u.variant_string_three = nil
-    
-    
-    
-        u.variant_string_four = nil
-    
-    
+	u.variant = "string_two"
+	u.variant_string_two = &v
+
+	u.variant_string_one = nil
+
+	u.variant_string_three = nil
+
+	u.variant_string_four = nil
+
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) IsString_two() bool {
-    return u.variant == "string_two"
+	return u.variant == "string_two"
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) String_two() *string {
-    if !u.IsString_two() {
-        return nil
-    }
-    return u.variant_string_two
+	if !u.IsString_two() {
+		return nil
+	}
+	return u.variant_string_two
 }
 
 func Union__string_one__string_two__string_three__string_fourNewWithString_two(v *string) *Union__string_one__string_two__string_three__string_four {
-    return &Union__string_one__string_two__string_three__string_four{
-        variant: "string_two",
-        variant_string_two: v,
-    }
+	return &Union__string_one__string_two__string_three__string_four{
+		variant:            "string_two",
+		variant_string_two: v,
+	}
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) SetString_three(v string) {
-    u.variant = "string_three"
-    u.variant_string_three = &v
-    
-    
-        u.variant_string_one = nil
-    
-    
-    
-        u.variant_string_two = nil
-    
-    
-    
-    
-    
-        u.variant_string_four = nil
-    
-    
+	u.variant = "string_three"
+	u.variant_string_three = &v
+
+	u.variant_string_one = nil
+
+	u.variant_string_two = nil
+
+	u.variant_string_four = nil
+
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) IsString_three() bool {
-    return u.variant == "string_three"
+	return u.variant == "string_three"
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) String_three() *string {
-    if !u.IsString_three() {
-        return nil
-    }
-    return u.variant_string_three
+	if !u.IsString_three() {
+		return nil
+	}
+	return u.variant_string_three
 }
 
 func Union__string_one__string_two__string_three__string_fourNewWithString_three(v *string) *Union__string_one__string_two__string_three__string_four {
-    return &Union__string_one__string_two__string_three__string_four{
-        variant: "string_three",
-        variant_string_three: v,
-    }
+	return &Union__string_one__string_two__string_three__string_four{
+		variant:              "string_three",
+		variant_string_three: v,
+	}
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) SetString_four(v string) {
-    u.variant = "string_four"
-    u.variant_string_four = &v
-    
-    
-        u.variant_string_one = nil
-    
-    
-    
-        u.variant_string_two = nil
-    
-    
-    
-        u.variant_string_three = nil
-    
-    
-    
-    
+	u.variant = "string_four"
+	u.variant_string_four = &v
+
+	u.variant_string_one = nil
+
+	u.variant_string_two = nil
+
+	u.variant_string_three = nil
+
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) IsString_four() bool {
-    return u.variant == "string_four"
+	return u.variant == "string_four"
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) String_four() *string {
-    if !u.IsString_four() {
-        return nil
-    }
-    return u.variant_string_four
+	if !u.IsString_four() {
+		return nil
+	}
+	return u.variant_string_four
 }
 
 func Union__string_one__string_two__string_three__string_fourNewWithString_four(v *string) *Union__string_one__string_two__string_three__string_four {
-    return &Union__string_one__string_two__string_three__string_four{
-        variant: "string_four",
-        variant_string_four: v,
-    }
+	return &Union__string_one__string_two__string_three__string_four{
+		variant:             "string_four",
+		variant_string_four: v,
+	}
 }
-
-

@@ -47,6 +47,19 @@ func TestEncodeDecode(t *testing.T) {
 				Bar: "baz",
 			},
 		}},
+		{&b.Education{
+			Institution:     "MIT",
+			Location:        "Cambridge, MA",
+			Degree:          "Bachelor of Science",
+			Major:           []string{"Computer Science", "Mathematics"},
+			Graduation_date: &[]string{"2024"}[0],
+		}},
+		{&b.Education{
+			Institution: "MIT",
+			Location:    "Cambridge, MA",
+			Degree:      "Bachelor of Science",
+			Major:       []string{"Computer Science", "Mathematics"},
+		}},
 		// TODO: fix this
 		// {map[string]b.Union__float__bool{
 		// 	"a": *b.Union__float__boolNewWithBool(&[]bool{true}[0]),
