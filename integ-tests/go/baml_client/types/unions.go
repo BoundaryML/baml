@@ -172,14 +172,14 @@ func (u *Union__List__bool__List__int) Decode(holder *cffi.CFFIValueUnionVariant
 	case 0:
 		u.variant = "List__bool"
 		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) bool {
-			return baml.Decode(__holder).(bool)
+			return *baml.Decode(__holder).(*bool)
 		})
 		u.variant_List__bool = &value
 
 	case 1:
 		u.variant = "List__int"
 		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) int64 {
-			return baml.Decode(__holder).(int64)
+			return *baml.Decode(__holder).(*int64)
 		})
 		u.variant_List__int = &value
 
@@ -610,7 +610,7 @@ func (u *Union__Nested__string) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 1:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	}
@@ -998,7 +998,7 @@ func (u *Union__SimpleTag__JsonTemplate) Decode(holder *cffi.CFFIValueUnionVaria
 
 	case 1:
 		u.variant = "JsonTemplate"
-		value := baml.Decode(valueHolder).(JsonTemplate)
+		value := *baml.Decode(valueHolder).(*JsonTemplate)
 		u.variant_JsonTemplate = &value
 
 	}
@@ -1090,12 +1090,12 @@ func (u *Union__Tag__string) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "Tag"
-		value := baml.Decode(valueHolder).(Tag)
+		value := *baml.Decode(valueHolder).(*Tag)
 		u.variant_Tag = &value
 
 	case 1:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	}
@@ -1187,12 +1187,12 @@ func (u *Union__float__bool) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "float"
-		value := baml.Decode(valueHolder).(float64)
+		value := *baml.Decode(valueHolder).(*float64)
 		u.variant_float = &value
 
 	case 1:
 		u.variant = "bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := *baml.Decode(valueHolder).(*bool)
 		u.variant_bool = &value
 
 	}
@@ -1286,17 +1286,17 @@ func (u *Union__int_1__bool_true__string_string_output) Decode(holder *cffi.CFFI
 
 	case 0:
 		u.variant = "int_1"
-		value := baml.Decode(valueHolder).(int)
+		value := *baml.Decode(valueHolder).(*int)
 		u.variant_int_1 = &value
 
 	case 1:
 		u.variant = "bool_true"
-		value := baml.Decode(valueHolder).(bool)
+		value := *baml.Decode(valueHolder).(*bool)
 		u.variant_bool_true = &value
 
 	case 2:
 		u.variant = "string_string_output"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_string_output = &value
 
 	}
@@ -1423,12 +1423,12 @@ func (u *Union__int__float) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "int"
-		value := baml.Decode(valueHolder).(int64)
+		value := *baml.Decode(valueHolder).(*int64)
 		u.variant_int = &value
 
 	case 1:
 		u.variant = "float"
-		value := baml.Decode(valueHolder).(float64)
+		value := *baml.Decode(valueHolder).(*float64)
 		u.variant_float = &value
 
 	}
@@ -1520,12 +1520,12 @@ func (u *Union__int__string) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "int"
-		value := baml.Decode(valueHolder).(int64)
+		value := *baml.Decode(valueHolder).(*int64)
 		u.variant_int = &value
 
 	case 1:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	}
@@ -1621,22 +1621,22 @@ func (u *Union__int__string__bool__float) Decode(holder *cffi.CFFIValueUnionVari
 
 	case 0:
 		u.variant = "int"
-		value := baml.Decode(valueHolder).(int64)
+		value := *baml.Decode(valueHolder).(*int64)
 		u.variant_int = &value
 
 	case 1:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 2:
 		u.variant = "bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := *baml.Decode(valueHolder).(*bool)
 		u.variant_bool = &value
 
 	case 3:
 		u.variant = "float"
-		value := baml.Decode(valueHolder).(float64)
+		value := *baml.Decode(valueHolder).(*float64)
 		u.variant_float = &value
 
 	}
@@ -1810,32 +1810,32 @@ func (u *Union__int__string__bool__float__JsonObject__JsonArray) Decode(holder *
 
 	case 0:
 		u.variant = "int"
-		value := baml.Decode(valueHolder).(int64)
+		value := *baml.Decode(valueHolder).(*int64)
 		u.variant_int = &value
 
 	case 1:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 2:
 		u.variant = "bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := *baml.Decode(valueHolder).(*bool)
 		u.variant_bool = &value
 
 	case 3:
 		u.variant = "float"
-		value := baml.Decode(valueHolder).(float64)
+		value := *baml.Decode(valueHolder).(*float64)
 		u.variant_float = &value
 
 	case 4:
 		u.variant = "JsonObject"
-		value := baml.Decode(valueHolder).(JsonObject)
+		value := *baml.Decode(valueHolder).(*JsonObject)
 		u.variant_JsonObject = &value
 
 	case 5:
 		u.variant = "JsonArray"
-		value := baml.Decode(valueHolder).(JsonArray)
+		value := *baml.Decode(valueHolder).(*JsonArray)
 		u.variant_JsonArray = &value
 
 	}
@@ -2099,34 +2099,34 @@ func (u *Union__int__string__bool__float__List__string__Map__string_List__string
 
 	case 0:
 		u.variant = "int"
-		value := baml.Decode(valueHolder).(int64)
+		value := *baml.Decode(valueHolder).(*int64)
 		u.variant_int = &value
 
 	case 1:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 2:
 		u.variant = "bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := *baml.Decode(valueHolder).(*bool)
 		u.variant_bool = &value
 
 	case 3:
 		u.variant = "float"
-		value := baml.Decode(valueHolder).(float64)
+		value := *baml.Decode(valueHolder).(*float64)
 		u.variant_float = &value
 
 	case 4:
 		u.variant = "List__string"
 		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) string {
-			return baml.Decode(__holder).(string)
+			return *baml.Decode(__holder).(*string)
 		})
 		u.variant_List__string = &value
 
 	case 5:
 		u.variant = "Map__string_List__string"
-		value := baml.Decode(valueHolder).(map[string][]string)
+		value := *baml.Decode(valueHolder).(*map[string][]string)
 		u.variant_Map__string_List__string = &value
 
 	}
@@ -2382,7 +2382,7 @@ func (u *Union__string__List__Nested) Decode(holder *cffi.CFFIValueUnionVariant)
 
 	case 0:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 1:
@@ -2481,7 +2481,7 @@ func (u *Union__string__Nested) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 1:
@@ -2578,12 +2578,12 @@ func (u *Union__string__bool) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 1:
 		u.variant = "bool"
-		value := baml.Decode(valueHolder).(bool)
+		value := *baml.Decode(valueHolder).(*bool)
 		u.variant_bool = &value
 
 	}
@@ -2675,12 +2675,12 @@ func (u *Union__string__int) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 1:
 		u.variant = "int"
-		value := baml.Decode(valueHolder).(int64)
+		value := *baml.Decode(valueHolder).(*int64)
 		u.variant_int = &value
 
 	}
@@ -2774,17 +2774,17 @@ func (u *Union__string__int__float) Decode(holder *cffi.CFFIValueUnionVariant) {
 
 	case 0:
 		u.variant = "string"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string = &value
 
 	case 1:
 		u.variant = "int"
-		value := baml.Decode(valueHolder).(int64)
+		value := *baml.Decode(valueHolder).(*int64)
 		u.variant_int = &value
 
 	case 2:
 		u.variant = "float"
-		value := baml.Decode(valueHolder).(float64)
+		value := *baml.Decode(valueHolder).(*float64)
 		u.variant_float = &value
 
 	}
@@ -2911,12 +2911,12 @@ func (u *Union__string_barisa__string_ox_burger) Decode(holder *cffi.CFFIValueUn
 
 	case 0:
 		u.variant = "string_barisa"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_barisa = &value
 
 	case 1:
 		u.variant = "string_ox_burger"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_ox_burger = &value
 
 	}
@@ -3008,12 +3008,12 @@ func (u *Union__string_breakfast__string_dinner) Decode(holder *cffi.CFFIValueUn
 
 	case 0:
 		u.variant = "string_breakfast"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_breakfast = &value
 
 	case 1:
 		u.variant = "string_dinner"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_dinner = &value
 
 	}
@@ -3105,12 +3105,12 @@ func (u *Union__string_curiosity__string_personal_finance) Decode(holder *cffi.C
 
 	case 0:
 		u.variant = "string_curiosity"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_curiosity = &value
 
 	case 1:
 		u.variant = "string_personal_finance"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_personal_finance = &value
 
 	}
@@ -3206,22 +3206,22 @@ func (u *Union__string_one__string_two__string_three__string_four) Decode(holder
 
 	case 0:
 		u.variant = "string_one"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_one = &value
 
 	case 1:
 		u.variant = "string_two"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_two = &value
 
 	case 2:
 		u.variant = "string_three"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_three = &value
 
 	case 3:
 		u.variant = "string_four"
-		value := baml.Decode(valueHolder).(string)
+		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_four = &value
 
 	}
