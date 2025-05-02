@@ -32,7 +32,7 @@ jobs:
           - runs-on: macos-14
             setup: |
               env | sort
-              brew install ollama
+              brew install ollama go
             test: |
               ollama serve &
               sleep 5
@@ -68,6 +68,9 @@ jobs:
           path: |
             ~/.ollama/models
           key: ollama-${{ matrix._.runs-on }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
       - uses: jdx/mise-action@v2
         env:
           GITHUB_TOKEN: ${{ github.token }}
