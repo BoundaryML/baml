@@ -28,14 +28,21 @@ jobs:
           - runs-on: windows-2025
             ollama-install: |
               winget install --id=Ollama.Ollama -e --accept-package-agreements
+    name: ${{ matrix._.runs-on }}
     runs-on: ${{ matrix._.runs-on }}
     # For when we have go integ tests
     # env:
     #   GOARCH: ${{ matrix._.goarch }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ollama/models
+          key: ollama-${{ matrix._.runs-on }}
       - name: Install Ollama
         run: ${{ matrix._.ollama-install }}
+      - uses: astral-sh/setup-uv@v6
       - name: Run simple smoke test
         run: |
           ollama serve &
