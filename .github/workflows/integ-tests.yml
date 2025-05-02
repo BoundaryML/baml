@@ -19,16 +19,19 @@ jobs:
         _:
           - runs-on: ubuntu-22.04
             setup: |
+              env | sort
               curl -fsSL https://ollama.com/install.sh | sh
           - runs-on: macos-14
             setup: |
+              env | sort
               brew install ollama
           # winget is not available on windows-2019 or windows-2022
           # https://github.com/actions/runner-images/issues/8584
+              # winget upgrade --all --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
           - runs-on: windows-2025
             setup: |
-              winget upgrade --all --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
-              winget install --id=Ollama.Ollama -e --accept-package-agreements
+              env | sort
+              winget install --id=Ollama.Ollama -e --accept-package-agreements --accept-source-agreements
     name: ${{ matrix._.runs-on }}
     runs-on: ${{ matrix._.runs-on }}
     # For when we have go integ tests
@@ -41,9 +44,10 @@ jobs:
           path: |
             ~/.ollama/models
           key: ollama-${{ matrix._.runs-on }}
+      - uses: jdx/mise-action@v2
+      - uses: astral-sh/setup-uv@v6
       - name: Setup
         run: ${{ matrix._.setup }}
-      - uses: astral-sh/setup-uv@v6
       - name: Run simple smoke test
         run: |
           ollama serve &
