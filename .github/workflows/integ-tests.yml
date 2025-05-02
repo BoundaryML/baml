@@ -16,7 +16,7 @@ jobs:
           - runs-on: macos-14
             ollama-install: |
               brew install ollama
-          - runs-on: windows-2019
+          - runs-on: windows-2025
             ollama-install: |
               winget install --id=Ollama.Ollama -e --accept-package-agreements
     runs-on: ${{ matrix._.runs-on }}
