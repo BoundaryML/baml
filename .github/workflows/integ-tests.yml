@@ -69,6 +69,8 @@ jobs:
             ~/.ollama/models
           key: ollama-${{ matrix._.runs-on }}
       - uses: jdx/mise-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: astral-sh/setup-uv@v6
       - name: Setup
         run: ${{ matrix._.setup }}
