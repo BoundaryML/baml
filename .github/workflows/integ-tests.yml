@@ -4,6 +4,13 @@ on:
   push:
     branches: [ sam/integ-tests-ci ]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build-test:
     strategy:
@@ -16,6 +23,7 @@ jobs:
           - runs-on: macos-14
             ollama-install: |
               brew install ollama
+          # winget is not available on windows-2019 or windows-2022
           - runs-on: windows-2025
             ollama-install: |
               winget install --id=Ollama.Ollama -e --accept-package-agreements
