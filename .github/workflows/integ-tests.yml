@@ -24,6 +24,7 @@ jobs:
             ollama-install: |
               brew install ollama
           # winget is not available on windows-2019 or windows-2022
+          # https://github.com/actions/runner-images/issues/8584
           - runs-on: windows-2025
             ollama-install: |
               winget install --id=Ollama.Ollama -e --accept-package-agreements
@@ -38,5 +39,9 @@ jobs:
       - name: Run simple smoke test
         run: |
           ollama serve &
+          set -euxo pipefail
           sleep 5
           ollama run tinyllama "2+2?"
+          ./tools/build integ-tests/python
+          ./tools/build integ-tests/typescript
+          ./tools/build integ-tests/ruby
