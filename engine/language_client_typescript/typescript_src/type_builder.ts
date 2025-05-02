@@ -5,7 +5,7 @@ import {
   EnumValueBuilder,
   FieldType,
   TypeBuilder as _TypeBuilder,
-  BamlRuntime
+  BamlRuntime,
 } from './native'
 
 type IsLiteral<T extends string> = string extends T ? false : true
@@ -79,6 +79,13 @@ export class TypeBuilder {
     return this.tb.union(types)
   }
 
+  classViewer<Name extends string, Properties extends string>(
+    name: Name,
+    properties: Properties[],
+  ): ClassViewer<Name, Properties> {
+    return new ClassViewer(this.tb, name, new Set(properties))
+  }
+
   classBuilder<Name extends string, Properties extends string>(
     name: Name,
     properties: Properties[],
@@ -86,7 +93,11 @@ export class TypeBuilder {
     return new ClassBuilder(this.tb, name, new Set(properties))
   }
 
-  enumBuilder<Name extends string, T extends string>(name: Name, values: T[]): EnumBuilder<Name, T> {
+  enumViewer<Name extends string, Values extends string>(name: Name, values: Values[]): EnumViewer<Name, Values> {
+    return new EnumViewer(this.tb, name, new Set(values))
+  }
+
+  enumBuilder<Name extends string, Values extends string>(name: Name, values: Values[]): EnumBuilder<Name, Values> {
     return new EnumBuilder(this.tb, name, new Set(values))
   }
 
@@ -117,13 +128,13 @@ export class TypeBuilder {
   }
 }
 
-export class ClassBuilder<ClassName extends string, Properties extends string = string> {
-  private bldr: _ClassBuilder
+export class ClassAst<ClassName extends string, Properties extends string = string> {
+  protected bldr: _ClassBuilder
 
   constructor(
     tb: _TypeBuilder,
     name: ClassName,
-    private properties: Set<Properties | string> = new Set(),
+    protected properties: Set<Properties | string> = new Set(),
   ) {
     this.bldr = tb.getClass(name)
   }
@@ -131,9 +142,34 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
   type(): FieldType {
     return this.bldr.field()
   }
+}
 
-  listProperties(): Array<[string, ClassPropertyBuilder]> {
-    return Array.from(this.properties).map((name) => [name, new ClassPropertyBuilder(this.bldr.property(name))])
+export class ClassViewer<ClassName extends string, Properties extends string = string> extends ClassAst<
+  ClassName,
+  Properties
+> {
+  constructor(tb: _TypeBuilder, name: ClassName, properties: Set<Properties | string> = new Set()) {
+    super(tb, name, properties)
+  }
+
+  listProperties(): Array<[string, ClassPropertyViewer]> {
+    return Array.from(this.properties).map((name) => [name, new ClassPropertyViewer()])
+  }
+
+  property(name: string): ClassPropertyViewer {
+    if (!this.properties.has(name)) {
+      throw new Error(`Property ${name} not found.`)
+    }
+    return new ClassPropertyViewer()
+  }
+}
+
+export class ClassBuilder<ClassName extends string, Properties extends string = string> extends ClassAst<
+  ClassName,
+  Properties
+> {
+  constructor(tb: _TypeBuilder, name: ClassName, properties: Set<Properties | string> = new Set()) {
+    super(tb, name, properties)
   }
 
   addProperty<S extends string>(name: RestrictNot<ClassName, S, Properties>, type: FieldType): ClassPropertyBuilder {
@@ -144,12 +180,20 @@ export class ClassBuilder<ClassName extends string, Properties extends string = 
     return new ClassPropertyBuilder(this.bldr.property(name).setType(type))
   }
 
+  listProperties(): Array<[string, ClassPropertyBuilder]> {
+    return Array.from(this.properties).map((name) => [name, new ClassPropertyBuilder(this.bldr.property(name))])
+  }
+
   property(name: string): ClassPropertyBuilder {
     if (!this.properties.has(name)) {
       throw new Error(`Property ${name} not found.`)
     }
     return new ClassPropertyBuilder(this.bldr.property(name))
   }
+}
+
+class ClassPropertyViewer {
+  constructor() {}
 }
 
 class ClassPropertyBuilder {
@@ -170,13 +214,13 @@ class ClassPropertyBuilder {
   }
 }
 
-export class EnumBuilder<EnumName extends string, T extends string = string> {
-  private bldr: _EnumBuilder
+export class EnumAst<EnumName extends string, Values extends string = string> {
+  protected bldr: _EnumBuilder
 
   constructor(
     tb: _TypeBuilder,
     name: EnumName,
-    private values: Set<T | string> = new Set(),
+    protected values: Set<Values | string> = new Set(),
   ) {
     this.bldr = tb.getEnum(name)
   }
@@ -184,16 +228,32 @@ export class EnumBuilder<EnumName extends string, T extends string = string> {
   type(): FieldType {
     return this.bldr.field()
   }
+}
 
-  value<S extends string>(name: S | T): EnumValueBuilder {
+export class EnumViewer<EnumName extends string, T extends string = string> extends EnumAst<EnumName, T> {
+  constructor(tb: _TypeBuilder, name: EnumName, values: Set<T | string> = new Set()) {
+    super(tb, name, values)
+  }
+
+  listValues(): Array<[string, EnumValueViewer]> {
+    return Array.from(this.values).map((name) => [name, new EnumValueViewer()])
+  }
+
+  value(name: string): EnumValueViewer {
     if (!this.values.has(name)) {
       throw new Error(`Value ${name} not found.`)
     }
-    return this.bldr.value(name)
+    return new EnumValueViewer()
   }
+}
 
-  listValues(): Array<[string, EnumValueBuilder]> {
-    return Array.from(this.values).map((name) => [name, this.bldr.value(name)])
+export class EnumValueViewer {
+  constructor() {}
+}
+
+export class EnumBuilder<EnumName extends string, T extends string = string> extends EnumAst<EnumName, T> {
+  constructor(tb: _TypeBuilder, name: EnumName, values: Set<T | string> = new Set()) {
+    super(tb, name, values)
   }
 
   addValue<S extends string>(name: RestrictNot<EnumName, S, T>): EnumValueBuilder {
@@ -201,6 +261,14 @@ export class EnumBuilder<EnumName extends string, T extends string = string> {
       throw new Error(`Value ${name} already exists.`)
     }
     this.values.add(name)
+    return this.bldr.value(name)
+  }
+
+  listValues(): Array<[string, EnumValueBuilder]> {
+    return Array.from(this.values).map((name) => [name, this.bldr.value(name)])
+  }
+
+  value(name: string): EnumValueBuilder {
     return this.bldr.value(name)
   }
 }

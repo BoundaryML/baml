@@ -1,6 +1,6 @@
 import typing
 from baml_py.baml_py import FieldType, EnumValueBuilder, EnumBuilder, ClassBuilder
-from baml_py.type_builder import TypeBuilder as _TypeBuilder, ClassPropertyBuilder
+from baml_py.type_builder import TypeBuilder as _TypeBuilder, ClassPropertyBuilder, ClassPropertyViewer, EnumValueViewer
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 
 
@@ -17,7 +17,10 @@ class TypeBuilder(_TypeBuilder):
     @property
     def {{cls.name}}(self) -> "{{cls.name}}Builder":
         return {{cls.name}}Builder(self)
-
+{% else %}
+    @property
+    def {{cls.name}}(self) -> "{{cls.name}}Ast":
+        return {{cls.name}}Ast(self)
 {% endif %}{% endfor %}
 
 {% for enum in enums %}{% if enum.dynamic %}
@@ -27,72 +30,100 @@ class TypeBuilder(_TypeBuilder):
         return {{enum.name}}Builder(self)
 {% endif %}{% endfor %}
 
-{% for cls in classes %}{% if cls.dynamic -%}
-
-class {{cls.name}}Builder:
+{% for cls in classes %}
+class {{cls.name}}Ast:
     def __init__(self, tb: _TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
-        self.__bldr = _tb.class_("{{cls.name}}")
-        self.__properties: typing.Set[str] = set([{% for (name, _, _) in cls.fields %} "{{name}}", {% endfor %}])
-        self.__props = {{cls.name}}Properties(self.__bldr, self.__properties)
+        self._bldr = _tb.class_("{{cls.name}}")
+        self._properties: typing.Set[str] = set([{% for (name, _, _) in cls.fields %} "{{name}}", {% endfor %}])
+        self._props = {{cls.name}}Properties(self._bldr, self._properties)
 
     def type(self) -> FieldType:
-        return self.__bldr.field()
+        return self._bldr.field()
 
     @property
     def props(self) -> "{{cls.name}}Properties":
-        return self.__props
-    
-    def list_properties(self) -> typing.List[typing.Tuple[str, ClassPropertyBuilder]]:
-        return [(name, ClassPropertyBuilder(self.__bldr.property(name))) for name in self.__properties]
+        return self._props
+
+{% if cls.dynamic %}
+class {{cls.name}}Builder({{cls.name}}Ast):
+    def __init__(self, tb: _TypeBuilder):
+        super().__init__(tb)
 
     def add_property(self, name: str, type: FieldType) -> ClassPropertyBuilder:
-        if name in self.__properties:
+        if name in self._properties:
             raise ValueError(f"Property {name} already exists.")
-        return ClassPropertyBuilder(self.__bldr.property(name).type(type))
+        return ClassPropertyBuilder(self._bldr.property(name).type(type))
+
+    def list_properties(self) -> typing.List[typing.Tuple[str, ClassPropertyBuilder]]:
+        return [(name, ClassPropertyBuilder(self._bldr.property(name))) for name in self._properties]
+{% else %}
+class {{cls.name}}Viewer({{cls.name}}Ast):
+    def __init__(self, tb: _TypeBuilder):
+        super().__init__(tb)
+
+    
+    def list_properties(self) -> typing.List[typing.Tuple[str, ClassPropertyViewer]]:
+        return [(name, ClassPropertyViewer(self._bldr.property(name))) for name in self._properties]
+{% endif %}
+
 
 class {{cls.name}}Properties:
-    def __init__(self, cls_bldr: ClassBuilder, properties: typing.Set[str]):
-        self.__bldr = cls_bldr
+    def __init__(self, bldr: ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = bldr
         self.__properties = properties
 
     {% for (name, type, _) in cls.fields %}
 
     @property
-    def {{name}}(self) -> ClassPropertyBuilder:
-        return ClassPropertyBuilder(self.__bldr.property("{{name}}"))
+    def {{name}}(self) -> {% if cls.dynamic %}ClassPropertyBuilder{% else %}ClassPropertyViewer{% endif %}:
+        return {% if cls.dynamic %}ClassPropertyBuilder(self.__bldr.property("{{name}}")){% else %}ClassPropertyViewer(self.__bldr.property("{{name}}")){% endif %}
     {%- endfor %}
 
+    {% if cls.dynamic %}
     def __getattr__(self, name: str) -> ClassPropertyBuilder:
         if name not in self.__properties:
             raise AttributeError(f"Property {name} not found.")
         return ClassPropertyBuilder(self.__bldr.property(name))
+    {% endif %}
+{% endfor %}
 
-{% endif %}{% endfor %}
-
-{% for enum in enums %}{% if enum.dynamic %}
-class {{enum.name}}Builder:
+{% for enum in enums %}
+class {{enum.name}}Ast:
     def __init__(self, tb: _TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
-        self.__bldr = _tb.enum("{{enum.name}}")
-        self.__values: typing.Set[str] = set([{% for (value, _) in enum.values %} "{{value}}", {% endfor %}])
-        self.__vals = {{enum.name}}Values(self.__bldr, self.__values)
+        self._bldr = _tb.enum("{{enum.name}}")
+        self._values: typing.Set[str] = set([{% for (value, _) in enum.values %} "{{value}}", {% endfor %}])
+        self._vals = {{enum.name}}Values(self._bldr, self._values)
 
     def type(self) -> FieldType:
-        return self.__bldr.field()
+        return self._bldr.field()
 
     @property
     def values(self) -> "{{enum.name}}Values":
-        return self.__vals
+        return self._vals
 
-    def list_values(self) -> typing.List[typing.Tuple[str, EnumValueBuilder]]:
-        return [(name, self.__bldr.value(name)) for name in self.__values]
+{% if enum.dynamic %}
+class {{enum.name}}Builder({{enum.name}}Ast):
+    def __init__(self, tb: _TypeBuilder):
+        super().__init__(tb)
 
     def add_value(self, name: str) -> EnumValueBuilder:
-        if name in self.__values:
+        if name in self._values:
             raise ValueError(f"Value {name} already exists.")
-        self.__values.add(name)
-        return self.__bldr.value(name)
+        self._values.add(name)
+        return self._bldr.value(name)
+
+    def list_values(self) -> typing.List[typing.Tuple[str, EnumValueBuilder]]:
+        return [(name, self._bldr.value(name)) for name in self._values]
+{% else %}
+class {{enum.name}}Viewer({{enum.name}}Ast):
+    def __init__(self, tb: _TypeBuilder):
+        super().__init__(tb)
+
+    def list_values(self) -> typing.List[typing.Tuple[str, EnumValueViewer]]:
+        return [(name, EnumValueViewer(self._bldr.value(name))) for name in self._values]
+{% endif %}
 
 class {{enum.name}}Values:
     def __init__(self, enum_bldr: EnumBuilder, values: typing.Set[str]):
@@ -102,14 +133,16 @@ class {{enum.name}}Values:
     {% for (value, _) in enum.values %}
 
     @property
-    def {{value}}(self) -> EnumValueBuilder:
-        return self.__bldr.value("{{value}}")
+    def {{value}}(self) -> {% if enum.dynamic %}EnumValueBuilder{% else %}EnumValueViewer{% endif %}:
+        return {% if enum.dynamic %}EnumValueBuilder(self.__bldr.value("{{value}}")){% else %}EnumValueViewer(self.__bldr.value("{{value}}")){% endif %}
     {% endfor %}
 
+    {% if enum.dynamic %}
     def __getattr__(self, name: str) -> EnumValueBuilder:
         if name not in self.__values:
             raise AttributeError(f"Value {name} not found.")
         return self.__bldr.value(name)
-{% endif %}{% endfor %}
+    {% endif %}
+{% endfor %}
 
 __all__ = ["TypeBuilder"]

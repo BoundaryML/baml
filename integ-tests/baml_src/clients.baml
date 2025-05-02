@@ -176,7 +176,7 @@ client<llm> VertexClaude {
     model "claude-3-5-sonnet@20240620"
     location us-east5
     anthropic_version "vertex-2023-10-16"
-    // credentials env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT
+    credentials env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT
   }
 }
 
