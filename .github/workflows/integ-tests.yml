@@ -1,0 +1,33 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [ sam/integ-tests-ci ]
+
+jobs:
+  build-test:
+    strategy:
+      matrix:
+        _:
+          - runs-on: ubuntu-22.04
+            ollama-install: |
+              curl -fsSL https://ollama.com/install.sh | sh
+          - runs-on: macos-14
+            ollama-install: |
+              brew install ollama
+          - runs-on: windows-2019
+            ollama-install: |
+              winget install --id=Ollama.Ollama -e --accept-package-agreements
+    runs-on: ${{ matrix._.runs-on }}
+    # For when we have go integ tests
+    # env:
+    #   GOARCH: ${{ matrix._.goarch }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Ollama
+        run: ${{ matrix._.ollama-install }}
+      - name: Run simple smoke test
+        run: |
+          ollama serve &
+          sleep 5
+          ollama run tinyllama "2+2?"
