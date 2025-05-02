@@ -21,10 +21,26 @@ jobs:
             setup: |
               env | sort
               curl -fsSL https://ollama.com/install.sh | sh
+            test: |
+              ollama serve &
+              sleep 5
+              ollama run tinyllama "2+2?"
+              ./tools/build integ-tests/python
+              ./tools/build integ-tests/typescript
+              ./tools/build integ-tests/ruby
+
           - runs-on: macos-14
             setup: |
               env | sort
               brew install ollama
+            test: |
+              ollama serve &
+              sleep 5
+              ollama run tinyllama "2+2?"
+              ./tools/build integ-tests/python
+              ./tools/build integ-tests/typescript
+              ./tools/build integ-tests/ruby
+
           # winget is not available on windows-2019 or windows-2022
           # https://github.com/actions/runner-images/issues/8584
               # winget upgrade --all --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
@@ -32,6 +48,14 @@ jobs:
             setup: |
               env | sort
               winget install --id=Ollama.Ollama -e --accept-package-agreements --accept-source-agreements
+            test: |
+              ollama serve &
+              sleep 5
+              ollama run tinyllama "2+2?"
+              ./tools/build integ-tests/python
+              ./tools/build integ-tests/typescript
+              ./tools/build integ-tests/ruby
+
     name: ${{ matrix._.runs-on }}
     runs-on: ${{ matrix._.runs-on }}
     # For when we have go integ tests
@@ -48,12 +72,5 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Setup
         run: ${{ matrix._.setup }}
-      - name: Run simple smoke test
-        run: |
-          ollama serve &
-          set -euxo pipefail
-          sleep 5
-          ollama run tinyllama "2+2?"
-          ./tools/build integ-tests/python
-          ./tools/build integ-tests/typescript
-          ./tools/build integ-tests/ruby
+      - name: Run all integ tests
+        run: ${{ matrix._.test }}
