@@ -1,4 +1,5 @@
-name: Integration Tests
+# infisical checks this against OIDC
+name: integ-tests
 
 on:
   push:
