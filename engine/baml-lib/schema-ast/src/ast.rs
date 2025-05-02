@@ -5,6 +5,7 @@ mod attribute;
 mod comment;
 mod config;
 
+pub mod builtin;
 pub mod expr;
 mod expression;
 mod field;

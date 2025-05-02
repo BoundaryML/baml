@@ -4,6 +4,7 @@ use super::{
     parse_identifier::parse_identifier,
     Rule,
 };
+use crate::ast::builtin::FetchCall;
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use baml_types::JinjaExpression;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
@@ -15,6 +16,7 @@ pub(crate) fn parse_expression(
     let first_child = token.into_inner().next()?;
     let span = diagnostics.span(first_child.as_span());
     match first_child.as_rule() {
+        Rule::fetch_call => Some(parse_fetch_call(first_child, diagnostics)),
         Rule::numeric_literal => Some(Expression::NumericValue(first_child.as_str().into(), span)),
         Rule::string_literal => Some(parse_string_literal(first_child, diagnostics)),
         Rule::raw_string_literal => Some(Expression::RawStringValue(parse_raw_string(
@@ -424,4 +426,13 @@ mod tests {
             _ => panic!("Expected JinjaExpression, got {expr:?}"),
         }
     }
+}
+
+fn parse_fetch_call(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::fetch_call);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let output_type = parse_field_type_chain(tokens.next().expect("Guaranteed by the grammar"), diagnostics);
+    let argument = parse_expression(tokens.next().expect("Guaranteed by the grammar"), diagnostics)?;
+    Some(Expression::FetchCall(FetchCall { output_type, argument }, span))
 }

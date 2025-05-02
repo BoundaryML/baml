@@ -118,6 +118,8 @@ pub enum Expression {
     ClassConstructor(ClassConstructor, Span),
     /// An expression block, e.g. `{ let x = 1; x + 2 }`.
     ExprBlock(ExpressionBlock, Span),
+    /// A call to the builtin function `std::fetch`.
+    FetchCall(FetchCall, Span),
 }
 
 impl fmt::Display for Expression {
