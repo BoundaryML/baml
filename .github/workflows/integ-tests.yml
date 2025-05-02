@@ -80,10 +80,6 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - name: Setup
         run: ${{ matrix._.setup }}
-      - name: Debug OIDC Claims
-        uses: github/actions-oidc-debugger@main
-        with:
-          audience: '${{ github.server_url }}/${{ github.repository_owner }}'
       - uses: infisical/secrets-action@v1.0.9
         with:
           method: "oidc"
