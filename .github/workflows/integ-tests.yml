@@ -18,15 +18,16 @@ jobs:
       matrix:
         _:
           - runs-on: ubuntu-22.04
-            ollama-install: |
+            setup: |
               curl -fsSL https://ollama.com/install.sh | sh
           - runs-on: macos-14
-            ollama-install: |
+            setup: |
               brew install ollama
           # winget is not available on windows-2019 or windows-2022
           # https://github.com/actions/runner-images/issues/8584
           - runs-on: windows-2025
-            ollama-install: |
+            setup: |
+              winget upgrade --all --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
               winget install --id=Ollama.Ollama -e --accept-package-agreements
     name: ${{ matrix._.runs-on }}
     runs-on: ${{ matrix._.runs-on }}
@@ -40,8 +41,8 @@ jobs:
           path: |
             ~/.ollama/models
           key: ollama-${{ matrix._.runs-on }}
-      - name: Install Ollama
-        run: ${{ matrix._.ollama-install }}
+      - name: Setup
+        run: ${{ matrix._.setup }}
       - uses: astral-sh/setup-uv@v6
       - name: Run simple smoke test
         run: |
