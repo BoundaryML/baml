@@ -2,6 +2,8 @@
 name: integ-tests
 
 on:
+  workflow_call: {}
+  workflow_dispatch: {}
   push:
     branches: [ sam/integ-tests-ci ]
 
@@ -84,6 +86,7 @@ jobs:
       - name: setup TS
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
+
       - name: Run all integ tests
         run: |
               ollama serve &

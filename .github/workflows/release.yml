@@ -58,6 +58,7 @@ jobs:
           echo "is_release_tag=$IS_RELEASE" >> $GITHUB_OUTPUT
           echo "Determined version: $VERSION"
           echo "Is release tag: $IS_RELEASE"
+
   build-python-release:
     uses: ./.github/workflows/build-python-release.reusable.yaml
 
@@ -83,6 +84,11 @@ jobs:
       version: ${{ needs.determine-version.outputs.version_string }}
       # Pass the boolean output directly
       is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+  
+  # Kick off integration tests when we build everything.
+  # This does not yet succeed/pass consistently, or even run everything, but it's a good start.
+  integ-tests:
+    uses: ./.github/workflows/integ-tests.yml
 
   # placeholder fan-in step
   all-builds:
