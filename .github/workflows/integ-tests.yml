@@ -69,6 +69,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+          cache-on-failure: true
       - uses: jdx/mise-action@v2
         env:
           GITHUB_TOKEN: ${{ github.token }}
