@@ -250,6 +250,7 @@ func encodeList(builder *flatbuffers.Builder, value reflect.Value) (flatbuffers.
 
 // encodeMap now accepts and passes TypeMap
 func encodeMap(builder *flatbuffers.Builder, mapValue reflect.Value) (flatbuffers.UOffsetT, error) {
+
 	mapLength := mapValue.Len()
 	entryOffsets := make([]flatbuffers.UOffsetT, 0, mapLength)
 	// Iterate map and build entries (order doesn't strictly matter for map, but FB requires building bottom-up)

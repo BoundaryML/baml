@@ -78,4 +78,23 @@ func (c {{ class.name }}) BamlTypeName() string {
 {#- Type Aliases -#}
 {% for alias in structural_recursive_alias_cycles %}
 type {{alias.name}} {{alias.target}}
+
+{% if alias.is_baml_serializable %}
+func (c {{alias.name}}) BamlTypeName() string {
+	return {{alias.target}}(c).BamlTypeName()
+}
+
+func (c {{alias.name}}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	return {{alias.target}}(c).Encode(builder)
+}
+{% endif %}
+
+{% if alias.is_union %}
+func (u *{{alias.name}}) Decode(holder *cffi.CFFIValueUnionVariant) {
+	decodedUnion := {{alias.target}}{}
+	decodedUnion.Decode(holder)
+	*u = {{alias.name}}(decodedUnion)
+}
+{% endif %}
+
 {% endfor %}

@@ -249,6 +249,8 @@ pub struct GoType {
 struct GoTypeAlias<'ir> {
     name: Cow<'ir, str>,
     target: String,
+    is_baml_serializable: bool,
+    is_union: bool,
 }
 
 #[derive(askama::Template)]
@@ -415,9 +417,12 @@ impl<'ir> From<ClassWalker<'ir>> for GoClass<'ir> {
 // TODO: Define AliasWalker to simplify type.
 impl<'ir> From<Walker<'ir, (&'ir String, &'ir FieldType)>> for GoTypeAlias<'ir> {
     fn from(walker: Walker<(&'ir String, &'ir FieldType)>) -> Self {
+        let type_ref = walker.item.1.to_type_ref_2(walker.ir, false);
         GoTypeAlias {
             name: Cow::Borrowed(walker.item.0),
-            target: walker.item.1.to_type_ref_2(walker.ir, false).name,
+            target: type_ref.name,
+            is_union: type_ref.is_union,
+            is_baml_serializable: type_ref.is_class || type_ref.is_enum || type_ref.is_union,
         }
     }
 }

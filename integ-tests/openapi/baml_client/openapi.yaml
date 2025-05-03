@@ -1300,6 +1300,19 @@ paths:
                 title: RecursiveClassWithAliasIndirectionResponse
                 $ref: '#/components/schemas/NodeWithAliasIndirection'
       operationId: RecursiveClassWithAliasIndirection
+  /call/RecursiveUnionTest:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RecursiveUnionTest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RecursiveUnionTestResponse
+                AnyValue: {}
+      operationId: RecursiveUnionTest
   /call/ReturnAliasWithMergedAttributes:
     post:
       requestBody:
@@ -3968,6 +3981,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - cls
+            additionalProperties: false
+    RecursiveUnionTest:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RecursiveUnionTestRequest
+            type: object
+            properties:
+              input:
+                AnyValue: {}
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     ReturnAliasWithMergedAttributes:
       required: true

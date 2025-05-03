@@ -2467,6 +2467,103 @@ func Union__string__List__NestedNewWithList__Nested(v *[]Nested) *Union__string_
 	}
 }
 
+type Union__string__Map__string_RecursiveUnion struct {
+	variant string
+
+	variant_string *string
+
+	variant_Map__string_RecursiveUnion *map[string]RecursiveUnion
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) Decode(holder *cffi.CFFIValueUnionVariant) {
+	valueHolder := holder.Value(nil)
+	switch holder.ValueTypeIndex() {
+
+	case 0:
+		u.variant = "string"
+		value := *baml.Decode(valueHolder).(*string)
+		u.variant_string = &value
+
+	case 1:
+		u.variant = "Map__string_RecursiveUnion"
+		value := *baml.Decode(valueHolder).(*map[string]RecursiveUnion)
+		u.variant_Map__string_RecursiveUnion = &value
+
+	}
+}
+
+func (u Union__string__Map__string_RecursiveUnion) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	switch u.variant {
+
+	case "string":
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
+
+	case "Map__string_RecursiveUnion":
+		return baml.EncodeUnion(builder, u.variant, u.variant_Map__string_RecursiveUnion)
+
+	case "":
+		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+	}
+
+	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u Union__string__Map__string_RecursiveUnion) BamlTypeName() string {
+	return "Union__string__Map__string_RecursiveUnion"
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) SetString(v string) {
+	u.variant = "string"
+	u.variant_string = &v
+
+	u.variant_Map__string_RecursiveUnion = nil
+
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) IsString() bool {
+	return u.variant == "string"
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) String() *string {
+	if !u.IsString() {
+		return nil
+	}
+	return u.variant_string
+}
+
+func Union__string__Map__string_RecursiveUnionNewWithString(v *string) *Union__string__Map__string_RecursiveUnion {
+	return &Union__string__Map__string_RecursiveUnion{
+		variant:        "string",
+		variant_string: v,
+	}
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) SetMap__string_RecursiveUnion(v map[string]RecursiveUnion) {
+	u.variant = "Map__string_RecursiveUnion"
+	u.variant_Map__string_RecursiveUnion = &v
+
+	u.variant_string = nil
+
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) IsMap__string_RecursiveUnion() bool {
+	return u.variant == "Map__string_RecursiveUnion"
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) Map__string_RecursiveUnion() *map[string]RecursiveUnion {
+	if !u.IsMap__string_RecursiveUnion() {
+		return nil
+	}
+	return u.variant_Map__string_RecursiveUnion
+}
+
+func Union__string__Map__string_RecursiveUnionNewWithMap__string_RecursiveUnion(v *map[string]RecursiveUnion) *Union__string__Map__string_RecursiveUnion {
+	return &Union__string__Map__string_RecursiveUnion{
+		variant:                            "Map__string_RecursiveUnion",
+		variant_Map__string_RecursiveUnion: v,
+	}
+}
+
 type Union__string__Nested struct {
 	variant string
 

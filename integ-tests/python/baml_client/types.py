@@ -614,3 +614,5 @@ RecAliasTwo: TypeAlias = "RecAliasThree"
 RecursiveListAlias: TypeAlias = List["RecursiveListAlias"]
 
 RecursiveMapAlias: TypeAlias = Dict[str, "RecursiveMapAlias"]
+
+RecursiveUnion: TypeAlias = Union[str, Dict[str, "RecursiveUnion"]]

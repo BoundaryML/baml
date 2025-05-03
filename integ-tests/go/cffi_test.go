@@ -12,6 +12,7 @@ import (
 )
 
 func TestEncodeDecode(t *testing.T) {
+
 	var tests = []struct {
 		input any
 	}{
@@ -64,6 +65,13 @@ func TestEncodeDecode(t *testing.T) {
 			Name:       &[]string{"John Doe"}[0],
 			Hair_color: &[]b.Color{b.ColorRED}[0],
 		}},
+		{b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithMap__string_RecursiveUnion(&map[string]b.RecursiveUnion{
+			"key": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value"}[0])),
+			"key2": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithMap__string_RecursiveUnion(&map[string]b.RecursiveUnion{
+				"key":  b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value2"}[0])),
+				"key2": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value3"}[0])),
+			})),
+		}))},
 		// TODO: fix this
 		// {map[string]b.Union__float__bool{
 		// 	"a": *b.Union__float__boolNewWithBool(&[]bool{true}[0]),

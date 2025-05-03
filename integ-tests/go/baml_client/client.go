@@ -5720,6 +5720,68 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 	return channel
 }
 
+func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion) (*types.RecursiveUnion, error) {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "RecursiveUnionTest", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func(result any) types.RecursiveUnion {
+		return (result).(types.RecursiveUnion)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion) <-chan types.RecursiveUnion {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan types.RecursiveUnion)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "RecursiveUnionTest", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(types.RecursiveUnion)
+			}
+		}
+	}()
+	return channel
+}
+
 func ReturnAliasWithMergedAttributes(ctx context.Context, money int64) (*types.Checked[int64], error) {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"money": money},
