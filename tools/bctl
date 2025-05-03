@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+# Get the directory where the script is located
+SCRIPT_DIR="$( dirname "${BASH_SOURCE[0]}" )/bctl_src"
+
+exec uv run --project "${SCRIPT_DIR}" python3 "${SCRIPT_DIR}/bctl.py" "${@:1}"

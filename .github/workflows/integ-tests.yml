@@ -89,6 +89,6 @@ jobs:
               ollama serve &
               sleep 5
               ollama run tinyllama "2+2?"
-              ./tools/build --test integ-tests/python
-              ./tools/build --test integ-tests/typescript
-              ./tools/build --test integ-tests/ruby
+              ./tools/bctl integ-tests --suite python
+              ./tools/bctl integ-tests --suite typescript
+              ./tools/bctl integ-tests --suite ruby
