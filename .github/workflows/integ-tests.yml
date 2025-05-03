@@ -93,6 +93,9 @@ jobs:
               ollama serve &
               sleep 5
               ollama run tinyllama "2+2?"
+              # If this fails, still run the next one
               ./tools/bctl integ-tests --suite python
+              # If this fails, still run the next one
               ./tools/bctl integ-tests --suite typescript
+              # If this fails, still run the next one
               ./tools/bctl integ-tests --suite ruby
