@@ -2336,9 +2336,10 @@ impl<'a> flatbuffers::Follow<'a> for CFFIValueUnionVariant<'a> {
 
 impl<'a> CFFIValueUnionVariant<'a> {
   pub const VT_NAME: flatbuffers::VOffsetT = 4;
-  pub const VT_FIELD_TYPES: flatbuffers::VOffsetT = 6;
-  pub const VT_VALUE_TYPE_INDEX: flatbuffers::VOffsetT = 8;
-  pub const VT_VALUE: flatbuffers::VOffsetT = 10;
+  pub const VT_VARIANT_NAME: flatbuffers::VOffsetT = 6;
+  pub const VT_FIELD_TYPES: flatbuffers::VOffsetT = 8;
+  pub const VT_VALUE_TYPE_INDEX: flatbuffers::VOffsetT = 10;
+  pub const VT_VALUE: flatbuffers::VOffsetT = 12;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -2353,6 +2354,7 @@ impl<'a> CFFIValueUnionVariant<'a> {
     if let Some(x) = args.value { builder.add_value(x); }
     builder.add_value_type_index(args.value_type_index);
     if let Some(x) = args.field_types { builder.add_field_types(x); }
+    if let Some(x) = args.variant_name { builder.add_variant_name(x); }
     if let Some(x) = args.name { builder.add_name(x); }
     builder.finish()
   }
@@ -2364,6 +2366,13 @@ impl<'a> CFFIValueUnionVariant<'a> {
     // Created from valid Table for this object
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(CFFIValueUnionVariant::VT_NAME, None)}
+  }
+  #[inline]
+  pub fn variant_name(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(CFFIValueUnionVariant::VT_VARIANT_NAME, None)}
   }
   #[inline]
   pub fn field_types(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder<'a>>>> {
@@ -2396,6 +2405,7 @@ impl flatbuffers::Verifiable for CFFIValueUnionVariant<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("variant_name", Self::VT_VARIANT_NAME, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder>>>>("field_types", Self::VT_FIELD_TYPES, false)?
      .visit_field::<i32>("value_type_index", Self::VT_VALUE_TYPE_INDEX, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<CFFIValueHolder>>("value", Self::VT_VALUE, false)?
@@ -2405,6 +2415,7 @@ impl flatbuffers::Verifiable for CFFIValueUnionVariant<'_> {
 }
 pub struct CFFIValueUnionVariantArgs<'a> {
     pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub variant_name: Option<flatbuffers::WIPOffset<&'a str>>,
     pub field_types: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder<'a>>>>>,
     pub value_type_index: i32,
     pub value: Option<flatbuffers::WIPOffset<CFFIValueHolder<'a>>>,
@@ -2414,6 +2425,7 @@ impl<'a> Default for CFFIValueUnionVariantArgs<'a> {
   fn default() -> Self {
     CFFIValueUnionVariantArgs {
       name: None,
+      variant_name: None,
       field_types: None,
       value_type_index: 0,
       value: None,
@@ -2429,6 +2441,10 @@ impl<'a: 'b, 'b> CFFIValueUnionVariantBuilder<'a, 'b> {
   #[inline]
   pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIValueUnionVariant::VT_NAME, name);
+  }
+  #[inline]
+  pub fn add_variant_name(&mut self, variant_name: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIValueUnionVariant::VT_VARIANT_NAME, variant_name);
   }
   #[inline]
   pub fn add_field_types(&mut self, field_types: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIFieldTypeHolder<'b >>>>) {
@@ -2461,6 +2477,7 @@ impl core::fmt::Debug for CFFIValueUnionVariant<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("CFFIValueUnionVariant");
       ds.field("name", &self.name());
+      ds.field("variant_name", &self.variant_name());
       ds.field("field_types", &self.field_types());
       ds.field("value_type_index", &self.value_type_index());
       ds.field("value", &self.value());
