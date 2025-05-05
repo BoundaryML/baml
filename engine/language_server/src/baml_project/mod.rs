@@ -156,7 +156,17 @@ impl BamlProject {
             .collect();
         let start_time = Instant::now();
 
-        let runtime = self.runtime(env)?;
+        let runtime = self.runtime(env);
+        if let Err(e) = runtime {
+            if (e.has_errors()) {
+                tracing::error!("Failed to run codegen: {:?}", e);
+                return Err(anyhow::anyhow!("Project has errors."));
+            } else {
+                tracing::error!("Failed to run codegen: {:?}", e);
+                return Err(e.into());
+            }
+        }
+        let runtime = runtime.unwrap();
 
         let generated = match runtime.run_codegen(&all_files, no_version_check.unwrap_or(false)) {
             Ok(gen) => {

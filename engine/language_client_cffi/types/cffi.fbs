@@ -18,7 +18,8 @@ union CFFIValueUnion {
   CFFIValueTuple,
   CFFIValueUnionVariant,   // corresponds to the Rust `Union(Vec<CFFIFieldType>, Box<CFFIValue>)`
   CFFIValueChecked,
-  CFFIValueStreamingState
+  CFFIValueStreamingState,
+  CFFIFunctionArguments
 }
 
 // The wrapper table for CFFIValue.
@@ -229,6 +230,10 @@ table CFFIFieldTypeChecked {
 
 table CFFIFieldTypeStreamState {
   value: CFFIFieldTypeHolder;
+}
+
+table CFFIFunctionArguments {
+  kwargs: [CFFIMapEntry];
 }
 
 // -----------------------------------------------------------------------------

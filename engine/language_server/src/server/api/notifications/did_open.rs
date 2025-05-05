@@ -1,15 +1,16 @@
-use lsp_types::notification::DidOpenTextDocument;
-use lsp_types::{DidOpenTextDocumentParams, PublishDiagnosticsParams, TextDocumentItem};
-
 use crate::server::api::diagnostics::publish_session_lsp_diagnostics;
 use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
 use crate::server::api::ResultExt;
 use crate::server::client::{Notifier, Requester};
-use crate::server::Result;
+use crate::server::{Result, Task};
 use crate::session::Session;
 use crate::{DocumentKey, TextDocument};
-
+use lsp_types::notification::DidOpenTextDocument;
+use lsp_types::{
+    self as types, ConfigurationItem, ConfigurationParams, DidOpenTextDocumentParams,
+    PublishDiagnosticsParams, TextDocumentItem,
+};
 pub(crate) struct DidOpenTextDocumentHandler;
 
 impl NotificationHandler for DidOpenTextDocumentHandler {
@@ -20,12 +21,31 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
     fn run(
         session: &mut Session,
         notifier: Notifier,
-        _requester: &mut Requester,
+        requester: &mut Requester,
         params: DidOpenTextDocumentParams,
     ) -> Result<()> {
         tracing::info!("DidOpenTextDocumentHandler");
 
         let url = params.text_document.uri;
+
+        // TODO: do this when server initializes instead of every time a file is opened
+        // note this just schedules the task. It will run after the current task is done.
+        requester.request::<types::request::WorkspaceConfiguration>(
+            ConfigurationParams {
+                items: vec![types::ConfigurationItem {
+                    scope_uri: None,
+                    section: Some("baml".to_string()),
+                }],
+            },
+            |response| {
+                Task::local(move |session, _, _, _| {
+                    tracing::info!("Workspace configuration request received: {:?}", response);
+                    if let Some(first_response) = response.first() {
+                        session.update_baml_settings(first_response.clone());
+                    }
+                })
+            },
+        );
 
         let file_path = url
             .to_file_path()

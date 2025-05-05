@@ -52,11 +52,18 @@ impl SyncRequestHandler for Hover {
         }
         .internal_error()?;
         let position = params.text_document_position_params.position;
-        let hover = project
-            .lock()
-            .unwrap()
-            .handle_hover_request(&text_document_item, &position, notifier)
-            .internal_error()?;
+        // Just swallow the error here, we dont want hover failures to show error notifs for a user.
+        let hover = match project.lock().unwrap().handle_hover_request(
+            &text_document_item,
+            &position,
+            notifier,
+        ) {
+            Ok(hover) => hover,
+            Err(e) => {
+                tracing::error!("Error handling hover request: {}", e);
+                None
+            }
+        };
         Ok(hover)
     }
 }

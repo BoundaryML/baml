@@ -7,8 +7,16 @@ use serde::Deserialize;
 /// Maps a workspace URI to its associated client settings. Used during server initialization.
 pub(crate) type WorkspaceSettingsMap = FxHashMap<Url, ClientSettings>;
 
+#[derive(Debug, Deserialize, Default, Clone)]
+#[cfg_attr(test, derive(PartialEq, Eq))]
+#[serde(rename_all = "camelCase")]
+pub struct BamlSettings {
+    pub(crate) cli_path: Option<String>,
+    pub(crate) generate_code_on_save: Option<String>,
+}
+
 /// This is a direct representation of the settings schema sent by the client.
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 pub struct ClientSettings {
@@ -20,7 +28,7 @@ pub struct ClientSettings {
 
 /// Settings needed to initialize tracing. These will only be
 /// read from the global configuration.
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Default, Clone)]
 #[cfg_attr(test, derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct TracingSettings {

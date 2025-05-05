@@ -137,6 +137,12 @@ func encodeValue(builder *flatbuffers.Builder, value any) (cffi.CFFIValueUnion, 
 			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding StreamState value: %w", err)
 		}
 		return cffi.CFFIValueUnionCFFIValueStreamingState, offset, nil
+	case BamlFunctionArguments:
+		offset, err := encodeFunctionArguments(builder, v)
+		if err != nil {
+			return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding function arguments: %w", err)
+		}
+		return cffi.CFFIValueUnionCFFIFunctionArguments, offset, nil
 		// Add cases for Media and Tuple if implemented
 		// case MyMediaStruct: ... return cffi.CFFIValueUnionCFFIValueMedia, offset, nil
 		// case MyTupleStruct: ... return cffi.CFFIValueUnionCFFIValueTuple, offset, nil
@@ -385,6 +391,17 @@ func encodeStreamState(builder *flatbuffers.Builder, streamStateVal StreamState[
 	cffi.CFFIValueStreamingStateAddValue(builder, valueHolderOffset)
 	cffi.CFFIValueStreamingStateAddState(builder, stateEnum)
 	return cffi.CFFIValueStreamingStateEnd(builder), nil
+}
+
+func encodeFunctionArguments(builder *flatbuffers.Builder, functionArgumentsVal BamlFunctionArguments) (flatbuffers.UOffsetT, error) {
+	kwargsOffset, err := encodeMapEntries(builder, functionArgumentsVal.Kwargs, "function arguments")
+	if err != nil {
+		return 0, fmt.Errorf("encoding function arguments: %w", err)
+	}
+
+	cffi.CFFIFunctionArgumentsStart(builder)
+	cffi.CFFIFunctionArgumentsAddKwargs(builder, kwargsOffset)
+	return cffi.CFFIFunctionArgumentsEnd(builder), nil
 }
 
 func encodeFieldType(builder *flatbuffers.Builder, fieldType reflect.Type) flatbuffers.UOffsetT {

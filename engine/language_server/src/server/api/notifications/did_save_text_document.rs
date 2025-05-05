@@ -1,10 +1,11 @@
 use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
 use crate::server::api::ResultExt;
 use crate::server::client::{Notifier, Requester};
-use crate::server::Result;
+use crate::server::{Result, Task};
 use crate::session::{DocumentSnapshot, Session};
-use lsp_types as types;
 use lsp_types::notification as notif;
+use lsp_types::request::Request;
+use lsp_types::{self as types, ConfigurationParams};
 use std::borrow::Cow;
 
 pub struct DidSaveTextDocument;
@@ -27,6 +28,14 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             .internal_error_msg("Could not convert URL to path")?;
         session.clear_unsaved_files();
         session.reload(Some(notifier.clone())).internal_error()?;
+
+        if let Some(generate_code_on_save) = session.baml_settings.clone().generate_code_on_save {
+            if generate_code_on_save == "never" {
+                tracing::info!("Skipping generator because generate_code_on_save is false");
+                return Ok(());
+            }
+        }
+
         tracing::info!("About to run generator. URL path: {:?}", path);
         let project = session
             .get_or_create_project(&path)
@@ -59,9 +68,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
             },
             |e| {
                 tracing::error!("Error generating: {e}");
-                notifier
-                    .notify_baml_error(&format!("Error generating: {e}"))
-                    .unwrap_or(())
+                notifier.notify_baml_error(&format!("{e}")).unwrap_or(())
             },
         );
 
@@ -102,9 +109,7 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
                 },
                 |e| {
                     tracing::error!("Error generating: {e}");
-                    notifier
-                        .notify_baml_error(&format!("Error generating: {e}"))
-                        .unwrap_or(())
+                    notifier.notify_baml_error(&format!("{e}")).unwrap_or(())
                 },
             );
         } else {

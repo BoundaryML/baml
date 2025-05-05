@@ -470,7 +470,7 @@ impl AwsClient {
                 bedrock::types::ContentBlock::ToolUse(_) => "toolUse",
                 bedrock::types::ContentBlock::Text(_) => "text",
                 bedrock::types::ContentBlock::ReasoningContent(_) => "reasoningContent",
-                bedrock::types::ContentBlock::CachePoint(_) => "cachePoint",
+                // bedrock::types::ContentBlock::CachePoint(_) => "cachePoint",
                 bedrock::types::ContentBlock::Document(_) => "document",
                 bedrock::types::ContentBlock::Video(_) => "video",
                 _ => "unknown",

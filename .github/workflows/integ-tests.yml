@@ -1,0 +1,101 @@
+# infisical checks this against OIDC
+name: integ-tests
+
+on:
+  workflow_call: {}
+  workflow_dispatch: {}
+  push:
+    branches: [ sam/integ-tests-ci ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  # for oidc
+  id-token: write
+
+jobs:
+  build-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        _:
+          - runs-on: ubuntu-22.04
+            setup: |
+              env | sort
+              curl -fsSL https://ollama.com/install.sh | sh
+            # test: |
+            #   ollama serve &
+            #   sleep 5
+            #   ollama run tinyllama "2+2?"
+            #   ./tools/build integ-tests/python
+            #   ./tools/build integ-tests/typescript
+            #   ./tools/build integ-tests/ruby
+
+          - runs-on: macos-14
+            setup: |
+              env | sort
+              brew install ollama go
+            # test: |
+            #   ollama serve &
+            #   sleep 5
+            #   ollama run tinyllama "2+2?"
+            #   ./tools/build integ-tests/python
+            #   ./tools/build integ-tests/typescript
+            #   ./tools/build integ-tests/ruby
+
+          # winget is not available on windows-2019 or windows-2022
+          # https://github.com/actions/runner-images/issues/8584
+              # winget upgrade --all --silent --disable-interactivity --accept-source-agreements --accept-package-agreements
+          # - runs-on: windows-2025
+          #   setup: |
+          #     env | sort
+          #     winget install --id=Ollama.Ollama -e --accept-package-agreements --accept-source-agreements
+
+    name: ${{ matrix._.runs-on }}
+    runs-on: ${{ matrix._.runs-on }}
+    # For when we have go integ tests
+    # env:
+    #   GOARCH: ${{ matrix._.goarch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.ollama/models
+          key: ollama-${{ matrix._.runs-on }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: engine
+          cache-on-failure: true
+      - uses: jdx/mise-action@v2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Setup
+        run: ${{ matrix._.setup }}
+      - uses: infisical/secrets-action@v1.0.9
+        with:
+          method: oidc
+          # https://app.infisical.com/organization/identities/5b66a909-d5b3-4835-b518-27abf4c9b97d
+          identity-id: 5b66a909-d5b3-4835-b518-27abf4c9b97d
+          env-slug: test
+          project-slug: gloo-infra-9-fkp
+
+      - name: setup TS
+        run: pnpm install --frozen-lockfile
+        working-directory: engine/language_client_typescript
+
+      - name: Run all integ tests
+        run: |
+              ollama serve &
+              sleep 5
+              ollama run tinyllama "2+2?"
+              # If this fails, still run the next one
+              ./tools/bctl integ-tests --suite python
+              # If this fails, still run the next one
+              ./tools/bctl integ-tests --suite typescript
+              # If this fails, still run the next one
+              ./tools/bctl integ-tests --suite ruby
