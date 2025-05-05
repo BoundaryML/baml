@@ -28,15 +28,6 @@ pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> 
                 .ok()
                 .unwrap()
         );
-    } else if field_type.is_slice {
-        let inner_type = field_type.underlying_type.as_ref().unwrap();
-        return format!(
-            r#"castSlice({container_variable_name}, func(item any) {} {{
-    return {}
-}})"#,
-            inner_type.name,
-            cast_value("item", inner_type),
-        );
     } else if field_type.is_union {
         return format!("*({container_variable_name}).(*{})", field_type.name);
     } else if field_type.is_pointer {

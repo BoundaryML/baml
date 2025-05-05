@@ -29,15 +29,6 @@ type stream struct {}
 
 var Stream = &stream{}
 
-func castSlice[T any](result any, castResult func(any) T) []T {
-	items := result.([]any)
-	casted := make([]T, len(items))
-	for i, item := range items {
-		casted[i] = castResult(item)
-	}
-	return casted
-}
-
 func castOptional[T any](result any, castResult func(any) T) *T {
 	if result == nil {
 		return nil
