@@ -46,11 +46,9 @@ mod test_cli {
         let run = h.run_cli(cmd)?.output()?;
         assert_ne!(run.status.code(), Some(0));
         assert!(run.stdout.is_empty());
-        assert!(String::from_utf8(run.stderr)?.contains("Please run with --preview"),);
+        assert!(String::from_utf8(run.stderr)?.contains("Please run with"),);
 
-        let mut child = h
-            .run_cli(format!("{cmd} --preview --port {port}"))?
-            .spawn()?;
+        let mut child = h.run_cli(format!("{cmd} --port {port}"))?.spawn()?;
         defer! {
             let _ = child.kill();
             std::thread::sleep(Duration::from_secs(1));
@@ -139,7 +137,7 @@ mod test_cli {
         assert_eq!(run.status.code(), Some(0));
 
         let mut child = h
-            .run_cli(format!("serve --preview --port {PORT}"))?
+            .run_cli(format!("serve --port {PORT}"))?
             .env("BAML_PASSWORD", "my-super-secret-password")
             .spawn()?;
         defer! { let _ = child.kill(); }
@@ -225,15 +223,13 @@ mod test_cli {
         assert_eq!(run.status.code(), Some(0));
 
         let mut child = h
-            .run_cli(format!("{cmd} --preview --port {PORT}"))?
+            .run_cli(format!("{cmd} --port {PORT}"))?
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()?;
         defer! { let _ = child.kill(); }
 
-        let run = h
-            .run_cli(format!("{cmd} --preview --port {PORT}"))?
-            .output()?;
+        let run = h.run_cli(format!("{cmd} --port {PORT}"))?.output()?;
         assert_ne!(run.status.code(), Some(0));
         assert!(String::from_utf8(run.stderr)?.contains("Address already in use"));
 
@@ -250,9 +246,7 @@ mod test_cli {
         let run = h.run_cli("init")?.output()?;
         assert_eq!(run.status.code(), Some(0));
 
-        let mut child = h
-            .run_cli(format!("serve --preview --port {PORT}"))?
-            .spawn()?;
+        let mut child = h.run_cli(format!("serve --port {PORT}"))?.spawn()?;
         defer! { let _ = child.kill(); }
 
         assert!(
@@ -308,7 +302,6 @@ mod test_cli {
         Ok(())
     }
 
-
     #[rstest]
     #[tokio::test]
     async fn call_function_with_baml_options() -> Result<()> {
@@ -319,9 +312,7 @@ mod test_cli {
         let run = h.run_cli("init")?.output()?;
         assert_eq!(run.status.code(), Some(0));
 
-        let mut child = h
-            .run_cli(format!("serve --preview --port {PORT}"))?
-            .spawn()?;
+        let mut child = h.run_cli(format!("serve --port {PORT}"))?.spawn()?;
         defer! { let _ = child.kill(); }
 
         assert!(
@@ -346,8 +337,8 @@ mod test_cli {
     "};
         let resp = reqwest::Client::new()
             .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
-            .json(&json!({ 
-                "resume": resume, 
+            .json(&json!({
+                "resume": resume,
                 "__baml_options__": {
                     "client_registry": {
                         "clients": [
@@ -369,14 +360,28 @@ mod test_cli {
         assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
         let resp_json = resp.json::<serde_json::Value>().await?;
         println!("baml options error expected: {:?}", resp_json);
-        assert!(resp_json.get("error").is_some(), "error field not found in error object of response");
-        assert!(resp_json.get("message").is_some(), "message field not found in error object of response");
-        assert!(resp_json.get("message").unwrap().as_str().unwrap().contains("Incorrect API key provided: my-super"), "message does not contain expected content");
+        assert!(
+            resp_json.get("error").is_some(),
+            "error field not found in error object of response"
+        );
+        assert!(
+            resp_json.get("message").is_some(),
+            "message field not found in error object of response"
+        );
+        assert!(
+            resp_json
+                .get("message")
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .contains("Incorrect API key provided: my-super"),
+            "message does not contain expected content"
+        );
 
         let resp = reqwest::Client::new()
             .post(&format!("http://localhost:{PORT}/call/ExtractResume"))
-            .json(&json!({ 
-                "resume": resume, 
+            .json(&json!({
+                "resume": resume,
                 "__baml_options__": {
                     "client_registry": {
                         "clients": [
@@ -410,9 +415,7 @@ mod test_cli {
         let run = h.run_cli("init")?.output()?;
         assert_eq!(run.status.code(), Some(0));
 
-        let mut child = h
-            .run_cli(format!("serve --preview --port {PORT}"))?
-            .spawn()?;
+        let mut child = h.run_cli(format!("serve --port {PORT}"))?.spawn()?;
         defer! { let _ = child.kill(); }
 
         assert!(
@@ -465,7 +468,7 @@ mod test_cli {
     //     assert_eq!(run.status.code(), Some(0));
 
     //     let mut child = h
-    //         .run_cli(format!("serve --preview --port {PORT}"))?
+    //         .run_cli(format!("serve --port {PORT}"))?
     //         .spawn()?;
     //     defer! { let _ = child.kill(); }
 
