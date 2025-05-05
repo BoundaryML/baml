@@ -113,6 +113,19 @@ use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
+static INIT: std::sync::Once = std::sync::Once::new();
+
+fn setup_crypto_provider() {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rustls::crypto::CryptoProvider;
+        INIT.call_once(|| {
+            let provider = rustls::crypto::ring::default_provider();
+            CryptoProvider::install_default(provider).expect("failed to install CryptoProvider");
+        });
+    }
+}
+
 #[derive(Clone)]
 pub struct BamlRuntime {
     pub inner: InternalBamlRuntime,
@@ -174,6 +187,7 @@ impl BamlRuntime {
         path: &std::path::Path,
         env_vars: HashMap<T, T>,
     ) -> Result<Self> {
+        setup_crypto_provider();
         let path = Self::parse_baml_src_path(path)?;
 
         let copy = env_vars
@@ -196,6 +210,7 @@ impl BamlRuntime {
         files: &HashMap<T, T>,
         env_vars: HashMap<U, U>,
     ) -> Result<Self> {
+        setup_crypto_provider();
         let copy = env_vars
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))

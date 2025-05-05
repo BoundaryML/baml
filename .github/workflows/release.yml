@@ -17,6 +17,8 @@ on:
       - "test-release/*.*"
       - "*.*"
 concurrency:
+  # No suffix specified - in reusable workflows we need a statically-defined suffix
+  # to prevent workflow_call workflows from triggering a concurrency deadlock
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 

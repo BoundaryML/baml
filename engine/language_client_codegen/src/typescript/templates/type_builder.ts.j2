@@ -1,17 +1,17 @@
 import { FieldType } from '@boundaryml/baml/native'
-import { TypeBuilder as _TypeBuilder, EnumBuilder, ClassBuilder } from '@boundaryml/baml/type_builder'
+import { TypeBuilder as _TypeBuilder, EnumBuilder, EnumViewer, ClassBuilder, ClassViewer } from '@boundaryml/baml/type_builder'
 import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
 
 export default class TypeBuilder {
     private tb: _TypeBuilder;
-    {% for cls in classes %}{% if cls.dynamic %}
-    {{cls.name}}: ClassBuilder<'{{cls.name}}'
+    {% for cls in classes %}
+    {{cls.name}}: {% if cls.dynamic %}ClassBuilder{% else %}ClassViewer{% endif %}<'{{cls.name}}'
     {%- for (name, _, _, _) in cls.fields %}{% if loop.first %}, {%endif%}"{{name}}"{% if !loop.last %} | {% endif %}{% endfor -%}
     >;
-    {% endif %}{% endfor %}
-    {% for enum in enums %}{% if enum.dynamic %}
-    {{enum.name}}: EnumBuilder<'{{enum.name}}'{%- for (value, _) in enum.values %}{% if loop.first %}, {%endif%}"{{value}}"{% if !loop.last %} | {% endif %}{% endfor -%}>;
-    {% endif %}{% endfor %}
+    {% endfor %}
+    {% for enum in enums %}
+    {{enum.name}}: {% if enum.dynamic %}EnumBuilder{% else %}EnumViewer{% endif %}<'{{enum.name}}'{%- for (value, _) in enum.values %}{% if loop.first %}, {%endif%}"{{value}}"{% if !loop.last %} | {% endif %}{% endfor -%}>;
+    {% endfor %}
 
     constructor() {
         this.tb = new _TypeBuilder({
@@ -23,16 +23,16 @@ export default class TypeBuilder {
           ]),
           runtime: DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
         });
-        {% for cls in classes %}{% if cls.dynamic %}
-        this.{{cls.name}} = this.tb.classBuilder("{{cls.name}}", [
+        {% for cls in classes %}
+        this.{{cls.name}} = this.tb.{% if cls.dynamic %}classBuilder{% else %}classViewer{% endif %}("{{cls.name}}", [
           {% for (name, _, _, _) in cls.fields %}"{{name}}",{% endfor %}
         ]);
-        {% endif %}{% endfor %}
-        {% for enum in enums %}{% if enum.dynamic %}
-        this.{{enum.name}} = this.tb.enumBuilder("{{enum.name}}", [
+        {% endfor %}
+        {% for enum in enums %}
+        this.{{enum.name}} = this.tb.{% if enum.dynamic %}enumBuilder{% else %}enumViewer{% endif %}("{{enum.name}}", [
           {% for (value, _) in enum.values %}"{{value}}",{% endfor %}
         ]);
-        {% endif %}{% endfor %}
+        {% endfor %}
     }
 
     __tb() {
@@ -92,6 +92,6 @@ export default class TypeBuilder {
     }
 
     addBaml(baml: string): void {
-        this.tb.addBaml(baml, this.runtime);
+        this.tb.addBaml(baml);
     }
 }
