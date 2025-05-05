@@ -116,11 +116,14 @@ static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> 
 static INIT: std::sync::Once = std::sync::Once::new();
 
 fn setup_crypto_provider() {
-    use rustls::crypto::CryptoProvider;
-    INIT.call_once(|| {
-        let provider = rustls::crypto::ring::default_provider();
-        CryptoProvider::install_default(provider).expect("failed to install CryptoProvider");
-    });
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        use rustls::crypto::CryptoProvider;
+        INIT.call_once(|| {
+            let provider = rustls::crypto::ring::default_provider();
+            CryptoProvider::install_default(provider).expect("failed to install CryptoProvider");
+        });
+    }
 }
 
 #[derive(Clone)]
