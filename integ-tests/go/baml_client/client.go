@@ -39,15 +39,6 @@ type stream struct{}
 
 var Stream = &stream{}
 
-func castSlice[T any](result any, castResult func(any) T) []T {
-	items := result.([]any)
-	casted := make([]T, len(items))
-	for i, item := range items {
-		casted[i] = castResult(item)
-	}
-	return casted
-}
-
 func castOptional[T any](result any, castResult func(any) T) *T {
 	if result == nil {
 		return nil
@@ -1872,9 +1863,7 @@ func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput) (
 	}
 
 	castResult := func(result any) []types.DynInputOutput {
-		return castSlice(result, func(item any) types.DynInputOutput {
-			return *(item).(*types.DynInputOutput)
-		})
+		return (result).([]types.DynInputOutput)
 	}
 
 	casted := castResult(*result.Data)
@@ -2122,9 +2111,7 @@ func ExtractHobby(ctx context.Context, text string) (*[]types.Hobby, error) {
 	}
 
 	castResult := func(result any) []types.Hobby {
-		return castSlice(result, func(item any) types.Hobby {
-			return (item).(types.Hobby)
-		})
+		return (result).([]types.Hobby)
 	}
 
 	casted := castResult(*result.Data)
@@ -2186,9 +2173,7 @@ func ExtractNames(ctx context.Context, input string) (*[]string, error) {
 	}
 
 	castResult := func(result any) []string {
-		return castSlice(result, func(item any) string {
-			return (item).(string)
-		})
+		return (result).([]string)
 	}
 
 	casted := castResult(*result.Data)
@@ -2250,9 +2235,7 @@ func ExtractPeople(ctx context.Context, text string) (*[]types.Person, error) {
 	}
 
 	castResult := func(result any) []types.Person {
-		return castSlice(result, func(item any) types.Person {
-			return *(item).(*types.Person)
-		})
+		return (result).([]types.Person)
 	}
 
 	casted := castResult(*result.Data)
@@ -2628,9 +2611,7 @@ func FnEnumListOutput(ctx context.Context, input string) (*[]types.EnumOutput, e
 	}
 
 	castResult := func(result any) []types.EnumOutput {
-		return castSlice(result, func(item any) types.EnumOutput {
-			return (item).(types.EnumOutput)
-		})
+		return (result).([]types.EnumOutput)
 	}
 
 	casted := castResult(*result.Data)
@@ -3064,9 +3045,7 @@ func FnOutputClassList(ctx context.Context, input string) (*[]types.TestOutputCl
 	}
 
 	castResult := func(result any) []types.TestOutputClass {
-		return castSlice(result, func(item any) types.TestOutputClass {
-			return *(item).(*types.TestOutputClass)
-		})
+		return (result).([]types.TestOutputClass)
 	}
 
 	casted := castResult(*result.Data)
@@ -3500,9 +3479,7 @@ func FnOutputStringList(ctx context.Context, input string) (*[]string, error) {
 	}
 
 	castResult := func(result any) []string {
-		return castSlice(result, func(item any) string {
-			return (item).(string)
-		})
+		return (result).([]string)
 	}
 
 	casted := castResult(*result.Data)
@@ -4928,11 +4905,7 @@ func OptionalTest_Function(ctx context.Context, input string) (*[]*types.Optiona
 	}
 
 	castResult := func(result any) []*types.OptionalTest_ReturnType {
-		return castSlice(result, func(item any) *types.OptionalTest_ReturnType {
-			return castOptional(item, func(item any) types.OptionalTest_ReturnType {
-				return *(item).(*types.OptionalTest_ReturnType)
-			})
-		})
+		return (result).([]*types.OptionalTest_ReturnType)
 	}
 
 	casted := castResult(*result.Data)
@@ -6482,9 +6455,7 @@ func StreamUnionIntegers(ctx context.Context, digits int64) (*[]types.Union__int
 	}
 
 	castResult := func(result any) []types.Union__int__string {
-		return castSlice(result, func(item any) types.Union__int__string {
-			return *(item).(*types.Union__int__string)
-		})
+		return (result).([]types.Union__int__string)
 	}
 
 	casted := castResult(*result.Data)
@@ -8716,9 +8687,7 @@ func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string) (*[]st
 	}
 
 	castResult := func(result any) []string {
-		return castSlice(result, func(item any) string {
-			return (item).(string)
-		})
+		return (result).([]string)
 	}
 
 	casted := castResult(*result.Data)
