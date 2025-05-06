@@ -19,9 +19,9 @@ type {{ union.name }} struct {
 
 func (u *{{ union.name }}) Decode(holder *cffi.CFFIValueUnionVariant) {
     valueHolder := holder.Value(nil)
-	switch holder.ValueTypeIndex() {
+	switch string(holder.VariantName()) {
     {% for variant in union.variants %}
-	    case {{ loop.index0 }}:
+	    case "{{ variant.0 }}":
             u.variant = "{{ variant.0 }}"
             value := {{ crate::go::generate_types::render_value_coercion("valueHolder", variant.1) }}
             u.variant_{{ variant.0 }} = &value
@@ -34,7 +34,7 @@ func (u {{ union.name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
     switch u.variant {
     {% for variant in union.variants %}
     case "{{ variant.0 }}":
-        return baml.EncodeUnion(builder, u.variant, u.variant_{{ variant.0 }})
+        return baml.EncodeUnion(builder, "{{ union.name }}", u.variant, u.variant_{{ variant.0 }})
     {% endfor %}
     case "":
         return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")

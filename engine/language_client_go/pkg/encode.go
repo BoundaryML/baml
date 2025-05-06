@@ -63,21 +63,17 @@ func EncodeEnum(builder *flatbuffers.Builder, name string, value string, isDynam
 	return cffi.CFFIValueUnionCFFIValueEnum, cffi.CFFIValueEnumEnd(builder), nil
 }
 
-func EncodeUnion(builder *flatbuffers.Builder, variantName string, value any) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	nameOffset := builder.CreateString(variantName)
+func EncodeUnion(builder *flatbuffers.Builder, name string, variantName string, value any) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	nameOffset := builder.CreateString(name)
+	variantNameOffset := builder.CreateString(variantName)
 	valueHolderOffset, err := Encode(builder, value)
 	if err != nil {
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("encoding inner value for union variant '%s': %w", variantName, err)
 	}
 
-	// Note: The CFFIValueUnionVariant schema has field_types and value_type_index.
-	// The BamlUnionSerializer interface currently doesn't provide these.
-	// For now, we are omitting them, which might be incomplete depending on
-	// how the receiving end uses this structure. If they are needed, the
-	// interface and this function must be updated.
-
 	cffi.CFFIValueUnionVariantStart(builder)
 	cffi.CFFIValueUnionVariantAddName(builder, nameOffset)
+	cffi.CFFIValueUnionVariantAddVariantName(builder, variantNameOffset)
 	cffi.CFFIValueUnionVariantAddValue(builder, valueHolderOffset)
 	// cffi.CFFIValueUnionVariantAddFieldTypes(builder, ...) // Omitted
 	// cffi.CFFIValueUnionVariantAddValueTypeIndex(builder, ...) // Omitted
@@ -250,6 +246,7 @@ func encodeList(builder *flatbuffers.Builder, value reflect.Value) (flatbuffers.
 
 // encodeMap now accepts and passes TypeMap
 func encodeMap(builder *flatbuffers.Builder, mapValue reflect.Value) (flatbuffers.UOffsetT, error) {
+
 	mapLength := mapValue.Len()
 	entryOffsets := make([]flatbuffers.UOffsetT, 0, mapLength)
 	// Iterate map and build entries (order doesn't strictly matter for map, but FB requires building bottom-up)

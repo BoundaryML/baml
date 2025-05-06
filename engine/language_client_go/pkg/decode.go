@@ -62,14 +62,15 @@ func (d *DynamicEnum) Decode(holder cffi.CFFIValueEnum) {
 	d.Value = string(holder.Value())
 }
 
-func decodePrimitiveValue[U any, T cffiValue[U]](valueHolder *cffi.CFFIValueHolder, t T) U {
+func decodePrimitiveValue[U any, T cffiValue[U]](valueHolder *cffi.CFFIValueHolder, t T) *U {
 	var tbl flatbuffers.Table
 	if !valueHolder.Value(&tbl) {
 		panic("error decoding value")
 	}
 
 	t.Init(tbl.Bytes, tbl.Pos)
-	return t.Value()
+	val := t.Value()
+	return &val
 }
 
 func decodeListValue(valueHolder *cffi.CFFIValueHolder) any {
@@ -396,8 +397,9 @@ func Decode(holder *cffi.CFFIValueHolder) any {
 	case cffi.CFFIValueUnionNONE:
 		return nil
 	case cffi.CFFIValueUnionCFFIValueString:
-		valueString := decodePrimitiveValue(holder, &cffi.CFFIValueString{})
-		return string(valueString)
+		valueBytes := decodePrimitiveValue(holder, &cffi.CFFIValueString{})
+		valueString := string(*valueBytes)
+		return &valueString
 	case cffi.CFFIValueUnionCFFIValueInt:
 		return decodePrimitiveValue(holder, &cffi.CFFIValueInt{})
 	case cffi.CFFIValueUnionCFFIValueFloat:

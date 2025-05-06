@@ -84,6 +84,7 @@ table CFFIValueTuple {
 // For the Rust variant `Union(Vec<CFFIFieldType>, Box<CFFIValue>)`
 table CFFIValueUnionVariant {
   name: string;
+  variant_name: string;
   field_types: [CFFIFieldTypeHolder];
   value_type_index: int;
   value: CFFIValueHolder;

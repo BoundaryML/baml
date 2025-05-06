@@ -120,11 +120,14 @@ BAML comes with native tooling for VSCode (jetbrains + neovim coming soon).
 
 **Using AI is all about iteration speed.**
 
-If testing your pipeline takes 2 minutes, in 20 minutes, you can only test 10 ideas.
+If testing your pipeline takes 2 minutes, you can only test 10 ideas in 20 minutes.
 
-If testing your pipeline took 5 seconds, in 20 minutes, you can test 240 ideas.
+If you reduce it to 5 seconds, you can test 240 ideas in the same amount of time.
 ![resume-attempt2-smaller2](https://github.com/user-attachments/assets/6fc6b8a6-ffed-4cfc-80b8-78bc8a3d66a6)
-No need to login to any website to test things, and no need to copy JSON blobs around.
+
+The playground also allows you to run tests in parallel -- for even faster iteration speeds 🚀.
+
+No need to login to websites, and no need to manually define json schemas.
 
 ## Enable reliable tool-calling with any model
 BAML works even when the models don't support native tool-calling APIs. We created the SAP (schema-aligned parsing) algorithm to support the flexible outputs LLMs can provide, like markdown within a JSON blob or chain-of-thought prior to answering. [Read more about SAP](https://www.boundaryml.com/blog/schema-aligned-parsing)
