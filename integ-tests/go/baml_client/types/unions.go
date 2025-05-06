@@ -30,19 +30,19 @@ type Union__BookOrder__FlightConfirmation__GroceryReceipt struct {
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "BookOrder":
+	case 0:
 		u.variant = "BookOrder"
 		value := *baml.Decode(valueHolder).(*BookOrder)
 		u.variant_BookOrder = &value
 
-	case "FlightConfirmation":
+	case 1:
 		u.variant = "FlightConfirmation"
 		value := *baml.Decode(valueHolder).(*FlightConfirmation)
 		u.variant_FlightConfirmation = &value
 
-	case "GroceryReceipt":
+	case 2:
 		u.variant = "GroceryReceipt"
 		value := *baml.Decode(valueHolder).(*GroceryReceipt)
 		u.variant_GroceryReceipt = &value
@@ -54,13 +54,13 @@ func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) Encode(builder *fl
 	switch u.variant {
 
 	case "BookOrder":
-		return baml.EncodeUnion(builder, "Union__BookOrder__FlightConfirmation__GroceryReceipt", u.variant, u.variant_BookOrder)
+		return baml.EncodeUnion(builder, u.variant, u.variant_BookOrder)
 
 	case "FlightConfirmation":
-		return baml.EncodeUnion(builder, "Union__BookOrder__FlightConfirmation__GroceryReceipt", u.variant, u.variant_FlightConfirmation)
+		return baml.EncodeUnion(builder, u.variant, u.variant_FlightConfirmation)
 
 	case "GroceryReceipt":
-		return baml.EncodeUnion(builder, "Union__BookOrder__FlightConfirmation__GroceryReceipt", u.variant, u.variant_GroceryReceipt)
+		return baml.EncodeUnion(builder, u.variant, u.variant_GroceryReceipt)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -167,19 +167,19 @@ type Union__List__bool__List__int struct {
 
 func (u *Union__List__bool__List__int) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "List__bool":
+	case 0:
 		u.variant = "List__bool"
 		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) bool {
-			return *baml.Decode(__holder).(*bool)
+			return baml.Decode(__holder).(bool)
 		})
 		u.variant_List__bool = &value
 
-	case "List__int":
+	case 1:
 		u.variant = "List__int"
 		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) int64 {
-			return *baml.Decode(__holder).(*int64)
+			return baml.Decode(__holder).(int64)
 		})
 		u.variant_List__int = &value
 
@@ -190,10 +190,10 @@ func (u Union__List__bool__List__int) Encode(builder *flatbuffers.Builder) (cffi
 	switch u.variant {
 
 	case "List__bool":
-		return baml.EncodeUnion(builder, "Union__List__bool__List__int", u.variant, u.variant_List__bool)
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__bool)
 
 	case "List__int":
-		return baml.EncodeUnion(builder, "Union__List__bool__List__int", u.variant, u.variant_List__int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__int)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -268,14 +268,14 @@ type Union__LiteralClassOne__LiteralClassTwo struct {
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "LiteralClassOne":
+	case 0:
 		u.variant = "LiteralClassOne"
 		value := *baml.Decode(valueHolder).(*LiteralClassOne)
 		u.variant_LiteralClassOne = &value
 
-	case "LiteralClassTwo":
+	case 1:
 		u.variant = "LiteralClassTwo"
 		value := *baml.Decode(valueHolder).(*LiteralClassTwo)
 		u.variant_LiteralClassTwo = &value
@@ -287,10 +287,10 @@ func (u Union__LiteralClassOne__LiteralClassTwo) Encode(builder *flatbuffers.Bui
 	switch u.variant {
 
 	case "LiteralClassOne":
-		return baml.EncodeUnion(builder, "Union__LiteralClassOne__LiteralClassTwo", u.variant, u.variant_LiteralClassOne)
+		return baml.EncodeUnion(builder, u.variant, u.variant_LiteralClassOne)
 
 	case "LiteralClassTwo":
-		return baml.EncodeUnion(builder, "Union__LiteralClassOne__LiteralClassTwo", u.variant, u.variant_LiteralClassTwo)
+		return baml.EncodeUnion(builder, u.variant, u.variant_LiteralClassTwo)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -365,14 +365,14 @@ type Union__Martian__Earthling struct {
 
 func (u *Union__Martian__Earthling) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "Martian":
+	case 0:
 		u.variant = "Martian"
 		value := *baml.Decode(valueHolder).(*Martian)
 		u.variant_Martian = &value
 
-	case "Earthling":
+	case 1:
 		u.variant = "Earthling"
 		value := *baml.Decode(valueHolder).(*Earthling)
 		u.variant_Earthling = &value
@@ -384,10 +384,10 @@ func (u Union__Martian__Earthling) Encode(builder *flatbuffers.Builder) (cffi.CF
 	switch u.variant {
 
 	case "Martian":
-		return baml.EncodeUnion(builder, "Union__Martian__Earthling", u.variant, u.variant_Martian)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Martian)
 
 	case "Earthling":
-		return baml.EncodeUnion(builder, "Union__Martian__Earthling", u.variant, u.variant_Earthling)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Earthling)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -464,19 +464,19 @@ type Union__MemoryObject__ComplexMemoryObject__AnotherObject struct {
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "MemoryObject":
+	case 0:
 		u.variant = "MemoryObject"
 		value := *baml.Decode(valueHolder).(*MemoryObject)
 		u.variant_MemoryObject = &value
 
-	case "ComplexMemoryObject":
+	case 1:
 		u.variant = "ComplexMemoryObject"
 		value := *baml.Decode(valueHolder).(*ComplexMemoryObject)
 		u.variant_ComplexMemoryObject = &value
 
-	case "AnotherObject":
+	case 2:
 		u.variant = "AnotherObject"
 		value := *baml.Decode(valueHolder).(*AnotherObject)
 		u.variant_AnotherObject = &value
@@ -488,13 +488,13 @@ func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) Encode(builder 
 	switch u.variant {
 
 	case "MemoryObject":
-		return baml.EncodeUnion(builder, "Union__MemoryObject__ComplexMemoryObject__AnotherObject", u.variant, u.variant_MemoryObject)
+		return baml.EncodeUnion(builder, u.variant, u.variant_MemoryObject)
 
 	case "ComplexMemoryObject":
-		return baml.EncodeUnion(builder, "Union__MemoryObject__ComplexMemoryObject__AnotherObject", u.variant, u.variant_ComplexMemoryObject)
+		return baml.EncodeUnion(builder, u.variant, u.variant_ComplexMemoryObject)
 
 	case "AnotherObject":
-		return baml.EncodeUnion(builder, "Union__MemoryObject__ComplexMemoryObject__AnotherObject", u.variant, u.variant_AnotherObject)
+		return baml.EncodeUnion(builder, u.variant, u.variant_AnotherObject)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -601,16 +601,16 @@ type Union__Nested__string struct {
 
 func (u *Union__Nested__string) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "Nested":
+	case 0:
 		u.variant = "Nested"
 		value := *baml.Decode(valueHolder).(*Nested)
 		u.variant_Nested = &value
 
-	case "string":
+	case 1:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
 	}
@@ -620,10 +620,10 @@ func (u Union__Nested__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIVa
 	switch u.variant {
 
 	case "Nested":
-		return baml.EncodeUnion(builder, "Union__Nested__string", u.variant, u.variant_Nested)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Nested)
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__Nested__string", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -698,14 +698,14 @@ type Union__OriginalA__OriginalB struct {
 
 func (u *Union__OriginalA__OriginalB) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "OriginalA":
+	case 0:
 		u.variant = "OriginalA"
 		value := *baml.Decode(valueHolder).(*OriginalA)
 		u.variant_OriginalA = &value
 
-	case "OriginalB":
+	case 1:
 		u.variant = "OriginalB"
 		value := *baml.Decode(valueHolder).(*OriginalB)
 		u.variant_OriginalB = &value
@@ -717,10 +717,10 @@ func (u Union__OriginalA__OriginalB) Encode(builder *flatbuffers.Builder) (cffi.
 	switch u.variant {
 
 	case "OriginalA":
-		return baml.EncodeUnion(builder, "Union__OriginalA__OriginalB", u.variant, u.variant_OriginalA)
+		return baml.EncodeUnion(builder, u.variant, u.variant_OriginalA)
 
 	case "OriginalB":
-		return baml.EncodeUnion(builder, "Union__OriginalA__OriginalB", u.variant, u.variant_OriginalB)
+		return baml.EncodeUnion(builder, u.variant, u.variant_OriginalB)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -795,14 +795,14 @@ type Union__PhoneNumber__EmailAddress struct {
 
 func (u *Union__PhoneNumber__EmailAddress) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "PhoneNumber":
+	case 0:
 		u.variant = "PhoneNumber"
 		value := *baml.Decode(valueHolder).(*PhoneNumber)
 		u.variant_PhoneNumber = &value
 
-	case "EmailAddress":
+	case 1:
 		u.variant = "EmailAddress"
 		value := *baml.Decode(valueHolder).(*EmailAddress)
 		u.variant_EmailAddress = &value
@@ -814,10 +814,10 @@ func (u Union__PhoneNumber__EmailAddress) Encode(builder *flatbuffers.Builder) (
 	switch u.variant {
 
 	case "PhoneNumber":
-		return baml.EncodeUnion(builder, "Union__PhoneNumber__EmailAddress", u.variant, u.variant_PhoneNumber)
+		return baml.EncodeUnion(builder, u.variant, u.variant_PhoneNumber)
 
 	case "EmailAddress":
-		return baml.EncodeUnion(builder, "Union__PhoneNumber__EmailAddress", u.variant, u.variant_EmailAddress)
+		return baml.EncodeUnion(builder, u.variant, u.variant_EmailAddress)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -892,14 +892,14 @@ type Union__Resume__Event struct {
 
 func (u *Union__Resume__Event) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "Resume":
+	case 0:
 		u.variant = "Resume"
 		value := *baml.Decode(valueHolder).(*Resume)
 		u.variant_Resume = &value
 
-	case "Event":
+	case 1:
 		u.variant = "Event"
 		value := *baml.Decode(valueHolder).(*Event)
 		u.variant_Event = &value
@@ -911,10 +911,10 @@ func (u Union__Resume__Event) Encode(builder *flatbuffers.Builder) (cffi.CFFIVal
 	switch u.variant {
 
 	case "Resume":
-		return baml.EncodeUnion(builder, "Union__Resume__Event", u.variant, u.variant_Resume)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Resume)
 
 	case "Event":
-		return baml.EncodeUnion(builder, "Union__Resume__Event", u.variant, u.variant_Event)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Event)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -989,16 +989,16 @@ type Union__SimpleTag__JsonTemplate struct {
 
 func (u *Union__SimpleTag__JsonTemplate) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "SimpleTag":
+	case 0:
 		u.variant = "SimpleTag"
 		value := *baml.Decode(valueHolder).(*SimpleTag)
 		u.variant_SimpleTag = &value
 
-	case "JsonTemplate":
+	case 1:
 		u.variant = "JsonTemplate"
-		value := *baml.Decode(valueHolder).(*JsonTemplate)
+		value := baml.Decode(valueHolder).(JsonTemplate)
 		u.variant_JsonTemplate = &value
 
 	}
@@ -1008,10 +1008,10 @@ func (u Union__SimpleTag__JsonTemplate) Encode(builder *flatbuffers.Builder) (cf
 	switch u.variant {
 
 	case "SimpleTag":
-		return baml.EncodeUnion(builder, "Union__SimpleTag__JsonTemplate", u.variant, u.variant_SimpleTag)
+		return baml.EncodeUnion(builder, u.variant, u.variant_SimpleTag)
 
 	case "JsonTemplate":
-		return baml.EncodeUnion(builder, "Union__SimpleTag__JsonTemplate", u.variant, u.variant_JsonTemplate)
+		return baml.EncodeUnion(builder, u.variant, u.variant_JsonTemplate)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -1086,16 +1086,16 @@ type Union__Tag__string struct {
 
 func (u *Union__Tag__string) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "Tag":
+	case 0:
 		u.variant = "Tag"
-		value := *baml.Decode(valueHolder).(*Tag)
+		value := baml.Decode(valueHolder).(Tag)
 		u.variant_Tag = &value
 
-	case "string":
+	case 1:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
 	}
@@ -1105,10 +1105,10 @@ func (u Union__Tag__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	switch u.variant {
 
 	case "Tag":
-		return baml.EncodeUnion(builder, "Union__Tag__string", u.variant, u.variant_Tag)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Tag)
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__Tag__string", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -1183,16 +1183,16 @@ type Union__float__bool struct {
 
 func (u *Union__float__bool) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "float":
+	case 0:
 		u.variant = "float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_float = &value
 
-	case "bool":
+	case 1:
 		u.variant = "bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_bool = &value
 
 	}
@@ -1202,10 +1202,10 @@ func (u Union__float__bool) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	switch u.variant {
 
 	case "float":
-		return baml.EncodeUnion(builder, "Union__float__bool", u.variant, u.variant_float)
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
 
 	case "bool":
-		return baml.EncodeUnion(builder, "Union__float__bool", u.variant, u.variant_bool)
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -1282,21 +1282,21 @@ type Union__int_1__bool_true__string_string_output struct {
 
 func (u *Union__int_1__bool_true__string_string_output) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "int_1":
+	case 0:
 		u.variant = "int_1"
-		value := *baml.Decode(valueHolder).(*int)
+		value := baml.Decode(valueHolder).(int)
 		u.variant_int_1 = &value
 
-	case "bool_true":
+	case 1:
 		u.variant = "bool_true"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_bool_true = &value
 
-	case "string_string_output":
+	case 2:
 		u.variant = "string_string_output"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_string_output = &value
 
 	}
@@ -1306,13 +1306,13 @@ func (u Union__int_1__bool_true__string_string_output) Encode(builder *flatbuffe
 	switch u.variant {
 
 	case "int_1":
-		return baml.EncodeUnion(builder, "Union__int_1__bool_true__string_string_output", u.variant, u.variant_int_1)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int_1)
 
 	case "bool_true":
-		return baml.EncodeUnion(builder, "Union__int_1__bool_true__string_string_output", u.variant, u.variant_bool_true)
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool_true)
 
 	case "string_string_output":
-		return baml.EncodeUnion(builder, "Union__int_1__bool_true__string_string_output", u.variant, u.variant_string_string_output)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_string_output)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -1419,16 +1419,16 @@ type Union__int__float struct {
 
 func (u *Union__int__float) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "int":
+	case 0:
 		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_int = &value
 
-	case "float":
+	case 1:
 		u.variant = "float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_float = &value
 
 	}
@@ -1438,10 +1438,10 @@ func (u Union__int__float) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueU
 	switch u.variant {
 
 	case "int":
-		return baml.EncodeUnion(builder, "Union__int__float", u.variant, u.variant_int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
 
 	case "float":
-		return baml.EncodeUnion(builder, "Union__int__float", u.variant, u.variant_float)
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -1516,16 +1516,16 @@ type Union__int__string struct {
 
 func (u *Union__int__string) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "int":
+	case 0:
 		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_int = &value
 
-	case "string":
+	case 1:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
 	}
@@ -1535,10 +1535,10 @@ func (u Union__int__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	switch u.variant {
 
 	case "int":
-		return baml.EncodeUnion(builder, "Union__int__string", u.variant, u.variant_int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__int__string", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -1617,26 +1617,26 @@ type Union__int__string__bool__float struct {
 
 func (u *Union__int__string__bool__float) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "int":
+	case 0:
 		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_int = &value
 
-	case "string":
+	case 1:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "bool":
+	case 2:
 		u.variant = "bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_bool = &value
 
-	case "float":
+	case 3:
 		u.variant = "float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_float = &value
 
 	}
@@ -1646,16 +1646,16 @@ func (u Union__int__string__bool__float) Encode(builder *flatbuffers.Builder) (c
 	switch u.variant {
 
 	case "int":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float", u.variant, u.variant_int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "bool":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float", u.variant, u.variant_bool)
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
 
 	case "float":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float", u.variant, u.variant_float)
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -1806,36 +1806,36 @@ type Union__int__string__bool__float__JsonObject__JsonArray struct {
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "int":
+	case 0:
 		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_int = &value
 
-	case "string":
+	case 1:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "bool":
+	case 2:
 		u.variant = "bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_bool = &value
 
-	case "float":
+	case 3:
 		u.variant = "float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_float = &value
 
-	case "JsonObject":
+	case 4:
 		u.variant = "JsonObject"
-		value := *baml.Decode(valueHolder).(*JsonObject)
+		value := baml.Decode(valueHolder).(JsonObject)
 		u.variant_JsonObject = &value
 
-	case "JsonArray":
+	case 5:
 		u.variant = "JsonArray"
-		value := *baml.Decode(valueHolder).(*JsonArray)
+		value := baml.Decode(valueHolder).(JsonArray)
 		u.variant_JsonArray = &value
 
 	}
@@ -1845,22 +1845,22 @@ func (u Union__int__string__bool__float__JsonObject__JsonArray) Encode(builder *
 	switch u.variant {
 
 	case "int":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__JsonObject__JsonArray", u.variant, u.variant_int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__JsonObject__JsonArray", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "bool":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__JsonObject__JsonArray", u.variant, u.variant_bool)
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
 
 	case "float":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__JsonObject__JsonArray", u.variant, u.variant_float)
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
 
 	case "JsonObject":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__JsonObject__JsonArray", u.variant, u.variant_JsonObject)
+		return baml.EncodeUnion(builder, u.variant, u.variant_JsonObject)
 
 	case "JsonArray":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__JsonObject__JsonArray", u.variant, u.variant_JsonArray)
+		return baml.EncodeUnion(builder, u.variant, u.variant_JsonArray)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -2095,38 +2095,38 @@ type Union__int__string__bool__float__List__string__Map__string_List__string str
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "int":
+	case 0:
 		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_int = &value
 
-	case "string":
+	case 1:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "bool":
+	case 2:
 		u.variant = "bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_bool = &value
 
-	case "float":
+	case 3:
 		u.variant = "float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_float = &value
 
-	case "List__string":
+	case 4:
 		u.variant = "List__string"
 		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) string {
-			return *baml.Decode(__holder).(*string)
+			return baml.Decode(__holder).(string)
 		})
 		u.variant_List__string = &value
 
-	case "Map__string_List__string":
+	case 5:
 		u.variant = "Map__string_List__string"
-		value := *baml.Decode(valueHolder).(*map[string][]string)
+		value := baml.Decode(valueHolder).(map[string][]string)
 		u.variant_Map__string_List__string = &value
 
 	}
@@ -2136,22 +2136,22 @@ func (u Union__int__string__bool__float__List__string__Map__string_List__string)
 	switch u.variant {
 
 	case "int":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__List__string__Map__string_List__string", u.variant, u.variant_int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__List__string__Map__string_List__string", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "bool":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__List__string__Map__string_List__string", u.variant, u.variant_bool)
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
 
 	case "float":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__List__string__Map__string_List__string", u.variant, u.variant_float)
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
 
 	case "List__string":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__List__string__Map__string_List__string", u.variant, u.variant_List__string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__string)
 
 	case "Map__string_List__string":
-		return baml.EncodeUnion(builder, "Union__int__string__bool__float__List__string__Map__string_List__string", u.variant, u.variant_Map__string_List__string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Map__string_List__string)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -2378,14 +2378,14 @@ type Union__string__List__Nested struct {
 
 func (u *Union__string__List__Nested) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string":
+	case 0:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "List__Nested":
+	case 1:
 		u.variant = "List__Nested"
 		value := baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Nested {
 			return *baml.Decode(__holder).(*Nested)
@@ -2399,10 +2399,10 @@ func (u Union__string__List__Nested) Encode(builder *flatbuffers.Builder) (cffi.
 	switch u.variant {
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__string__List__Nested", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "List__Nested":
-		return baml.EncodeUnion(builder, "Union__string__List__Nested", u.variant, u.variant_List__Nested)
+		return baml.EncodeUnion(builder, u.variant, u.variant_List__Nested)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -2477,16 +2477,16 @@ type Union__string__Map__string_RecursiveUnion struct {
 
 func (u *Union__string__Map__string_RecursiveUnion) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string":
+	case 0:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "Map__string_RecursiveUnion":
+	case 1:
 		u.variant = "Map__string_RecursiveUnion"
-		value := *baml.Decode(valueHolder).(*map[string]RecursiveUnion)
+		value := baml.Decode(valueHolder).(map[string]RecursiveUnion)
 		u.variant_Map__string_RecursiveUnion = &value
 
 	}
@@ -2496,10 +2496,10 @@ func (u Union__string__Map__string_RecursiveUnion) Encode(builder *flatbuffers.B
 	switch u.variant {
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__string__Map__string_RecursiveUnion", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "Map__string_RecursiveUnion":
-		return baml.EncodeUnion(builder, "Union__string__Map__string_RecursiveUnion", u.variant, u.variant_Map__string_RecursiveUnion)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Map__string_RecursiveUnion)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -2574,14 +2574,14 @@ type Union__string__Nested struct {
 
 func (u *Union__string__Nested) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string":
+	case 0:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "Nested":
+	case 1:
 		u.variant = "Nested"
 		value := *baml.Decode(valueHolder).(*Nested)
 		u.variant_Nested = &value
@@ -2593,10 +2593,10 @@ func (u Union__string__Nested) Encode(builder *flatbuffers.Builder) (cffi.CFFIVa
 	switch u.variant {
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__string__Nested", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "Nested":
-		return baml.EncodeUnion(builder, "Union__string__Nested", u.variant, u.variant_Nested)
+		return baml.EncodeUnion(builder, u.variant, u.variant_Nested)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -2671,16 +2671,16 @@ type Union__string__bool struct {
 
 func (u *Union__string__bool) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string":
+	case 0:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "bool":
+	case 1:
 		u.variant = "bool"
-		value := *baml.Decode(valueHolder).(*bool)
+		value := baml.Decode(valueHolder).(bool)
 		u.variant_bool = &value
 
 	}
@@ -2690,10 +2690,10 @@ func (u Union__string__bool) Encode(builder *flatbuffers.Builder) (cffi.CFFIValu
 	switch u.variant {
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__string__bool", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "bool":
-		return baml.EncodeUnion(builder, "Union__string__bool", u.variant, u.variant_bool)
+		return baml.EncodeUnion(builder, u.variant, u.variant_bool)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -2768,16 +2768,16 @@ type Union__string__int struct {
 
 func (u *Union__string__int) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string":
+	case 0:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "int":
+	case 1:
 		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_int = &value
 
 	}
@@ -2787,10 +2787,10 @@ func (u Union__string__int) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 	switch u.variant {
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__string__int", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "int":
-		return baml.EncodeUnion(builder, "Union__string__int", u.variant, u.variant_int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -2867,21 +2867,21 @@ type Union__string__int__float struct {
 
 func (u *Union__string__int__float) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string":
+	case 0:
 		u.variant = "string"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string = &value
 
-	case "int":
+	case 1:
 		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
+		value := baml.Decode(valueHolder).(int64)
 		u.variant_int = &value
 
-	case "float":
+	case 2:
 		u.variant = "float"
-		value := *baml.Decode(valueHolder).(*float64)
+		value := baml.Decode(valueHolder).(float64)
 		u.variant_float = &value
 
 	}
@@ -2891,13 +2891,13 @@ func (u Union__string__int__float) Encode(builder *flatbuffers.Builder) (cffi.CF
 	switch u.variant {
 
 	case "string":
-		return baml.EncodeUnion(builder, "Union__string__int__float", u.variant, u.variant_string)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string)
 
 	case "int":
-		return baml.EncodeUnion(builder, "Union__string__int__float", u.variant, u.variant_int)
+		return baml.EncodeUnion(builder, u.variant, u.variant_int)
 
 	case "float":
-		return baml.EncodeUnion(builder, "Union__string__int__float", u.variant, u.variant_float)
+		return baml.EncodeUnion(builder, u.variant, u.variant_float)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -3004,16 +3004,16 @@ type Union__string_barisa__string_ox_burger struct {
 
 func (u *Union__string_barisa__string_ox_burger) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string_barisa":
+	case 0:
 		u.variant = "string_barisa"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_barisa = &value
 
-	case "string_ox_burger":
+	case 1:
 		u.variant = "string_ox_burger"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_ox_burger = &value
 
 	}
@@ -3023,10 +3023,10 @@ func (u Union__string_barisa__string_ox_burger) Encode(builder *flatbuffers.Buil
 	switch u.variant {
 
 	case "string_barisa":
-		return baml.EncodeUnion(builder, "Union__string_barisa__string_ox_burger", u.variant, u.variant_string_barisa)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_barisa)
 
 	case "string_ox_burger":
-		return baml.EncodeUnion(builder, "Union__string_barisa__string_ox_burger", u.variant, u.variant_string_ox_burger)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_ox_burger)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -3101,16 +3101,16 @@ type Union__string_breakfast__string_dinner struct {
 
 func (u *Union__string_breakfast__string_dinner) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string_breakfast":
+	case 0:
 		u.variant = "string_breakfast"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_breakfast = &value
 
-	case "string_dinner":
+	case 1:
 		u.variant = "string_dinner"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_dinner = &value
 
 	}
@@ -3120,10 +3120,10 @@ func (u Union__string_breakfast__string_dinner) Encode(builder *flatbuffers.Buil
 	switch u.variant {
 
 	case "string_breakfast":
-		return baml.EncodeUnion(builder, "Union__string_breakfast__string_dinner", u.variant, u.variant_string_breakfast)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_breakfast)
 
 	case "string_dinner":
-		return baml.EncodeUnion(builder, "Union__string_breakfast__string_dinner", u.variant, u.variant_string_dinner)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_dinner)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -3198,16 +3198,16 @@ type Union__string_curiosity__string_personal_finance struct {
 
 func (u *Union__string_curiosity__string_personal_finance) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string_curiosity":
+	case 0:
 		u.variant = "string_curiosity"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_curiosity = &value
 
-	case "string_personal_finance":
+	case 1:
 		u.variant = "string_personal_finance"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_personal_finance = &value
 
 	}
@@ -3217,10 +3217,10 @@ func (u Union__string_curiosity__string_personal_finance) Encode(builder *flatbu
 	switch u.variant {
 
 	case "string_curiosity":
-		return baml.EncodeUnion(builder, "Union__string_curiosity__string_personal_finance", u.variant, u.variant_string_curiosity)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_curiosity)
 
 	case "string_personal_finance":
-		return baml.EncodeUnion(builder, "Union__string_curiosity__string_personal_finance", u.variant, u.variant_string_personal_finance)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_personal_finance)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -3299,26 +3299,26 @@ type Union__string_one__string_two__string_three__string_four struct {
 
 func (u *Union__string_one__string_two__string_three__string_four) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
+	switch holder.ValueTypeIndex() {
 
-	case "string_one":
+	case 0:
 		u.variant = "string_one"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_one = &value
 
-	case "string_two":
+	case 1:
 		u.variant = "string_two"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_two = &value
 
-	case "string_three":
+	case 2:
 		u.variant = "string_three"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_three = &value
 
-	case "string_four":
+	case 3:
 		u.variant = "string_four"
-		value := *baml.Decode(valueHolder).(*string)
+		value := baml.Decode(valueHolder).(string)
 		u.variant_string_four = &value
 
 	}
@@ -3328,16 +3328,16 @@ func (u Union__string_one__string_two__string_three__string_four) Encode(builder
 	switch u.variant {
 
 	case "string_one":
-		return baml.EncodeUnion(builder, "Union__string_one__string_two__string_three__string_four", u.variant, u.variant_string_one)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_one)
 
 	case "string_two":
-		return baml.EncodeUnion(builder, "Union__string_one__string_two__string_three__string_four", u.variant, u.variant_string_two)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_two)
 
 	case "string_three":
-		return baml.EncodeUnion(builder, "Union__string_one__string_two__string_three__string_four", u.variant, u.variant_string_three)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_three)
 
 	case "string_four":
-		return baml.EncodeUnion(builder, "Union__string_one__string_two__string_three__string_four", u.variant, u.variant_string_four)
+		return baml.EncodeUnion(builder, u.variant, u.variant_string_four)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")

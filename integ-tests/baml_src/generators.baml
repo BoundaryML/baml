@@ -34,7 +34,7 @@ generator lang_ruby {
 generator openapi {
   output_type rest/openapi
   output_dir "../openapi"
-  version "0.86.1"
+  version "0.86.0"
   on_generate "rm .gitignore"
 }
 

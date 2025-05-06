@@ -46,10 +46,15 @@
           ],
           "description": "Generate code on save"
         },
-        "baml.restartTSServerOnSave": {
-          "type": "boolean",
-          "default": false,
-          "description": "Restart the TypeScript server when generating baml_client code, in case it's not reading the new generated types."
+        "baml.syncExtensionToGeneratorVersion": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "never",
+            "always"
+          ],
+          "description": "Sync the extension to the currently selected baml_src generator version (provided all your generators have the same version). This will automatically download the correct version of the baml-cli to generate the client code -- preventing issues with mismatched versions. Note that on some platforms, if you have this on `auto`, it may be disabled."
         },
         "baml.enablePlaygroundProxy": {
           "type": "boolean",

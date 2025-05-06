@@ -299,6 +299,21 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
       bamlOutputChannel.appendLine(
         `============ baml_src_generator_version notification: ${payload.version} ${payload.root_path}`,
       )
+
+      const syncExtensionToGeneratorVersion = BAML_CONFIG_SINGLETON.config?.syncExtensionToGeneratorVersion
+      if (syncExtensionToGeneratorVersion === 'never') {
+        bamlOutputChannel.appendLine(`Skipping version update as syncExtensionToGeneratorVersion is set to 'never'`)
+        return
+      }
+
+      // Skip updating on Windows when setting is 'auto'
+      if (syncExtensionToGeneratorVersion === 'auto' && os.platform() === 'win32') {
+        bamlOutputChannel.appendLine(
+          `Skipping version update on Windows with 'auto' setting. Current platform: ${os.platform()}`,
+        )
+        return
+      }
+
       const version = payload.version
 
       if (!semver.valid(version)) {
@@ -360,17 +375,17 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
               currentExecutingCliPath = targetCliPath
               BAML_CONFIG_SINGLETON.cliVersion = version
 
-              window.withProgress(
-                {
-                  location: vscode.ProgressLocation.Notification,
-                  title: `BAML Language Server reloaded with version ${version}`,
-                  cancellable: false,
-                },
-                async () => {
-                  // Show progress for 4 seconds
-                  await new Promise((resolve) => setTimeout(resolve, 4000))
-                },
-              )
+              // window.withProgress(
+              //   {
+              //     location: vscode.ProgressLocation.Notification,
+              //     title: `BAML Language Server reloaded with version ${version}`,
+              //     cancellable: false,
+              //   },
+              //   async () => {
+              //     // Show progress for 4 seconds
+              //     await new Promise((resolve) => setTimeout(resolve, 4000))
+              //   },
+              // )
               bamlOutputChannel?.appendLine(`BAML Language Server reloaded with version ${version}.`)
             } catch (e) {
               clientReady = false
