@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.87.0](https://github.com/boundaryml/baml/compare/0.86.1..0.87.0) - 2025-05-06
+
+### Miscellaneous Chores
+
+- run integ tests during the release workflow (#1897) - ([9645621](https://github.com/boundaryml/baml/commit/964562186583d399ce7f6fe7984d71cce92d1a5a)) - Samuel Lijin
+- fix concurrency groups (#1902) - ([8104859](https://github.com/boundaryml/baml/commit/8104859fb2b99cf9f5701581300f6e4b99c30612)) - Samuel Lijin
+
+### Bugfixes
+- [Go] Fix optional struct fields (#1889) - ([7105b13](https://github.com/boundaryml/baml/commit/7105b13cb991e70be0cfaf338321aee6a3effbe9)) - Todd Berman
+- [Go] Fix go enum encoding (#1892) - ([f198ba3](https://github.com/boundaryml/baml/commit/f198ba33eea9666406fefc3da6a08c152fd63b3a)) - Todd Berman
+- [Go] Fix union encoding/decoding (#1898) - ([6a7dc25](https://github.com/boundaryml/baml/commit/6a7dc25e0baf61ab095b6c21a214f2f75e15b247)) - Todd Berman
+- [Python] Export BamlClientFinishReason (#1907) - ([3c08e83](https://github.com/boundaryml/baml/commit/3c08e8307ca1c801d0acc15951df43f59048fb01)) - aaronvg
+- make vertex http resonse parsing more lenient (#1909) - ([dd26a2d](https://github.com/boundaryml/baml/commit/dd26a2dbc4e860c9b2d97832cfc43e93c1b9f099)) - aaronvg
+
+### Features
+- [feature] Expose all types via type-builder (not just dynamic) (#1893) - ([a635a06](https://github.com/boundaryml/baml/commit/a635a06efb859b9d4fa246c89b45739c95f5eb22)) - hellovai
+- Enable LSP Downloading to keep versions in sync (all platforms except windows) (#1910) - ([2a4771b](https://github.com/boundaryml/baml/commit/2a4771b8d9b41e2903f7a0f42ae36b6a46afbe95)) - aaronvg
+
 ## [0.86.1](https://github.com/boundaryml/baml/compare/0.86.0..0.86.1) - 2025-04-30
 
 
