@@ -39,6 +39,15 @@ type stream struct{}
 
 var Stream = &stream{}
 
+func castSlice[T any](result any, castResult func(any) T) []T {
+	items := result.([]any)
+	casted := make([]T, len(items))
+	for i, item := range items {
+		casted[i] = castResult(item)
+	}
+	return casted
+}
+
 func castOptional[T any](result any, castResult func(any) T) *T {
 	if result == nil {
 		return nil
@@ -1863,7 +1872,9 @@ func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput) (
 	}
 
 	castResult := func(result any) []types.DynInputOutput {
-		return (result).([]types.DynInputOutput)
+		return castSlice(result, func(item any) types.DynInputOutput {
+			return *(item).(*types.DynInputOutput)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -2111,7 +2122,9 @@ func ExtractHobby(ctx context.Context, text string) (*[]types.Hobby, error) {
 	}
 
 	castResult := func(result any) []types.Hobby {
-		return (result).([]types.Hobby)
+		return castSlice(result, func(item any) types.Hobby {
+			return (item).(types.Hobby)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -2173,7 +2186,9 @@ func ExtractNames(ctx context.Context, input string) (*[]string, error) {
 	}
 
 	castResult := func(result any) []string {
-		return (result).([]string)
+		return castSlice(result, func(item any) string {
+			return (item).(string)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -2235,7 +2250,9 @@ func ExtractPeople(ctx context.Context, text string) (*[]types.Person, error) {
 	}
 
 	castResult := func(result any) []types.Person {
-		return (result).([]types.Person)
+		return castSlice(result, func(item any) types.Person {
+			return *(item).(*types.Person)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -2611,7 +2628,9 @@ func FnEnumListOutput(ctx context.Context, input string) (*[]types.EnumOutput, e
 	}
 
 	castResult := func(result any) []types.EnumOutput {
-		return (result).([]types.EnumOutput)
+		return castSlice(result, func(item any) types.EnumOutput {
+			return (item).(types.EnumOutput)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -3045,7 +3064,9 @@ func FnOutputClassList(ctx context.Context, input string) (*[]types.TestOutputCl
 	}
 
 	castResult := func(result any) []types.TestOutputClass {
-		return (result).([]types.TestOutputClass)
+		return castSlice(result, func(item any) types.TestOutputClass {
+			return *(item).(*types.TestOutputClass)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -3479,7 +3500,9 @@ func FnOutputStringList(ctx context.Context, input string) (*[]string, error) {
 	}
 
 	castResult := func(result any) []string {
-		return (result).([]string)
+		return castSlice(result, func(item any) string {
+			return (item).(string)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -4905,7 +4928,11 @@ func OptionalTest_Function(ctx context.Context, input string) (*[]*types.Optiona
 	}
 
 	castResult := func(result any) []*types.OptionalTest_ReturnType {
-		return (result).([]*types.OptionalTest_ReturnType)
+		return castSlice(result, func(item any) *types.OptionalTest_ReturnType {
+			return castOptional(item, func(item any) types.OptionalTest_ReturnType {
+				return *(item).(*types.OptionalTest_ReturnType)
+			})
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -6455,7 +6482,9 @@ func StreamUnionIntegers(ctx context.Context, digits int64) (*[]types.Union__int
 	}
 
 	castResult := func(result any) []types.Union__int__string {
-		return (result).([]types.Union__int__string)
+		return castSlice(result, func(item any) types.Union__int__string {
+			return *(item).(*types.Union__int__string)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -8687,7 +8716,9 @@ func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string) (*[]st
 	}
 
 	castResult := func(result any) []string {
-		return (result).([]string)
+		return castSlice(result, func(item any) string {
+			return (item).(string)
+		})
 	}
 
 	casted := castResult(*result.Data)
@@ -10133,6 +10164,68 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string) <-chan str
 	}
 	channel := make(chan string)
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIShorthand", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(string)
+			}
+		}
+	}()
+	return channel
+}
+
+func TestOpenAIWithFinishReasonError(ctx context.Context, input string) (*string, error) {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithFinishReasonError", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func(result any) string {
+		return (result).(string)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string) <-chan string {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan string)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIWithFinishReasonError", encoded)
 	if err != nil {
 		close(channel)
 		return channel

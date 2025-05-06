@@ -187,6 +187,7 @@ export type StreamingServerTypes = {
   TestOpenAIO1WithMaxCompletionTokens: string,
   TestOpenAIO1WithMaxTokens: string,
   TestOpenAIShorthand: string,
+  TestOpenAIWithFinishReasonError: string,
   TestOpenAIWithMaxTokens: string,
   TestOpenAIWithNullMaxTokens: string,
   TestOpenRouterMistralSmall3_1_24b: string,

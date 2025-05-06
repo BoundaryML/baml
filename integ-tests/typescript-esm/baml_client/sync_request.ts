@@ -3291,6 +3291,26 @@ export class HttpRequest {
     }
   }
   
+  TestOpenAIWithFinishReasonError(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestOpenAIWithFinishReasonError",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestOpenAIWithMaxTokens(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -6864,6 +6884,26 @@ export class HttpStreamRequest {
     try {
       return this.runtime.buildRequestSync(
         "TestOpenAIShorthand",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIWithFinishReasonError(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "TestOpenAIWithFinishReasonError",
         {
           "input": input
         },

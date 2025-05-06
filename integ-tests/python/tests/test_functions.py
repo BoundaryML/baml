@@ -535,6 +535,14 @@ async def test_works_with_failing_azure_fallback():
 
 
 @pytest.mark.asyncio
+async def test_works_with_finish_reason_error():
+    with pytest.raises(errors.BamlClientFinishReasonError) as e:
+        _ = await b.TestOpenAIWithFinishReasonError("test")
+    print(e)
+    assert "finish_reason" in str(e.value)
+
+
+@pytest.mark.asyncio
 async def test_claude():
     res = await b.PromptTestClaude(input="Mt Rainier is tall")
     assert len(res) > 0, "Expected non-empty result but got empty."

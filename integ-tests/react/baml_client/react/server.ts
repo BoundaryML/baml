@@ -2985,6 +2985,24 @@ export const TestOpenAIShorthand = async (
 };
 
 /**
+ * Executes the "TestOpenAIWithFinishReasonError" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIWithFinishReasonError"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIWithFinishReasonError = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIWithFinishReasonError(
+    input,
+  );
+};
+
+/**
  * Executes the "TestOpenAIWithMaxTokens" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAIWithMaxTokens"

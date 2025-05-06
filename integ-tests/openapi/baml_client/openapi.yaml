@@ -2265,6 +2265,19 @@ paths:
                 title: TestOpenAIShorthandResponse
                 type: string
       operationId: TestOpenAIShorthand
+  /call/TestOpenAIWithFinishReasonError:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIWithFinishReasonError'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIWithFinishReasonErrorResponse
+                type: string
+      operationId: TestOpenAIWithFinishReasonError
   /call/TestOpenAIWithMaxTokens:
     post:
       requestBody:
@@ -5149,6 +5162,22 @@ components:
         application/json:
           schema:
             title: TestOpenAIShorthandRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIWithFinishReasonError:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIWithFinishReasonErrorRequest
             type: object
             properties:
               input:
