@@ -89,7 +89,7 @@ ai-chat:
     </LLMClients>
 
     <Prompt>
-      When writing the prompt:
+      In case you need to write a prompt example:
       1. Make sure to include the input in the prompt (even if it's an image) using {{ input }}  
       2. Make sure to include {{ ctx.output_format }} in the prompt so the LLM knows how to format the output.
       3. You do not need to specify to "answer in JSON format". Only write in the prompt brief instruction, and any other task-specific things to keep in mind for the task.
