@@ -814,10 +814,10 @@ navigation:
             path: 03-reference/vscode-ext/clipath.mdx
           - page: baml.generateCodeOnSave
             path: 03-reference/vscode-ext/generateCodeOnSave.mdx
-          - page: baml.restartTSServerOnSave
-            path: 03-reference/vscode-ext/restartTSServerOnSave.mdx
           - page: baml.enablePlaygroundProxy
             path: 03-reference/vscode-ext/enablePlaygroundProxy.mdx
+          - page: baml.syncExtensionToGeneratorVersion
+            path: 03-reference/vscode-ext/syncExtensionToGeneratorVersion.mdx
       - section: Boundary Extraction API
         contents:
           - api: API Reference
