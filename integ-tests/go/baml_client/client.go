@@ -39,15 +39,6 @@ type stream struct{}
 
 var Stream = &stream{}
 
-func castSlice[T any](result any, castResult func(any) T) []T {
-	items := result.([]any)
-	casted := make([]T, len(items))
-	for i, item := range items {
-		casted[i] = castResult(item)
-	}
-	return casted
-}
-
 func castOptional[T any](result any, castResult func(any) T) *T {
 	if result == nil {
 		return nil
@@ -57,7 +48,9 @@ func castOptional[T any](result any, castResult func(any) T) *T {
 }
 
 func AaaSamOutputFormat(ctx context.Context, recipe string) (*types.Recipe, error) {
-	args := map[string]any{"recipe": recipe}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"recipe": recipe},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -81,7 +74,9 @@ func AaaSamOutputFormat(ctx context.Context, recipe string) (*types.Recipe, erro
 }
 
 func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string) <-chan types.Recipe {
-	args := map[string]any{"recipe": recipe}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"recipe": recipe},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -115,7 +110,9 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string) <-chan typ
 }
 
 func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode) (*types.LinkedListAliasNode, error) {
-	args := map[string]any{"data": data}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"data": data},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -139,7 +136,9 @@ func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAl
 }
 
 func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode) <-chan types.LinkedListAliasNode {
-	args := map[string]any{"data": data}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"data": data},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -173,7 +172,9 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 }
 
 func AliasWithMultipleAttrs(ctx context.Context, money int64) (*types.Checked[int64], error) {
-	args := map[string]any{"money": money}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"money": money},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -197,7 +198,9 @@ func AliasWithMultipleAttrs(ctx context.Context, money int64) (*types.Checked[in
 }
 
 func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64) <-chan types.Checked[int64] {
-	args := map[string]any{"money": money}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"money": money},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -231,7 +234,9 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64) <-chan t
 }
 
 func AliasedInputClass(ctx context.Context, input types.InputClass) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -255,7 +260,9 @@ func AliasedInputClass(ctx context.Context, input types.InputClass) (*string, er
 }
 
 func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -289,7 +296,9 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass) <-
 }
 
 func AliasedInputClass2(ctx context.Context, input types.InputClass) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -313,7 +322,9 @@ func AliasedInputClass2(ctx context.Context, input types.InputClass) (*string, e
 }
 
 func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -347,7 +358,9 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass) <
 }
 
 func AliasedInputClassNested(ctx context.Context, input types.InputClassNested) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -371,7 +384,9 @@ func AliasedInputClassNested(ctx context.Context, input types.InputClassNested) 
 }
 
 func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputClassNested) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -405,7 +420,9 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 }
 
 func AliasedInputEnum(ctx context.Context, input types.AliasedEnum) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -429,7 +446,9 @@ func AliasedInputEnum(ctx context.Context, input types.AliasedEnum) (*string, er
 }
 
 func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -463,7 +482,9 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum) <-
 }
 
 func AliasedInputList(ctx context.Context, input []types.AliasedEnum) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -487,7 +508,9 @@ func AliasedInputList(ctx context.Context, input []types.AliasedEnum) (*string, 
 }
 
 func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -521,7 +544,9 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum) 
 }
 
 func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap) (*types.OptionalListAndMap, error) {
-	args := map[string]any{"optionals": optionals}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"optionals": optionals},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -545,7 +570,9 @@ func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap) (
 }
 
 func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap) <-chan types.OptionalListAndMap {
-	args := map[string]any{"optionals": optionals}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"optionals": optionals},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -579,7 +606,9 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 }
 
 func AssertFn(ctx context.Context, a int64) (*int64, error) {
-	args := map[string]any{"a": a}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"a": a},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -603,7 +632,9 @@ func AssertFn(ctx context.Context, a int64) (*int64, error) {
 }
 
 func (*stream) AssertFn(ctx context.Context, a int64) <-chan int64 {
-	args := map[string]any{"a": a}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"a": a},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -637,7 +668,9 @@ func (*stream) AssertFn(ctx context.Context, a int64) <-chan int64 {
 }
 
 func AudioInput(ctx context.Context, aud any) (*string, error) {
-	args := map[string]any{"aud": aud}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"aud": aud},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -661,7 +694,9 @@ func AudioInput(ctx context.Context, aud any) (*string, error) {
 }
 
 func (*stream) AudioInput(ctx context.Context, aud any) <-chan string {
-	args := map[string]any{"aud": aud}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"aud": aud},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -695,7 +730,9 @@ func (*stream) AudioInput(ctx context.Context, aud any) <-chan string {
 }
 
 func BuildLinkedList(ctx context.Context, input []int64) (*types.LinkedList, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -719,7 +756,9 @@ func BuildLinkedList(ctx context.Context, input []int64) (*types.LinkedList, err
 }
 
 func (*stream) BuildLinkedList(ctx context.Context, input []int64) <-chan types.LinkedList {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -753,7 +792,9 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64) <-chan types.
 }
 
 func BuildTree(ctx context.Context, input types.BinaryNode) (*types.Tree, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -777,7 +818,9 @@ func BuildTree(ctx context.Context, input types.BinaryNode) (*types.Tree, error)
 }
 
 func (*stream) BuildTree(ctx context.Context, input types.BinaryNode) <-chan types.Tree {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -811,7 +854,9 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode) <-chan typ
 }
 
 func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias) (*types.ClassToRecAlias, error) {
-	args := map[string]any{"cls": cls}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"cls": cls},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -835,7 +880,9 @@ func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.
 }
 
 func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias) <-chan types.ClassToRecAlias {
-	args := map[string]any{"cls": cls}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"cls": cls},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -869,7 +916,9 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 }
 
 func ClassifyDynEnumTwo(ctx context.Context, input string) (*types.DynEnumTwo, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -893,7 +942,9 @@ func ClassifyDynEnumTwo(ctx context.Context, input string) (*types.DynEnumTwo, e
 }
 
 func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string) <-chan types.DynEnumTwo {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -927,7 +978,9 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string) <-chan type
 }
 
 func ClassifyMessage(ctx context.Context, input string) (*types.Category, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -951,7 +1004,9 @@ func ClassifyMessage(ctx context.Context, input string) (*types.Category, error)
 }
 
 func (*stream) ClassifyMessage(ctx context.Context, input string) <-chan types.Category {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -985,7 +1040,9 @@ func (*stream) ClassifyMessage(ctx context.Context, input string) <-chan types.C
 }
 
 func ClassifyMessage2(ctx context.Context, input string) (*types.Category, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1009,7 +1066,9 @@ func ClassifyMessage2(ctx context.Context, input string) (*types.Category, error
 }
 
 func (*stream) ClassifyMessage2(ctx context.Context, input string) <-chan types.Category {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1043,7 +1102,9 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string) <-chan types.
 }
 
 func ClassifyMessage3(ctx context.Context, input string) (*types.Category, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1067,7 +1128,9 @@ func ClassifyMessage3(ctx context.Context, input string) (*types.Category, error
 }
 
 func (*stream) ClassifyMessage3(ctx context.Context, input string) <-chan types.Category {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1101,7 +1164,9 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string) <-chan types.
 }
 
 func Completion(ctx context.Context, prefix string, suffix string, language string) (*string, error) {
-	args := map[string]any{"prefix": prefix, "suffix": suffix, "language": language}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"prefix": prefix, "suffix": suffix, "language": language},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1125,7 +1190,9 @@ func Completion(ctx context.Context, prefix string, suffix string, language stri
 }
 
 func (*stream) Completion(ctx context.Context, prefix string, suffix string, language string) <-chan string {
-	args := map[string]any{"prefix": prefix, "suffix": suffix, "language": language}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"prefix": prefix, "suffix": suffix, "language": language},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1159,7 +1226,9 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 }
 
 func CustomTask(ctx context.Context, input string) (*types.Union__BookOrder__FlightConfirmation__GroceryReceipt, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1183,7 +1252,9 @@ func CustomTask(ctx context.Context, input string) (*types.Union__BookOrder__Fli
 }
 
 func (*stream) CustomTask(ctx context.Context, input string) <-chan types.Union__BookOrder__FlightConfirmation__GroceryReceipt {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1217,7 +1288,9 @@ func (*stream) CustomTask(ctx context.Context, input string) <-chan types.Union_
 }
 
 func DescribeImage(ctx context.Context, img any) (*string, error) {
-	args := map[string]any{"img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1241,7 +1314,9 @@ func DescribeImage(ctx context.Context, img any) (*string, error) {
 }
 
 func (*stream) DescribeImage(ctx context.Context, img any) <-chan string {
-	args := map[string]any{"img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1275,7 +1350,9 @@ func (*stream) DescribeImage(ctx context.Context, img any) <-chan string {
 }
 
 func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any) (*string, error) {
-	args := map[string]any{"classWithImage": classWithImage, "img2": img2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1299,7 +1376,9 @@ func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, im
 }
 
 func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any) <-chan string {
-	args := map[string]any{"classWithImage": classWithImage, "img2": img2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1333,7 +1412,9 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 }
 
 func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any) (*string, error) {
-	args := map[string]any{"classWithImage": classWithImage, "img2": img2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1357,7 +1438,9 @@ func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, im
 }
 
 func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any) <-chan string {
-	args := map[string]any{"classWithImage": classWithImage, "img2": img2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1391,7 +1474,9 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 }
 
 func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any) (*string, error) {
-	args := map[string]any{"classWithImage": classWithImage, "img2": img2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1415,7 +1500,9 @@ func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, im
 }
 
 func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any) <-chan string {
-	args := map[string]any{"classWithImage": classWithImage, "img2": img2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1449,7 +1536,9 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 }
 
 func DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string) (*string, error) {
-	args := map[string]any{"img": img, "client_sector": client_sector, "client_name": client_name}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img, "client_sector": client_sector, "client_name": client_name},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1473,7 +1562,9 @@ func DescribeMedia1599(ctx context.Context, img any, client_sector string, clien
 }
 
 func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string) <-chan string {
-	args := map[string]any{"img": img, "client_sector": client_sector, "client_name": client_name}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img, "client_sector": client_sector, "client_name": client_name},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1507,7 +1598,9 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 }
 
 func DifferentiateUnions(ctx context.Context) (*types.Union__OriginalA__OriginalB, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1531,7 +1624,9 @@ func DifferentiateUnions(ctx context.Context) (*types.Union__OriginalA__Original
 }
 
 func (*stream) DifferentiateUnions(ctx context.Context) <-chan types.Union__OriginalA__OriginalB {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1565,7 +1660,9 @@ func (*stream) DifferentiateUnions(ctx context.Context) <-chan types.Union__Orig
 }
 
 func DummyOutputFunction(ctx context.Context, input string) (*types.DummyOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1589,7 +1686,9 @@ func DummyOutputFunction(ctx context.Context, input string) (*types.DummyOutput,
 }
 
 func (*stream) DummyOutputFunction(ctx context.Context, input string) <-chan types.DummyOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1623,7 +1722,9 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string) <-chan typ
 }
 
 func DynamicFunc(ctx context.Context, input types.DynamicClassOne) (*types.DynamicClassTwo, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1647,7 +1748,9 @@ func DynamicFunc(ctx context.Context, input types.DynamicClassOne) (*types.Dynam
 }
 
 func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne) <-chan types.DynamicClassTwo {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1681,7 +1784,9 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne) <-c
 }
 
 func DynamicInputOutput(ctx context.Context, input types.DynInputOutput) (*types.DynInputOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1705,7 +1810,9 @@ func DynamicInputOutput(ctx context.Context, input types.DynInputOutput) (*types
 }
 
 func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutput) <-chan types.DynInputOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1739,7 +1846,9 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 }
 
 func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput) (*[]types.DynInputOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1754,9 +1863,7 @@ func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput) (
 	}
 
 	castResult := func(result any) []types.DynInputOutput {
-		return castSlice(result, func(item any) types.DynInputOutput {
-			return *(item).(*types.DynInputOutput)
-		})
+		return (result).([]types.DynInputOutput)
 	}
 
 	casted := castResult(*result.Data)
@@ -1765,7 +1872,9 @@ func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput) (
 }
 
 func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput) <-chan []types.DynInputOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1799,7 +1908,9 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 }
 
 func ExpectFailure(ctx context.Context) (*string, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1823,7 +1934,9 @@ func ExpectFailure(ctx context.Context) (*string, error) {
 }
 
 func (*stream) ExpectFailure(ctx context.Context) <-chan string {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1857,7 +1970,9 @@ func (*stream) ExpectFailure(ctx context.Context) <-chan string {
 }
 
 func ExtractContactInfo(ctx context.Context, document string) (*types.ContactInfo, error) {
-	args := map[string]any{"document": document}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"document": document},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1881,7 +1996,9 @@ func ExtractContactInfo(ctx context.Context, document string) (*types.ContactInf
 }
 
 func (*stream) ExtractContactInfo(ctx context.Context, document string) <-chan types.ContactInfo {
-	args := map[string]any{"document": document}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"document": document},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1915,7 +2032,9 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string) <-chan t
 }
 
 func ExtractEntities(ctx context.Context, text string) (*types.DynamicSchema, error) {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1939,7 +2058,9 @@ func ExtractEntities(ctx context.Context, text string) (*types.DynamicSchema, er
 }
 
 func (*stream) ExtractEntities(ctx context.Context, text string) <-chan types.DynamicSchema {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1973,7 +2094,9 @@ func (*stream) ExtractEntities(ctx context.Context, text string) <-chan types.Dy
 }
 
 func ExtractHobby(ctx context.Context, text string) (*[]types.Hobby, error) {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -1988,9 +2111,7 @@ func ExtractHobby(ctx context.Context, text string) (*[]types.Hobby, error) {
 	}
 
 	castResult := func(result any) []types.Hobby {
-		return castSlice(result, func(item any) types.Hobby {
-			return (item).(types.Hobby)
-		})
+		return (result).([]types.Hobby)
 	}
 
 	casted := castResult(*result.Data)
@@ -1999,7 +2120,9 @@ func ExtractHobby(ctx context.Context, text string) (*[]types.Hobby, error) {
 }
 
 func (*stream) ExtractHobby(ctx context.Context, text string) <-chan []types.Hobby {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2033,7 +2156,9 @@ func (*stream) ExtractHobby(ctx context.Context, text string) <-chan []types.Hob
 }
 
 func ExtractNames(ctx context.Context, input string) (*[]string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2048,9 +2173,7 @@ func ExtractNames(ctx context.Context, input string) (*[]string, error) {
 	}
 
 	castResult := func(result any) []string {
-		return castSlice(result, func(item any) string {
-			return (item).(string)
-		})
+		return (result).([]string)
 	}
 
 	casted := castResult(*result.Data)
@@ -2059,7 +2182,9 @@ func ExtractNames(ctx context.Context, input string) (*[]string, error) {
 }
 
 func (*stream) ExtractNames(ctx context.Context, input string) <-chan []string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2093,7 +2218,9 @@ func (*stream) ExtractNames(ctx context.Context, input string) <-chan []string {
 }
 
 func ExtractPeople(ctx context.Context, text string) (*[]types.Person, error) {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2108,9 +2235,7 @@ func ExtractPeople(ctx context.Context, text string) (*[]types.Person, error) {
 	}
 
 	castResult := func(result any) []types.Person {
-		return castSlice(result, func(item any) types.Person {
-			return *(item).(*types.Person)
-		})
+		return (result).([]types.Person)
 	}
 
 	casted := castResult(*result.Data)
@@ -2119,7 +2244,9 @@ func ExtractPeople(ctx context.Context, text string) (*[]types.Person, error) {
 }
 
 func (*stream) ExtractPeople(ctx context.Context, text string) <-chan []types.Person {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2153,7 +2280,9 @@ func (*stream) ExtractPeople(ctx context.Context, text string) <-chan []types.Pe
 }
 
 func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union__string_curiosity__string_personal_finance) (*types.ReceiptInfo, error) {
-	args := map[string]any{"email": email, "reason": reason}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"email": email, "reason": reason},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2177,7 +2306,9 @@ func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union__s
 }
 
 func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason types.Union__string_curiosity__string_personal_finance) <-chan types.ReceiptInfo {
-	args := map[string]any{"email": email, "reason": reason}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"email": email, "reason": reason},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2211,7 +2342,9 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 }
 
 func ExtractResume(ctx context.Context, resume string, img *any) (*types.Resume, error) {
-	args := map[string]any{"resume": resume, "img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"resume": resume, "img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2235,7 +2368,9 @@ func ExtractResume(ctx context.Context, resume string, img *any) (*types.Resume,
 }
 
 func (*stream) ExtractResume(ctx context.Context, resume string, img *any) <-chan types.Resume {
-	args := map[string]any{"resume": resume, "img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"resume": resume, "img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2269,7 +2404,9 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any) <-cha
 }
 
 func ExtractResume2(ctx context.Context, resume string) (*types.Resume, error) {
-	args := map[string]any{"resume": resume}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"resume": resume},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2293,7 +2430,9 @@ func ExtractResume2(ctx context.Context, resume string) (*types.Resume, error) {
 }
 
 func (*stream) ExtractResume2(ctx context.Context, resume string) <-chan types.Resume {
-	args := map[string]any{"resume": resume}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"resume": resume},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2327,7 +2466,9 @@ func (*stream) ExtractResume2(ctx context.Context, resume string) <-chan types.R
 }
 
 func FnClassOptionalOutput(ctx context.Context, input string) (**types.ClassOptionalOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2353,7 +2494,9 @@ func FnClassOptionalOutput(ctx context.Context, input string) (**types.ClassOpti
 }
 
 func (*stream) FnClassOptionalOutput(ctx context.Context, input string) <-chan *types.ClassOptionalOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2387,7 +2530,9 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string) <-chan *
 }
 
 func FnClassOptionalOutput2(ctx context.Context, input string) (**types.ClassOptionalOutput2, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2413,7 +2558,9 @@ func FnClassOptionalOutput2(ctx context.Context, input string) (**types.ClassOpt
 }
 
 func (*stream) FnClassOptionalOutput2(ctx context.Context, input string) <-chan *types.ClassOptionalOutput2 {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2447,7 +2594,9 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string) <-chan 
 }
 
 func FnEnumListOutput(ctx context.Context, input string) (*[]types.EnumOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2462,9 +2611,7 @@ func FnEnumListOutput(ctx context.Context, input string) (*[]types.EnumOutput, e
 	}
 
 	castResult := func(result any) []types.EnumOutput {
-		return castSlice(result, func(item any) types.EnumOutput {
-			return (item).(types.EnumOutput)
-		})
+		return (result).([]types.EnumOutput)
 	}
 
 	casted := castResult(*result.Data)
@@ -2473,7 +2620,9 @@ func FnEnumListOutput(ctx context.Context, input string) (*[]types.EnumOutput, e
 }
 
 func (*stream) FnEnumListOutput(ctx context.Context, input string) <-chan []types.EnumOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2507,7 +2656,9 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string) <-chan []type
 }
 
 func FnEnumOutput(ctx context.Context, input string) (*types.EnumOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2531,7 +2682,9 @@ func FnEnumOutput(ctx context.Context, input string) (*types.EnumOutput, error) 
 }
 
 func (*stream) FnEnumOutput(ctx context.Context, input string) <-chan types.EnumOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2565,7 +2718,9 @@ func (*stream) FnEnumOutput(ctx context.Context, input string) <-chan types.Enum
 }
 
 func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello) (*types.LiteralClassHello, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2589,7 +2744,9 @@ func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHell
 }
 
 func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello) <-chan types.LiteralClassHello {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2623,7 +2780,9 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 }
 
 func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union__LiteralClassOne__LiteralClassTwo) (*types.Union__LiteralClassOne__LiteralClassTwo, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2647,7 +2806,9 @@ func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union__Lite
 }
 
 func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union__LiteralClassOne__LiteralClassTwo) <-chan types.Union__LiteralClassOne__LiteralClassTwo {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2681,7 +2842,9 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 }
 
 func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string) (*string, error) {
-	args := map[string]any{"myString": myString}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myString": myString},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2705,7 +2868,9 @@ func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string) (*st
 }
 
 func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *string) <-chan string {
-	args := map[string]any{"myString": myString}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myString": myString},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2739,7 +2904,9 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 }
 
 func FnOutputBool(ctx context.Context, input string) (*bool, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2763,7 +2930,9 @@ func FnOutputBool(ctx context.Context, input string) (*bool, error) {
 }
 
 func (*stream) FnOutputBool(ctx context.Context, input string) <-chan bool {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2797,7 +2966,9 @@ func (*stream) FnOutputBool(ctx context.Context, input string) <-chan bool {
 }
 
 func FnOutputClass(ctx context.Context, input string) (*types.TestOutputClass, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2821,7 +2992,9 @@ func FnOutputClass(ctx context.Context, input string) (*types.TestOutputClass, e
 }
 
 func (*stream) FnOutputClass(ctx context.Context, input string) <-chan types.TestOutputClass {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2855,7 +3028,9 @@ func (*stream) FnOutputClass(ctx context.Context, input string) <-chan types.Tes
 }
 
 func FnOutputClassList(ctx context.Context, input string) (*[]types.TestOutputClass, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2870,9 +3045,7 @@ func FnOutputClassList(ctx context.Context, input string) (*[]types.TestOutputCl
 	}
 
 	castResult := func(result any) []types.TestOutputClass {
-		return castSlice(result, func(item any) types.TestOutputClass {
-			return *(item).(*types.TestOutputClass)
-		})
+		return (result).([]types.TestOutputClass)
 	}
 
 	casted := castResult(*result.Data)
@@ -2881,7 +3054,9 @@ func FnOutputClassList(ctx context.Context, input string) (*[]types.TestOutputCl
 }
 
 func (*stream) FnOutputClassList(ctx context.Context, input string) <-chan []types.TestOutputClass {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2915,7 +3090,9 @@ func (*stream) FnOutputClassList(ctx context.Context, input string) <-chan []typ
 }
 
 func FnOutputClassNested(ctx context.Context, input string) (*types.TestClassNested, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2939,7 +3116,9 @@ func FnOutputClassNested(ctx context.Context, input string) (*types.TestClassNes
 }
 
 func (*stream) FnOutputClassNested(ctx context.Context, input string) <-chan types.TestClassNested {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2973,7 +3152,9 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string) <-chan typ
 }
 
 func FnOutputClassWithEnum(ctx context.Context, input string) (*types.TestClassWithEnum, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -2997,7 +3178,9 @@ func FnOutputClassWithEnum(ctx context.Context, input string) (*types.TestClassW
 }
 
 func (*stream) FnOutputClassWithEnum(ctx context.Context, input string) <-chan types.TestClassWithEnum {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3031,7 +3214,9 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string) <-chan t
 }
 
 func FnOutputInt(ctx context.Context, input string) (*int64, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3055,7 +3240,9 @@ func FnOutputInt(ctx context.Context, input string) (*int64, error) {
 }
 
 func (*stream) FnOutputInt(ctx context.Context, input string) <-chan int64 {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3089,7 +3276,9 @@ func (*stream) FnOutputInt(ctx context.Context, input string) <-chan int64 {
 }
 
 func FnOutputLiteralBool(ctx context.Context, input string) (*bool, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3113,7 +3302,9 @@ func FnOutputLiteralBool(ctx context.Context, input string) (*bool, error) {
 }
 
 func (*stream) FnOutputLiteralBool(ctx context.Context, input string) <-chan bool {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3147,7 +3338,9 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string) <-chan boo
 }
 
 func FnOutputLiteralInt(ctx context.Context, input string) (*int, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3171,7 +3364,9 @@ func FnOutputLiteralInt(ctx context.Context, input string) (*int, error) {
 }
 
 func (*stream) FnOutputLiteralInt(ctx context.Context, input string) <-chan int {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3205,7 +3400,9 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string) <-chan int 
 }
 
 func FnOutputLiteralString(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3229,7 +3426,9 @@ func FnOutputLiteralString(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) FnOutputLiteralString(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3263,7 +3462,9 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string) <-chan s
 }
 
 func FnOutputStringList(ctx context.Context, input string) (*[]string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3278,9 +3479,7 @@ func FnOutputStringList(ctx context.Context, input string) (*[]string, error) {
 	}
 
 	castResult := func(result any) []string {
-		return castSlice(result, func(item any) string {
-			return (item).(string)
-		})
+		return (result).([]string)
 	}
 
 	casted := castResult(*result.Data)
@@ -3289,7 +3488,9 @@ func FnOutputStringList(ctx context.Context, input string) (*[]string, error) {
 }
 
 func (*stream) FnOutputStringList(ctx context.Context, input string) <-chan []string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3323,7 +3524,9 @@ func (*stream) FnOutputStringList(ctx context.Context, input string) <-chan []st
 }
 
 func FnTestAliasedEnumOutput(ctx context.Context, input string) (*types.TestEnum, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3347,7 +3550,9 @@ func FnTestAliasedEnumOutput(ctx context.Context, input string) (*types.TestEnum
 }
 
 func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string) <-chan types.TestEnum {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3381,7 +3586,9 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string) <-chan
 }
 
 func FnTestClassAlias(ctx context.Context, input string) (*types.TestClassAlias, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3405,7 +3612,9 @@ func FnTestClassAlias(ctx context.Context, input string) (*types.TestClassAlias,
 }
 
 func (*stream) FnTestClassAlias(ctx context.Context, input string) <-chan types.TestClassAlias {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3439,7 +3648,9 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string) <-chan types.
 }
 
 func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum) (*string, error) {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3463,7 +3674,9 @@ func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleE
 }
 
 func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum) <-chan string {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3497,7 +3710,9 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 }
 
 func GetDataType(ctx context.Context, text string) (*types.RaysData, error) {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3521,7 +3736,9 @@ func GetDataType(ctx context.Context, text string) (*types.RaysData, error) {
 }
 
 func (*stream) GetDataType(ctx context.Context, text string) <-chan types.RaysData {
-	args := map[string]any{"text": text}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"text": text},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3555,7 +3772,9 @@ func (*stream) GetDataType(ctx context.Context, text string) <-chan types.RaysDa
 }
 
 func GetOrderInfo(ctx context.Context, email types.Email) (*types.OrderInfo, error) {
-	args := map[string]any{"email": email}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"email": email},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3579,7 +3798,9 @@ func GetOrderInfo(ctx context.Context, email types.Email) (*types.OrderInfo, err
 }
 
 func (*stream) GetOrderInfo(ctx context.Context, email types.Email) <-chan types.OrderInfo {
-	args := map[string]any{"email": email}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"email": email},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3613,7 +3834,9 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email) <-chan types
 }
 
 func GetQuery(ctx context.Context, query string) (*types.SearchParams, error) {
-	args := map[string]any{"query": query}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3637,7 +3860,9 @@ func GetQuery(ctx context.Context, query string) (*types.SearchParams, error) {
 }
 
 func (*stream) GetQuery(ctx context.Context, query string) <-chan types.SearchParams {
-	args := map[string]any{"query": query}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"query": query},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3671,7 +3896,9 @@ func (*stream) GetQuery(ctx context.Context, query string) <-chan types.SearchPa
 }
 
 func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string) (*map[types.MapKey]string, error) {
-	args := map[string]any{"i1": i1, "i2": i2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"i1": i1, "i2": i2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3695,7 +3922,9 @@ func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[typ
 }
 
 func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string) <-chan map[types.MapKey]string {
-	args := map[string]any{"i1": i1, "i2": i2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"i1": i1, "i2": i2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3729,7 +3958,9 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 }
 
 func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__string_one__string_two__string_three__string_four]string, i2 map[types.Union__string_one__string_two__string_three__string_four]string) (*map[types.Union__string_one__string_two__string_three__string_four]string, error) {
-	args := map[string]any{"i1": i1, "i2": i2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"i1": i1, "i2": i2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3753,7 +3984,9 @@ func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__stri
 }
 
 func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__string_one__string_two__string_three__string_four]string, i2 map[types.Union__string_one__string_two__string_three__string_four]string) <-chan map[types.Union__string_one__string_two__string_three__string_four]string {
-	args := map[string]any{"i1": i1, "i2": i2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"i1": i1, "i2": i2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3787,7 +4020,9 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 }
 
 func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string) (*map[string]string, error) {
-	args := map[string]any{"m": m}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"m": m},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3811,7 +4046,9 @@ func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string) (*
 }
 
 func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string) <-chan map[string]string {
-	args := map[string]any{"m": m}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"m": m},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3845,7 +4082,9 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 }
 
 func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue) (*types.JsonValue, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3869,7 +4108,9 @@ func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue) (*types.Json
 }
 
 func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue) <-chan types.JsonValue {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3903,7 +4144,9 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue) <-
 }
 
 func LiteralUnionsTest(ctx context.Context, input string) (*types.Union__int_1__bool_true__string_string_output, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3927,7 +4170,9 @@ func LiteralUnionsTest(ctx context.Context, input string) (*types.Union__int_1__
 }
 
 func (*stream) LiteralUnionsTest(ctx context.Context, input string) <-chan types.Union__int_1__bool_true__string_string_output {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3961,7 +4206,9 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string) <-chan types
 }
 
 func MakeBlockConstraint(ctx context.Context) (*types.Checked[types.BlockConstraint], error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -3985,7 +4232,9 @@ func MakeBlockConstraint(ctx context.Context) (*types.Checked[types.BlockConstra
 }
 
 func (*stream) MakeBlockConstraint(ctx context.Context) <-chan types.Checked[types.BlockConstraint] {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4019,7 +4268,9 @@ func (*stream) MakeBlockConstraint(ctx context.Context) <-chan types.Checked[typ
 }
 
 func MakeClassWithBlockDone(ctx context.Context) (*types.ClassWithBlockDone, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4043,7 +4294,9 @@ func MakeClassWithBlockDone(ctx context.Context) (*types.ClassWithBlockDone, err
 }
 
 func (*stream) MakeClassWithBlockDone(ctx context.Context) <-chan types.ClassWithBlockDone {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4077,7 +4330,9 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context) <-chan types.ClassWit
 }
 
 func MakeClassWithExternalDone(ctx context.Context) (*types.ClassWithoutDone, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4101,7 +4356,9 @@ func MakeClassWithExternalDone(ctx context.Context) (*types.ClassWithoutDone, er
 }
 
 func (*stream) MakeClassWithExternalDone(ctx context.Context) <-chan types.ClassWithoutDone {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4135,7 +4392,9 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context) <-chan types.Class
 }
 
 func MakeNestedBlockConstraint(ctx context.Context) (*types.NestedBlockConstraint, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4159,7 +4418,9 @@ func MakeNestedBlockConstraint(ctx context.Context) (*types.NestedBlockConstrain
 }
 
 func (*stream) MakeNestedBlockConstraint(ctx context.Context) <-chan types.NestedBlockConstraint {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4193,7 +4454,9 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context) <-chan types.Neste
 }
 
 func MakeSemanticContainer(ctx context.Context) (*types.SemanticContainer, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4217,7 +4480,9 @@ func MakeSemanticContainer(ctx context.Context) (*types.SemanticContainer, error
 }
 
 func (*stream) MakeSemanticContainer(ctx context.Context) <-chan types.SemanticContainer {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4251,7 +4516,9 @@ func (*stream) MakeSemanticContainer(ctx context.Context) <-chan types.SemanticC
 }
 
 func MapAlias(ctx context.Context, m map[string][]string) (*map[string][]string, error) {
-	args := map[string]any{"m": m}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"m": m},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4275,7 +4542,9 @@ func MapAlias(ctx context.Context, m map[string][]string) (*map[string][]string,
 }
 
 func (*stream) MapAlias(ctx context.Context, m map[string][]string) <-chan map[string][]string {
-	args := map[string]any{"m": m}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"m": m},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4309,7 +4578,9 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string) <-chan map[s
 }
 
 func MergeAliasAttributes(ctx context.Context, money int64) (*types.MergeAttrs, error) {
-	args := map[string]any{"money": money}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"money": money},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4333,7 +4604,9 @@ func MergeAliasAttributes(ctx context.Context, money int64) (*types.MergeAttrs, 
 }
 
 func (*stream) MergeAliasAttributes(ctx context.Context, money int64) <-chan types.MergeAttrs {
-	args := map[string]any{"money": money}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"money": money},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4367,7 +4640,9 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64) <-chan typ
 }
 
 func MyFunc(ctx context.Context, input string) (*types.DynamicOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4391,7 +4666,9 @@ func MyFunc(ctx context.Context, input string) (*types.DynamicOutput, error) {
 }
 
 func (*stream) MyFunc(ctx context.Context, input string) <-chan types.DynamicOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4425,7 +4702,9 @@ func (*stream) MyFunc(ctx context.Context, input string) <-chan types.DynamicOut
 }
 
 func NestedAlias(ctx context.Context, c types.Union__int__string__bool__float__List__string__Map__string_List__string) (*types.Union__int__string__bool__float__List__string__Map__string_List__string, error) {
-	args := map[string]any{"c": c}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"c": c},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4449,7 +4728,9 @@ func NestedAlias(ctx context.Context, c types.Union__int__string__bool__float__L
 }
 
 func (*stream) NestedAlias(ctx context.Context, c types.Union__int__string__bool__float__List__string__Map__string_List__string) <-chan types.Union__int__string__bool__float__List__string__Map__string_List__string {
-	args := map[string]any{"c": c}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"c": c},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4483,7 +4764,9 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union__int__string__bool
 }
 
 func NullLiteralClassHello(ctx context.Context, s string) (*types.ClassForNullLiteral, error) {
-	args := map[string]any{"s": s}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"s": s},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4507,7 +4790,9 @@ func NullLiteralClassHello(ctx context.Context, s string) (*types.ClassForNullLi
 }
 
 func (*stream) NullLiteralClassHello(ctx context.Context, s string) <-chan types.ClassForNullLiteral {
-	args := map[string]any{"s": s}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"s": s},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4541,7 +4826,9 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string) <-chan types
 }
 
 func OpenAIWithAnthropicResponseHello(ctx context.Context, s string) (*string, error) {
-	args := map[string]any{"s": s}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"s": s},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4565,7 +4852,9 @@ func OpenAIWithAnthropicResponseHello(ctx context.Context, s string) (*string, e
 }
 
 func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string) <-chan string {
-	args := map[string]any{"s": s}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"s": s},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4599,7 +4888,9 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string) <
 }
 
 func OptionalTest_Function(ctx context.Context, input string) (*[]*types.OptionalTest_ReturnType, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4614,11 +4905,7 @@ func OptionalTest_Function(ctx context.Context, input string) (*[]*types.Optiona
 	}
 
 	castResult := func(result any) []*types.OptionalTest_ReturnType {
-		return castSlice(result, func(item any) *types.OptionalTest_ReturnType {
-			return castOptional(item, func(item any) types.OptionalTest_ReturnType {
-				return *(item).(*types.OptionalTest_ReturnType)
-			})
-		})
+		return (result).([]*types.OptionalTest_ReturnType)
 	}
 
 	casted := castResult(*result.Data)
@@ -4627,7 +4914,9 @@ func OptionalTest_Function(ctx context.Context, input string) (*[]*types.Optiona
 }
 
 func (*stream) OptionalTest_Function(ctx context.Context, input string) <-chan []*types.OptionalTest_ReturnType {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4661,7 +4950,9 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string) <-chan [
 }
 
 func PredictAge(ctx context.Context, name string) (*types.FooAny, error) {
-	args := map[string]any{"name": name}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"name": name},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4685,7 +4976,9 @@ func PredictAge(ctx context.Context, name string) (*types.FooAny, error) {
 }
 
 func (*stream) PredictAge(ctx context.Context, name string) <-chan types.FooAny {
-	args := map[string]any{"name": name}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"name": name},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4719,7 +5012,9 @@ func (*stream) PredictAge(ctx context.Context, name string) <-chan types.FooAny 
 }
 
 func PredictAgeBare(ctx context.Context, inp string) (*types.Checked[int64], error) {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4743,7 +5038,9 @@ func PredictAgeBare(ctx context.Context, inp string) (*types.Checked[int64], err
 }
 
 func (*stream) PredictAgeBare(ctx context.Context, inp string) <-chan types.Checked[int64] {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4777,7 +5074,9 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string) <-chan types.Chec
 }
 
 func PrimitiveAlias(ctx context.Context, p types.Union__int__string__bool__float) (*types.Union__int__string__bool__float, error) {
-	args := map[string]any{"p": p}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"p": p},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4801,7 +5100,9 @@ func PrimitiveAlias(ctx context.Context, p types.Union__int__string__bool__float
 }
 
 func (*stream) PrimitiveAlias(ctx context.Context, p types.Union__int__string__bool__float) <-chan types.Union__int__string__bool__float {
-	args := map[string]any{"p": p}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"p": p},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4835,7 +5136,9 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union__int__string__b
 }
 
 func PromptTestClaude(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4859,7 +5162,9 @@ func PromptTestClaude(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) PromptTestClaude(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4893,7 +5198,9 @@ func (*stream) PromptTestClaude(ctx context.Context, input string) <-chan string
 }
 
 func PromptTestClaudeChat(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4917,7 +5224,9 @@ func PromptTestClaudeChat(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) PromptTestClaudeChat(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4951,7 +5260,9 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string) <-chan st
 }
 
 func PromptTestClaudeChatNoSystem(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -4975,7 +5286,9 @@ func PromptTestClaudeChatNoSystem(ctx context.Context, input string) (*string, e
 }
 
 func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5009,7 +5322,9 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string) <
 }
 
 func PromptTestOpenAI(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5033,7 +5348,9 @@ func PromptTestOpenAI(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) PromptTestOpenAI(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5067,7 +5384,9 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string) <-chan string
 }
 
 func PromptTestOpenAIChat(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5091,7 +5410,9 @@ func PromptTestOpenAIChat(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) PromptTestOpenAIChat(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5125,7 +5446,9 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string) <-chan st
 }
 
 func PromptTestOpenAIChatNoSystem(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5149,7 +5472,9 @@ func PromptTestOpenAIChatNoSystem(ctx context.Context, input string) (*string, e
 }
 
 func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5183,7 +5508,9 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string) <
 }
 
 func PromptTestStreaming(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5207,7 +5534,9 @@ func PromptTestStreaming(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) PromptTestStreaming(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5241,7 +5570,9 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string) <-chan str
 }
 
 func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne) (*types.RecAliasOne, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5265,7 +5596,9 @@ func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne) (*types.R
 }
 
 func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne) <-chan types.RecAliasOne {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5299,7 +5632,9 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne)
 }
 
 func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection) (*types.NodeWithAliasIndirection, error) {
-	args := map[string]any{"cls": cls}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"cls": cls},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5323,7 +5658,9 @@ func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithA
 }
 
 func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection) <-chan types.NodeWithAliasIndirection {
-	args := map[string]any{"cls": cls}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"cls": cls},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5357,7 +5694,9 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 }
 
 func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion) (*types.RecursiveUnion, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5381,7 +5720,9 @@ func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion) (*types
 }
 
 func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion) <-chan types.RecursiveUnion {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5415,7 +5756,9 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 }
 
 func ReturnAliasWithMergedAttributes(ctx context.Context, money int64) (*types.Checked[int64], error) {
-	args := map[string]any{"money": money}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"money": money},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5439,7 +5782,9 @@ func ReturnAliasWithMergedAttributes(ctx context.Context, money int64) (*types.C
 }
 
 func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64) <-chan types.Checked[int64] {
-	args := map[string]any{"money": money}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"money": money},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5473,7 +5818,9 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64)
 }
 
 func ReturnFailingAssert(ctx context.Context, inp int64) (*int64, error) {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5497,7 +5844,9 @@ func ReturnFailingAssert(ctx context.Context, inp int64) (*int64, error) {
 }
 
 func (*stream) ReturnFailingAssert(ctx context.Context, inp int64) <-chan int64 {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5531,7 +5880,9 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64) <-chan int64 
 }
 
 func ReturnJsonEntry(ctx context.Context, s string) (*types.JsonTemplate, error) {
-	args := map[string]any{"s": s}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"s": s},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5555,7 +5906,9 @@ func ReturnJsonEntry(ctx context.Context, s string) (*types.JsonTemplate, error)
 }
 
 func (*stream) ReturnJsonEntry(ctx context.Context, s string) <-chan types.JsonTemplate {
-	args := map[string]any{"s": s}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"s": s},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5589,7 +5942,9 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string) <-chan types.JsonT
 }
 
 func ReturnMalformedConstraints(ctx context.Context, a int64) (*types.MalformedConstraints, error) {
-	args := map[string]any{"a": a}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"a": a},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5613,7 +5968,9 @@ func ReturnMalformedConstraints(ctx context.Context, a int64) (*types.MalformedC
 }
 
 func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64) <-chan types.MalformedConstraints {
-	args := map[string]any{"a": a}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"a": a},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5647,7 +6004,9 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64) <-chan t
 }
 
 func SchemaDescriptions(ctx context.Context, input string) (*types.Schema, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5671,7 +6030,9 @@ func SchemaDescriptions(ctx context.Context, input string) (*types.Schema, error
 }
 
 func (*stream) SchemaDescriptions(ctx context.Context, input string) <-chan types.Schema {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5705,7 +6066,9 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string) <-chan type
 }
 
 func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias) (*types.RecursiveListAlias, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5729,7 +6092,9 @@ func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlia
 }
 
 func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias) <-chan types.RecursiveListAlias {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5763,7 +6128,9 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 }
 
 func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias) (*types.RecursiveMapAlias, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5787,7 +6154,9 @@ func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias)
 }
 
 func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias) <-chan types.RecursiveMapAlias {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5821,7 +6190,9 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 }
 
 func StreamBigNumbers(ctx context.Context, digits int64) (*types.BigNumbers, error) {
-	args := map[string]any{"digits": digits}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5845,7 +6216,9 @@ func StreamBigNumbers(ctx context.Context, digits int64) (*types.BigNumbers, err
 }
 
 func (*stream) StreamBigNumbers(ctx context.Context, digits int64) <-chan types.BigNumbers {
-	args := map[string]any{"digits": digits}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5879,7 +6252,9 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64) <-chan types.
 }
 
 func StreamFailingAssertion(ctx context.Context, theme string, length int64) (*types.TwoStoriesOneTitle, error) {
-	args := map[string]any{"theme": theme, "length": length}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"theme": theme, "length": length},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5903,7 +6278,9 @@ func StreamFailingAssertion(ctx context.Context, theme string, length int64) (*t
 }
 
 func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length int64) <-chan types.TwoStoriesOneTitle {
-	args := map[string]any{"theme": theme, "length": length}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"theme": theme, "length": length},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5937,7 +6314,9 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 }
 
 func StreamFailingCheck(ctx context.Context, theme string, length int64) (*types.TwoStoriesOneTitleCheck, error) {
-	args := map[string]any{"theme": theme, "length": length}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"theme": theme, "length": length},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5961,7 +6340,9 @@ func StreamFailingCheck(ctx context.Context, theme string, length int64) (*types
 }
 
 func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int64) <-chan types.TwoStoriesOneTitleCheck {
-	args := map[string]any{"theme": theme, "length": length}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"theme": theme, "length": length},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -5995,7 +6376,9 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 }
 
 func StreamOneBigNumber(ctx context.Context, digits int64) (*int64, error) {
-	args := map[string]any{"digits": digits}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6019,7 +6402,9 @@ func StreamOneBigNumber(ctx context.Context, digits int64) (*int64, error) {
 }
 
 func (*stream) StreamOneBigNumber(ctx context.Context, digits int64) <-chan int64 {
-	args := map[string]any{"digits": digits}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6053,7 +6438,9 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64) <-chan int6
 }
 
 func StreamUnionIntegers(ctx context.Context, digits int64) (*[]types.Union__int__string, error) {
-	args := map[string]any{"digits": digits}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6068,9 +6455,7 @@ func StreamUnionIntegers(ctx context.Context, digits int64) (*[]types.Union__int
 	}
 
 	castResult := func(result any) []types.Union__int__string {
-		return castSlice(result, func(item any) types.Union__int__string {
-			return *(item).(*types.Union__int__string)
-		})
+		return (result).([]types.Union__int__string)
 	}
 
 	casted := castResult(*result.Data)
@@ -6079,7 +6464,9 @@ func StreamUnionIntegers(ctx context.Context, digits int64) (*[]types.Union__int
 }
 
 func (*stream) StreamUnionIntegers(ctx context.Context, digits int64) <-chan []types.Union__int__string {
-	args := map[string]any{"digits": digits}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6113,7 +6500,9 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64) <-chan []t
 }
 
 func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool) (*types.CompoundBigNumbers, error) {
-	args := map[string]any{"digits": digits, "yapping": yapping}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits, "yapping": yapping},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6137,7 +6526,9 @@ func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool) (
 }
 
 func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool) <-chan types.CompoundBigNumbers {
-	args := map[string]any{"digits": digits, "yapping": yapping}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"digits": digits, "yapping": yapping},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6171,7 +6562,9 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 }
 
 func StructureDocument1559(ctx context.Context, document_txt string) (*types.Document1559, error) {
-	args := map[string]any{"document_txt": document_txt}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"document_txt": document_txt},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6195,7 +6588,9 @@ func StructureDocument1559(ctx context.Context, document_txt string) (*types.Doc
 }
 
 func (*stream) StructureDocument1559(ctx context.Context, document_txt string) <-chan types.Document1559 {
-	args := map[string]any{"document_txt": document_txt}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"document_txt": document_txt},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6229,7 +6624,9 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string) <
 }
 
 func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency) (*types.RecursiveAliasDependency, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6253,7 +6650,9 @@ func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency) 
 }
 
 func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency) <-chan types.RecursiveAliasDependency {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6287,7 +6686,9 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 }
 
 func TellStory(ctx context.Context, story string) (*string, error) {
-	args := map[string]any{"story": story}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"story": story},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6311,7 +6712,9 @@ func TellStory(ctx context.Context, story string) (*string, error) {
 }
 
 func (*stream) TellStory(ctx context.Context, story string) <-chan string {
-	args := map[string]any{"story": story}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"story": story},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6345,7 +6748,9 @@ func (*stream) TellStory(ctx context.Context, story string) <-chan string {
 }
 
 func TestAnthropic(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6369,7 +6774,9 @@ func TestAnthropic(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestAnthropic(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6403,7 +6810,9 @@ func (*stream) TestAnthropic(ctx context.Context, input string) <-chan string {
 }
 
 func TestAnthropicShorthand(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6427,7 +6836,9 @@ func TestAnthropicShorthand(ctx context.Context, input string) (*string, error) 
 }
 
 func (*stream) TestAnthropicShorthand(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6461,7 +6872,9 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string) <-chan 
 }
 
 func TestAws(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6485,7 +6898,9 @@ func TestAws(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestAws(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6519,7 +6934,9 @@ func (*stream) TestAws(ctx context.Context, input string) <-chan string {
 }
 
 func TestAwsClaude37(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6543,7 +6960,9 @@ func TestAwsClaude37(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestAwsClaude37(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6577,7 +6996,9 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string) <-chan string 
 }
 
 func TestAwsInferenceProfile(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6601,7 +7022,9 @@ func TestAwsInferenceProfile(ctx context.Context, input string) (*string, error)
 }
 
 func (*stream) TestAwsInferenceProfile(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6635,7 +7058,9 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string) <-chan
 }
 
 func TestAwsInvalidAccessKey(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6659,7 +7084,9 @@ func TestAwsInvalidAccessKey(ctx context.Context, input string) (*string, error)
 }
 
 func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6693,7 +7120,9 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string) <-chan
 }
 
 func TestAwsInvalidProfile(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6717,7 +7146,9 @@ func TestAwsInvalidProfile(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestAwsInvalidProfile(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6751,7 +7182,9 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string) <-chan s
 }
 
 func TestAwsInvalidRegion(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6775,7 +7208,9 @@ func TestAwsInvalidRegion(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestAwsInvalidRegion(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6809,7 +7244,9 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string) <-chan st
 }
 
 func TestAwsInvalidSessionToken(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6833,7 +7270,9 @@ func TestAwsInvalidSessionToken(ctx context.Context, input string) (*string, err
 }
 
 func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6867,7 +7306,9 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string) <-c
 }
 
 func TestAzure(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6891,7 +7332,9 @@ func TestAzure(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestAzure(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6925,7 +7368,9 @@ func (*stream) TestAzure(ctx context.Context, input string) <-chan string {
 }
 
 func TestAzureFailure(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6949,7 +7394,9 @@ func TestAzureFailure(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestAzureFailure(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -6983,7 +7430,9 @@ func (*stream) TestAzureFailure(ctx context.Context, input string) <-chan string
 }
 
 func TestAzureO1NoMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7007,7 +7456,9 @@ func TestAzureO1NoMaxTokens(ctx context.Context, input string) (*string, error) 
 }
 
 func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7041,7 +7492,9 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string) <-chan 
 }
 
 func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7065,7 +7518,9 @@ func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string) (*str
 }
 
 func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7099,7 +7554,9 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 }
 
 func TestAzureO1WithMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7123,7 +7580,9 @@ func TestAzureO1WithMaxTokens(ctx context.Context, input string) (*string, error
 }
 
 func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7157,7 +7616,9 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string) <-cha
 }
 
 func TestAzureO3NoMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7181,7 +7642,9 @@ func TestAzureO3NoMaxTokens(ctx context.Context, input string) (*string, error) 
 }
 
 func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7215,7 +7678,9 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string) <-chan 
 }
 
 func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7239,7 +7704,9 @@ func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string) (*str
 }
 
 func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7273,7 +7740,9 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 }
 
 func TestAzureWithMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7297,7 +7766,9 @@ func TestAzureWithMaxTokens(ctx context.Context, input string) (*string, error) 
 }
 
 func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7331,7 +7802,9 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string) <-chan 
 }
 
 func TestCaching(ctx context.Context, input string, not_cached string) (*string, error) {
-	args := map[string]any{"input": input, "not_cached": not_cached}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input, "not_cached": not_cached},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7355,7 +7828,9 @@ func TestCaching(ctx context.Context, input string, not_cached string) (*string,
 }
 
 func (*stream) TestCaching(ctx context.Context, input string, not_cached string) <-chan string {
-	args := map[string]any{"input": input, "not_cached": not_cached}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input, "not_cached": not_cached},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7389,7 +7864,9 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string)
 }
 
 func TestFallbackClient(ctx context.Context) (*string, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7413,7 +7890,9 @@ func TestFallbackClient(ctx context.Context) (*string, error) {
 }
 
 func (*stream) TestFallbackClient(ctx context.Context) <-chan string {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7447,7 +7926,9 @@ func (*stream) TestFallbackClient(ctx context.Context) <-chan string {
 }
 
 func TestFallbackStrategy(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7471,7 +7952,9 @@ func TestFallbackStrategy(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestFallbackStrategy(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7505,7 +7988,9 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string) <-chan st
 }
 
 func TestFallbackToShorthand(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7529,7 +8014,9 @@ func TestFallbackToShorthand(ctx context.Context, input string) (*string, error)
 }
 
 func (*stream) TestFallbackToShorthand(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7563,7 +8050,9 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string) <-chan
 }
 
 func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool) (*string, error) {
-	args := map[string]any{"myBool": myBool}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myBool": myBool},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7587,7 +8076,9 @@ func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool) (*string, error
 }
 
 func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool) <-chan string {
-	args := map[string]any{"myBool": myBool}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myBool": myBool},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7621,7 +8112,9 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool) <-cha
 }
 
 func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass) (*string, error) {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7645,7 +8138,9 @@ func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingle
 }
 
 func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass) <-chan string {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7679,7 +8174,9 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 }
 
 func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList) (*string, error) {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7703,7 +8200,9 @@ func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsS
 }
 
 func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList) <-chan string {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7737,7 +8236,9 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 }
 
 func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64) (*string, error) {
-	args := map[string]any{"myFloat": myFloat}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myFloat": myFloat},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7761,7 +8262,9 @@ func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64) (*string, 
 }
 
 func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64) <-chan string {
-	args := map[string]any{"myFloat": myFloat}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myFloat": myFloat},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7795,7 +8298,9 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64) 
 }
 
 func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64) (*string, error) {
-	args := map[string]any{"myInt": myInt}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myInt": myInt},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7819,7 +8324,9 @@ func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64) (*string, error)
 }
 
 func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64) <-chan string {
-	args := map[string]any{"myInt": myInt}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myInt": myInt},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7853,7 +8360,9 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64) <-chan
 }
 
 func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry) (*map[string]types.StringToClassEntry, error) {
-	args := map[string]any{"myMap": myMap}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myMap": myMap},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7877,7 +8386,9 @@ func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string
 }
 
 func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry) <-chan map[string]types.StringToClassEntry {
-	args := map[string]any{"myMap": myMap}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myMap": myMap},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7911,7 +8422,9 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 }
 
 func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string) (*map[string]map[string]string, error) {
-	args := map[string]any{"myMap": myMap}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myMap": myMap},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7935,7 +8448,9 @@ func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]m
 }
 
 func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string) <-chan map[string]map[string]string {
-	args := map[string]any{"myMap": myMap}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myMap": myMap},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7969,7 +8484,9 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 }
 
 func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string) (*map[string]string, error) {
-	args := map[string]any{"myMap": myMap}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myMap": myMap},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -7993,7 +8510,9 @@ func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[strin
 }
 
 func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string) <-chan map[string]string {
-	args := map[string]any{"myMap": myMap}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myMap": myMap},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8027,7 +8546,9 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 }
 
 func TestFnNamedArgsSingleString(ctx context.Context, myString string) (*string, error) {
-	args := map[string]any{"myString": myString}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myString": myString},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8051,7 +8572,9 @@ func TestFnNamedArgsSingleString(ctx context.Context, myString string) (*string,
 }
 
 func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string) <-chan string {
-	args := map[string]any{"myString": myString}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myString": myString},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8085,7 +8608,9 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string)
 }
 
 func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string) (*string, error) {
-	args := map[string]any{"myStringArray": myStringArray}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myStringArray": myStringArray},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8109,7 +8634,9 @@ func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []strin
 }
 
 func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string) <-chan string {
-	args := map[string]any{"myStringArray": myStringArray}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myStringArray": myStringArray},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8143,7 +8670,9 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 }
 
 func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string) (*[]string, error) {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8158,9 +8687,7 @@ func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string) (*[]st
 	}
 
 	castResult := func(result any) []string {
-		return castSlice(result, func(item any) string {
-			return (item).(string)
-		})
+		return (result).([]string)
 	}
 
 	casted := castResult(*result.Data)
@@ -8169,7 +8696,9 @@ func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string) (*[]st
 }
 
 func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string) <-chan []string {
-	args := map[string]any{"myArg": myArg}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8203,7 +8732,9 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 }
 
 func TestGemini(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8227,7 +8758,9 @@ func TestGemini(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestGemini(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8261,7 +8794,9 @@ func (*stream) TestGemini(ctx context.Context, input string) <-chan string {
 }
 
 func TestGeminiOpenAiGeneric(ctx context.Context) (*string, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8285,7 +8820,9 @@ func TestGeminiOpenAiGeneric(ctx context.Context) (*string, error) {
 }
 
 func (*stream) TestGeminiOpenAiGeneric(ctx context.Context) <-chan string {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8319,7 +8856,9 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context) <-chan string {
 }
 
 func TestGeminiSystem(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8343,7 +8882,9 @@ func TestGeminiSystem(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestGeminiSystem(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8377,7 +8918,9 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string) <-chan string
 }
 
 func TestGeminiSystemAsChat(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8401,7 +8944,9 @@ func TestGeminiSystemAsChat(ctx context.Context, input string) (*string, error) 
 }
 
 func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8435,7 +8980,9 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string) <-chan 
 }
 
 func TestGroq(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8459,7 +9006,9 @@ func TestGroq(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestGroq(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8493,7 +9042,9 @@ func (*stream) TestGroq(ctx context.Context, input string) <-chan string {
 }
 
 func TestImageInput(ctx context.Context, img any) (*string, error) {
-	args := map[string]any{"img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8517,7 +9068,9 @@ func TestImageInput(ctx context.Context, img any) (*string, error) {
 }
 
 func (*stream) TestImageInput(ctx context.Context, img any) <-chan string {
-	args := map[string]any{"img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8551,7 +9104,9 @@ func (*stream) TestImageInput(ctx context.Context, img any) <-chan string {
 }
 
 func TestImageInputAnthropic(ctx context.Context, img any) (*string, error) {
-	args := map[string]any{"img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8575,7 +9130,9 @@ func TestImageInputAnthropic(ctx context.Context, img any) (*string, error) {
 }
 
 func (*stream) TestImageInputAnthropic(ctx context.Context, img any) <-chan string {
-	args := map[string]any{"img": img}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"img": img},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8609,7 +9166,9 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any) <-chan stri
 }
 
 func TestImageListInput(ctx context.Context, imgs []any) (*string, error) {
-	args := map[string]any{"imgs": imgs}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"imgs": imgs},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8633,7 +9192,9 @@ func TestImageListInput(ctx context.Context, imgs []any) (*string, error) {
 }
 
 func (*stream) TestImageListInput(ctx context.Context, imgs []any) <-chan string {
-	args := map[string]any{"imgs": imgs}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"imgs": imgs},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8667,7 +9228,9 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any) <-chan string
 }
 
 func TestMemory(ctx context.Context, input string) (*types.TestMemoryOutput, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8691,7 +9254,9 @@ func TestMemory(ctx context.Context, input string) (*types.TestMemoryOutput, err
 }
 
 func (*stream) TestMemory(ctx context.Context, input string) <-chan types.TestMemoryOutput {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8725,7 +9290,9 @@ func (*stream) TestMemory(ctx context.Context, input string) <-chan types.TestMe
 }
 
 func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass) (*string, error) {
-	args := map[string]any{"myArg": myArg, "myArg2": myArg2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg, "myArg2": myArg2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8749,7 +9316,9 @@ func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleCla
 }
 
 func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass) <-chan string {
-	args := map[string]any{"myArg": myArg, "myArg2": myArg2}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myArg": myArg, "myArg2": myArg2},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8783,7 +9352,9 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 }
 
 func TestNamedArgsLiteralBool(ctx context.Context, myBool bool) (*string, error) {
-	args := map[string]any{"myBool": myBool}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myBool": myBool},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8807,7 +9378,9 @@ func TestNamedArgsLiteralBool(ctx context.Context, myBool bool) (*string, error)
 }
 
 func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool) <-chan string {
-	args := map[string]any{"myBool": myBool}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myBool": myBool},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8841,7 +9414,9 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool) <-chan
 }
 
 func TestNamedArgsLiteralInt(ctx context.Context, myInt int) (*string, error) {
-	args := map[string]any{"myInt": myInt}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myInt": myInt},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8865,7 +9440,9 @@ func TestNamedArgsLiteralInt(ctx context.Context, myInt int) (*string, error) {
 }
 
 func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int) <-chan string {
-	args := map[string]any{"myInt": myInt}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myInt": myInt},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8899,7 +9476,9 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int) <-chan st
 }
 
 func TestNamedArgsLiteralString(ctx context.Context, myString string) (*string, error) {
-	args := map[string]any{"myString": myString}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myString": myString},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8923,7 +9502,9 @@ func TestNamedArgsLiteralString(ctx context.Context, myString string) (*string, 
 }
 
 func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string) <-chan string {
-	args := map[string]any{"myString": myString}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"myString": myString},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8957,7 +9538,9 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string) 
 }
 
 func TestOllama(ctx context.Context, input string) (**string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -8983,7 +9566,9 @@ func TestOllama(ctx context.Context, input string) (**string, error) {
 }
 
 func (*stream) TestOllama(ctx context.Context, input string) <-chan *string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9017,7 +9602,9 @@ func (*stream) TestOllama(ctx context.Context, input string) <-chan *string {
 }
 
 func TestOllamaHaiku(ctx context.Context, input string) (*types.Haiku, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9041,7 +9628,9 @@ func TestOllamaHaiku(ctx context.Context, input string) (*types.Haiku, error) {
 }
 
 func (*stream) TestOllamaHaiku(ctx context.Context, input string) <-chan types.Haiku {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9075,7 +9664,9 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string) <-chan types.H
 }
 
 func TestOpenAI(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9099,7 +9690,9 @@ func TestOpenAI(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestOpenAI(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9133,7 +9726,9 @@ func (*stream) TestOpenAI(ctx context.Context, input string) <-chan string {
 }
 
 func TestOpenAIDummyClient(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9157,7 +9752,9 @@ func TestOpenAIDummyClient(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestOpenAIDummyClient(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9191,7 +9788,9 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string) <-chan s
 }
 
 func TestOpenAIGPT4oMini(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9215,7 +9814,9 @@ func TestOpenAIGPT4oMini(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9249,7 +9850,9 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string) <-chan str
 }
 
 func TestOpenAILegacyProvider(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9273,7 +9876,9 @@ func TestOpenAILegacyProvider(ctx context.Context, input string) (*string, error
 }
 
 func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9307,7 +9912,9 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string) <-cha
 }
 
 func TestOpenAIO1NoMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9331,7 +9938,9 @@ func TestOpenAIO1NoMaxTokens(ctx context.Context, input string) (*string, error)
 }
 
 func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9365,7 +9974,9 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string) <-chan
 }
 
 func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9389,7 +10000,9 @@ func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string) (*st
 }
 
 func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9423,7 +10036,9 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 }
 
 func TestOpenAIO1WithMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9447,7 +10062,9 @@ func TestOpenAIO1WithMaxTokens(ctx context.Context, input string) (*string, erro
 }
 
 func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9481,7 +10098,9 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string) <-ch
 }
 
 func TestOpenAIShorthand(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9505,7 +10124,9 @@ func TestOpenAIShorthand(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestOpenAIShorthand(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9539,7 +10160,9 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string) <-chan str
 }
 
 func TestOpenAIWithFinishReasonError(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9563,7 +10186,9 @@ func TestOpenAIWithFinishReasonError(ctx context.Context, input string) (*string
 }
 
 func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9597,7 +10222,9 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 }
 
 func TestOpenAIWithMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9621,7 +10248,9 @@ func TestOpenAIWithMaxTokens(ctx context.Context, input string) (*string, error)
 }
 
 func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9655,7 +10284,9 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string) <-chan
 }
 
 func TestOpenAIWithNullMaxTokens(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9679,7 +10310,9 @@ func TestOpenAIWithNullMaxTokens(ctx context.Context, input string) (*string, er
 }
 
 func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9713,7 +10346,9 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string) <-
 }
 
 func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9737,7 +10372,9 @@ func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string) (*stri
 }
 
 func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9771,7 +10408,9 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 }
 
 func TestRetryConstant(ctx context.Context) (*string, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9795,7 +10434,9 @@ func TestRetryConstant(ctx context.Context) (*string, error) {
 }
 
 func (*stream) TestRetryConstant(ctx context.Context) <-chan string {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9829,7 +10470,9 @@ func (*stream) TestRetryConstant(ctx context.Context) <-chan string {
 }
 
 func TestRetryExponential(ctx context.Context) (*string, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9853,7 +10496,9 @@ func TestRetryExponential(ctx context.Context) (*string, error) {
 }
 
 func (*stream) TestRetryExponential(ctx context.Context) <-chan string {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9887,7 +10532,9 @@ func (*stream) TestRetryExponential(ctx context.Context) <-chan string {
 }
 
 func TestRoundRobinStrategy(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9911,7 +10558,9 @@ func TestRoundRobinStrategy(ctx context.Context, input string) (*string, error) 
 }
 
 func (*stream) TestRoundRobinStrategy(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9945,7 +10594,9 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string) <-chan 
 }
 
 func TestSingleFallbackClient(ctx context.Context) (*string, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -9969,7 +10620,9 @@ func TestSingleFallbackClient(ctx context.Context) (*string, error) {
 }
 
 func (*stream) TestSingleFallbackClient(ctx context.Context) <-chan string {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10003,7 +10656,9 @@ func (*stream) TestSingleFallbackClient(ctx context.Context) <-chan string {
 }
 
 func TestThinking(ctx context.Context, input string) (*types.CustomStory, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10027,7 +10682,9 @@ func TestThinking(ctx context.Context, input string) (*types.CustomStory, error)
 }
 
 func (*stream) TestThinking(ctx context.Context, input string) <-chan types.CustomStory {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10061,7 +10718,9 @@ func (*stream) TestThinking(ctx context.Context, input string) <-chan types.Cust
 }
 
 func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput) (*types.UniverseQuestion, error) {
-	args := map[string]any{"question": question}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"question": question},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10085,7 +10744,9 @@ func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionIn
 }
 
 func (*stream) TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput) <-chan types.UniverseQuestion {
-	args := map[string]any{"question": question}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"question": question},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10119,7 +10780,9 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 }
 
 func TestVertex(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10143,7 +10806,9 @@ func TestVertex(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestVertex(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10177,7 +10842,9 @@ func (*stream) TestVertex(ctx context.Context, input string) <-chan string {
 }
 
 func TestVertexClaude(ctx context.Context, input string) (*string, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10201,7 +10868,9 @@ func TestVertexClaude(ctx context.Context, input string) (*string, error) {
 }
 
 func (*stream) TestVertexClaude(ctx context.Context, input string) <-chan string {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10235,7 +10904,9 @@ func (*stream) TestVertexClaude(ctx context.Context, input string) <-chan string
 }
 
 func TestVertexWithSystemInstructions(ctx context.Context) (*string, error) {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10259,7 +10930,9 @@ func TestVertexWithSystemInstructions(ctx context.Context) (*string, error) {
 }
 
 func (*stream) TestVertexWithSystemInstructions(ctx context.Context) <-chan string {
-	args := map[string]any{}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10293,7 +10966,9 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context) <-chan stri
 }
 
 func UnionTest_Function(ctx context.Context, input types.Union__string__bool) (*types.UnionTest_ReturnType, error) {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10317,7 +10992,9 @@ func UnionTest_Function(ctx context.Context, input types.Union__string__bool) (*
 }
 
 func (*stream) UnionTest_Function(ctx context.Context, input types.Union__string__bool) <-chan types.UnionTest_ReturnType {
-	args := map[string]any{"input": input}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10351,7 +11028,9 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union__string
 }
 
 func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam) (*int64, error) {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10375,7 +11054,9 @@ func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam) 
 }
 
 func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam) <-chan int64 {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10409,7 +11090,9 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 }
 
 func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2) (*int64, error) {
-	args := map[string]any{"a": a}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"a": a},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10433,7 +11116,9 @@ func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2)
 }
 
 func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2) <-chan int64 {
-	args := map[string]any{"a": a}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"a": a},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10467,7 +11152,9 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 }
 
 func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam) (*int64, error) {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -10491,7 +11178,9 @@ func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstrai
 }
 
 func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam) <-chan int64 {
-	args := map[string]any{"inp": inp}
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"inp": inp},
+	}
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
