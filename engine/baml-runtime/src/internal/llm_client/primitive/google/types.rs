@@ -300,33 +300,33 @@ pub struct CitationMetadata {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Citation {
-    pub start_index: i32,
-    pub end_index: i32,
-    pub uri: String,
-    pub title: String,
-    pub license: String,
-    pub publication_date: Date,
+    pub start_index: Option<i32>,
+    pub end_index: Option<i32>,
+    pub uri: Option<String>,
+    pub title: Option<String>,
+    pub license: Option<String>,
+    pub publication_date: Option<Date>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Date {
-    pub year: i32,
-    pub month: i32,
-    pub day: i32,
+    pub year: Option<i32>,
+    pub month: Option<i32>,
+    pub day: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GroundingMetadata {
-    pub web_search_queries: Vec<String>,
-    pub search_entry_point: SearchEntryPoint,
+    pub web_search_queries: Option<Vec<String>>,
+    pub search_entry_point: Option<SearchEntryPoint>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchEntryPoint {
-    pub rendered_content: String,
-    pub sdk_blob: Vec<u8>,
+    pub rendered_content: Option<String>,
+    pub sdk_blob: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

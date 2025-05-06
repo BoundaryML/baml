@@ -321,23 +321,23 @@ pub struct Citation {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Date {
-    pub year: i32,
-    pub month: i32,
-    pub day: i32,
+    pub year: Option<i32>,
+    pub month: Option<i32>,
+    pub day: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GroundingMetadata {
-    pub web_search_queries: Vec<String>,
-    pub search_entry_point: SearchEntryPoint,
+    pub web_search_queries: Option<Vec<String>>,
+    pub search_entry_point: Option<SearchEntryPoint>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchEntryPoint {
-    pub rendered_content: String,
-    pub sdk_blob: Vec<u8>,
+    pub rendered_content: Option<String>,
+    pub sdk_blob: Option<Vec<u8>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
