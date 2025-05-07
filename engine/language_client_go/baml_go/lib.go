@@ -26,7 +26,6 @@ import (
 #include <dlfcn.h>
 #include <baml_cffi_wrapper.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
 #include <string.h>

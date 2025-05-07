@@ -2,10 +2,9 @@ package baml
 
 /*
 #include <stdlib.h>
-#include <stdbool.h>
 
-extern void trigger_callback(uint32_t, bool, const int8_t *, int);
-extern void error_callback(uint32_t, bool, const int8_t *, int);
+extern void trigger_callback(uint32_t, int, const int8_t *, int);
+extern void error_callback(uint32_t, int, const int8_t *, int);
 */
 import "C"
 

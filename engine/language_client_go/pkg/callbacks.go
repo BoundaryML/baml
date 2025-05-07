@@ -2,7 +2,6 @@ package baml
 
 /*
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 */
 import "C"
@@ -59,7 +58,7 @@ func SetTypeMap(t TypeMap) {
 }
 
 //export error_callback
-func error_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.int) {
+func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int) {
 	fmt.Println("Error callback")
 	callbackMutex.RLock()
 	id_uint := uint32(id)
@@ -86,7 +85,7 @@ func error_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.in
 }
 
 //export trigger_callback
-func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.int) {
+func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int) {
 	callbackMutex.RLock()
 	id_uint := uint32(id)
 	callback, exists := dynamicCallbacks[id_uint]
@@ -100,7 +99,7 @@ func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.
 		decoded_data := Decode(&parsed_data)
 
 		var res ResultCallback
-		if isDone {
+		if isDone == 1 {
 			res = ResultCallback{HasData: true, Data: &decoded_data}
 		} else {
 			res = ResultCallback{HasStreamData: true, StreamData: &decoded_data}
@@ -117,7 +116,7 @@ func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.
 			break
 		}
 
-		if bool(isDone) || force_close {
+		if isDone == 1 || force_close {
 			close(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()
