@@ -793,6 +793,56 @@ async def test_streaming_gemini():
 
 
 @pytest.mark.asyncio
+async def test_gemini_models():
+    client_registry = baml_py.ClientRegistry()
+    # # Test with gemini-1.5-flash-thinking-exp-1219
+    # client_registry.add_llm_client(
+    #     "MyCustomGeminiClient",
+    #     "google-ai",
+    #     {"model": "gemini-1.5-flash-thinking-exp-1219"},
+    # )
+    # client_registry.set_primary("MyCustomGeminiClient")
+    # res = await b.TestGemini(
+    #     input="Dr.Pepper", baml_options={"client_registry": client_registry}
+    # )
+    # assert len(res) > 0, "Expected non-empty result but got empty."
+
+    # Test with gemini-2.5-pro-preview-05-06
+    # client_registry.add_llm_client(
+    #     "Gemini25ProMay", "google-ai", {"model": "gemini-2.5-pro-preview-05-06"}
+    # )
+    # client_registry.set_primary("Gemini25ProMay")
+    # res = await b.TestGemini(
+    #     input="sea. Actually output the multiplication of 23*12/12+3 and take square root of 10.",
+    #     baml_options={"client_registry": client_registry},
+    # )
+    # assert len(res) > 0, "Expected non-empty result but got empty."
+
+    # Test with gemini-2.5-pro-preview-03-25
+    # client_registry.add_llm_client(
+    #     "Gemini25ProMarch", "google-ai", {"model": "gemini-2.5-pro-preview-03-25"}
+    # )
+    # client_registry.set_primary("Gemini25ProMarch")
+    # res = await b.TestGemini(
+    #     input="sea. Actually just output a json object with the keys 'name' and 'age'.",
+    #     baml_options={"client_registry": client_registry},
+    # )
+    # assert len(res) > 0, "Expected non-empty result but got empty."
+
+    # Test with gemini-2.0-flash-thinking-exp-1219
+    client_registry.add_llm_client(
+        "GeminiFlashThinking",
+        "google-ai",
+        {"model": "gemini-2.0-flash-thinking-exp-1219"},
+    )
+    client_registry.set_primary("GeminiFlashThinking")
+    res = await b.TestGemini(
+        input="sea", baml_options={"client_registry": client_registry}
+    )
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
 async def test_tracing_async_only():
     @trace
     async def top_level_async_tracing():

@@ -245,6 +245,7 @@ pub struct Part {
     pub function_call: Option<FunctionCall>,
     pub function_response: Option<FunctionResponse>,
     pub video_metadata: Option<VideoMetadata>,
+    pub thought: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
