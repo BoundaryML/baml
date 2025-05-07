@@ -131,16 +131,41 @@ pub fn get_word_at_position(contents: &str, position: &Position) -> String {
 /// Returns the symbol (a single character) immediately preceding the given position.
 /// If the position is at the start of the line, an empty string is returned.
 pub fn get_symbol_before_position(contents: &str, position: &Position) -> String {
-    if position.character == 0 {
-        return "".to_string();
-    }
     let current_line = get_current_line(contents, position.line);
-    let pos = cmp::min(position.character as usize, current_line.len());
-    if pos == 0 {
+    // position.character is a 0-indexed character offset.
+    let char_cursor_pos = position.character as usize;
+
+    if char_cursor_pos == 0 {
         return "".to_string();
     }
-    // This simple slicing works correctly if the text is ASCII.
-    current_line[pos - 1..pos].to_string()
+
+    // Clamp the character cursor position against the actual number of characters in the line.
+    // This ensures that if position.character is, for example, 5, but the line only has 3 chars,
+    // we don't panic. We want the character at index (clamped_char_cursor_pos - 1).
+    let num_chars_in_line = current_line.chars().count();
+
+    // If the effective cursor position is beyond the line's character length,
+    // or if it's at the very beginning (char_cursor_pos == 0, handled above),
+    // there's no valid preceding character to get by simple indexing from char_cursor_pos.
+    // We are interested in the character at `char_cursor_pos - 1`.
+    if char_cursor_pos > num_chars_in_line {
+        // If cursor is effectively beyond the line, the "preceding" character would be the last one.
+        // So we try to get char at num_chars_in_line - 1.
+        if num_chars_in_line == 0 {
+            return "".to_string(); // Empty line
+        }
+        return current_line
+            .chars()
+            .nth(num_chars_in_line - 1)
+            .map_or("".to_string(), |ch| ch.to_string());
+    }
+
+    // At this point, 0 < char_cursor_pos <= num_chars_in_line.
+    // We want the character at index (char_cursor_pos - 1).
+    current_line
+        .chars()
+        .nth(char_cursor_pos - 1)
+        .map_or("".to_string(), |ch| ch.to_string())
 }
 
 /// Computes the Position (line and character) corresponding to a given index in the document's text.
