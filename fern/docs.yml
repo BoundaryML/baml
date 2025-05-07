@@ -403,9 +403,10 @@ navigation:
           - page: LLM Client Registry
             icon: fa-regular fa-gears
             path: 01-guide/05-baml-advanced/client-registry.mdx
-          - page: Dynamic / Runtime Types
+          - page: Dynamic Types
             icon: fa-solid fa-person-running
             path: 01-guide/05-baml-advanced/dynamic-types.mdx
+            slug: guide/baml-advanced/dynamic-types
           - page: Reusing Prompt Snippets
             icon: fa-regular fa-repeat
             path: 01-guide/05-baml-advanced/reusing-prompt-snippets.mdx
@@ -958,6 +959,8 @@ typography:
 
 # Legacy docs
 redirects:
+  - source: "/guide/baml-advanced/dynamic-runtime-types"
+    destination: "/guide/baml-advanced/dynamic-types"
   - source: "/guide/baml-basics/switching-ll-ms"
     destination: "/guide/baml-basics/switching-llms"
   - source: "/docs/get-started/what-is-baml"
