@@ -49,8 +49,7 @@ ARROW = { SPACER_TEXT ~ "->" ~ SPACER_TEXT }
 assignment           = { "=" }
 template_declaration = { TEMPLATE_KEYWORD ~ identifier ~ assignment? ~ named_argument_list? ~ raw_string_literal }
 
-colon          = { ":" }
-named_argument = { identifier ~ ((":" ~ field_type_chain) | colon)? }
+named_argument = { identifier ~ ((COLON ~ field_type_chain) | COLON)? }
 // Be forgiving and allow trailing comma
 named_argument_list = { openParan ~ SPACER_TEXT ~ named_argument? ~ ("," ~ SPACER_TEXT ~ named_argument)* ~ ","? ~ SPACER_TEXT ~ closeParan }
 
@@ -87,7 +86,7 @@ parenthesized_type = { openParan ~ field_type_with_attr ~ closeParan }
 path_identifier       =  { single_word ~ ("." ~ single_word)+ }
 identifier            =  { path_identifier | namespaced_identifier | single_word }
 single_word           = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_" | "-")* }
-namespaced_identifier =  { single_word ~ ("::" ~ single_word)+ }
+namespaced_identifier = ${ single_word ~ ("::" ~ single_word)+ }
 
 // ######################################
 // Type Alias
@@ -113,7 +112,7 @@ jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
 expression        =  {
-    fetch_call |
+    generic_fn_app |
     fn_app |
     lambda |
     jinja_expression |
@@ -241,8 +240,10 @@ stmt = { let_expr ~ SEMICOLON? }
 // Let-binding statement.
 let_expr = { "let" ~ identifier ~ "=" ~ expression }
 
+fn_args = { expression? ~ ("," ~ expression)* }
+
 // Function application.
-fn_app = { identifier ~ "(" ~ expression? ~ ("," ~ expression)* ~ ")" }
+fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }
@@ -261,6 +262,16 @@ class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }
 // e.g. `new MyClass { a: 1, b: 2, ..other_struct }`
 struct_spread = { ".." ~ expression }
 
-// A special-case parser for std::fetch, until we have a more general
+// A special-case parser for std::fetch_value_call, until we have a more general
 // parser for generic function calls.
-fetch_call = { "std::fetch<" ~ field_type_chain ~ ">" ~ "(" ~ expression ~ ")" }
+
+// No whitespaces for "func_call<", needs to be atomic.
+// Actually "compound atomic" because of Pest stuff, read here:
+// https://pest.rs/book/grammars/syntax.html#atomic
+generic_fn_app_identifier = ${ identifier ~ "<" }
+
+// But then allow whitespaces inside angle brackets and after:
+// func_call<    Type    >(a, b)
+generic_fn_app_args = { field_type_chain ~ ">" ~ "(" ~ fn_args ~ ")" }
+
+generic_fn_app = { generic_fn_app_identifier ~ generic_fn_app_args }

@@ -5,11 +5,11 @@ mod attribute;
 mod comment;
 mod config;
 
-pub mod builtin;
 pub mod expr;
 mod expression;
 mod field;
 
+mod fn_app;
 mod identifier;
 mod indentation_type;
 mod newline_type;
@@ -31,6 +31,7 @@ pub use expression::{
     ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, RawString, Stmt,
 };
 pub use field::{Field, FieldArity, FieldType};
+pub use fn_app::FnApp;
 pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;

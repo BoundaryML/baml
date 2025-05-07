@@ -345,17 +345,23 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     (span.clone(), None),
                 ))
             }
-            ast::Expression::FnApp(func, args, span) => {
-                let func = Expr::FreeVar(func.name().to_string(), (func.span().clone(), None));
-                let args = args.iter().map(|arg| arg.repr(db)).collect::<Result<_>>()?;
+            ast::Expression::FnApp(fn_app) => {
+                let func = Expr::FreeVar(fn_app.name.to_string(), (fn_app.span().clone(), None));
+                let args = fn_app
+                    .args
+                    .iter()
+                    .map(|arg| arg.repr(db))
+                    .collect::<Result<_>>()?;
                 Ok(Expr::App(
                     Arc::new(func),
-                    Arc::new(Expr::ArgsTuple(args, (span.clone(), None))), // TODO: We don't really have a span for the ArgsTuple, so we're using the one for the whole FnApp.
-                    (span.clone(), None),
+                    Arc::new(Expr::ArgsTuple(args, (fn_app.span().clone(), None))), // TODO: We don't really have a span for the ArgsTuple, so we're using the one for the whole FnApp.
+                    (fn_app.span().clone(), None),
                 ))
             }
             ast::Expression::ClassConstructor(
-                ast::ClassConstructor { class_name, fields },
+                ast::ClassConstructor {
+                    class_name, fields, ..
+                },
                 span,
             ) => {
                 let mut new_fields = BamlMap::new();

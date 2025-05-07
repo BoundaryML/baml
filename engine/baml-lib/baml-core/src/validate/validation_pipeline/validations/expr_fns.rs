@@ -84,15 +84,15 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
         }
         Expression::Lambda(_args, _body, _span) => {}
-        Expression::FnApp(fn_name, args, span) => {
+        Expression::FnApp(fn_app) => {
             // Validate the function name.
-            if !scope.contains(&fn_name.to_string()) {
+            if !scope.contains(&fn_app.name.to_string()) {
                 ctx.push_error(DatamodelError::new_anyhow_error(
-                    anyhow::anyhow!("Unknown function {}", &fn_name.to_string()),
-                    span.clone(),
+                    anyhow::anyhow!("Unknown function {}", &fn_app.name.to_string()),
+                    fn_app.span().clone(),
                 ));
             }
-            for arg in args {
+            for arg in &fn_app.args {
                 validate_expression(ctx, arg, scope);
             }
         }
@@ -137,7 +137,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                 })
                 .collect::<Vec<_>>();
 
-            for field in cc.fields.iter() {
+            for field in &cc.fields {
                 match field {
                     ClassConstructorField::Named(field_name, value) => {}
                     ClassConstructorField::Spread(expr) => {
