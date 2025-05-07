@@ -799,4 +799,45 @@ test TestMakePerson() {
         dbg!(res);
         assert!(false);
     }
+
+    #[tokio::test]
+    async fn test_fetch_value() {
+        let rt = runtime(
+            r##"
+class Todo {
+  id int
+  todo string
+  completed bool
+  userId int 
+}
+
+fn GetTodo(id: int) -> Todo {
+  std::fetch_value<Todo>(std::request {
+    method: Get,
+    base_url: "https://dummyjson.com/todos/1",
+    query_params: null,
+    body: null,
+  })
+}
+
+test GetTodo() {
+  functions [GetTodo]
+  args { }
+}
+        "##,
+        );
+        // dbg!(&rt.inner.ir.find_function("GetTodo").unwrap().item);
+        let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
+
+        let on_event = |res: FunctionResult| {
+            eprintln!("on_event: {:?}", res);
+        };
+        let f = rt.inner.ir.find_expr_fn("GetTodo").unwrap();
+        // dbg!(&f.item);
+        let (res, _) = rt
+            .run_test("GetTodo", "GetTodo", &ctx, Some(on_event), None)
+            .await;
+        dbg!(res);
+        // assert!(false);
+    }
 }
