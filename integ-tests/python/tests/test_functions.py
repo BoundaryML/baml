@@ -17,12 +17,9 @@ from ..baml_client.globals import (
 )
 from ..baml_client import partial_types
 from ..baml_client.types import (
-    DynInputOutput,
-    Hobby,
-    NamedArgsSingleEnumList,
     NamedArgsSingleClass,
+    NamedArgsSingleEnumList,
     Nested,
-    OriginalB,
     StringToClassEntry,
     MalformedConstraints2,
     LiteralClassHello,
@@ -40,8 +37,6 @@ from ..baml_client.types import (
     ClassToRecAlias,
     NodeWithAliasIndirection,
     OptionalListAndMap,
-    Person,
-    Color,
     SimpleTag,
 )
 

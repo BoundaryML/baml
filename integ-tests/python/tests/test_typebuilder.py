@@ -2,7 +2,7 @@ from ..baml_client.type_builder import TypeBuilder
 import pytest
 import baml_py
 from baml_py import errors
-from typing import List, Optional
+from typing import List
 from ..baml_client import b
 from ..baml_client.types import (
     DynInputOutput,
@@ -10,7 +10,6 @@ from ..baml_client.types import (
     Color,
     Person,
     OriginalB,
-    Resume,
 )
 from ..baml_client import partial_types
 
