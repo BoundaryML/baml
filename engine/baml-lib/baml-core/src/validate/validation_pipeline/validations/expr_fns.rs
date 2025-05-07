@@ -8,6 +8,20 @@ use internal_baml_schema_ast::ast::{WithName, WithSpan};
 
 use crate::validate::validation_pipeline::context::Context;
 
+/// Builtin functions.
+///
+/// TODO: Define this somewhere else like their own std.baml file or something,
+/// but we don't have modules yet.
+fn baml_prelude() -> HashSet<String> {
+    let builtin_functions = ["std::fetch_value"];
+
+    let builtin_classes = ["std::request"];
+
+    let builtin_identifiers = builtin_functions.iter().chain(builtin_classes.iter());
+
+    HashSet::from_iter(builtin_identifiers.map(ToString::to_string))
+}
+
 // An expr_fn is valid if:
 //   - Its arguments have valid types.
 //   - Its return type is valid.
@@ -20,7 +34,8 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         internal_baml_jinja_types::JinjaContext::Prompt,
     );
 
-    let mut taken_names = std::collections::HashSet::new();
+    let mut taken_names = baml_prelude();
+
     ctx.db.walk_classes().for_each(|class| {
         class.add_to_types(&mut defined_types);
         taken_names.insert(class.name().to_owned());
@@ -86,7 +101,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
         Expression::Lambda(_args, _body, _span) => {}
         Expression::FnApp(fn_app) => {
             // Validate the function name.
-            if !scope.contains(&fn_app.name.to_string()) {
+            if !scope.contains(fn_app.name.name()) {
                 ctx.push_error(DatamodelError::new_anyhow_error(
                     anyhow::anyhow!("Unknown function {}", &fn_app.name.to_string()),
                     fn_app.span().clone(),
