@@ -195,7 +195,6 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
             (FieldType::Tuple(_), _) => false,
             (FieldType::Enum(_), _) => false,
             (FieldType::Class(_), _) => false,
-
             (FieldType::Arrow(arrow1), FieldType::Arrow(arrow2)) => {
                 let param_lengths_match = arrow1.param_types.len() == arrow2.param_types.len();
                 // N.B. Functions are covariant in their return type and contravariant in their arguments.

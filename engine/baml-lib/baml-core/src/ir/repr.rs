@@ -30,6 +30,8 @@ use serde::Serialize;
 use crate::validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context;
 use crate::Configuration;
 
+use super::builtin::{builtin_classes, builtin_functions};
+
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
 /// raw BAML AST, and should include all information necessary to generate
@@ -180,12 +182,9 @@ impl WithRepr<Function> for ExprFnWalker<'_> {
             .args
             .args
             .iter()
-            .map(|(arg_name, arg_type)| {
-                let ty = arg_type.field_type.repr(db)?;
-                Ok((arg_name.to_string(), ty))
-            })
+            .map(|(arg_name, arg_type)| Ok((arg_name.to_string(), arg_type.field_type.repr(db)?)))
             .collect::<Result<_>>()?;
-        let return_ty = self
+        let return_type = self
             .expr_fn()
             .return_type
             .as_ref()
@@ -196,7 +195,7 @@ impl WithRepr<Function> for ExprFnWalker<'_> {
         let function = Function {
             name: self.expr_fn().name.to_string(),
             inputs: args,
-            output: return_ty,
+            output: return_type,
             configs: vec![],
             default_config: "".to_string(),
             tests: vec![],
@@ -565,11 +564,12 @@ impl IntermediateRepr {
                 .collect::<Result<Vec<_>>>()?,
             classes: db
                 .walk_classes()
-                .map(|e| e.node(db))
+                .map(|c| c.node(db))
+                .chain(builtin_classes().into_iter().map(Ok))
                 .collect::<Result<Vec<_>>>()?,
             type_aliases: db
                 .walk_type_aliases()
-                .map(|e| e.node(db))
+                .map(|a| a.node(db))
                 .collect::<Result<Vec<_>>>()?,
             finite_recursive_cycles: db
                 .finite_recursive_cycles()

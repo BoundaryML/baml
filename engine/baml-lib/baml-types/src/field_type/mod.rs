@@ -248,9 +248,9 @@ impl ToUnionName for FieldType {
         match &value {
             FieldType::Union(_) => IndexSet::from_iter([value]),
             FieldType::List(inner) => inner.find_union_types(),
-            FieldType::Map(field_type, field_type1) => {
-                let mut set = field_type.find_union_types();
-                set.extend(field_type1.find_union_types());
+            FieldType::Map(key_type, value_type) => {
+                let mut set = key_type.find_union_types();
+                set.extend(value_type.find_union_types());
                 set
             }
             FieldType::Primitive(_)

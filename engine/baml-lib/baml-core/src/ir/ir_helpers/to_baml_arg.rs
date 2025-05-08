@@ -357,7 +357,9 @@ impl ArgCoercer {
                 }
             }
             (FieldType::Arrow(_), _) => {
-                scope.push_error(format!("A json value may not be coerced into a function type"));
+                scope.push_error(format!(
+                    "A json value may not be coerced into a function type"
+                ));
                 Err(())
             }
             (FieldType::WithMetadata { .. }, _) => {
