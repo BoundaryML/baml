@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.87.2](https://github.com/boundaryml/baml/compare/0.87.1..0.87.2) - 2025-05-08
+
+### Bugfixes
+- [Go] Fix build of baml-cli for Go in linux (#1921) - ([d234dc9](https://github.com/boundaryml/baml/commit/d234dc922d6f01487a5e680ee52f1d8b28ef7ebb)) - Todd Berman
+- Bump version to 0.87.2 - ([77d6502](https://github.com/boundaryml/baml/commit/77d650219af58debc33d2544a2704197645ced32)) - Aaron Villalpando
+
 ## [0.87.1](https://github.com/boundaryml/baml/compare/0.87.0..0.87.1) - 2025-05-07
 
 ### Bugfixes
