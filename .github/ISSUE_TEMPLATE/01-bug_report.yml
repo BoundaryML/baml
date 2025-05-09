@@ -6,7 +6,7 @@ body:
   - type: dropdown
     attributes:
       label: Product
-      description: Which BoundaryML product are you using?
+      description: Which Boundary product are you using?
       options:
         - BAML
         - VS Code Playground
@@ -23,13 +23,13 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: To reproduce
+      label: Reproduction Steps
       description: Describe how to reproduce your bug. Steps, code snippets, reproduction repos etc.
     validations:
       required: true
   - type: input
     attributes:
-      label: Version (Optional)
+      label: BAML Version (Optional)
       description: Which version of BAML are you using?
   - type: dropdown
     attributes:

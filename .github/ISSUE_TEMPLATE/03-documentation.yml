@@ -5,33 +5,17 @@ labels: ["documentation"]
 body:
   - type: textarea
     attributes:
-      label: Documentation Issue
-      description: What documentation needs to be improved or added?
-    validations:
-      required: true
-  - type: textarea
-    attributes:
-      label: Current Documentation
-      description: If applicable, what is the current documentation that needs improvement?
-  - type: textarea
-    attributes:
       label: Proposed Changes
       description: What changes would you like to see in the documentation?
     validations:
       required: true
+  - type: textarea
+    attributes:
+      label: Current Documentation (Optional)
+      description: If applicable, what is the current documentation that needs improvement?
   - type: dropdown
     attributes:
-      label: Product
-      description: Which BoundaryML product's documentation needs improvement?
-      options:
-        - BAML Language
-        - VS Code Playground
-        - Boundary Studio
-        - Prompt Fiddle
-        - Other
-  - type: dropdown
-    attributes:
-      label: Documentation Type
+      label: Documentation Type (Optional)
       description: What type of documentation is this?
       options:
         - Getting Started Guide
@@ -40,5 +24,3 @@ body:
         - Example
         - Best Practices
         - Other
-    validations:
-      required: true

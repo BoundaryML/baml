@@ -6,7 +6,7 @@ body:
   - type: dropdown
     attributes:
       label: Product
-      description: Which BoundaryML product would this feature be for?
+      description: Which Boundary product would this feature be for?
       options:
         - BAML
         - VS Code Playground
