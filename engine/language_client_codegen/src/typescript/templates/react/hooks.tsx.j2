@@ -81,6 +81,8 @@ export type HookOutput<FunctionName extends FunctionNames = FunctionNames, Optio
   reset: () => void
 }
 
+export type HookData<FunctionName extends FunctionNames, Options extends { stream?: boolean } = { stream?: true }> = NonNullable<HookOutput<FunctionName, Options>['data']>;
+
 /**
  * Type guard to check if the hook props are configured for streaming mode.
  *
