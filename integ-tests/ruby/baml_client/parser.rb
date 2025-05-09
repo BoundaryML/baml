@@ -4128,6 +4128,29 @@ module Baml
       params(
         llm_response: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(Baml::Types::MaintainFieldOrder)
+    }
+    def UseMaintainFieldOrder(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.parse_llm_response(
+        "UseMaintainFieldOrder",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        false,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def UseMalformedConstraints(llm_response:, baml_options: {})
@@ -8266,6 +8289,29 @@ module Baml
 
       @runtime.parse_llm_response(
         "UseBlockConstraint",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        true,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(T.nilable(Baml::PartialTypes::MaintainFieldOrder))
+    }
+    def UseMaintainFieldOrder(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.parse_llm_response(
+        "UseMaintainFieldOrder",
         llm_response,
         Baml::Types,
         Baml::PartialTypes,
