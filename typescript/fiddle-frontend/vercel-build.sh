@@ -2,7 +2,7 @@
 set -x
 set -e
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain 1.81.0
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain 1.82.0
 export PATH="/vercel/.cargo/bin:$PATH"
 
 source $HOME/.cargo/env
