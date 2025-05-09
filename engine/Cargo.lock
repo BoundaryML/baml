@@ -879,7 +879,7 @@ dependencies = [
 
 [[package]]
 name = "baml-cli"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lib"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "base64 0.13.1",
  "dissimilar",
@@ -985,7 +985,7 @@ dependencies = [
 
 [[package]]
 name = "baml-log"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -999,7 +999,7 @@ dependencies = [
 
 [[package]]
 name = "baml-lsp-types"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1029,7 +1029,7 @@ dependencies = [
 
 [[package]]
 name = "baml-python-ffi"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1103,7 +1103,7 @@ dependencies = [
 
 [[package]]
 name = "baml-runtime"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1216,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "baml-schema-build"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-runtime",
@@ -1260,7 +1260,7 @@ dependencies = [
 
 [[package]]
 name = "baml-types"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -1284,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "baml-typescript-ffi"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1307,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "baml_cffi"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-cli",
@@ -1421,7 +1421,7 @@ dependencies = [
 
 [[package]]
 name = "bstd"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -2935,7 +2935,7 @@ dependencies = [
  "http 1.1.0",
  "hyper 1.6.0",
  "hyper-util",
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-native-certs 0.7.3",
  "rustls-pki-types",
  "tokio",
@@ -3284,7 +3284,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-codegen"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3312,7 +3312,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-core"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3349,7 +3349,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-diagnostics"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "colored 2.1.0",
@@ -3362,7 +3362,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3383,7 +3383,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-jinja-types"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "askama",
@@ -3402,7 +3402,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-parser-database"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3427,7 +3427,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-prompt-parser"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "internal-baml-diagnostics",
  "internal-baml-schema-ast",
@@ -3439,7 +3439,7 @@ dependencies = [
 
 [[package]]
 name = "internal-baml-schema-ast"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-types",
@@ -3460,7 +3460,7 @@ dependencies = [
 
 [[package]]
 name = "internal-llm-client"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "aws-config",
@@ -3598,7 +3598,7 @@ checksum = "9dbbfed4e59ba9750e15ba154fdfd9329cee16ff3df539c2666b70f58cc32105"
 
 [[package]]
 name = "jsonish"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -3679,7 +3679,7 @@ dependencies = [
 
 [[package]]
 name = "language-server"
-version = "0.86.1"
+version = "0.87.2"
 dependencies = [
  "anyhow",
  "baml-log",
@@ -5208,9 +5208,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.25"
+version = "0.23.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "822ee9188ac4ec04a2f0531e55d035fb2de73f18b41a63c70c2712503b6fb13c"
+checksum = "df51b5869f3a441595eac5e8ff14d486ff285f7b8c0df8770e49c3b56351f0f0"
 dependencies = [
  "once_cell",
  "ring",
@@ -6157,7 +6157,7 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c7bc40d0e5a97695bb96e27995cd3a08538541b0a846f65bba7a359f36700d4"
 dependencies = [
- "rustls 0.23.25",
+ "rustls 0.23.26",
  "rustls-pki-types",
  "tokio",
 ]

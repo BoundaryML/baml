@@ -531,6 +531,59 @@ export async function resolveCliPath(
   bamlOutputChannel.appendLine(`Resolving CLI path for version: ${requestedVersion}`)
   const bundledVersion = packageJson.version as string
 
+  // Proactively cache the current bundled CLI if it's not already in ~/.baml
+  // This is useful if the extension auto-updates, preserving the previous version's bundled CLI.
+  const bundledCliActualPath = _getBundledCliPath(context)
+
+  // Disable windows caching for now since not sure if it will trigger Windows Defender
+  if (os.platform() !== 'win32' && bundledCliActualPath) {
+    bamlOutputChannel.appendLine(
+      `Checking if current bundled CLI (version: ${bundledVersion}) needs to be cached from ${bundledCliActualPath}...`,
+    )
+    const cliVersionMetaForBundled: CliVersion = {
+      architecture: os.arch(),
+      platform: os.platform(),
+      version: bundledVersion,
+    }
+    const targetCachePathForBundled = downloadedCliPath(context, cliVersionMetaForBundled)
+
+    try {
+      // Check if the cached file already exists
+      await fs.promises.access(targetCachePathForBundled)
+      bamlOutputChannel.appendLine(
+        `Bundled CLI version ${bundledVersion} is already cached at ${targetCachePathForBundled}. No copy needed.`,
+      )
+    } catch (e) {
+      // File does not exist in cache, so copy it
+      bamlOutputChannel.appendLine(
+        `Bundled CLI version ${bundledVersion} not found in cache. Attempting to cache from ${bundledCliActualPath} to ${targetCachePathForBundled}.`,
+      )
+      try {
+        await _ensureInstallPathExists(context) // Ensure ~/.baml (or installPath) exists
+        await fs.promises.copyFile(bundledCliActualPath, targetCachePathForBundled)
+        bamlOutputChannel.appendLine(`Successfully copied bundled CLI to cache: ${targetCachePathForBundled}`)
+
+        // Ensure executable permissions for the newly cached file
+        try {
+          await fs.promises.chmod(targetCachePathForBundled, 0o755)
+          bamlOutputChannel.appendLine(
+            `Ensured executable permissions for cached bundled CLI: ${targetCachePathForBundled}`,
+          )
+        } catch (chmodError: any) {
+          bamlOutputChannel.appendLine(
+            `ERROR: Failed to set executable permissions for cached bundled CLI ${targetCachePathForBundled}: ${chmodError.message}`,
+          )
+          // Continue even if chmod fails, the file is copied.
+        }
+      } catch (copyError: any) {
+        bamlOutputChannel.appendLine(
+          `ERROR: Failed to cache bundled CLI version ${bundledVersion} from ${bundledCliActualPath} to ${targetCachePathForBundled}: ${copyError.message}`,
+        )
+        // This is a non-fatal error for the resolveCliPath function's main goal.
+      }
+    }
+  }
+
   // 1. Check if requested version matches bundled version
   if (semver.valid(requestedVersion) && semver.valid(bundledVersion) && semver.eq(requestedVersion, bundledVersion)) {
     console.log(`Requested version (${requestedVersion}) matches bundled version (${bundledVersion}).`)

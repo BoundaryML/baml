@@ -28,15 +28,6 @@ pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> 
                 .ok()
                 .unwrap()
         );
-    } else if field_type.is_slice {
-        let inner_type = field_type.underlying_type.as_ref().unwrap();
-        return format!(
-            r#"castSlice({container_variable_name}, func(item any) {} {{
-    return {}
-}})"#,
-            inner_type.name,
-            cast_value("item", inner_type),
-        );
     } else if field_type.is_union {
         return format!("*({container_variable_name}).(*{})", field_type.name);
     } else if field_type.is_pointer {
@@ -249,6 +240,8 @@ pub struct GoType {
 struct GoTypeAlias<'ir> {
     name: Cow<'ir, str>,
     target: String,
+    is_baml_serializable: bool,
+    is_union: bool,
 }
 
 #[derive(askama::Template)]
@@ -415,9 +408,12 @@ impl<'ir> From<ClassWalker<'ir>> for GoClass<'ir> {
 // TODO: Define AliasWalker to simplify type.
 impl<'ir> From<Walker<'ir, (&'ir String, &'ir FieldType)>> for GoTypeAlias<'ir> {
     fn from(walker: Walker<(&'ir String, &'ir FieldType)>) -> Self {
+        let type_ref = walker.item.1.to_type_ref_2(walker.ir, false);
         GoTypeAlias {
             name: Cow::Borrowed(walker.item.0),
-            target: walker.item.1.to_type_ref_2(walker.ir, false).name,
+            target: type_ref.name,
+            is_union: type_ref.is_union,
+            is_baml_serializable: type_ref.is_class || type_ref.is_enum || type_ref.is_union,
         }
     }
 }

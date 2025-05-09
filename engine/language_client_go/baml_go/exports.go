@@ -10,7 +10,6 @@ import (
 #cgo CFLAGS: -O3 -g
 #include <baml_cffi_wrapper.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 */

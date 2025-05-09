@@ -1,5 +1,10 @@
 name: BAML Release - Build VSCode Extension (Matrix Packaging)
 
+concurrency:
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-build-vscode
+  cancel-in-progress: true
+
 on:
   workflow_call:
     inputs:

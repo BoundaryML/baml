@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{BamlMap, CompletionState, Constraint, ConstraintLevel};
+use baml_types::{BamlMap, CompletionState, Constraint, ConstraintLevel, LiteralValue};
 use internal_baml_core::{ir::FieldType, ir::TypeValue};
 
 use crate::deserializer::{
@@ -33,7 +33,7 @@ impl TypeCoercer for FieldType {
                     scope = ctx.display_scope(),
                     current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
                 );
-                if matches!(target, FieldType::Primitive(TypeValue::String)) {
+                if matches!(target, FieldType::Primitive(TypeValue::String) | FieldType::Enum(_) | FieldType::Literal(LiteralValue::String(_))) {
                     self.coerce(
                         ctx,
                         target,

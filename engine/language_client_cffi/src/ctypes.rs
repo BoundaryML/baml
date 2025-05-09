@@ -489,14 +489,17 @@ where
             .iter()
             .position(|t| real_type == *t)
             .expect("Failed to find target_type in options");
+        let variant_name = options[value_type_index].to_union_name();
         let options = builder.create_vector_from_iter(options_vec.into_iter());
-        // TODO: get the name from the target_type
-        let name = builder.create_string(&target_type.to_union_name());
+
+        let name_offset = builder.create_string(&target_type.to_union_name());
+        let variant_name_offset = builder.create_string(&variant_name);
 
         let value_union_variant = CFFIValueUnionVariant::create(
             &mut builder,
             &CFFIValueUnionVariantArgs {
-                name: Some(name),
+                name: Some(name_offset),
+                variant_name: Some(variant_name_offset),
                 field_types: Some(options),
                 value_type_index: value_type_index as i32,
                 value: Some(value_holder),

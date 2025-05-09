@@ -2403,6 +2403,32 @@ class LlmResponseParser:
 
       return cast(types.NodeWithAliasIndirection, parsed)
     
+    def RecursiveUnionTest(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.RecursiveUnion:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "RecursiveUnionTest",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        False,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast(types.RecursiveUnion, parsed)
+    
     def ReturnAliasWithMergedAttributes(
         self,
         llm_response: str,
@@ -4237,6 +4263,32 @@ class LlmResponseParser:
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIShorthand",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        False,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast(str, parsed)
+    
+    def TestOpenAIWithFinishReasonError(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestOpenAIWithFinishReasonError",
         llm_response,
         types,
         types,
@@ -7042,6 +7094,32 @@ class LlmStreamParser:
 
       return cast(partial_types.NodeWithAliasIndirection, parsed)
     
+    def RecursiveUnionTest(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.RecursiveUnion:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "RecursiveUnionTest",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        True,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast(types.RecursiveUnion, parsed)
+    
     def ReturnAliasWithMergedAttributes(
         self,
         llm_response: str,
@@ -8876,6 +8954,32 @@ class LlmStreamParser:
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIShorthand",
+        llm_response,
+        types,
+        types,
+        partial_types,
+        True,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+      )
+
+      return cast(Optional[str], parsed)
+    
+    def TestOpenAIWithFinishReasonError(
+        self,
+        llm_response: str,
+        baml_options: BamlCallOptions = {},
+    ) -> Optional[str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestOpenAIWithFinishReasonError",
         llm_response,
         types,
         types,

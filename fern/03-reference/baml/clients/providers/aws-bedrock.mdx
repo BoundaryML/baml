@@ -16,6 +16,14 @@ client<llm> MyClient {
       max_tokens 100
       temperature 0.7
     }
+    // Pass any other parameters that are model specific, 
+    // like with claude thinking models.
+    additional_model_request_fields {
+      thinking {
+        type "enabled"
+        budget_tokens 1030
+      }
+    }
   }
 }
 ```

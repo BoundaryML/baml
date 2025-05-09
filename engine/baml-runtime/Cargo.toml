@@ -160,7 +160,6 @@ aws-config = "=1.5.3"
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
 aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
-
 ] }
 axum = "0.7.5"
 axum-extra = { version = "0.9.3", features = ["erased-json", "typed-header"] }

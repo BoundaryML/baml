@@ -49,8 +49,16 @@ func (rcv *CFFIValueUnionVariant) Name() []byte {
 	return nil
 }
 
-func (rcv *CFFIValueUnionVariant) FieldTypes(obj *CFFIFieldTypeHolder, j int) bool {
+func (rcv *CFFIValueUnionVariant) VariantName() []byte {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+	}
+	return nil
+}
+
+func (rcv *CFFIValueUnionVariant) FieldTypes(obj *CFFIFieldTypeHolder, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		x := rcv._tab.Vector(o)
 		x += flatbuffers.UOffsetT(j) * 4
@@ -62,7 +70,7 @@ func (rcv *CFFIValueUnionVariant) FieldTypes(obj *CFFIFieldTypeHolder, j int) bo
 }
 
 func (rcv *CFFIValueUnionVariant) FieldTypesLength() int {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
 	if o != 0 {
 		return rcv._tab.VectorLen(o)
 	}
@@ -70,7 +78,7 @@ func (rcv *CFFIValueUnionVariant) FieldTypesLength() int {
 }
 
 func (rcv *CFFIValueUnionVariant) ValueTypeIndex() int32 {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(8))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
 	if o != 0 {
 		return rcv._tab.GetInt32(o + rcv._tab.Pos)
 	}
@@ -78,11 +86,11 @@ func (rcv *CFFIValueUnionVariant) ValueTypeIndex() int32 {
 }
 
 func (rcv *CFFIValueUnionVariant) MutateValueTypeIndex(n int32) bool {
-	return rcv._tab.MutateInt32Slot(8, n)
+	return rcv._tab.MutateInt32Slot(10, n)
 }
 
 func (rcv *CFFIValueUnionVariant) Value(obj *CFFIValueHolder) *CFFIValueHolder {
-	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(12))
 	if o != 0 {
 		x := rcv._tab.Indirect(o + rcv._tab.Pos)
 		if obj == nil {
@@ -95,22 +103,25 @@ func (rcv *CFFIValueUnionVariant) Value(obj *CFFIValueHolder) *CFFIValueHolder {
 }
 
 func CFFIValueUnionVariantStart(builder *flatbuffers.Builder) {
-	builder.StartObject(4)
+	builder.StartObject(5)
 }
 func CFFIValueUnionVariantAddName(builder *flatbuffers.Builder, name flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(name), 0)
 }
+func CFFIValueUnionVariantAddVariantName(builder *flatbuffers.Builder, variantName flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(variantName), 0)
+}
 func CFFIValueUnionVariantAddFieldTypes(builder *flatbuffers.Builder, fieldTypes flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(fieldTypes), 0)
+	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(fieldTypes), 0)
 }
 func CFFIValueUnionVariantStartFieldTypesVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func CFFIValueUnionVariantAddValueTypeIndex(builder *flatbuffers.Builder, valueTypeIndex int32) {
-	builder.PrependInt32Slot(2, valueTypeIndex, 0)
+	builder.PrependInt32Slot(3, valueTypeIndex, 0)
 }
 func CFFIValueUnionVariantAddValue(builder *flatbuffers.Builder, value flatbuffers.UOffsetT) {
-	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(value), 0)
+	builder.PrependUOffsetTSlot(4, flatbuffers.UOffsetT(value), 0)
 }
 func CFFIValueUnionVariantEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

@@ -828,3 +828,5 @@ export type RecAliasTwo = RecAliasThree
 export type RecursiveListAlias = RecursiveListAlias[]
 
 export type RecursiveMapAlias = Record<string, RecursiveMapAlias>
+
+export type RecursiveUnion = string | Record<string, RecursiveUnion>

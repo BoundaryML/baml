@@ -294,6 +294,8 @@ var typeMap = map[string]reflect.Type{
 
 	"Union__string__List__Nested": reflect.TypeOf(types.Union__string__List__Nested{}),
 
+	"Union__string__Map__string_RecursiveUnion": reflect.TypeOf(types.Union__string__Map__string_RecursiveUnion{}),
+
 	"Union__string__Nested": reflect.TypeOf(types.Union__string__Nested{}),
 
 	"Union__string__bool": reflect.TypeOf(types.Union__string__bool{}),
