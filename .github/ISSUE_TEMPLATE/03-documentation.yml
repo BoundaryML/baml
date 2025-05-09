@@ -28,10 +28,7 @@ body:
         - VS Code Playground
         - Boundary Studio
         - Prompt Fiddle
-        - BAML Parser
         - Other
-    validations:
-      required: true
   - type: dropdown
     attributes:
       label: Documentation Type
@@ -45,14 +42,3 @@ body:
         - Other
     validations:
       required: true
-  - type: textarea
-    attributes:
-      label: Discord Link
-      description: If you're a Discord user, please provide your Discord username for easier communication.
-  - type: checkboxes
-    attributes:
-      label: Code of Conduct
-      description: By submitting this issue, I agree to follow the project's code of conduct.
-      options:
-        - label: I agree to follow the code of conduct
-          required: true

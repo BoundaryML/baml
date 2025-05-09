@@ -1,7 +1,7 @@
 contact_links:
-  - name: Ask a question
-    url: https://github.com/boundaryml/baml/discussions
+  - name: Ask a question on Discord
+    url: https://discord.gg/yzaTpQ3tdT
     about: Ask questions and discuss with other community members
-  - name: Feature request
-    url: https://github.com/boundaryml/baml/discussions/new?category=ideas
-    about: Feature requests should be opened as discussions
+  - name: Report a security issue
+    url: https://discord.gg/yzaTpQ3tdT
+    about: Report security vulnerabilities

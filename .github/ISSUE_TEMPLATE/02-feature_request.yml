@@ -3,6 +3,18 @@ description: Suggest an idea for BAML
 title: "[feat] "
 labels: ["feature request"]
 body:
+  - type: dropdown
+    attributes:
+      label: Product
+      description: Which BoundaryML product would this feature be for?
+      options:
+        - BAML
+        - VS Code Playground
+        - Boundary Studio
+        - Prompt Fiddle
+        - Other
+    validations:
+      required: true
   - type: textarea
     attributes:
       label: Problem Statement / Use Case
@@ -17,57 +29,9 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Alternative Solutions
+      label: Alternative Solutions (Optional)
       description: Have you considered any alternative solutions or workarounds?
   - type: textarea
     attributes:
-      label: Additional Context
+      label: Additional Context (Optional)
       description: Add any other context about the feature request here.
-  - type: dropdown
-    attributes:
-      label: Product
-      description: Which BoundaryML product would this feature be for?
-      options:
-        - BAML Language
-        - VS Code Playground
-        - Boundary Studio
-        - Prompt Fiddle
-        - BAML Parser
-        - Other
-    validations:
-      required: true
-  - type: dropdown
-    attributes:
-      label: Priority
-      description: How important is this feature to you?
-      options:
-        - Critical (blocks development/production)
-        - High (would significantly improve workflow)
-        - Medium (nice to have)
-        - Low (minor improvement)
-    validations:
-      required: true
-  - type: dropdown
-    attributes:
-      label: Language/Framework
-      description: Which language or framework would this feature primarily benefit?
-      options:
-        - Python
-        - Node.js
-        - React
-        - Ruby
-        - Go
-        - Other
-    validations:
-      required: true
-  - type: textarea
-    attributes:
-      label: Discord Link
-      description: If you're a Discord user, please provide your Discord username for easier communication.
-  - type: checkboxes
-    attributes:
-      label: Code of Conduct
-      description: By submitting this issue, I agree to follow the project's code of conduct.
-      options:
-        - label: I agree to follow the code of conduct
-          required: true
