@@ -1,0 +1,54 @@
+name: ❓ Question
+description: Ask a question about BAML
+title: "[question] "
+labels: ["question"]
+body:
+  - type: textarea
+    attributes:
+      label: Question
+      description: What would you like to know?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Context
+      description: Provide any relevant context about your question.
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Product
+      description: Which BoundaryML product is your question about?
+      options:
+        - BAML Language
+        - VS Code Playground
+        - Boundary Studio
+        - Prompt Fiddle
+        - BAML Parser
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Language/Framework
+      description: Which language or framework are you using?
+      options:
+        - Python
+        - Node.js
+        - React
+        - Ruby
+        - Go
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Discord Link
+      description: If you're a Discord user, please provide your Discord username for easier communication.
+  - type: checkboxes
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, I agree to follow the project's code of conduct.
+      options:
+        - label: I agree to follow the code of conduct
+          required: true
