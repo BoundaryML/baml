@@ -60,6 +60,10 @@ body:
         - Other
     validations:
       required: true
+  - type: textarea
+    attributes:
+      label: Discord Link
+      description: If you're a Discord user, please provide your Discord username for easier communication.
   - type: checkboxes
     attributes:
       label: Code of Conduct

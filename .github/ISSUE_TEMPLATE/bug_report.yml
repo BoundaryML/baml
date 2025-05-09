@@ -29,21 +29,10 @@ body:
     attributes:
       label: Additional information
       description: Add any other information related to the bug here, screenshots if applicable.
-  - type: dropdown
+  - type: input
     attributes:
       label: Version
       description: Which version of BAML are you using?
-      options:
-        - 0.87.2
-        - 0.87.1
-        - 0.87.0
-        - 0.86.1
-        - 0.86.0
-        - 0.85.0
-        - 0.84.4
-        - 0.84.3
-        - 0.84.2
-        - 0.84.1
     validations:
       required: true
   - type: dropdown
@@ -143,6 +132,10 @@ body:
     attributes:
       label: Editor Version
       description: What version of your code editor are you using? (e.g., VS Code 1.85.1)
+  - type: textarea
+    attributes:
+      label: Discord Link
+      description: If you're a Discord user, please provide your Discord username for easier communication.
   - type: checkboxes
     attributes:
       label: Code of Conduct
