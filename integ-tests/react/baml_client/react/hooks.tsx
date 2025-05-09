@@ -8936,11 +8936,11 @@ export function useUseMaintainFieldOrder(props?: HookInput<'UseMaintainFieldOrde
 export function useUseMaintainFieldOrder(
   props: HookInput<'UseMaintainFieldOrder', { stream?: boolean }> = {},
 ): HookOutput<'UseMaintainFieldOrder', { stream: true }> | HookOutput<'UseMaintainFieldOrder', { stream: false }> {
-  let action = Actions.UseMaintainFieldOrder;
+  let action: ServerAction = Actions.UseMaintainFieldOrder;
   if (isStreamingProps(props)) {
     action = StreamingActions.UseMaintainFieldOrder;
   }
-  return useBamlAction(action, props)
+  return useBamlAction(action, props as HookInput)
 }
 /**
  * A specialized hook for the UseMalformedConstraints BAML function that supports both streaming and non‑streaming responses.
