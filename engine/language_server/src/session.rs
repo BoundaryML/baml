@@ -3,6 +3,7 @@
 use anyhow::Context;
 use index::DocumentController;
 use itertools::any;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
@@ -21,6 +22,7 @@ use crate::{PositionEncoding, TextDocument};
 pub(crate) use self::capabilities::ResolvedClientCapabilities;
 pub use self::index::DocumentQuery;
 pub(crate) use self::settings::AllSettings;
+pub use self::settings::BamlSettings;
 pub use self::settings::ClientSettings;
 use crate::server::client::Notifier;
 
@@ -44,6 +46,8 @@ pub struct Session {
     pub position_encoding: PositionEncoding,
     /// Tracks what LSP features the client supports and doesn't support.
     pub resolved_client_capabilities: Arc<ResolvedClientCapabilities>,
+
+    pub baml_settings: BamlSettings,
 }
 
 impl Clone for Session {
@@ -53,6 +57,7 @@ impl Clone for Session {
             baml_src_projects: self.baml_src_projects.clone(),
             position_encoding: self.position_encoding.clone(),
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),
+            baml_settings: self.baml_settings.clone(),
         }
     }
 }
@@ -65,7 +70,7 @@ impl Session {
         workspace_folders: &[(Url, ClientSettings)],
     ) -> anyhow::Result<Self> {
         let mut projects = HashMap::new();
-        let index = index::Index::new(global_settings);
+        let index = index::Index::new(global_settings.clone());
 
         for (url, _) in workspace_folders {
             let workspace_path = url
@@ -99,7 +104,19 @@ impl Session {
             resolved_client_capabilities: Arc::new(ResolvedClientCapabilities::new(
                 client_capabilities,
             )),
+            baml_settings: BamlSettings::default(),
         })
+    }
+
+    pub fn update_baml_settings(&mut self, settings: Value) {
+        match serde_json::from_value(settings) {
+            Ok(parsed_settings) => {
+                self.baml_settings = parsed_settings;
+            }
+            Err(err) => {
+                tracing::error!("Failed to parse BAML settings: {}", err);
+            }
+        }
     }
 
     /// Gets or creates a project for the given path.
@@ -169,7 +186,12 @@ impl Session {
             .unwrap()
             .iter_mut()
             .map(|(_project_root, project)| {
-                let files_map = project.lock().unwrap().baml_project.load_files()?;
+                let files_map = project
+                    .lock()
+                    .unwrap()
+                    .baml_project
+                    .load_files()
+                    .map_err(|e| anyhow::anyhow!("Failed to load project files: {}", e))?;
                 project
                     .lock()
                     .unwrap()
@@ -181,6 +203,7 @@ impl Session {
                 Ok(files_map)
             })
             .collect::<anyhow::Result<Vec<_>>>()?;
+        tracing::info!("Initial reload of {} files", project_updates.len());
 
         let files: Vec<(DocumentKey, String)> = project_updates
             .into_iter()

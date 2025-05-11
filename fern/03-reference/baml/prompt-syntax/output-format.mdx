@@ -84,6 +84,9 @@ BAML's default prefix varies based on the function's return type.
 <ParamField path="always_hoist_enums" type="boolean" > 
 Whether to inline the enum definitions in the schema, or print them above. **Default: false**
 
+Note that setting this to `false` means BAML will use heuristics internally to determine
+whether or not to hoist. `false` does not mean "never hoist".
+
 
 **Inlined**
 ```

@@ -14,6 +14,7 @@ export const bamlConfigSchema = z
       server: z.enum(['off', 'messages', 'verbose']).default('off'),
     }),
     bamlPanelOpen: z.boolean().default(false),
+    syncExtensionToGeneratorVersion: z.enum(['auto', 'never', 'always']).default('auto'),
   })
   .partial()
 type BamlConfig = z.infer<typeof bamlConfigSchema>
@@ -26,6 +27,7 @@ export const BAML_CONFIG_SINGLETON: { config: BamlConfig | null; cliVersion: str
 export const refreshBamlConfigSingleton = () => {
   try {
     console.log('getting config')
+
     const configResponse = workspace.getConfiguration('baml')
     console.log('configResponse ' + JSON.stringify(configResponse, null, 2))
     BAML_CONFIG_SINGLETON.config = bamlConfigSchema.parse(configResponse)

@@ -67,12 +67,24 @@ where
 impl DatamodelError {
     pub(crate) fn new(message: impl Into<Cow<'static, str>>, span: Span) -> Self {
         let message = message.into();
-        DatamodelError { message, span, multi_span: None }
+        DatamodelError {
+            message,
+            span,
+            multi_span: None,
+        }
     }
 
-    pub(crate) fn new_with_span(message: impl Into<Cow<'static, str>>, span: Span, other_spans: Vec<Span>) -> Self {
+    pub(crate) fn new_with_span(
+        message: impl Into<Cow<'static, str>>,
+        span: Span,
+        other_spans: Vec<Span>,
+    ) -> Self {
         let message = message.into();
-        DatamodelError { message, span, multi_span: Some(other_spans) }
+        DatamodelError {
+            message,
+            span,
+            multi_span: Some(other_spans),
+        }
     }
 
     pub fn new_anyhow_error(error: anyhow::Error, span: Span) -> Self {
@@ -226,10 +238,14 @@ impl DatamodelError {
     ) -> DatamodelError {
         match other_function_spans.len() {
             0 => {
-                unreachable!("Duplicate test error should only be called with a list of other tests");
+                unreachable!(
+                    "Duplicate test error should only be called with a list of other tests"
+                );
             }
             _ => {
-                let msg = format!("Test \"{test_name}\" is already defined for function \"{function_name}\"");
+                let msg = format!(
+                    "Test \"{test_name}\" is already defined for function \"{function_name}\""
+                );
                 Self::new_with_span(msg, function_name_span, other_function_spans)
             }
         }
@@ -253,20 +269,34 @@ impl DatamodelError {
                 Self::new_with_span(msg, top_span, vec![existing_span])
             }
             _ => {
-                let mut existing_top_types = others.iter().map(|(top_type, _)| top_type).collect::<Vec<_>>();
+                let mut existing_top_types = others
+                    .iter()
+                    .map(|(top_type, _)| top_type)
+                    .collect::<Vec<_>>();
                 existing_top_types.sort();
                 // Remove duplicates
                 existing_top_types.dedup();
                 let existing_top_types = match existing_top_types.len() {
                     0 => "".to_string(),
                     1 => format!("a {}", existing_top_types[0]),
-                    _ => format!("one of these: {}", existing_top_types.iter().map(|top_type| format!("\"{}\"", top_type)).collect::<Vec<_>>().join(", "))
+                    _ => format!(
+                        "one of these: {}",
+                        existing_top_types
+                            .iter()
+                            .map(|top_type| format!("\"{}\"", top_type))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
                 };
 
                 let msg = format!(
                     "The {top_type} \"{name}\" cannot be re-defined because it is already defined as {existing_top_types}.",
                 );
-                Self::new_with_span(msg, top_span, others.into_iter().map(|(_, span)| span).collect())
+                Self::new_with_span(
+                    msg,
+                    top_span,
+                    others.into_iter().map(|(_, span)| span).collect(),
+                )
             }
         }
     }
@@ -407,7 +437,10 @@ impl DatamodelError {
     }
 
     pub fn disallow_dynamic_type_definitions(span: Span) -> DatamodelError {
-        Self::new("The `@@dynamic` attribute is not allowed in type_builder blocks.", span)
+        Self::new(
+            "The `@@dynamic` attribute is not allowed in type_builder blocks.",
+            span,
+        )
     }
 
     pub fn new_validation_error(message: &str, span: Span) -> DatamodelError {
@@ -688,7 +721,9 @@ impl DatamodelError {
     pub fn pretty_print(&self, f: &mut dyn std::io::Write) -> std::io::Result<()> {
         pretty_print(
             f,
-            &std::iter::once(self.span()).chain(self.multi_span.iter().flatten()).collect::<Vec<_>>(),
+            &std::iter::once(self.span())
+                .chain(self.multi_span.iter().flatten())
+                .collect::<Vec<_>>(),
             self.message.as_ref(),
             &DatamodelErrorColorer {},
         )

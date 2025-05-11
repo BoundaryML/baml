@@ -39,6 +39,7 @@ const API_KEY_INJECTION_ALLOWED = {
   'https://api.anthropic.com': { 'x-api-key': process.env.ANTHROPIC_API_KEY },
   'https://generativelanguage.googleapis.com': { 'x-goog-api-key': process.env.GOOGLE_API_KEY },
   'https://openrouter.ai': { Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}` },
+  'https://api.llmapi.com': { Authorization: `Bearer ${process.env.LLAMA_API_KEY}` },
 }
 
 // Consult sam@ before changing this.

@@ -3,6 +3,7 @@ mod did_change;
 mod did_change_configuration;
 mod did_change_watched_files;
 // mod did_change_workspace;
+mod baml_src_version;
 mod did_close;
 mod did_open;
 mod did_save_text_document;

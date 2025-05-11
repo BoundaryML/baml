@@ -5,6 +5,26 @@ description: Technical reference for the BamlClientFinishReasonError class
 
 The `BamlClientFinishReasonError` class represents an error that occurs when an LLM terminates with a disallowed finish reason.
 
+You can allow or disallow finish reasons like this:
+
+<CodeBlocks>
+```baml
+client<llm> OpenAIWithFinishReasonError {
+  provider openai
+  options {
+    api_key env.OPENAI_API_KEY
+    model "gpt-4"
+    // make it very small so model will stop early
+    max_tokens 10 
+    // throws if the model returns any other finish reason
+    finish_reason_allow_list ["stop"]
+    // or allow all finish reasons except length
+    // finish_reason_deny_list ["length"]
+  }
+}
+```
+</CodeBlocks>
+
 ## Type Definition
 
 <CodeBlocks>

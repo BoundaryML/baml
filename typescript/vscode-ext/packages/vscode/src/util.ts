@@ -13,6 +13,8 @@ import {
 } from 'vscode'
 import type { CodeAction, LanguageClientOptions, TextDocumentIdentifier } from 'vscode-languageclient'
 import { LanguageClient, type ServerOptions } from 'vscode-languageclient/node'
+import { registerClientEventHandlers, requestDiagnostics } from './plugins/language-server-client'
+
 export function isDebugOrTestSession(): boolean {
   return env.sessionId === 'someValue.sessionId'
 }
@@ -115,11 +117,18 @@ export const restartClient = async (
   clientOptions: LanguageClientOptions,
 ): Promise<LanguageClient> => {
   client?.diagnostics?.dispose()
+  console.log('Stopping client')
   if (client) await client.stop()
 
   client = createLanguageServer(serverOptions, clientOptions)
+  console.log('Starting client')
   context.subscriptions.push(client.start())
+  console.log('Client started')
   await client.onReady()
+  console.log('Restarted client ready')
+  // Re-register handlers and request diagnostics
+  registerClientEventHandlers(client, context)
+  requestDiagnostics()
   return client
 }
 

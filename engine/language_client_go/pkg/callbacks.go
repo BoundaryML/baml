@@ -2,13 +2,13 @@ package baml
 
 /*
 #include <stdlib.h>
-#include <stdbool.h>
 #include <stdint.h>
 */
 import "C"
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"sync"
 	"unsafe"
@@ -19,6 +19,10 @@ import (
 
 type BamlError struct {
 	Message string
+}
+
+func (e BamlError) Error() string {
+	return e.Message
 }
 
 type BamlClientError struct {
@@ -53,8 +57,35 @@ func SetTypeMap(t TypeMap) {
 	typeMap = t
 }
 
+//export error_callback
+func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int) {
+	fmt.Println("Error callback")
+	callbackMutex.RLock()
+	id_uint := uint32(id)
+	callback, exists := dynamicCallbacks[id_uint]
+	callbackMutex.RUnlock()
+
+	if exists {
+		content_bytes := C.GoBytes(unsafe.Pointer(content), length)
+
+		// Parse the content as a string
+		content_str := string(content_bytes)
+
+		// TODO: cast to the right error type
+		err := BamlError{Message: content_str}
+
+		// Send the error to the callback
+		callback.channel <- ResultCallback{Error: err}
+
+		close(callback.channel)
+		callbackMutex.Lock()
+		defer callbackMutex.Unlock()
+		delete(dynamicCallbacks, id_uint)
+	}
+}
+
 //export trigger_callback
-func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.int) {
+func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int) {
 	callbackMutex.RLock()
 	id_uint := uint32(id)
 	callback, exists := dynamicCallbacks[id_uint]
@@ -65,10 +96,10 @@ func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.
 
 		parsed_data := cffi.CFFIValueHolder{}
 		flatbuffers.GetRootAs(content_bytes, 0, &parsed_data)
-		decoded_data := Decode(&parsed_data, typeMap)
+		decoded_data := Decode(&parsed_data)
 
 		var res ResultCallback
-		if isDone {
+		if isDone == 1 {
 			res = ResultCallback{HasData: true, Data: &decoded_data}
 		} else {
 			res = ResultCallback{HasStreamData: true, StreamData: &decoded_data}
@@ -85,7 +116,7 @@ func trigger_callback(id C.uint32_t, isDone C.bool, content *C.int8_t, length C.
 			break
 		}
 
-		if bool(isDone) || force_close {
+		if isDone == 1 || force_close {
 			close(callback.channel)
 			callbackMutex.Lock()
 			defer callbackMutex.Unlock()

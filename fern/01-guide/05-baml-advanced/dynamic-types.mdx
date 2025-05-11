@@ -1,5 +1,6 @@
 ---
 title: Dynamic Types - TypeBuilder
+slug: guide/baml-advanced/dynamic-types
 ---
 
 Sometimes you have **output schemas that change at runtime** -- for example if
@@ -175,6 +176,83 @@ end
 ```
 </CodeBlocks>
 
+
+### Add existing BAML types to a property (e.g. you want to add a subset of tools)
+
+Imagine you have a `ChatResponse` type in a function that you want to modify with a set of tools.
+```baml {3}
+class ChatResponse {
+  answer string?
+  @@dynamic
+}
+
+function Chat(messages: Message[]) -> ChatResponse {
+  ...
+}
+```
+
+You want to add a `tool_calls` property to the `ChatResponse` type that can be a list of `GetWeather` or `GetNews` types, that are completely defined in BAML.
+```baml {11,12}
+class GetWeather {
+  location string
+}
+
+class GetNews {
+  topic string
+}
+
+class ChatResponse {
+  answer string?
+  // We want to add this property at runtime!
+  tools (GetWeather | GetNews)[]?
+  @@dynamic
+}
+
+function Chat(messages: Message[]) -> ChatResponse {
+  ...
+}
+```
+
+You can modify the set of tools that can be used in the `ChatResponse` type at runtime like this:
+
+
+<Tabs>
+
+<Tab title="Python">
+```python
+tb = TypeBuilder()
+tb.ChatResponse.add_property(
+    "tools", 
+    tb.union([
+        # we could comment one of these if we wanted!
+        tb.GetWeather.type(), 
+        tb.GetNews.type()
+    ]).list()
+).description("The tool calls in the response")
+```
+</Tab>
+
+<Tab title="TypeScript">
+```typescript
+const tb = new TypeBuilder()
+tb.ChatResponse.addProperty("tools", 
+    tb.union([
+      // we could comment one of these if we wanted!
+      tb.GetWeather.type(), 
+      tb.GetNews.type()
+    ]).list()).description("The tool calls in the response")
+```
+</Tab>
+
+<Tab title="Ruby">
+```ruby
+tb = Baml::TypeBuilder.new
+tb.ChatResponse.add_property("tools", tb.union([tb.GetWeather.type(), tb.GetNews.type()]).list).description("The tool calls in the response")
+```
+</Tab>
+
+</Tabs>
+
 ### Creating new dynamic classes or enums not in BAML
 The previous examples showed how to modify existing types. Here we create a new `Hobbies` enum, and a new class called `Address` without having them defined in BAML.
 
@@ -248,16 +326,25 @@ end
 </CodeBlocks>
 
 
+
 TypeBuilder provides methods for building different kinds of types:
 
-| Method | Description | Example |
-|--------|-------------|---------|
-| `string()` | Creates a string type | `tb.string()` |
-| `int()` | Creates an integer type | `tb.int()` |
-| `float()` | Creates a float type | `tb.float()` |
-| `bool()` | Creates a boolean type | `tb.bool()` |
-| `list()` | Makes a type into a list | `tb.string().list()` |
-| `optional()` | Makes a type optional | `tb.string().optional()` |
+| Method | Returns | Description | Example |
+|--------|---------|-------------|---------|
+| `string()` | `FieldType` | Creates a string type | `tb.string()` |
+| `int()` | `FieldType` | Creates an integer type | `tb.int()` |
+| `float()` | `FieldType` | Creates a float type | `tb.float()` |
+| `bool()` | `FieldType` | Creates a boolean type | `tb.bool()` |
+| `literal_string(value: string)` | `FieldType` | Creates a literal string type | `tb.literal_string("hello")` |
+| `literal_int(value: int)` | `FieldType` | Creates a literal integer type | `tb.literal_int(123)` |
+| `literal_bool(value: boolean)` | `FieldType` | Creates a literal boolean type | `tb.literal_bool(true)` |
+| `list(type: FieldType)` | `FieldType` | Makes a type into a list | `tb.list(tb.string())` |
+| `union(types: FieldType[])` | `FieldType` | Creates a union of types | `tb.union([tb.string(), tb.int()])` |
+| `map(key: FieldType, value: FieldType)` | `FieldType` | Creates a map type | `tb.map(tb.string(), tb.int())` |
+| `add_class(name: string)` | `ClassBuilder` | Creates a new class | `tb.add_class("User")` |
+| `add_enum(name: string)` | `EnumBuilder` | Creates a new enum | `tb.add_enum("Category")` |
+| `MyClass` | `FieldType` | Reference an existing BAML class | `tb.MyClass.type()` |
+
 
 ### Adding descriptions to dynamic types
 
@@ -280,13 +367,15 @@ tb.User.add_property("email", tb.string).description("The user's email")
 
 </CodeBlocks>
 
-### Creating dynamic classes and enums at runtime with BAML
 
-The `TypeBuilder` has a higher level API for creating dynamic types at runtime.
-Here's an example:
+### Creating dynamic classes and enums at runtime with BAML syntax
+Ok, what if you just want to write some actual baml code to modify the types at runtime?
 
-<CodeBlocks>
+The `TypeBuilder` has a higher level API `add_baml` to do this:
 
+<Tabs>
+
+<Tab title="Python">
 ```python Python
 tb = TypeBuilder()
 tb.add_baml("""
@@ -308,7 +397,9 @@ tb.add_baml("""
   }
 """)
 ```
+</Tab>
 
+<Tab title="TypeScript">
 ```typescript TypeScript
 const tb = new TypeBuilder()
 tb.addBaml(`
@@ -330,7 +421,9 @@ tb.addBaml(`
   }
 `)
 ```
+</Tab>
 
+<Tab title="Ruby">
 ```ruby Ruby
 tb = Baml::TypeBuilder.new
 tb.add_baml("
@@ -352,8 +445,9 @@ tb.add_baml("
   }
 ")
 ```
+</Tab>
 
-</CodeBlocks>
+</Tabs>
 
 ### Building dynamic types from JSON schema
 

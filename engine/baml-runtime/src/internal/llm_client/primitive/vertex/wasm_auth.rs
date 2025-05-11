@@ -3,9 +3,12 @@ use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 use serde::{Deserialize, Serialize};
 use std::{future::Future, pin::Pin, sync::Arc};
 
-use crate::internal::wasm_jwt::encode_jwt;
+use crate::{
+    internal::wasm_jwt::encode_jwt,
+    js_callback_provider::{get_js_callback_provider, GcpCredResult},
+};
 
-pub struct VertexAuth(ServiceAccount);
+pub struct VertexAuth(Option<ServiceAccount>);
 
 pub struct Token(String);
 
@@ -16,61 +19,64 @@ impl Token {
 }
 
 impl VertexAuth {
-    pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<VertexAuth> {
+    pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<Self> {
         Ok(match auth_strategy {
-            ResolvedGcpAuthStrategy::FilePath(path) => {
-                anyhow::bail!(
-                    "Failed to auth - cannot load credentials from a file in WASM (path='{}...', path.len={})",
-                    path.chars().take(5).collect::<String>(),
-                    path.len()
-                )
-            }
-            ResolvedGcpAuthStrategy::JsonString(json) => {
+            ResolvedGcpAuthStrategy::MaybeFilePath(str)
+            | ResolvedGcpAuthStrategy::StringContainingJson(str) => {
+                if str.starts_with("$") {
+                    anyhow::bail!("Failed to resolve {}", str);
+                }
+
+                let debug_str = {
+                    let s = serde_json::to_string(&serde_json::Value::String(str.clone()))
+                        .expect("Serialization of string should always succeed");
+                    if s.len() > 8 {
+                        format!("{}...{}", &s[..4], &s[s.len() - 4..])
+                    } else {
+                        s
+                    }
+                };
+
                 log::debug!("Attempting to auth using JsonString strategy");
-                Self(serde_json::from_str(&json).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?)
+                Self(Some(serde_json::from_str(str).context(format!("Failed to parse 'credentials' as GCP service account creds (are you using JSON format creds?); credentials={}", debug_str))?))
             }
             ResolvedGcpAuthStrategy::JsonObject(json) => {
                 // NB: this should never happen in WASM, there's no way to pass a JSON object in
                 log::debug!("Attempting to auth using JsonObject strategy");
-                Self(serde_json::from_value(
-                    serde_json::to_value(&json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?)
+                Self(Some(serde_json::from_value(
+                    serde_json::to_value(&json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?))
             }
-            ResolvedGcpAuthStrategy::SystemDefault => {
-                anyhow::bail!(
-                    "Failed to auth - failed to load default credentials in WASM (please set env.GOOGLE_APPLICATION_CREDENTIALS, see https://docs.boundaryml.com/ref/llm-client-providers/google-vertex#using-a-vertex-ai-client-in-the-playground)"
-                )
-            }
+            ResolvedGcpAuthStrategy::SystemDefault => Self(None),
         })
     }
 
     pub async fn token(&self, scopes: &[&str]) -> Result<Arc<Token>> {
-        let claims = Claims::from_service_account(&self.0);
-
-        let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.0.private_key)
-            .await
-            .map_err(|e| anyhow::anyhow!(format!("{e:?}")))?;
-
-        // Make the token request
-        let client = reqwest::Client::new();
-        let params = [
-            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
-            ("assertion", &jwt),
-        ];
-        let res = client
-            .post(&self.0.token_uri)
-            .form(&params)
-            .send()
-            .await?
-            .text()
-            .await?;
-
-        parse_token_response(&res)
-            .context(format!("OAuth2 access token request failed: {res}"))
-            .map(Arc::new)
+        match &self.0 {
+            Some(service_account) => {
+                let token = service_account.get_oauth2_token().await?;
+                Ok(Arc::new(token))
+            }
+            None => {
+                let cred_provider = get_js_callback_provider()?;
+                let gcp_creds = cred_provider.gcp_req().await.context(
+                    "Failed to load GCP creds: try running `gcloud auth application-default login`",
+                )?;
+                Ok(Arc::new(Token(gcp_creds.access_token)))
+            }
+        }
     }
 
     pub async fn project_id(&self) -> Result<String> {
-        Ok(self.0.project_id.clone())
+        match &self.0 {
+            Some(service_account) => Ok(service_account.project_id.clone()),
+            None => {
+                let cred_provider = get_js_callback_provider()?;
+                let gcp_creds = cred_provider.gcp_req().await.context(
+                    "Failed to load GCP creds: try running `gcloud auth application-default login`",
+                )?;
+                Ok(gcp_creds.project_id)
+            }
+        }
     }
 }
 
@@ -121,4 +127,30 @@ pub struct ServiceAccount {
     pub project_id: String,
     pub client_email: String,
     pub private_key: String,
+}
+
+impl ServiceAccount {
+    async fn get_oauth2_token(&self) -> Result<Token> {
+        let claims = Claims::from_service_account(&self);
+
+        let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.private_key)
+            .await
+            .map_err(|e| anyhow::anyhow!(format!("{e:?}")))?;
+
+        // Make the token request
+        let client = reqwest::Client::new();
+        let params = [
+            ("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"),
+            ("assertion", &jwt),
+        ];
+        let res = client
+            .post(&self.token_uri)
+            .form(&params)
+            .send()
+            .await?
+            .text()
+            .await?;
+
+        parse_token_response(&res).context(format!("OAuth2 access token request failed: {res}"))
+    }
 }

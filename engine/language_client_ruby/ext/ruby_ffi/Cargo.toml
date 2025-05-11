@@ -22,7 +22,7 @@ jsonish = { path = "../../../baml-lib/jsonish" }
 log.workspace = true
 magnus = { version = "0.7.1", features = ["rb-sys"] }
 # Must be kept in sync with ../../Gemfile
-rb-sys = { version = "0.9.99", features = [
+rb-sys = { version = "0.9.111", features = [
   "global-allocator",
   "bindgen-rbimpls",
   "bindgen-deprecated-types",
@@ -44,4 +44,4 @@ version = "0.7.1"
 features = ["rb-sys", "embed"]
 
 [build-dependencies]
-rb-sys-env = { version = "0.1" }
+rb-sys-env = { version = "0.2.2" }

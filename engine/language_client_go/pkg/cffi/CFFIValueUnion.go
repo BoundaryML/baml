@@ -21,6 +21,7 @@ const (
 	CFFIValueUnionCFFIValueUnionVariant   CFFIValueUnion = 11
 	CFFIValueUnionCFFIValueChecked        CFFIValueUnion = 12
 	CFFIValueUnionCFFIValueStreamingState CFFIValueUnion = 13
+	CFFIValueUnionCFFIFunctionArguments   CFFIValueUnion = 14
 )
 
 var EnumNamesCFFIValueUnion = map[CFFIValueUnion]string{
@@ -38,6 +39,7 @@ var EnumNamesCFFIValueUnion = map[CFFIValueUnion]string{
 	CFFIValueUnionCFFIValueUnionVariant:   "CFFIValueUnionVariant",
 	CFFIValueUnionCFFIValueChecked:        "CFFIValueChecked",
 	CFFIValueUnionCFFIValueStreamingState: "CFFIValueStreamingState",
+	CFFIValueUnionCFFIFunctionArguments:   "CFFIFunctionArguments",
 }
 
 var EnumValuesCFFIValueUnion = map[string]CFFIValueUnion{
@@ -55,6 +57,7 @@ var EnumValuesCFFIValueUnion = map[string]CFFIValueUnion{
 	"CFFIValueUnionVariant":   CFFIValueUnionCFFIValueUnionVariant,
 	"CFFIValueChecked":        CFFIValueUnionCFFIValueChecked,
 	"CFFIValueStreamingState": CFFIValueUnionCFFIValueStreamingState,
+	"CFFIFunctionArguments":   CFFIValueUnionCFFIFunctionArguments,
 }
 
 func (v CFFIValueUnion) String() string {

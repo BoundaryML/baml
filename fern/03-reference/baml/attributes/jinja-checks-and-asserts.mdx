@@ -1,0 +1,146 @@
+`@check` and `@assert` use [Jinja](/ref/prompt-syntax/what-is-jinja) syntax to specify the invariants
+(properties that should always hold true) of a type.
+
+### Checks and Asserts
+
+This example demonstrates [@assert](/ref/attributes/assert) and [@check](/ref/attributes/check) on both class fields
+and the class block itself, and it shows a few examples of Jinja syntax.
+
+```baml BAML
+class Student {
+    first_name string @assert( {{ this|length > 0 }})
+    last_name string @assert( {{ this|length > 0 }})
+    age int @check(old_enough, {{ this > 5 }}) @check(u8, {{ this|abs < 255 }})
+    concentration string @assert( {{ this.regex_match("[Math|Science]")}})
+    @@check(age_threshold, {{ this.concentration != "calculus" or this.age > 12 }})
+}
+```
+
+### `this` keyword
+
+Inside a Jinja expression, `this` refers to the value of a class field, if the
+`@assert` or `@check` is applied to a class field, and it applies to the whole
+object if it is applied to the whole type with `@@assert()` or `@@check()`.
+
+### Filters
+
+In Jinja, functions are called "filters", and they are applied to arguments
+by writing `some_argument|some_filter`. Filters can be applied one after the
+other by chaining them with additional `|`s.
+
+ -  `abs`: Absolote value.
+ -  `capitalize`: Make the first letter uppercase
+ -  `escape`: Replace special HTML characters with their escaped counterparts
+ -  `first`: First item of a list
+ -  `last`: Last item of a list
+ -  `default(x)`: Returns `x` when applied to something undefined.
+ -  `float`: Convert to a float, or 0.0 if conversion fails
+ -  `int`: Convert to an int, or 0 if conversion fails
+ -  `join`: Concatenate a list of strings
+ -  `length`: List length
+ -  `lower`: Make the string lowercase
+ -  `upper`: Make the string uppercase
+ -  `map(filter)`: Apply a filter to each item in a list
+ -  `max`: Maximum of a list of numbers or Booleans
+ -  `min`: Minimum of a list of numbers or Booleans
+ -  `regex_match("regex")`: Return true if argument matches the regex
+ -  `reject("test")`: Filter out items that fail the test
+ -  `reverse`: Reverse a list or string
+ -  `round`: Round a float to the nearest int
+ -  `select("test_name")`: Retain the values of a list passing `test_name`
+ -  `sum`: Sum of a list of numbers
+ -  `title`: Convert a string to "Title Case"
+ -  `trim`: Remove leading and trailing whitespace from a string
+ -  `unique`: Remove duplicate entries in a list
+
+ ### Common Patterns
+
+#### Test that a substring appears inside some string
+
+ ```baml BAML
+ function GenerateStory(subject: string) -> string {
+   client GPT4
+   prompt #"Write a story about {{ subject }}"#
+ }
+
+ test HorseStory {
+    functions [GenerateStory]
+    args {
+        subject "Equestrian team coming-of-age story"
+    }
+    @@assert( {{ this|lower|regex_match("horse") }} )
+ }
+ ```
+
+ We use the `lower` filter to make the whole story lowercase, and pass
+ the result to `regex_match()` to search for an occurrance of "horse".
+
+
+#### Test that a string is an exact match
+
+```baml BAML
+class Person {
+    first_name string
+    last_name string
+}
+
+function ExtractPerson(description: string) -> Person {
+    client GPT4
+    prompt #"
+      Extract a Person from the description {{ description }}.
+      {{ ctx.output_format }}
+    "#
+}
+
+test ExtractJohnDoe {
+    functions [ExtractPerson]
+    args {
+        description "John Doe is a 5'6\" man riding a stolen horse."
+    }
+    @@assert( {{ this.first_name|regex_match("^John$") }} )
+    @@assert( {{ this.last_name == "Doe" }} )
+}
+```
+
+We can use `regex_match` with special control characters indicating
+the beginning and end of a string, as in the first `@@assert`, or
+simply check equality with a literal string as in the second `@@assert`.
+
+#### Test that item prices add up to a total
+
+```baml BAML
+class Receipt {
+    establishment string
+    items Item[]
+    tax_cents int
+    total_cents int
+}
+
+class Item {
+    name string
+    price_cents int
+}
+
+function ExtractReceipt(text_receipt: string) -> Receipt {
+    client GPT4
+    prompt #"
+      Extract the details of this receipt: {{ text_receipt }}
+      {{ ctx.output_format }}
+    "#
+}
+
+test SmallReceipt {
+    functions [ExtractReceipt]
+    args {
+        text_receipt "Nutty Squirrel. Affogato: $8.50. Kids cone: $6.50. Tax: $1. Total: $16.00"
+    }
+
+    @@assert( {{ this.items|map(attribute="price_cents")|sum + this.tax_cents == this.total_cents }} )
+}
+```
+
+To check that the numbers in our `Receipt` add up, we first
+`map` over the items to get the price of each item, then sum
+the list of prices, and check the sum of the items and the sales
+tax against the receipt total.
+

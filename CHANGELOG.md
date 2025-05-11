@@ -2,6 +2,85 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.87.2](https://github.com/boundaryml/baml/compare/0.87.1..0.87.2) - 2025-05-08
+
+### Bugfixes
+- [Go] Fix build of baml-cli for Go in linux (#1921) - ([d234dc9](https://github.com/boundaryml/baml/commit/d234dc922d6f01487a5e680ee52f1d8b28ef7ebb)) - Todd Berman
+- Bump version to 0.87.2 - ([77d6502](https://github.com/boundaryml/baml/commit/77d650219af58debc33d2544a2704197645ced32)) - Aaron Villalpando
+
+## [0.87.1](https://github.com/boundaryml/baml/compare/0.87.0..0.87.1) - 2025-05-07
+
+### Bugfixes
+- [bug] Correctly parse enums when other json elements may exist in the string (#1913) - ([da202d1](https://github.com/boundaryml/baml/commit/da202d1e2c9147bf72b993e7ad1d0f203487b284)) - hellovai
+- [Go] Switch bool to int in CFFI layer (#1915) - ([4b7075a](https://github.com/boundaryml/baml/commit/4b7075affc8f24d07d8aa3a1695266d5864e1771)) - Todd Berman
+- Disable completions due to issues with non-ascii chars (#1917) - ([c0f3fa1](https://github.com/boundaryml/baml/commit/c0f3fa1e484d1fce4f519447065f61783d128ab3)) - aaronvg
+- Bump version to 0.87.1 - ([d5a1d3f](https://github.com/boundaryml/baml/commit/d5a1d3fb99a4a9fa82f193b47be1db20782a0eeb)) - Aaron Villalpando
+
+## [0.87.0](https://github.com/boundaryml/baml/compare/0.86.1..0.87.0) - 2025-05-06
+
+### Miscellaneous Chores
+
+- run integ tests during the release workflow (#1897) - ([9645621](https://github.com/boundaryml/baml/commit/964562186583d399ce7f6fe7984d71cce92d1a5a)) - Samuel Lijin
+- fix concurrency groups (#1902) - ([8104859](https://github.com/boundaryml/baml/commit/8104859fb2b99cf9f5701581300f6e4b99c30612)) - Samuel Lijin
+
+### Bugfixes
+- [Go] Fix optional struct fields (#1889) - ([7105b13](https://github.com/boundaryml/baml/commit/7105b13cb991e70be0cfaf338321aee6a3effbe9)) - Todd Berman
+- [Go] Fix go enum encoding (#1892) - ([f198ba3](https://github.com/boundaryml/baml/commit/f198ba33eea9666406fefc3da6a08c152fd63b3a)) - Todd Berman
+- [Go] Fix union encoding/decoding (#1898) - ([6a7dc25](https://github.com/boundaryml/baml/commit/6a7dc25e0baf61ab095b6c21a214f2f75e15b247)) - Todd Berman
+- [Python] Export BamlClientFinishReason (#1907) - ([3c08e83](https://github.com/boundaryml/baml/commit/3c08e8307ca1c801d0acc15951df43f59048fb01)) - aaronvg
+- make vertex http resonse parsing more lenient (#1909) - ([dd26a2d](https://github.com/boundaryml/baml/commit/dd26a2dbc4e860c9b2d97832cfc43e93c1b9f099)) - aaronvg
+
+### Features
+- [feature] Expose all types via type-builder (not just dynamic) (#1893) - ([a635a06](https://github.com/boundaryml/baml/commit/a635a06efb859b9d4fa246c89b45739c95f5eb22)) - hellovai
+- Enable LSP Downloading to keep versions in sync (all platforms except windows) (#1910) - ([2a4771b](https://github.com/boundaryml/baml/commit/2a4771b8d9b41e2903f7a0f42ae36b6a46afbe95)) - aaronvg
+
+## [0.86.1](https://github.com/boundaryml/baml/compare/0.86.0..0.86.1) - 2025-04-30
+
+
+### Bugs
+- Fix arguments for functions from go (#1884) - ([b83557c](https://github.com/boundaryml/baml/commit/b83557c2c2ff279e49a7e589f5d6f06e1bd59fba)) - Todd Berman
+- Bump version to 0.86.1 - ([af4c366](https://github.com/boundaryml/baml/commit/af4c366c2633b6049dbdb87b8a8e0fb4ad08c286)) - Aaron Villalpando
+
+## [0.86.0](https://github.com/boundaryml/baml/compare/0.85.0..0.86.0) - 2025-04-30
+
+### Bug Fixes
+
+- fix union streaming bug where unions wouldn't stream until they were done (#1858)
+- Fix codegen when streaming done types (#1861) - ([d6c4ff3](https://github.com/boundaryml/baml/commit/d6c4ff30ebdaa4b90440b92b2d2045eca0205775)) - Greg Hale
+- Go Encode/Decode fixes (#1865) - ([8ecb065](https://github.com/boundaryml/baml/commit/8ecb065d89cc10b9e306c6155146122ee3427a0f)) - Todd Berman
+- Fix bedrock stalled stream protection not working with custom http client, and support additional_model_request_fields (#1877) - ([da15434](https://github.com/boundaryml/baml/commit/da1543470ff2a3601808e6ebc04548c1a56a445f)) - aaronvg
+- Remove run command from CLI (#1879) - ([7684d71](https://github.com/boundaryml/baml/commit/7684d71c615c0dc4d093a2316cf06054292c74ae)) - hellovai
+- [Rust LSP] Support generateCodeOnSave setting, clean up error messages (#1881) - ([784f1b1](https://github.com/boundaryml/baml/commit/784f1b1ccbb2361254020a2a389f8b2633c8a39a)) - aaronvg
+
+
+### Features
+- Download the right LSP and CLI depending on the project version (#1738) - ([429936d](https://github.com/boundaryml/baml/commit/429936dcfa802db5a51b9c250ce52ca5657fd3de)) - Antonio Sarosi
+- make gcp auth work seamlessly from vscode (#1860) - ([484c449](https://github.com/boundaryml/baml/commit/484c44987dcf5b87512d333cc71bc2f2717c58a7)) - Samuel Lijin
+
+
+## [0.85.0](https://github.com/boundaryml/baml/compare/0.84.4..0.85.0) - 2025-04-23
+
+### Bug Fixes
+
+- make playground env var reveal toggle visibility on the correct row (#1816) - ([5c3794a](https://github.com/boundaryml/baml/commit/5c3794a10b2257b8f3ef9c4cc8bc49429359dbe3)) - Samuel Lijin
+- Fix issue where playground proxy wasn't actually used which caused CORS issues (#1841) - ([1657e35](https://github.com/boundaryml/baml/commit/1657e3529476ec1aa9ccdd2059e50795a3a5a0b9)) - aaronvg
+- add support for plumbing through some errors for go (#1844) - ([766ba08](https://github.com/boundaryml/baml/commit/766ba08f4fb7062d977cc834e3016211d06ac27f)) - hellovai
+
+### Features
+
+- move REST API out of preview and add docs on streaming (#1818) - ([55e9d9d](https://github.com/boundaryml/baml/commit/55e9d9da7055b3ad708890d769128c9d1a1be403)) - Samuel Lijin
+- Support claude models via vertex apis (#1820) - ([c8378bc](https://github.com/boundaryml/baml/commit/c8378bc4d049d6c254cb30b4fc4c3eaa95af1ff2)) - Samuel Lijin
+- Support HTTPS_PROXY and HTTP_PROXY system proxies in AWS client by delegating to the reqwest client (#1827) - ([c5c7fc6](https://github.com/boundaryml/baml/commit/c5c7fc63138a391f16c432ba3cc84376189ef6b8)) - aaronvg
+- Make Typescript generator have a `outputFormat "esm"` field to use ES Module-friendly imports (#1831) - ([d27e729](https://github.com/boundaryml/baml/commit/d27e729b9bb6d50fac0059401c4a8ca1269d8168)) - aaronvg
+- Support ruby 3.4 (#1830) - ([960c7d8](https://github.com/boundaryml/baml/commit/960c7d8bc2adde79c1f62b1ed6887fde212ececb)) - aaronvg
+
+
+### Miscellaneous
+- Test collector using openai-generic client (groq) (#1813) - ([430e428](https://github.com/boundaryml/baml/commit/430e4288b3a8b17166832bd61beda1a36fa4d1c6)) - aaronvg
+- Document jinja in checks and asserts (#1826) - ([b27c980](https://github.com/boundaryml/baml/commit/b27c98073519120914ad29fae0ca627fc1757b57)) - Greg Hale
+- only print out vertex auth errors if it failed to auth completely (#1843) - ([e42a594](https://github.com/boundaryml/baml/commit/e42a594475557c75c04f2aeeafc77ffae7fdb0d9)) - aaronvg
+- Bump version to 0.85.0 - ([654fec2](https://github.com/boundaryml/baml/commit/654fec219d88ff90fa64fdf77aa49a124cbd0d45)) - Aaron Villalpando
+
 ## [0.84.4](https://github.com/boundaryml/baml/compare/0.84.3..0.84.4) - 2025-04-17
 
 ### Bug Fixes

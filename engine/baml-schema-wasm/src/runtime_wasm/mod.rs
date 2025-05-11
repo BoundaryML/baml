@@ -1,7 +1,6 @@
 pub mod generator;
 pub mod runtime_prompt;
 use self::runtime_prompt::WasmScope;
-use crate::aws_cred_bridge::js_fn_to_aws_cred_provider;
 use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 use anyhow::Context;
 use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
@@ -1573,7 +1572,6 @@ impl WasmRuntime {
         function_test_pairs: js_sys::Array,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
-        load_aws_creds_cb: js_sys::Function,
     ) -> Result<WasmTestResponses, JsValue> {
         // Create a vector to store all test futures
         let mut test_futures = Vec::new();
@@ -1606,11 +1604,11 @@ impl WasmRuntime {
                     });
 
                     // Create evaluation context for the test
-                    let ctx = self.runtime.create_ctx_manager_with_env_var_loaders(
-                        BamlValue::String("wasm".to_string()),
-                        js_fn_to_baml_src_reader(get_baml_src_cb.clone()),
-                        js_fn_to_aws_cred_provider(load_aws_creds_cb.clone()),
-                    );
+                    let ctx = self
+                        .runtime
+                        .create_ctx_manager_for_wasm(js_fn_to_baml_src_reader(
+                            get_baml_src_cb.clone(),
+                        ));
 
                     // Reference to the runtime
                     let rt = &self.runtime;
@@ -1839,7 +1837,6 @@ impl WasmFunction {
         test_name: String,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
-        load_aws_creds_cb: js_sys::Function,
         on_expr_event: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
@@ -1882,11 +1879,7 @@ impl WasmFunction {
         });
 
         // Create your evaluation context, etc.
-        let ctx = rt.create_ctx_manager_with_env_var_loaders(
-            BamlValue::String("wasm".to_string()),
-            js_fn_to_baml_src_reader(get_baml_src_cb),
-            js_fn_to_aws_cred_provider(load_aws_creds_cb),
-        );
+        let ctx = rt.create_ctx_manager_for_wasm(js_fn_to_baml_src_reader(get_baml_src_cb));
 
         // Pass the sender to run_test_with_expr_events
         let (test_response, span) = rt
@@ -1913,7 +1906,6 @@ impl WasmFunction {
         test_name: String,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
-        load_aws_creds_cb: js_sys::Function,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -1936,11 +1928,7 @@ impl WasmFunction {
         });
 
         // Create your evaluation context, etc.
-        let ctx = rt.create_ctx_manager_with_env_var_loaders(
-            BamlValue::String("wasm".to_string()),
-            js_fn_to_baml_src_reader(get_baml_src_cb),
-            js_fn_to_aws_cred_provider(load_aws_creds_cb),
-        );
+        let ctx = rt.create_ctx_manager_for_wasm(js_fn_to_baml_src_reader(get_baml_src_cb));
 
         // Now pass collector_arc to your runtime's run_test
         let (test_response, span) = rt

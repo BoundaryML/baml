@@ -9,6 +9,10 @@ use once_cell::sync::{Lazy, OnceCell};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+struct BamlFunctionArguments {
+    kwargs: baml_types::BamlMap<String, BamlValue>,
+}
+
 #[no_mangle]
 pub extern "C" fn version() -> *const libc::c_char {
     let version = CString::new(VERSION).unwrap();
@@ -81,23 +85,9 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-use baml_types::{BamlMap, BamlValue};
+use baml_types::BamlValue;
 
-/// Convert Flatbuffers encoded arguments to a BamlMap<String, BamlValue>
-fn ckwargs_to_map(
-    encoded_args: *const libc::c_char,
-    length: usize,
-) -> Result<BamlMap<String, BamlValue>> {
-    let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
-    let value = ctypes::buffer_to_cffi_value_holder(buffer)?;
-    if let Some(map) = value.as_map_owned() {
-        Ok(map)
-    } else {
-        Err(anyhow::anyhow!("Invalid encoded arguments"))
-    }
-}
-
-pub type CallbackFn = extern "C" fn(call_id: u32, is_done: bool, content: *const i8, length: usize);
+pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 
 /// cbindgen:ignore
 static RESULT_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
@@ -107,12 +97,14 @@ static ERROR_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
 
 #[no_mangle]
 extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: CallbackFn) {
-    baml_log::init();
+    println!("Registering callbacks");
+    let _ = baml_log::init();
+    let _ = env_logger::try_init_from_env(env_logger::Env::new().filter("BAML_INTERNAL_LOG"));
 
     // Create a global runtime or pass it along as needed.
     unsafe {
-        RESULT_CALLBACK_FN.set(std::mem::transmute(callback_fn));
-        ERROR_CALLBACK_FN.set(std::mem::transmute(error_callback_fn));
+        let _ = RESULT_CALLBACK_FN.set(std::mem::transmute(callback_fn));
+        let _ = ERROR_CALLBACK_FN.set(std::mem::transmute(error_callback_fn));
     }
 }
 
@@ -121,27 +113,36 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
         .get()
         .expect("expected callback function to be set. Did you call register_callbacks?");
 
+    let error_callback_fn = ERROR_CALLBACK_FN
+        .get()
+        .expect("expected error callback function to be set. Did you call register_callbacks?");
+
     match result {
         Ok(result) => match result.parsed() {
             Some(Ok(content)) => {
                 let mut builder = flatbuffers::FlatBufferBuilder::new();
                 let content = ctypes::serialize_baml_value_with_meta(&content.0, &mut builder);
-                callback_fn(id, is_done, content.as_ptr() as *const i8, content.len());
+                let is_done_int = if is_done { 1 } else { 0 };
+                callback_fn(
+                    id,
+                    is_done_int,
+                    content.as_ptr() as *const i8,
+                    content.len(),
+                );
             }
             Some(Err(e)) => {
-                println!("Error: {}", e);
                 // let c_message = CString::new(e.to_string()).unwrap();
-                // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
+                let message = e.to_string();
+                error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
             }
             None => {
-                println!("No result");
-                // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
+                let message = "No result from baml".to_string();
+                error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
             }
         },
         Err(e) => {
-            println!("Error: {}", e);
-            // let c_message = CString::new(e.to_string()).unwrap();
-            // error_callback_fn(id, c_message.as_ptr() as *const libc::c_char);
+            let message = format!("Error: {}", e);
+            error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
         }
     }
 }
@@ -187,7 +188,8 @@ fn call_function_from_c_inner(
     };
 
     // Convert keyword arguments.
-    let keyword_args = ckwargs_to_map(encoded_args, length)?;
+    let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
+    let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
@@ -196,7 +198,7 @@ fn call_function_from_c_inner(
     let rt = RUNTIME.clone();
     rt.spawn(async move {
         let (result, _) = runtime
-            .call_function(func_name, &keyword_args, &ctx, None, None, None)
+            .call_function(func_name, &function_args.kwargs, &ctx, None, None, None)
             .await;
         safe_trigger_callback(id, true, result);
     });
@@ -241,16 +243,17 @@ fn call_function_stream_from_c_inner(
     };
 
     // Convert keyword arguments.
-    let keyword_args = ckwargs_to_map(encoded_args, length)?;
+    let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
+    let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
-    let mut stream = match runtime.stream_function(func_name, &keyword_args, &ctx, None, None, None)
-    {
-        Ok(stream) => stream,
-        Err(e) => {
-            return Err(anyhow::anyhow!("Failed to stream function: {}", e));
-        }
-    };
+    let mut stream =
+        match runtime.stream_function(func_name, &function_args.kwargs, &ctx, None, None, None) {
+            Ok(stream) => stream,
+            Err(e) => {
+                return Err(anyhow::anyhow!("Failed to stream function: {}", e));
+            }
+        };
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 

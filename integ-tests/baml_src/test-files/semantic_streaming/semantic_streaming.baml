@@ -31,3 +31,19 @@ function MakeSemanticContainer() -> SemanticContainer {
         {{ ctx.output_format }}
     "#
 }
+
+function MakeClassWithBlockDone() -> ClassWithBlockDone {
+    client GPT35
+    prompt #"
+        {{ ctx.output_format }}
+    "#
+}
+
+function MakeClassWithExternalDone() -> ClassWithoutDone @stream.done {
+    client GPT35
+    prompt #"
+        {{ ctx.output_format }}
+    "#
+}
+
+

@@ -112,8 +112,6 @@ const useRunTests = (maxBatchSize = 5) => {
                 setState(test, { status: 'running', response: partial })
               },
               findMediaFile,
-              vscode.loadAwsCreds.bind(vscode),
-
               (spans: WasmSpan[]) => {
                 // Send spans to VSCode for highlighting if we're in the VSCode environment
                 const spans_to_send = spans.map((span) => ({
@@ -324,7 +322,6 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                 )
               },
               findMediaFile,
-              vscode.loadAwsCreds.bind(vscode),
             )
 
             const endTime = performance.now()

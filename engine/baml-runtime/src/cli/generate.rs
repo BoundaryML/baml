@@ -91,6 +91,7 @@ impl GenerateArgs {
                         } else {
                             None
                         },
+                        None,
                     )
                     .context("Failed while resolving .baml paths in baml_src/")?,
                 )

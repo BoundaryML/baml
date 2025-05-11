@@ -157,95 +157,18 @@ pub fn typecheck_in_context(
                     }
                 }
                 x => {
-                    eprintln!("TYPECHECKING APP: UNEXPECTED ARGS: {:?} {:?}", f, x);
+                    eprintln!(
+                        "TYPECHECKING APP: UNEXPECTED ARGS: ({}: {:?} ) {:?}",
+                        f.dump_str(),
+                        f.meta()
+                            .1
+                            .as_ref()
+                            .map_or("?".to_string(), |t| t.to_string()),
+                        x
+                    );
                 }
             }
             Ok(())
-
-            // TODO: What was this? Bring it back?
-            // match (f.as_ref(), xs.as_ref(), maybe_app_type) {
-            //     (
-            //         _, // Expr::Lambda(params, body, (lambda_span, _)),
-            //         Expr::ArgsTuple(args, (args_span, args_type)),
-            //         _,
-            //     ) => {
-            //         // First, check that the arguments are the right type
-            //         // for the lambda.
-            //         let maybe_lambda_type= &f.meta().1;
-            //         eprintln!("LAMBDA_TYPE: {:?}", maybe_lambda_type);
-            //         if let Some(lambda_type) = maybe_lambda_type {
-            //             eprintln!("checking lambda_type: {:?}", lambda_type);
-            //             match lambda_type {
-            //                 ExprType::Arrow(arrow) => {
-            //                     if let Some(app_type) = maybe_app_type {
-
-            //                         if !compatible_as_subtype(
-            //                             ir,
-            //                             &maybe_app_type,
-            //                             &Some(arrow.body_type.clone()),
-            //                         ) {
-            //                             eprintln!(
-            //                                 "C Type mismatch in app: {} vs {}",
-            //                                 app_type.dump_str(),
-            //                                 arrow.body_type.dump_str()
-            //                             );
-            //                             diagnostics.push_error(DatamodelError::new_validation_error(
-            //                                 &format!(
-            //                                     "D Type mismatch in app: {} vs {}",
-            //                                     app_type.dump_str(),
-            //                                     arrow.body_type.dump_str()
-            //                                 ),
-            //                                 span.clone(),
-            //                             ));
-            //                         }
-            //                     }
-            //                     for (param_type, arg) in arrow.param_types.iter().zip(args.iter()) {
-            //                         eprintln!("TYPECHECKING APP COMPARING PARAMTYPE: {:?} vs ARG: {:?}", param_type, arg);
-            //                         if !compatible_as_subtype(
-            //                             ir,
-            //                             &arg.meta().1,
-            //                             &Some(param_type.clone()),
-            //                         ) {
-            //                             eprintln!(
-            //                                 "E Type mismatch in app: {} vs {}",
-            //                                 arg.meta()
-            //                                     .1
-            //                                     .as_ref()
-            //                                     .map_or("?".to_string(), |t| t.dump_str()),
-            //                                 param_type.dump_str()
-            //                             );
-            //                             diagnostics.push_error(
-            //                                 DatamodelError::new_validation_error(
-            //                                     &format!(
-            //                                         "F Type mismatch in app: {} vs {}",
-            //                                         arg.meta()
-            //                                             .1
-            //                                             .as_ref()
-            //                                             .map_or("?".to_string(), |t| t.dump_str()),
-            //                                         param_type.dump_str()
-            //                                     ),
-            //                                     span.clone(),
-            //                                 ),
-            //                             );
-            //                         }
-            //                     }
-            //                 }
-            //                 ExprType::Atom(_) => {
-            //                     diagnostics.push_error(DatamodelError::new_validation_error(
-            //                         "Expected a function type",
-            //                         span.clone(),
-            //                     ));
-            //                 }
-            //             }
-            //         }
-
-            //         typecheck_in_context(ir, diagnostics, &inner_context, body)?;
-
-            //         Ok(())
-            //     }
-            //     _ => Ok(()),
-            // }
-            // Applications typecheck if the function arguments
         }
         Expr::Let(let_expr, _, _, _) => Ok(()),
         Expr::ArgsTuple(args, _) => Ok(()),
@@ -458,7 +381,66 @@ pub fn infer_types_in_context(
                 (span.clone(), maybe_type.clone()),
             ))
         }
-        _ => expr.clone(),
+        Expr::List(items, (span, maybe_type)) => {
+            let new_items = items
+                .iter()
+                .map(|item| {
+                    Arc::unwrap_or_clone(infer_types_in_context(
+                        typing_context,
+                        Arc::new(item.clone()),
+                    ))
+                })
+                .collect();
+            Arc::new(Expr::List(new_items, (span.clone(), maybe_type.clone())))
+        }
+        Expr::Map(items, (span, maybe_type)) => {
+            let new_items = items
+                .iter()
+                .map(|(key, value)| {
+                    (
+                        key.clone(),
+                        Arc::unwrap_or_clone(infer_types_in_context(
+                            typing_context,
+                            Arc::new(value.clone()),
+                        )),
+                    )
+                })
+                .collect();
+            Arc::new(Expr::Map(new_items, (span.clone(), maybe_type.clone())))
+        }
+        Expr::ClassConstructor {
+            name,
+            fields,
+            spread,
+            meta,
+        } => {
+            let new_fields = fields
+                .iter()
+                .map(|(name, value)| {
+                    (
+                        name.clone(),
+                        Arc::unwrap_or_clone(infer_types_in_context(
+                            typing_context,
+                            Arc::new(value.clone()),
+                        )),
+                    )
+                })
+                .collect();
+            let new_spread = spread.as_ref().map(|s| {
+                Box::new(Arc::unwrap_or_clone(infer_types_in_context(
+                    typing_context,
+                    Arc::new(s.as_ref().clone()),
+                )))
+            });
+            Arc::new(Expr::ClassConstructor {
+                name: name.clone(),
+                fields: new_fields,
+                spread: new_spread,
+                meta: meta.clone(),
+            })
+        }
+        Expr::LLMFunction(llm_function, args, (span, maybe_type)) => expr.clone(),
+        Expr::BoundVar(_, _) => expr.clone(),
     }
 }
 

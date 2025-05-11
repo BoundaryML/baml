@@ -5,27 +5,24 @@ import (
 	"fmt"
 
 	b "example.com/integ-tests/baml_client"
-	"example.com/integ-tests/baml_client/types"
 )
 
 func main() {
 	ctx := context.Background()
 
-	param := types.Union__List__string__string{}
-	param.SetString("oranges")
-	v2, err := b.AaaSamOutputFormat(ctx, &param)
+	v2, err := b.AaaSamOutputFormat(ctx, "oranges")
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(*v2)
 
-	v2, err = b.AaaSamOutputFormat(ctx, nil)
+	v2, err = b.AaaSamOutputFormat(ctx, "pineapple")
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(*v2)
 
-	stream := b.Stream.AaaSamOutputFormat(ctx, &param)
+	stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
 	for chunk := range stream {
 		fmt.Println(chunk)
 	}

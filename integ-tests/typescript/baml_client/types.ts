@@ -775,6 +775,13 @@ export interface TwoStoriesOneTitle {
   
 }
 
+export interface TwoStoriesOneTitleCheck {
+  title: string
+  story_a: Checked<string,"too_long_story">
+  story_b: Checked<string,"too_long_story">
+  
+}
+
 export interface UnionTest_ReturnType {
   prop1: string | boolean
   prop2: (number | boolean)[]
@@ -821,3 +828,5 @@ export type RecAliasTwo = RecAliasThree
 export type RecursiveListAlias = RecursiveListAlias[]
 
 export type RecursiveMapAlias = Record<string, RecursiveMapAlias>
+
+export type RecursiveUnion = string | Record<string, RecursiveUnion>

@@ -7,16 +7,20 @@ const PROMPT_FIDDLE_EXAMPLE_DIR: &str =
     concat!("/../../../typescript/fiddle-frontend/public/_examples/all-projects/baml_src");
 
 fn main() {
-    build_folder_tests(
-        BAML_CLI_INIT_DIR,
-        "tests/validation_files/baml_cli_init.baml",
-    );
-    build_folder_tests(
-        PROMPT_FIDDLE_EXAMPLE_DIR,
-        "tests/validation_files/prompt_fiddle_example.baml",
-    );
-    build_validation_tests();
-    // build_reformat_tests();
+    if std::env::var("SKIP_BAML_VALIDATION").unwrap_or_default() == "1" {
+        println!("cargo:warning=Skipping BAML validation during build");
+    } else {
+        build_folder_tests(
+            BAML_CLI_INIT_DIR,
+            "tests/validation_files/baml_cli_init.baml",
+        );
+        build_folder_tests(
+            PROMPT_FIDDLE_EXAMPLE_DIR,
+            "tests/validation_files/prompt_fiddle_example.baml",
+        );
+        build_validation_tests();
+        // build_reformat_tests();
+    }
 }
 
 fn build_validation_tests() {

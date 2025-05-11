@@ -351,3 +351,58 @@ test_partial_deserializer_streaming!(
       ]
     }
 );
+
+const TODO_TOOLS_EXAMPLE: &str = r#"
+type Tool = MessageToUser | AddItem | AdjustItem | GetLastItemId
+
+class MessageToUser {
+    type "message_to_user" @stream.not_null
+    message string @stream.not_null
+}
+
+class AdjustItem {
+    type "adjust_item" @stream.not_null
+    item_id int
+    title string?
+    @@stream.done
+}
+
+class AddItem {
+    type "add_item" @stream.not_null
+    title string @stream.not_null
+    @@stream.done
+}
+
+class GetLastItemId {
+    type "get_last_item_id" @stream.not_null
+    @@stream.done
+}
+"#;
+
+test_partial_deserializer_streaming!(
+    test_todo_tools_message,
+    TODO_TOOLS_EXAMPLE,
+    r#"{"type": "message_to_user", "message": "Hello us"#,
+    FieldType::Union(vec![
+        FieldType::class("MessageToUser"),
+        FieldType::class("AdjustItem"),
+        FieldType::class("AddItem"),
+        FieldType::class("GetLastItemId"),
+    ]),
+    {
+        "type": "message_to_user",
+        "message": "Hello us"
+    }
+);
+
+test_partial_deserializer_streaming_failure!(
+    test_todo_tools_adjust_item,
+    TODO_TOOLS_EXAMPLE,
+    r#"{"type": "adjust_item", "item_id": 1, "title": "New Title"#,
+    FieldType::Union(vec![
+        FieldType::class("MessageToUser"),
+        FieldType::class("AdjustItem"),
+        FieldType::class("AddItem"),
+        FieldType::class("GetLastItemId"),
+    ])
+);

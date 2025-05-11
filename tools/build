@@ -195,8 +195,9 @@ case "$_path" in
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_streaming"
-      command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
+      # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
       # command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
+      command="${command} && BAML_LOG=info  uv run pytest -s"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

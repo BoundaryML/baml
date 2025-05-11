@@ -29,15 +29,6 @@ type stream struct {}
 
 var Stream = &stream{}
 
-func castSlice[T any](result any, castResult func(any) T) []T {
-	items := result.([]any)
-	casted := make([]T, len(items))
-	for i, item := range items {
-		casted[i] = castResult(item)
-	}
-	return casted
-}
-
 func castOptional[T any](result any, castResult func(any) T) *T {
 	if result == nil {
 		return nil
@@ -51,8 +42,10 @@ func castOptional[T any](result any, castResult func(any) T) *T {
 func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
         , {{name}} {{type}}
         {%- endfor %}) (*{{ fn.return_type }}, error) {
-	args := map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} }
-	encoded, err := baml.EncodeRoot(args, typeMap)
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
+	}
+	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
@@ -77,8 +70,10 @@ func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		, {{name}} {{type}}
 		{%- endfor %}) <-chan {{ fn.return_type }} {
-	args := map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} }
-	encoded, err := baml.EncodeRoot(args, typeMap)
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
+	}
+	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}

@@ -963,6 +963,32 @@ paths:
                 - checks
                 additionalProperties: false
       operationId: MakeBlockConstraint
+  /call/MakeClassWithBlockDone:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MakeClassWithBlockDone'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MakeClassWithBlockDoneResponse
+                $ref: '#/components/schemas/ClassWithBlockDone'
+      operationId: MakeClassWithBlockDone
+  /call/MakeClassWithExternalDone:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/MakeClassWithExternalDone'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: MakeClassWithExternalDoneResponse
+                $ref: '#/components/schemas/ClassWithoutDone'
+      operationId: MakeClassWithExternalDone
   /call/MakeNestedBlockConstraint:
     post:
       requestBody:
@@ -1274,6 +1300,19 @@ paths:
                 title: RecursiveClassWithAliasIndirectionResponse
                 $ref: '#/components/schemas/NodeWithAliasIndirection'
       operationId: RecursiveClassWithAliasIndirection
+  /call/RecursiveUnionTest:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RecursiveUnionTest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RecursiveUnionTestResponse
+                AnyValue: {}
+      operationId: RecursiveUnionTest
   /call/ReturnAliasWithMergedAttributes:
     post:
       requestBody:
@@ -1406,6 +1445,19 @@ paths:
                 title: StreamFailingAssertionResponse
                 $ref: '#/components/schemas/TwoStoriesOneTitle'
       operationId: StreamFailingAssertion
+  /call/StreamFailingCheck:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/StreamFailingCheck'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: StreamFailingCheckResponse
+                $ref: '#/components/schemas/TwoStoriesOneTitleCheck'
+      operationId: StreamFailingCheck
   /call/StreamOneBigNumber:
     post:
       requestBody:
@@ -1527,6 +1579,32 @@ paths:
                 title: TestAwsResponse
                 type: string
       operationId: TestAws
+  /call/TestAwsClaude37:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsClaude37'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsClaude37Response
+                type: string
+      operationId: TestAwsClaude37
+  /call/TestAwsInferenceProfile:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestAwsInferenceProfile'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestAwsInferenceProfileResponse
+                type: string
+      operationId: TestAwsInferenceProfile
   /call/TestAwsInvalidAccessKey:
     post:
       requestBody:
@@ -2187,6 +2265,19 @@ paths:
                 title: TestOpenAIShorthandResponse
                 type: string
       operationId: TestOpenAIShorthand
+  /call/TestOpenAIWithFinishReasonError:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIWithFinishReasonError'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIWithFinishReasonErrorResponse
+                type: string
+      operationId: TestOpenAIWithFinishReasonError
   /call/TestOpenAIWithMaxTokens:
     post:
       requestBody:
@@ -2213,6 +2304,19 @@ paths:
                 title: TestOpenAIWithNullMaxTokensResponse
                 type: string
       operationId: TestOpenAIWithNullMaxTokens
+  /call/TestOpenRouterMistralSmall3_1_24b:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenRouterMistralSmall3_1_24b'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenRouterMistralSmall3_1_24bResponse
+                type: string
+      operationId: TestOpenRouterMistralSmall3_1_24b
   /call/TestRetryConstant:
     post:
       requestBody:
@@ -3514,6 +3618,32 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required: []
             additionalProperties: false
+    MakeClassWithBlockDone:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MakeClassWithBlockDoneRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
+    MakeClassWithExternalDone:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: MakeClassWithExternalDoneRequest
+            type: object
+            properties:
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required: []
+            additionalProperties: false
     MakeNestedBlockConstraint:
       required: true
       content:
@@ -3865,6 +3995,22 @@ components:
             required:
             - cls
             additionalProperties: false
+    RecursiveUnionTest:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RecursiveUnionTestRequest
+            type: object
+            properties:
+              input:
+                AnyValue: {}
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     ReturnAliasWithMergedAttributes:
       required: true
       content:
@@ -3999,6 +4145,25 @@ components:
         application/json:
           schema:
             title: StreamFailingAssertionRequest
+            type: object
+            properties:
+              length:
+                type: integer
+              theme:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - length
+            - theme
+            additionalProperties: false
+    StreamFailingCheck:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: StreamFailingCheckRequest
             type: object
             properties:
               length:
@@ -4149,6 +4314,38 @@ components:
         application/json:
           schema:
             title: TestAwsRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsClaude37:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsClaude37Request
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestAwsInferenceProfile:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestAwsInferenceProfileRequest
             type: object
             properties:
               input:
@@ -4975,6 +5172,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenAIWithFinishReasonError:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIWithFinishReasonErrorRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestOpenAIWithMaxTokens:
       required: true
       content:
@@ -4997,6 +5210,22 @@ components:
         application/json:
           schema:
             title: TestOpenAIWithNullMaxTokensRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenRouterMistralSmall3_1_24b:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenRouterMistralSmall3_1_24bRequest
             type: object
             properties:
               input:
@@ -6681,6 +6910,50 @@ components:
           type: string
         story_b:
           type: string
+        title:
+          type: string
+      required:
+      - story_a
+      - story_b
+      - title
+      additionalProperties: false
+    TwoStoriesOneTitleCheck:
+      type: object
+      properties:
+        story_a:
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                too_long_story:
+                  $ref: '#components/schemas/Check'
+              required:
+              - too_long_story
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
+        story_b:
+          type: object
+          properties:
+            value:
+              type: string
+            checks:
+              type: object
+              properties:
+                too_long_story:
+                  $ref: '#components/schemas/Check'
+              required:
+              - too_long_story
+              additionalProperties: false
+          required:
+          - value
+          - checks
+          additionalProperties: false
         title:
           type: string
       required:

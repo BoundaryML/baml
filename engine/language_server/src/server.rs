@@ -77,6 +77,7 @@ impl Server {
             mut workspace_settings,
         } = AllSettings::from_value(
             init_params
+                .clone()
                 .initialization_options
                 .unwrap_or_else(|| serde_json::Value::Object(serde_json::Map::default())),
         );
@@ -107,7 +108,7 @@ impl Server {
         );
 
         let workspaces = init_params
-            .workspace_folders
+            .workspace_folders.clone()
             .filter(|folders| !folders.is_empty())
             .map(|folders| folders.into_iter().filter_map(|folder| {
                 let baml_src_dir = find_baml_src(&PathBuf::from(folder.uri.path()))?;
@@ -129,6 +130,8 @@ impl Server {
             .ok_or_else(|| {
                 anyhow::anyhow!("Failed to get the current working directory while creating a default workspace.")
             })?;
+
+        // tracing::info!("init params: {:?}", init_params);
 
         // for some reason tracing logs are not available before this point
         tracing::info!("Starting server with {} worker threads", worker_threads);
@@ -229,6 +232,7 @@ impl Server {
         let mut scheduler =
             schedule::Scheduler::new(&mut session, worker_threads, connection.make_sender());
         Self::try_register_capabilities(&_client_capabilities, &mut scheduler);
+
         for msg in connection.incoming() {
             if connection.handle_shutdown(&msg)? {
                 break;
@@ -258,25 +262,37 @@ impl Server {
             .and_then(|workspace| workspace.did_change_watched_files)
             .and_then(|watched_files| watched_files.dynamic_registration)
             .unwrap_or_default();
+        tracing::info!("*** dynamic_registration: {}", dynamic_registration);
         if dynamic_registration {
             // Register all dynamic capabilities here
 
             // `workspace/didChangeWatchedFiles`
             // (this registers the configuration file watcher)
             let params = lsp_types::RegistrationParams {
-                registrations: vec![lsp_types::Registration {
-                    id: "baml-server-file-operations".into(),
-                    method: "workspace/didChangeWatchedFiles".into(),
-                    register_options: Some(
-                        serde_json::to_value(lsp_types::DidChangeWatchedFilesRegistrationOptions {
-                            watchers: vec![FileSystemWatcher {
-                                glob_pattern: lsp_types::GlobPattern::String("**/*.{baml}".into()),
-                                kind: None,
-                            }],
-                        })
-                        .unwrap(),
-                    ),
-                }],
+                registrations: vec![
+                    lsp_types::Registration {
+                        id: "baml-server-file-operations".into(),
+                        method: "workspace/didChangeWatchedFiles".into(),
+                        register_options: Some(
+                            serde_json::to_value(
+                                lsp_types::DidChangeWatchedFilesRegistrationOptions {
+                                    watchers: vec![FileSystemWatcher {
+                                        glob_pattern: lsp_types::GlobPattern::String(
+                                            "**/*.{baml}".into(),
+                                        ),
+                                        kind: None,
+                                    }],
+                                },
+                            )
+                            .unwrap(),
+                        ),
+                    },
+                    lsp_types::Registration {
+                        id: "baml-server-configuration".into(),
+                        method: "workspace/didChangeConfiguration".into(),
+                        register_options: None,
+                    },
+                ],
             };
 
             let response_handler = |()| {
@@ -325,6 +341,7 @@ impl Server {
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(true),
             }),
+
             definition_provider: Some(lsp_types::OneOf::Left(true)),
             document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -345,6 +362,7 @@ impl Server {
                     supported: Some(true),
                     change_notifications: Some(lsp_types::OneOf::Left(true)),
                 }),
+
                 ..Default::default()
             }),
             ..Default::default()

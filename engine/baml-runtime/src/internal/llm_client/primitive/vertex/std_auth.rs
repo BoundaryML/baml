@@ -14,14 +14,30 @@ pub enum VertexAuth {
 impl VertexAuth {
     pub async fn new(auth_strategy: &ResolvedGcpAuthStrategy) -> Result<VertexAuth> {
         match auth_strategy {
-            ResolvedGcpAuthStrategy::FilePath(path) => {
+            ResolvedGcpAuthStrategy::MaybeFilePath(path) => {
                 log::debug!("Attempting to auth using JsonFile strategy");
-                let authz_user = gcp_auth::CustomServiceAccount::from_file(&path)?;
+                let authz_user =
+                    gcp_auth::CustomServiceAccount::from_file(&path).context(format!(
+                        "Failed to parse credentials as JSON file: {}",
+                        serde_json::to_string(&path)
+                            .expect("Serialization of string should always succeed")
+                    ))?;
                 Ok(VertexAuth::CustomServiceAccount(authz_user))
             }
-            ResolvedGcpAuthStrategy::JsonString(s) => {
+            ResolvedGcpAuthStrategy::StringContainingJson(s) => {
                 log::debug!("Attempting to auth using JsonString strategy");
-                let authz_user = gcp_auth::CustomServiceAccount::from_json(&s)?;
+                let authz_user = gcp_auth::CustomServiceAccount::from_json(&s).context(format!(
+                    "Failed to parse credentials as JSON string: {}",
+                    {
+                        let s = serde_json::to_string(&s)
+                            .expect("Serialization of string should always succeed");
+                        if s.len() > 8 {
+                            format!("{}...{}", &s[..4], &s[s.len() - 4..])
+                        } else {
+                            s
+                        }
+                    }
+                ))?;
                 Ok(VertexAuth::CustomServiceAccount(authz_user))
             }
             ResolvedGcpAuthStrategy::JsonObject(o) => {
@@ -35,6 +51,8 @@ impl VertexAuth {
             }
             ResolvedGcpAuthStrategy::SystemDefault => {
                 log::debug!("Attempting to auth using SystemDefault strategy (local mods)");
+                let mut errors = Vec::new();
+
                 match gcp_auth::ConfigDefaultCredentials::new().await {
                     Ok(authz_user) => {
                         log::debug!(
@@ -43,12 +61,9 @@ impl VertexAuth {
                         return Ok(VertexAuth::ConfigDefaultCredentials(authz_user));
                     }
                     Err(e) => {
-                        log::error!(
-                            "{:?}",
-                            anyhow::Error::from(e).context(
-                                "Failed to auth using GcloudApplicationDefaultCredentials strategy"
-                            )
-                        );
+                        errors.push(anyhow::Error::from(e).context(
+                            "Failed to auth using GcloudApplicationDefaultCredentials strategy",
+                        ));
                     }
                 }
                 match gcp_auth::MetadataServiceAccount::new().await {
@@ -57,10 +72,9 @@ impl VertexAuth {
                         return Ok(VertexAuth::MetadataServiceAccount(authz_user));
                     }
                     Err(e) => {
-                        log::error!(
-                            "{:?}",
+                        errors.push(
                             anyhow::Error::from(e)
-                                .context("Failed to auth using MetadataServiceAccount strategy")
+                                .context("Failed to auth using MetadataServiceAccount strategy"),
                         );
                     }
                 }
@@ -70,15 +84,20 @@ impl VertexAuth {
                         return Ok(VertexAuth::GCloudAuthorizedUser(authz_user));
                     }
                     Err(e) => {
-                        log::error!(
-                            "{:?}",
+                        errors.push(
                             anyhow::Error::from(e)
-                                .context("Failed to auth using GCloudAuthorizedUser strategy")
+                                .context("Failed to auth using GCloudAuthorizedUser strategy"),
                         );
                     }
                 }
+
+                // Log all collected errors if no strategy succeeded
+                for err in &errors {
+                    log::error!("{:?}", err);
+                }
                 anyhow::bail!(
-                    "Failed to auth - system_default strategy did not resolve successfully"
+                    "Failed to auth - system_default strategy did not resolve successfully. Errors encountered: {:?}",
+                    errors
                 )
             }
         }

@@ -11,6 +11,7 @@ import { WasmDiagnosticError, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')
+  wasm.init_js_callback_bridge(vscode.loadAwsCreds, vscode.loadGcpCreds)
   return wasm
 })
 
@@ -24,35 +25,6 @@ export const useWaitForWasm = () => {
 export const filesAtom = atom<Record<string, string>>({})
 export const sandboxFilesAtom = atom<Record<string, string>>({})
 
-const pythonGenerator = `
-generator python {
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
-    output_type "python/pydantic"
-    
-    // Where the generated code will be saved (relative to baml_src/)
-    output_dir "python"
-    
-    // What interface you prefer to use for the generated code (sync/async)
-    // Both are generated regardless of the choice, just modifies what is exported
-    // at the top level
-    default_client_mode "sync"
-    
-    // Version of runtime to generate code for (should match installed baml-py version)
-    version "0.66.0"
-}
-
-generator typescript {
-    // Valid values: "python/pydantic", "typescript", "ruby/sorbet"
-    output_type "typescript"
-    
-    // Where the generated code will be saved (relative to baml_src/)
-    output_dir "typescript"
-    
-    // Version of runtime to generate code for (should match installed baml-py version)
-    version "0.66.0"
-}
-
-`
 export const projectAtom = atom((get) => {
   const wasm = get(wasmAtom)
   const files = get(filesAtom)
@@ -62,7 +34,6 @@ export const projectAtom = atom((get) => {
   // filter out files that are not baml files
   const bamlFiles = Object.entries(files).filter(([path, content]) => path.endsWith('.baml'))
   // TODO: add python generator if using sandbox
-  // files = files + pythonGenerator
 
   return wasm.WasmProject.new('./', bamlFiles)
 })
@@ -263,12 +234,27 @@ export const envVarsAtom = atom(
       if (proxyUrl === undefined) {
         return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
       }
+
+      // Check if BOUNDARY_PROXY_URL exists in the env vars.
+      const hasBoundaryProxyUrl = envKeyValues.some(([k]) => k === 'BOUNDARY_PROXY_URL')
+
       const entries = envKeyValues.map(([k, v]) => {
         if (k === 'BOUNDARY_PROXY_URL') {
           return [k, proxyUrl]
         }
         return [k, v]
       })
+
+      // If proxy is enabled and there's a proxyUrl but no BOUNDARY_PROXY_URL, add it
+      // TODO: it's likely when proxy is updated we dont update our env vars properly again.
+      // so we resort to this.
+      if (proxyEnabled && proxyUrl && !hasBoundaryProxyUrl) {
+        console.warn(
+          '⚠️ WARNING: BOUNDARY_PROXY_URL was not found in env vars but proxy is enabled. Adding it automatically.',
+        )
+        entries.push(['BOUNDARY_PROXY_URL', proxyUrl])
+      }
+
       return Object.fromEntries(entries.filter((e) => e !== undefined))
     }
   },

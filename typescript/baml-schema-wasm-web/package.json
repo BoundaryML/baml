@@ -1,6 +1,6 @@
 {
   "name": "@gloo-ai/baml-schema-wasm-web",
-  "version": "0.1.4",
+  "version": "0.86.1",
   "description": "The WASM package for baml-fmt",
   "main": "./dist/baml_schema_build.js",
   "scripts": {

@@ -19,7 +19,7 @@ import {
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
 import { getCurrentOpenedFile } from '../helpers/get-open-file'
-import { bamlConfig, requestDiagnostics } from '../plugins/language-server'
+import { bamlConfig, requestDiagnostics } from '../plugins/language-server-client'
 import TelemetryReporter from '../telemetryReporter'
 import { exec, fork } from 'child_process'
 import { promisify } from 'util'
@@ -27,7 +27,8 @@ import { dirname, join } from 'path'
 import * as dotenv from 'dotenv'
 import * as fs from 'fs'
 import { AwsCredentialIdentity } from '@smithy/types'
-import { refreshBamlConfigSingleton } from '../plugins/language-server/bamlConfig'
+import { refreshBamlConfigSingleton } from '../plugins/language-server-client/bamlConfig'
+import { GoogleAuth } from 'google-auth-library'
 // import { CredentialsProviderError } from '@aws-sdk/credential-providers'
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],
@@ -127,7 +128,6 @@ export class WebviewPanelHost {
 
   public postMessage<T>(command: string, content: T) {
     this._panel.webview.postMessage({ command: command, content })
-    console.log('postMessage', command, content)
     this.reporter?.sendTelemetryEvent({
       event: `baml.webview.${command}`,
       properties: {},
@@ -213,8 +213,11 @@ export class WebviewPanelHost {
     }
 
     vscode.workspace.onDidChangeConfiguration((event) => {
+      console.log('*** CLIENT DID CHANGE CONFIGURATION', event)
       if (event.affectsConfiguration('baml')) {
-        this.postMessage('baml_settings_updated', refreshBamlConfigSingleton())
+        setTimeout(() => {
+          this.postMessage('baml_settings_updated', refreshBamlConfigSingleton())
+        }, 1000)
       }
     })
 
@@ -346,6 +349,7 @@ export class WebviewPanelHost {
             this._panel.webview.postMessage({ rpcId: message.rpcId, rpcMethod: vscodeCommand, data: webviewUriResp })
             return
           case 'GET_PLAYGROUND_PORT':
+            console.log('GET_PLAYGROUND_PORT', this._port(), Date.now())
             const response: GetPlaygroundPortResponse = {
               port: this._port(),
             }
@@ -366,6 +370,52 @@ export class WebviewPanelHost {
                 })
               } catch (error) {
                 console.error('Error loading aws creds:', error)
+                if (error instanceof Error) {
+                  this._panel.webview.postMessage({
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: {
+                      error: {
+                        ...error,
+                        name: error.name,
+                        message: error.message,
+                      },
+                    },
+                  })
+                } else {
+                  this._panel.webview.postMessage({
+                    rpcId: message.rpcId,
+                    rpcMethod: vscodeCommand,
+                    data: { error },
+                  })
+                }
+              }
+            })()
+            return
+          case 'LOAD_GCP_CREDS':
+            ;(async () => {
+              try {
+                const auth = new GoogleAuth({
+                  scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+                })
+
+                const client = await auth.getClient()
+                const projectId = await auth.getProjectId()
+
+                const tokenResponse = await client.getAccessToken()
+
+                this._panel.webview.postMessage({
+                  rpcId: message.rpcId,
+                  rpcMethod: vscodeCommand,
+                  data: {
+                    ok: {
+                      accessToken: tokenResponse.token,
+                      projectId,
+                    },
+                  },
+                })
+              } catch (error) {
+                console.error('Error loading gcp creds:', error)
                 if (error instanceof Error) {
                   this._panel.webview.postMessage({
                     rpcId: message.rpcId,

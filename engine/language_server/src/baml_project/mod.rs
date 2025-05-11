@@ -23,6 +23,7 @@ use lsp_types::{
     Diagnostic, DiagnosticSeverity, Hover, HoverContents, Position, Range, TextDocumentItem,
 };
 use position_utils::get_word_at_position;
+use semver::Version;
 // use rustc_hash::FxHashSet;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::io;
@@ -155,7 +156,17 @@ impl BamlProject {
             .collect();
         let start_time = Instant::now();
 
-        let runtime = self.runtime(env)?;
+        let runtime = self.runtime(env);
+        if let Err(e) = runtime {
+            if (e.has_errors()) {
+                tracing::error!("Failed to run codegen: {:?}", e);
+                return Err(anyhow::anyhow!("Project has errors."));
+            } else {
+                tracing::error!("Failed to run codegen: {:?}", e);
+                return Err(e.into());
+            }
+        }
+        let runtime = runtime.unwrap();
 
         let generated = match runtime.run_codegen(&all_files, no_version_check.unwrap_or(false)) {
             Ok(gen) => {
@@ -244,13 +255,27 @@ impl BamlProject {
 
     /// Load files into the current state. Also return the newly loaded files.
     pub fn load_files(&mut self) -> anyhow::Result<HashMap<DocumentKey, TextDocument>> {
-        let workspace_file_paths = gather_files(&self.root_dir_name, false)?;
+        let workspace_file_paths = gather_files(&self.root_dir_name, false).map_err(|e| {
+            anyhow::anyhow!(
+                "Failed to gather files from directory {}: {}",
+                self.root_dir_name.display(),
+                e
+            )
+        })?;
         let workspace_files = workspace_file_paths
             .into_iter()
             .map(|file_path| {
-                let document_key = DocumentKey::from_path(&self.root_dir_name, &file_path)?;
-                let contents =
-                    std::fs::read_to_string(&file_path).context("Failed to read file")?;
+                let document_key = DocumentKey::from_path(&self.root_dir_name, &file_path)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "Failed to create document key for file {}: {}",
+                            file_path.display(),
+                            e
+                        )
+                    })?;
+                let contents = std::fs::read_to_string(&file_path).map_err(|e| {
+                    anyhow::anyhow!("Failed to read file {}: {}", file_path.display(), e)
+                })?;
                 let text_document = TextDocument::new(contents, 0);
                 Ok((document_key, text_document))
             })
@@ -1231,6 +1256,83 @@ impl Project {
     //     self.run_generators_without_debounce(on_success, on_error)
     //         .await;
     // }
+
+    /// Checks if all generators use the same major.minor version.
+    /// Returns Ok(()) if they do (or if there are no generators),
+    /// otherwise returns an Err with a descriptive message.
+    pub fn get_common_generator_version(&self) -> Result<String, String> {
+        let runtime_version = env!("CARGO_PKG_VERSION");
+
+        let generators = match self.list_generators() {
+            Ok(gens) => gens,
+            Err(_) => return Ok(runtime_version.to_string()), // Return cargo pkg version if error listing generators
+        };
+
+        if generators.is_empty() {
+            return Ok(runtime_version.to_string());
+        }
+
+        let mut major_minor_versions = std::collections::HashMap::new();
+        let mut highest_patch_by_major_minor = std::collections::HashMap::new();
+
+        // Track major.minor versions and find highest patch for each
+        for gen in &generators {
+            if let Ok(version) = semver::Version::parse(&gen.version) {
+                let major_minor = format!("{}.{}", version.major, version.minor);
+
+                // Track generators with this major.minor
+                major_minor_versions
+                    .entry(major_minor.clone())
+                    .or_insert_with(Vec::new)
+                    .push(gen.clone());
+
+                // Track highest patch version for this major.minor
+                highest_patch_by_major_minor
+                    .entry(major_minor)
+                    .and_modify(|highest_patch: &mut u64| {
+                        if version.patch > *highest_patch {
+                            *highest_patch = version.patch;
+                        }
+                    })
+                    .or_insert(version.patch);
+            } else {
+                tracing::warn!("Invalid semver version in generator: {}", gen.version);
+                // Consider how to handle invalid versions - for now, we ignore them for the check
+            }
+        }
+
+        // If there's more than one major.minor version, return an error
+        if major_minor_versions.len() > 1 {
+            let versions_str = major_minor_versions
+                .keys()
+                .map(|v| format!("'{}'", v))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let message = format!(
+                "Multiple generator major.minor versions detected: {}. Major and minor versions must match across all generators.",
+                versions_str
+            );
+            Err(message)
+        // If there's only one major.minor version, return it with the highest patch
+        } else if let Some((version, _)) = major_minor_versions.iter().next() {
+            if let Some(highest_patch) = highest_patch_by_major_minor.get(version) {
+                // Parse the version string to create a proper semver::Version
+                if let Ok(mut v) = Version::parse(&format!("{}.0", version)) {
+                    // Update with the highest patch version
+                    v.patch = *highest_patch;
+                    Ok(v.to_string())
+                } else {
+                    Ok(format!("{}.{}", version, highest_patch))
+                }
+            } else {
+                Ok(version.clone())
+            }
+        // Fallback to the runtime version if no valid versions were found
+        } else {
+            Err("No valid generator versions found".to_string())
+        }
+    }
 }
 
 fn get_dummy_value(

@@ -26,7 +26,6 @@ import (
 #include <dlfcn.h>
 #include <baml_cffi_wrapper.h>
 #include <stdlib.h>
-#include <stdbool.h>
 #include <string.h>
 #include <stdint.h>
 #include <string.h>
@@ -34,7 +33,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.84.4"
+	VERSION            = "0.87.2"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
