@@ -59,7 +59,7 @@ func (u {{ union.name }}) MarshalJSON() ([]byte, error) {
     return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
-func (u {{ union.name }}) UnmarshalJSON(data []byte) error {
+func (u *{{ union.name }}) UnmarshalJSON(data []byte) error {
     return fmt.Errorf("not implemented")
 }
 
