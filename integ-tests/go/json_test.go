@@ -27,7 +27,7 @@ func TestRoundTrip(t *testing.T) {
 			require.NoError(t, err)
 			emptyOutput := reflect.New(reflect.TypeOf(test.input)).Interface()
 
-			err = json.Unmarshal(encoded, &emptyOutput)
+			err = json.Unmarshal(encoded, emptyOutput)
 			require.NoError(t, err)
 
 			require.Equal(t, test.input, reflect.ValueOf(emptyOutput).Elem().Interface())
