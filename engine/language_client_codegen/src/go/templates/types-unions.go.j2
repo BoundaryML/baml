@@ -52,7 +52,7 @@ func (u {{ union.name }}) MarshalJSON() ([]byte, error) {
     switch u.variant {
     {% for variant in union.variants %}
     case "{{ variant.0 }}":
-        return json.Marshal(u.variant_{{ variant.0 }}), nil
+        return json.Marshal(u.variant_{{ variant.0 }})
     {% endfor %}
     }
 
@@ -60,7 +60,7 @@ func (u {{ union.name }}) MarshalJSON() ([]byte, error) {
 }
 
 func (u {{ union.name }}) UnmarshalJSON(data []byte) error {
-    panic("not implemented")
+    return fmt.Errorf("not implemented")
 }
 
 {% for variant in union.variants %}

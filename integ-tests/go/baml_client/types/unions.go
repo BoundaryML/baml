@@ -92,7 +92,7 @@ func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) MarshalJSON() ([]b
 }
 
 func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) SetBookOrder(v BookOrder) {
@@ -243,7 +243,7 @@ func (u Union__List__bool__List__int) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__List__bool__List__int) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__List__bool__List__int) SetList__bool(v []bool) {
@@ -358,7 +358,7 @@ func (u Union__LiteralClassOne__LiteralClassTwo) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__LiteralClassOne__LiteralClassTwo) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) SetLiteralClassOne(v LiteralClassOne) {
@@ -473,7 +473,7 @@ func (u Union__Martian__Earthling) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__Martian__Earthling) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__Martian__Earthling) SetMartian(v Martian) {
@@ -601,7 +601,7 @@ func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) MarshalJSON() (
 }
 
 func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) SetMemoryObject(v MemoryObject) {
@@ -748,7 +748,7 @@ func (u Union__Nested__string) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__Nested__string) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__Nested__string) SetNested(v Nested) {
@@ -863,7 +863,7 @@ func (u Union__OriginalA__OriginalB) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__OriginalA__OriginalB) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__OriginalA__OriginalB) SetOriginalA(v OriginalA) {
@@ -978,7 +978,7 @@ func (u Union__PhoneNumber__EmailAddress) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__PhoneNumber__EmailAddress) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__PhoneNumber__EmailAddress) SetPhoneNumber(v PhoneNumber) {
@@ -1093,7 +1093,7 @@ func (u Union__Resume__Event) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__Resume__Event) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__Resume__Event) SetResume(v Resume) {
@@ -1208,7 +1208,7 @@ func (u Union__SimpleTag__JsonTemplate) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__SimpleTag__JsonTemplate) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__SimpleTag__JsonTemplate) SetSimpleTag(v SimpleTag) {
@@ -1323,7 +1323,7 @@ func (u Union__Tag__string) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__Tag__string) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__Tag__string) SetTag(v Tag) {
@@ -1438,7 +1438,7 @@ func (u Union__float__bool) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__float__bool) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__float__bool) SetFloat(v float64) {
@@ -1566,7 +1566,7 @@ func (u Union__int_1__bool_true__string_string_output) MarshalJSON() ([]byte, er
 }
 
 func (u Union__int_1__bool_true__string_string_output) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int_1__bool_true__string_string_output) SetInt_1(v int) {
@@ -1713,7 +1713,7 @@ func (u Union__int__float) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__int__float) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__float) SetInt(v int64) {
@@ -1828,7 +1828,7 @@ func (u Union__int__string) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__int__string) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__string) SetInt(v int64) {
@@ -1969,7 +1969,7 @@ func (u Union__int__string__bool__float) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__int__string__bool__float) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__string__bool__float) SetInt(v int64) {
@@ -2204,7 +2204,7 @@ func (u Union__int__string__bool__float__JsonObject__JsonArray) MarshalJSON() ([
 }
 
 func (u Union__int__string__bool__float__JsonObject__JsonArray) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetInt(v int64) {
@@ -2525,7 +2525,7 @@ func (u Union__int__string__bool__float__List__string__Map__string_List__string)
 }
 
 func (u Union__int__string__bool__float__List__string__Map__string_List__string) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetInt(v int64) {
@@ -2794,7 +2794,7 @@ func (u Union__string__List__Nested) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__string__List__Nested) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__List__Nested) SetString(v string) {
@@ -2909,7 +2909,7 @@ func (u Union__string__Map__string_RecursiveUnion) MarshalJSON() ([]byte, error)
 }
 
 func (u Union__string__Map__string_RecursiveUnion) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__Map__string_RecursiveUnion) SetString(v string) {
@@ -3024,7 +3024,7 @@ func (u Union__string__Nested) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__string__Nested) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__Nested) SetString(v string) {
@@ -3139,7 +3139,7 @@ func (u Union__string__bool) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__string__bool) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__bool) SetString(v string) {
@@ -3254,7 +3254,7 @@ func (u Union__string__int) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__string__int) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__int) SetString(v string) {
@@ -3382,7 +3382,7 @@ func (u Union__string__int__float) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__string__int__float) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__int__float) SetString(v string) {
@@ -3529,7 +3529,7 @@ func (u Union__string_barisa__string_ox_burger) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__string_barisa__string_ox_burger) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string_barisa__string_ox_burger) SetString_barisa(v string) {
@@ -3644,7 +3644,7 @@ func (u Union__string_breakfast__string_dinner) MarshalJSON() ([]byte, error) {
 }
 
 func (u Union__string_breakfast__string_dinner) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string_breakfast__string_dinner) SetString_breakfast(v string) {
@@ -3759,7 +3759,7 @@ func (u Union__string_curiosity__string_personal_finance) MarshalJSON() ([]byte,
 }
 
 func (u Union__string_curiosity__string_personal_finance) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string_curiosity__string_personal_finance) SetString_curiosity(v string) {
@@ -3900,7 +3900,7 @@ func (u Union__string_one__string_two__string_three__string_four) MarshalJSON() 
 }
 
 func (u Union__string_one__string_two__string_three__string_four) UnmarshalJSON(data []byte) error {
-	panic("not implemented")
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) SetString_one(v string) {
