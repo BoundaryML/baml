@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::expr::VarIndex;
+use baml_types::expr::{Builtin, VarIndex};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -84,6 +84,11 @@ pub fn typecheck_in_context(
             // Bare functions always typecheck.
             Ok(())
         }
+        Expr::Builtin(builtin, _) => match builtin {
+            Builtin::FetchValue => {
+                todo!()
+            }
+        },
         Expr::FreeVar(var, (var_span, maybe_type)) => {
             if let Some(var_type) = maybe_type {
                 if let Some(ctx_type) = typing_context.get(var) {
@@ -329,6 +334,11 @@ pub fn infer_types_in_context(
             let new_meta = (span.clone(), new_app_type);
             Arc::new(Expr::App(new_f, new_args, new_meta))
         }
+        Expr::Builtin(builtin, _) => match builtin {
+            Builtin::FetchValue => {
+                todo!()
+            }
+        },
         Expr::ArgsTuple(ref args, _) => {
             let new_args = args
                 .iter()

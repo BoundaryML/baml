@@ -7017,3 +7017,8 @@ components:
       - reasoning
       - value
       additionalProperties: false
+    std::request:
+      type: object
+      properties: {}
+      required: []
+      additionalProperties: false

@@ -385,6 +385,7 @@ impl OutputFormatContent {
                     auto_prefix(base, options, output_format_content)
                 }
                 FieldType::Arrow(_) => None, // TODO: Error? Arrow shouldn't appear here.
+                FieldType::Generic(_) => None, // TODO: Error? Arrow shouldn't appear here.
             }
         }
 
@@ -594,6 +595,12 @@ impl OutputFormatContent {
                 return Err(minijinja::Error::new(
                     minijinja::ErrorKind::BadSerialization,
                     "Arrow type is not supported in LLM function outputs",
+                ))
+            }
+            FieldType::Generic(_) => {
+                return Err(minijinja::Error::new(
+                    minijinja::ErrorKind::BadSerialization,
+                    "Generic type is not supported in LLM function outputs",
                 ))
             }
         })

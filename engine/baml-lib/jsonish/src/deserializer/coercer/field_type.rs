@@ -33,7 +33,12 @@ impl TypeCoercer for FieldType {
                     scope = ctx.display_scope(),
                     current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
                 );
-                if matches!(target, FieldType::Primitive(TypeValue::String) | FieldType::Enum(_) | FieldType::Literal(LiteralValue::String(_))) {
+                if matches!(
+                    target,
+                    FieldType::Primitive(TypeValue::String)
+                        | FieldType::Enum(_)
+                        | FieldType::Literal(LiteralValue::String(_))
+                ) {
                     self.coerce(
                         ctx,
                         target,
@@ -99,6 +104,7 @@ impl TypeCoercer for FieldType {
                 FieldType::Map(_, _) => coerce_map(ctx, self, value).map(|v| v.with_target(target)),
                 FieldType::Tuple(_) => Err(ctx.error_internal("Tuple not supported")),
                 FieldType::Arrow(_) => Err(ctx.error_internal("Arrow type not supported")),
+                FieldType::Generic(_) => Err(ctx.error_internal("Generic type not supported")),
                 FieldType::WithMetadata { base, .. } => {
                     let mut coerced_value = base.coerce(ctx, target, value)?;
                     let constraint_results = run_user_checks(&coerced_value.clone().into(), self)
@@ -184,6 +190,7 @@ impl DefaultValue for FieldType {
             FieldType::Literal(_) => None,
             FieldType::Class(_) => None,
             FieldType::RecursiveTypeAlias(_) => None,
+            FieldType::Generic(_) => None,
             FieldType::List(_) => Some(BamlValueWithFlags::List(
                 get_flags(),
                 self.clone(),

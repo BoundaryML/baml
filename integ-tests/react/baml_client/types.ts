@@ -809,6 +809,10 @@ export interface WithReasoning {
   
 }
 
+export interface std::request {
+  
+}
+
 export type JsonArray = JsonValue[]
 
 export type JsonEntry = SimpleTag | JsonTemplate

@@ -262,9 +262,6 @@ class_field_value_pair = { (identifier ~ COLON ~ expression) | struct_spread }
 // e.g. `new MyClass { a: 1, b: 2, ..other_struct }`
 struct_spread = { ".." ~ expression }
 
-// A special-case parser for std::fetch_value_call, until we have a more general
-// parser for generic function calls.
-
 // No whitespaces for "func_call<", needs to be atomic.
 // Actually "compound atomic" because of Pest stuff, read here:
 // https://pest.rs/book/grammars/syntax.html#atomic

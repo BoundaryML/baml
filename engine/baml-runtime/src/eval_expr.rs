@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::{BamlRuntime, FunctionResult};
-use baml_types::expr::{Expr, ExprMetadata, Name, VarIndex};
+use baml_types::expr::{Builtin, Expr, ExprMetadata, Name, VarIndex};
 use baml_types::{Arrow, FieldType, TypeValue};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
@@ -46,6 +46,11 @@ fn subst<'a>(
                 Ok(expr.clone())
             }
         }
+        Expr::Builtin(builtin, meta) => match builtin {
+            Builtin::FetchValue => {
+                todo!()
+            }
+        },
         Expr::FreeVar(name, _) => Ok(expr.clone()),
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::App(f, x, meta) => {
@@ -274,6 +279,13 @@ async fn beta_reduce<'a>(
 
             Ok(evaluated)
         }
+        Expr::Builtin(builtin, meta) => match builtin {
+            Builtin::FetchValue => {
+                // TODO: Actually fetch
+                // let res = env.runtime.fetch_value(meta.0).await;
+                todo!()
+            }
+        },
         Expr::BoundVar(_, _) => Ok(expr.clone()),
         Expr::List(_, _) => Ok(expr.clone()),
         Expr::Map(_, _) => Ok(expr.clone()),
@@ -400,6 +412,14 @@ pub async fn eval_to_value_or_llm_call<'a>(
             Expr::Lambda(_, _, _) => {
                 return Err(anyhow::anyhow!("Bare lambda found: {}", expr.dump_str()));
             }
+            Expr::Builtin(builtin, meta) => match builtin {
+                Builtin::FetchValue => {
+                    return Err(anyhow::anyhow!(
+                        "Bare builtin fetch_value found: {}",
+                        expr.dump_str()
+                    ));
+                }
+            },
             Expr::Let(var_name, value, body, meta) => {
                 let res = beta_reduce(env, &expr, false).await?;
                 if res.temporary_same_state(expr) {
@@ -838,6 +858,6 @@ test GetTodo() {
             .run_test("GetTodo", "GetTodo", &ctx, Some(on_event), None)
             .await;
         dbg!(res);
-        // assert!(false);
+        assert!(false);
     }
 }

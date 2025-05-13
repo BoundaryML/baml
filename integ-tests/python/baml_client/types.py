@@ -595,6 +595,8 @@ class WithReasoning(BaseModel):
     value: str
     reasoning: str
 
+class std::request(BaseModel):pass
+
 JsonArray: TypeAlias = List["JsonValue"]
 
 JsonEntry: TypeAlias = Union["SimpleTag", "JsonTemplate"]

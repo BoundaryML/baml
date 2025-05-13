@@ -475,6 +475,8 @@ class WithReasoning(BaseModel):
     value: Optional[str] = None
     reasoning: Optional[str] = None
 
+class std::request(BaseModel):pass
+
 JsonArray: TypeAlias = List["JsonValue"]
 
 JsonEntry: TypeAlias = Union["SimpleTag", "JsonTemplate"]

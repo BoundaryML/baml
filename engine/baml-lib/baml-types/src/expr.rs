@@ -29,6 +29,12 @@ pub enum Expr<T> {
     App(Arc<Expr<T>>, Arc<Expr<T>>, T),
     Let(Name, Arc<Expr<T>>, Arc<Expr<T>>, T), // let name = expr in body
     ArgsTuple(Vec<Expr<T>>, T),
+    Builtin(Builtin, T),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Builtin {
+    FetchValue,
 }
 
 pub type Name = String;
@@ -76,6 +82,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::App(_, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
+            Expr::Builtin(_, meta) => meta,
         }
     }
 
@@ -92,6 +99,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::App(_, _, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
+            Expr::Builtin(_, meta) => meta,
         }
     }
 
@@ -108,6 +116,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::App(_, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
+            Expr::Builtin(_, meta) => meta,
         }
     }
 }
@@ -138,6 +147,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 };
                 format!("{}({})", func_str, args_str)
             }
+            Expr::Builtin(builtin, _) => format!("{builtin:?}"),
             Expr::Let(name, expr, body, _) => {
                 format!("Let {} = {} in {}", name, expr.dump_str(), body.dump_str())
             }
@@ -190,6 +200,9 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
 
             (Expr::LLMFunction(n1, _, _), Expr::LLMFunction(n2, _, _)) => n1 == n2,
             (Expr::LLMFunction(_, _, _), _) => false,
+
+            (Expr::Builtin(b1, _), Expr::Builtin(b2, _)) => b1 == b2,
+            (Expr::Builtin(_, _), _) => false,
 
             (Expr::BoundVar(n1, _), Expr::BoundVar(n2, _)) => n1 == n2,
             (Expr::BoundVar(_, _), _) => false,
@@ -341,6 +354,7 @@ impl Expr<ExprMetadata> {
                 field_vars
             }
             Expr::LLMFunction(_, _, _) => HashSet::new(),
+            Expr::Builtin(_, _) => HashSet::new(),
             Expr::FreeVar(name, _) => HashSet::from([name.clone()]),
             Expr::BoundVar(_, _) => HashSet::new(),
             Expr::Lambda(_, body, _) => body.free_vars(),
@@ -427,6 +441,7 @@ impl<T: Clone> Expr<T> {
                 Arc::new(x.open(target, new_name)),
                 m.clone(),
             ),
+            Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
             Expr::Let(n, e, body, m) => Expr::Let(
                 n.clone(),
                 Arc::new(e.open(target, new_name)),
@@ -491,6 +506,7 @@ impl<T: Clone> Expr<T> {
                 Arc::new(x.close(new_index, target)),
                 m.clone(),
             ),
+            Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
             Expr::Let(n, e, body, m) => Expr::Let(
                 n.clone(),
                 Arc::new(e.close(new_index, target)),

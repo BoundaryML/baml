@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
+use baml_types::expr::Builtin;
 use baml_types::BamlMap;
 use baml_types::{
     expr::{self, Expr, ExprMetadata, Name, VarIndex},
@@ -1610,6 +1611,11 @@ pub fn annotate_variable(
                 annotate_variable(target.clone(), r#type, Arc::unwrap_or_clone(args.clone()));
             Expr::App(Arc::new(new_f), Arc::new(new_args), meta.clone())
         }
+        Expr::Builtin(builtin, meta) => match builtin {
+            Builtin::FetchValue => {
+                todo!()
+            }
+        },
         Expr::Let(var_name, expr, body, meta) => {
             let new_binding = annotate_variable(
                 target.clone(),
@@ -2136,6 +2142,22 @@ pub fn initial_context(ir: &IntermediateRepr) -> HashMap<Name, Expr<ExprMetadata
             ),
         );
     }
+
+    // Builtin functions & types
+    ctx.insert(
+        "std::fetch_value".to_string(),
+        Expr::Builtin(
+            Builtin::FetchValue,
+            (
+                Span::fake(),
+                Some(FieldType::Arrow(Box::new(Arrow {
+                    param_types: vec![FieldType::class("std::request")],
+                    return_type: FieldType::Generic("T".to_string()),
+                }))),
+            ),
+        ),
+    );
+
     ctx
 }
 

@@ -1,4 +1,4 @@
-use super::{BamlMediaType, FieldType, TypeValue};
+use super::{Arrow, BamlMediaType, FieldType, TypeValue};
 
 impl FieldType {
     pub fn string() -> Self {
@@ -49,6 +49,10 @@ impl FieldType {
         FieldType::Class(name.to_string())
     }
 
+    pub fn generic(name: &str) -> Self {
+        FieldType::Generic(name.to_string())
+    }
+
     pub fn list(inner: FieldType) -> Self {
         FieldType::List(Box::new(inner))
     }
@@ -75,5 +79,12 @@ impl FieldType {
 
     pub fn as_optional(self) -> Self {
         FieldType::Optional(Box::new(self))
+    }
+
+    pub fn arrow(param_types: Vec<FieldType>, return_type: FieldType) -> Self {
+        FieldType::Arrow(Box::new(Arrow {
+            param_types,
+            return_type,
+        }))
     }
 }

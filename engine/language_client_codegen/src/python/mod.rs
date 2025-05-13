@@ -290,11 +290,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Class(name) => format!("types.{name}"),
             FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
             FieldType::Map(key, value) => {
-                format!(
-                    "Dict[{}, {}]",
-                    key.to_type_ref(ir),
-                    value.to_type_ref(ir)
-                )
+                format!("Dict[{}, {}]", key.to_type_ref(ir), value.to_type_ref(ir))
             }
             FieldType::Primitive(r#type) => r#type.to_python(),
             FieldType::Union(inner) => format!(
@@ -326,6 +322,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             },
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
+            }
+            FieldType::Generic(_) => {
+                todo!("Generic types should not be used in generated type definitions")
             }
         }
     }
@@ -401,11 +400,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             }
             FieldType::Map(key, value) => {
                 let value_type = value.to_partial_type_ref(ir, true);
-                format!(
-                    "Dict[{}, {}]",
-                    key.to_type_ref(ir),
-                    value_type
-                )
+                format!("Dict[{}, {}]", key.to_type_ref(ir), value_type)
             }
             FieldType::Primitive(r#type) => {
                 // Note: The `false` here preserves potentially bugged codegen
@@ -454,10 +449,10 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 // After we verify that we don't need to wrap all primitives
                 // in optional, we should remove this workaround.
                 if let FieldType::Primitive(_) = inner.as_ref() {
-                  format!("Optional[{}]", inner.to_type_ref(ir))
+                    format!("Optional[{}]", inner.to_type_ref(ir))
                 } else {
-                  let inner_rep = inner.to_partial_type_ref(ir, true);
-                  format!("Optional[{}]", inner_rep)
+                    let inner_rep = inner.to_partial_type_ref(ir, true);
+                    format!("Optional[{}]", inner_rep)
                 }
             }
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
@@ -470,6 +465,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             },
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
+            }
+            FieldType::Generic(_) => {
+                todo!("Generic types should not be used in generated type definitions")
             }
         };
 
@@ -508,20 +506,21 @@ fn default_value_for_parameter_type(field_type: &FieldType) -> Option<&'static s
         FieldType::Union(xs) => None,
         FieldType::WithMetadata { base, .. } => default_value_for_parameter_type(base),
         FieldType::Arrow(_) => None,
+        FieldType::Generic(_) => None,
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use internal_baml_core::ir::repr::make_test_ir;
     use baml_types::{FieldType, TypeValue};
+    use internal_baml_core::ir::repr::make_test_ir;
 
     use crate::GeneratorArgs;
 
     use super::*;
 
     #[test]
-    fn optional_str() { 
+    fn optional_str() {
         let ir = make_test_ir("").unwrap();
         let field_type = FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::String)));
         let rep = field_type.to_partial_type_ref(&ir, true);

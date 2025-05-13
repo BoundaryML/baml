@@ -197,17 +197,16 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                         (false, false) => {
                             f.elem.r#type.elem.to_partial_type_ref(c.ir, false, false)
                         }
-                        (true, false) => (format!("Optional[{}]",f.elem.r#type.elem.to_type_ref(c.ir, true)), true),
+                        (true, false) => (
+                            format!("Optional[{}]", f.elem.r#type.elem.to_type_ref(c.ir, true)),
+                            true,
+                        ),
                         (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.ir, true, true),
                         (true, true) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
                     };
                     (
                         f.elem.name.as_str(),
-                        add_default_value(
-                            c.ir,
-                            &f.elem.r#type.elem,
-                            &field,
-                        ),
+                        add_default_value(c.ir, &f.elem.r#type.elem, &field),
                         f.elem.docstring.as_ref().map(render_docstring),
                     )
                 })
@@ -260,6 +259,7 @@ fn has_none_default(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
             unreachable!("FieldType::WithMetadata is always consumed by distribute_metadata")
         }
         FieldType::Arrow(_) => false,
+        FieldType::Generic(_) => false,
     }
 }
 
@@ -357,6 +357,9 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             },
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
+            }
+            FieldType::Generic(_) => {
+                todo!("Generic types should not be used in generated type definitions")
             }
         }
     }
@@ -469,6 +472,9 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             }
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
+            }
+            FieldType::Generic(_) => {
+                todo!("Generic types should not be used in generated type definitions")
             }
         };
         let base_type_ref = if is_partial_type {

@@ -243,6 +243,7 @@ module Baml
     class UniverseQuestion < T::Struct; end
     class UniverseQuestionInput < T::Struct; end
     class WithReasoning < T::Struct; end
+    class std::request < T::Struct; end
     class AnotherObject < T::Struct
       include Baml::Sorbet::Struct
       const :id, String
@@ -1683,6 +1684,16 @@ module Baml
         super(
           value: props[:value],
           reasoning: props[:reasoning],
+        )
+
+        @props = props
+      end
+    end
+    class std::request < T::Struct
+      include Baml::Sorbet::Struct
+
+      def initialize(props)
+        super(
         )
 
         @props = props

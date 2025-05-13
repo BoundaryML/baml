@@ -208,6 +208,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
                 param_lengths_match && return_types_match && args_match
             }
             (FieldType::Arrow(_), _) => false,
+            (FieldType::Generic(_), _) => false,
         }
     }
 
@@ -1102,6 +1103,7 @@ pub fn item_type<'ir, 'a, T: std::fmt::Debug>(
     baml_child_values: &BamlValueWithMeta<T>,
 ) -> Option<FieldType> {
     let res = match ir.distribute_metadata(field_type).0 {
+        FieldType::Generic(_) => None,
         FieldType::Class(_) => None,
         FieldType::Enum(_) => None,
         FieldType::List(inner) => Some(*inner.clone()),
@@ -1162,6 +1164,7 @@ where
         }
         FieldType::Class(_) => None,
         FieldType::Arrow(_) => None,
+        FieldType::Generic(_) => None,
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata never returns this variant")
         }

@@ -89,6 +89,7 @@ pub enum FieldType {
     Optional(Box<FieldType>),
     RecursiveTypeAlias(String),
     Arrow(Box<Arrow>),
+    Generic(String),
     WithMetadata {
         base: Box<FieldType>,
         constraints: Vec<Constraint>,
@@ -112,7 +113,8 @@ impl std::fmt::Display for FieldType {
         match self {
             FieldType::Enum(name)
             | FieldType::Class(name)
-            | FieldType::RecursiveTypeAlias(name) => write!(f, "{name}"),
+            | FieldType::RecursiveTypeAlias(name)
+            | FieldType::Generic(name) => write!(f, "{name}"),
             FieldType::Primitive(t) => write!(f, "{t}"),
             FieldType::Literal(v) => write!(f, "{v}"),
             FieldType::Union(choices) => {
@@ -258,6 +260,7 @@ impl ToUnionName for FieldType {
             | FieldType::Literal(_)
             | FieldType::Class(_)
             | FieldType::RecursiveTypeAlias(_)
+            | FieldType::Generic(_)
             | FieldType::Arrow(_) => IndexSet::new(),
             FieldType::Tuple(inner) => inner.iter().flat_map(|t| t.find_union_types()).collect(),
             FieldType::Optional(inner) => inner.find_union_types(),
@@ -268,7 +271,10 @@ impl ToUnionName for FieldType {
     fn to_union_name(&self) -> String {
         match self {
             FieldType::Primitive(type_value) => type_value.to_string(),
-            FieldType::Enum(name) => name.to_string(),
+            FieldType::Enum(name)
+            | FieldType::Class(name)
+            | FieldType::Generic(name)
+            | FieldType::RecursiveTypeAlias(name) => name.to_string(),
             FieldType::Literal(literal_value) => match literal_value {
                 LiteralValue::String(value) => format!(
                     "string_{}",
@@ -280,7 +286,6 @@ impl ToUnionName for FieldType {
                 LiteralValue::Int(val) => format!("int_{}", val.to_string()),
                 LiteralValue::Bool(val) => format!("bool_{}", val.to_string()),
             },
-            FieldType::Class(name) => name.to_string(),
             FieldType::List(field_type) => {
                 format!("List__{}", field_type.to_union_name())
             }
@@ -312,7 +317,6 @@ impl ToUnionName for FieldType {
             FieldType::Optional(field_type) => {
                 format!("Optional__{}", field_type.to_union_name())
             }
-            FieldType::RecursiveTypeAlias(name) => name.to_string(),
             FieldType::WithMetadata { base, .. } => base.to_union_name(),
             FieldType::Arrow(_) => "function".to_string(),
         }

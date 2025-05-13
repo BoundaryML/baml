@@ -1,4 +1,7 @@
-use baml_types::FieldType;
+use baml_types::{
+    expr::{Builtin, Expr},
+    Arrow, FieldType,
+};
 use internal_baml_diagnostics::Span;
 
 use super::repr::{Class, ExprFunction, Node, NodeAttributes};
@@ -33,8 +36,17 @@ pub fn builtin_functions() -> Vec<Node<ExprFunction>> {
     builtin([ExprFunction {
         name: String::from("std::fetch_value"),
         inputs: vec![(String::from("request"), FieldType::class("std::request"))],
-        output: FieldType::null(),
+        output: FieldType::generic("T"),
         tests: vec![],
-        expr: todo!(),
+        expr: Expr::Builtin(
+            Builtin::FetchValue,
+            (
+                Span::fake(),
+                Some(FieldType::arrow(
+                    vec![FieldType::class("std::request")],
+                    FieldType::generic("T"),
+                )),
+            ),
+        ),
     }])
 }
