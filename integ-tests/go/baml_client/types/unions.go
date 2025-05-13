@@ -11,6 +11,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
@@ -71,6 +72,27 @@ func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) Encode(builder *fl
 
 func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) BamlTypeName() string {
 	return "Union__BookOrder__FlightConfirmation__GroceryReceipt"
+}
+
+func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "BookOrder":
+		return json.Marshal(u.variant_BookOrder)
+
+	case "FlightConfirmation":
+		return json.Marshal(u.variant_FlightConfirmation)
+
+	case "GroceryReceipt":
+		return json.Marshal(u.variant_GroceryReceipt)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) SetBookOrder(v BookOrder) {
@@ -206,6 +228,24 @@ func (u Union__List__bool__List__int) BamlTypeName() string {
 	return "Union__List__bool__List__int"
 }
 
+func (u Union__List__bool__List__int) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "List__bool":
+		return json.Marshal(u.variant_List__bool)
+
+	case "List__int":
+		return json.Marshal(u.variant_List__int)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__List__bool__List__int) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__List__bool__List__int) SetList__bool(v []bool) {
 	u.variant = "List__bool"
 	u.variant_List__bool = &v
@@ -303,6 +343,24 @@ func (u Union__LiteralClassOne__LiteralClassTwo) BamlTypeName() string {
 	return "Union__LiteralClassOne__LiteralClassTwo"
 }
 
+func (u Union__LiteralClassOne__LiteralClassTwo) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "LiteralClassOne":
+		return json.Marshal(u.variant_LiteralClassOne)
+
+	case "LiteralClassTwo":
+		return json.Marshal(u.variant_LiteralClassTwo)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__LiteralClassOne__LiteralClassTwo) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__LiteralClassOne__LiteralClassTwo) SetLiteralClassOne(v LiteralClassOne) {
 	u.variant = "LiteralClassOne"
 	u.variant_LiteralClassOne = &v
@@ -398,6 +456,24 @@ func (u Union__Martian__Earthling) Encode(builder *flatbuffers.Builder) (cffi.CF
 
 func (u Union__Martian__Earthling) BamlTypeName() string {
 	return "Union__Martian__Earthling"
+}
+
+func (u Union__Martian__Earthling) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "Martian":
+		return json.Marshal(u.variant_Martian)
+
+	case "Earthling":
+		return json.Marshal(u.variant_Earthling)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__Martian__Earthling) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__Martian__Earthling) SetMartian(v Martian) {
@@ -505,6 +581,27 @@ func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) Encode(builder 
 
 func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) BamlTypeName() string {
 	return "Union__MemoryObject__ComplexMemoryObject__AnotherObject"
+}
+
+func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "MemoryObject":
+		return json.Marshal(u.variant_MemoryObject)
+
+	case "ComplexMemoryObject":
+		return json.Marshal(u.variant_ComplexMemoryObject)
+
+	case "AnotherObject":
+		return json.Marshal(u.variant_AnotherObject)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) SetMemoryObject(v MemoryObject) {
@@ -636,6 +733,24 @@ func (u Union__Nested__string) BamlTypeName() string {
 	return "Union__Nested__string"
 }
 
+func (u Union__Nested__string) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "Nested":
+		return json.Marshal(u.variant_Nested)
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__Nested__string) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__Nested__string) SetNested(v Nested) {
 	u.variant = "Nested"
 	u.variant_Nested = &v
@@ -731,6 +846,24 @@ func (u Union__OriginalA__OriginalB) Encode(builder *flatbuffers.Builder) (cffi.
 
 func (u Union__OriginalA__OriginalB) BamlTypeName() string {
 	return "Union__OriginalA__OriginalB"
+}
+
+func (u Union__OriginalA__OriginalB) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "OriginalA":
+		return json.Marshal(u.variant_OriginalA)
+
+	case "OriginalB":
+		return json.Marshal(u.variant_OriginalB)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__OriginalA__OriginalB) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__OriginalA__OriginalB) SetOriginalA(v OriginalA) {
@@ -830,6 +963,24 @@ func (u Union__PhoneNumber__EmailAddress) BamlTypeName() string {
 	return "Union__PhoneNumber__EmailAddress"
 }
 
+func (u Union__PhoneNumber__EmailAddress) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "PhoneNumber":
+		return json.Marshal(u.variant_PhoneNumber)
+
+	case "EmailAddress":
+		return json.Marshal(u.variant_EmailAddress)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__PhoneNumber__EmailAddress) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__PhoneNumber__EmailAddress) SetPhoneNumber(v PhoneNumber) {
 	u.variant = "PhoneNumber"
 	u.variant_PhoneNumber = &v
@@ -925,6 +1076,24 @@ func (u Union__Resume__Event) Encode(builder *flatbuffers.Builder) (cffi.CFFIVal
 
 func (u Union__Resume__Event) BamlTypeName() string {
 	return "Union__Resume__Event"
+}
+
+func (u Union__Resume__Event) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "Resume":
+		return json.Marshal(u.variant_Resume)
+
+	case "Event":
+		return json.Marshal(u.variant_Event)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__Resume__Event) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__Resume__Event) SetResume(v Resume) {
@@ -1024,6 +1193,24 @@ func (u Union__SimpleTag__JsonTemplate) BamlTypeName() string {
 	return "Union__SimpleTag__JsonTemplate"
 }
 
+func (u Union__SimpleTag__JsonTemplate) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "SimpleTag":
+		return json.Marshal(u.variant_SimpleTag)
+
+	case "JsonTemplate":
+		return json.Marshal(u.variant_JsonTemplate)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__SimpleTag__JsonTemplate) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__SimpleTag__JsonTemplate) SetSimpleTag(v SimpleTag) {
 	u.variant = "SimpleTag"
 	u.variant_SimpleTag = &v
@@ -1121,6 +1308,24 @@ func (u Union__Tag__string) BamlTypeName() string {
 	return "Union__Tag__string"
 }
 
+func (u Union__Tag__string) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "Tag":
+		return json.Marshal(u.variant_Tag)
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__Tag__string) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__Tag__string) SetTag(v Tag) {
 	u.variant = "Tag"
 	u.variant_Tag = &v
@@ -1216,6 +1421,24 @@ func (u Union__float__bool) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 
 func (u Union__float__bool) BamlTypeName() string {
 	return "Union__float__bool"
+}
+
+func (u Union__float__bool) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "float":
+		return json.Marshal(u.variant_float)
+
+	case "bool":
+		return json.Marshal(u.variant_bool)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__float__bool) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__float__bool) SetFloat(v float64) {
@@ -1323,6 +1546,27 @@ func (u Union__int_1__bool_true__string_string_output) Encode(builder *flatbuffe
 
 func (u Union__int_1__bool_true__string_string_output) BamlTypeName() string {
 	return "Union__int_1__bool_true__string_string_output"
+}
+
+func (u Union__int_1__bool_true__string_string_output) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "int_1":
+		return json.Marshal(u.variant_int_1)
+
+	case "bool_true":
+		return json.Marshal(u.variant_bool_true)
+
+	case "string_string_output":
+		return json.Marshal(u.variant_string_string_output)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__int_1__bool_true__string_string_output) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int_1__bool_true__string_string_output) SetInt_1(v int) {
@@ -1454,6 +1698,24 @@ func (u Union__int__float) BamlTypeName() string {
 	return "Union__int__float"
 }
 
+func (u Union__int__float) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "int":
+		return json.Marshal(u.variant_int)
+
+	case "float":
+		return json.Marshal(u.variant_float)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__int__float) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__int__float) SetInt(v int64) {
 	u.variant = "int"
 	u.variant_int = &v
@@ -1549,6 +1811,24 @@ func (u Union__int__string) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 
 func (u Union__int__string) BamlTypeName() string {
 	return "Union__int__string"
+}
+
+func (u Union__int__string) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "int":
+		return json.Marshal(u.variant_int)
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__int__string) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__string) SetInt(v int64) {
@@ -1666,6 +1946,30 @@ func (u Union__int__string__bool__float) Encode(builder *flatbuffers.Builder) (c
 
 func (u Union__int__string__bool__float) BamlTypeName() string {
 	return "Union__int__string__bool__float"
+}
+
+func (u Union__int__string__bool__float) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "int":
+		return json.Marshal(u.variant_int)
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "bool":
+		return json.Marshal(u.variant_bool)
+
+	case "float":
+		return json.Marshal(u.variant_float)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__int__string__bool__float) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__string__bool__float) SetInt(v int64) {
@@ -1871,6 +2175,36 @@ func (u Union__int__string__bool__float__JsonObject__JsonArray) Encode(builder *
 
 func (u Union__int__string__bool__float__JsonObject__JsonArray) BamlTypeName() string {
 	return "Union__int__string__bool__float__JsonObject__JsonArray"
+}
+
+func (u Union__int__string__bool__float__JsonObject__JsonArray) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "int":
+		return json.Marshal(u.variant_int)
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "bool":
+		return json.Marshal(u.variant_bool)
+
+	case "float":
+		return json.Marshal(u.variant_float)
+
+	case "JsonObject":
+		return json.Marshal(u.variant_JsonObject)
+
+	case "JsonArray":
+		return json.Marshal(u.variant_JsonArray)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__int__string__bool__float__JsonObject__JsonArray) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetInt(v int64) {
@@ -2164,6 +2498,36 @@ func (u Union__int__string__bool__float__List__string__Map__string_List__string)
 	return "Union__int__string__bool__float__List__string__Map__string_List__string"
 }
 
+func (u Union__int__string__bool__float__List__string__Map__string_List__string) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "int":
+		return json.Marshal(u.variant_int)
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "bool":
+		return json.Marshal(u.variant_bool)
+
+	case "float":
+		return json.Marshal(u.variant_float)
+
+	case "List__string":
+		return json.Marshal(u.variant_List__string)
+
+	case "Map__string_List__string":
+		return json.Marshal(u.variant_Map__string_List__string)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__int__string__bool__float__List__string__Map__string_List__string) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetInt(v int64) {
 	u.variant = "int"
 	u.variant_int = &v
@@ -2415,6 +2779,24 @@ func (u Union__string__List__Nested) BamlTypeName() string {
 	return "Union__string__List__Nested"
 }
 
+func (u Union__string__List__Nested) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "List__Nested":
+		return json.Marshal(u.variant_List__Nested)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string__List__Nested) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__string__List__Nested) SetString(v string) {
 	u.variant = "string"
 	u.variant_string = &v
@@ -2510,6 +2892,24 @@ func (u Union__string__Map__string_RecursiveUnion) Encode(builder *flatbuffers.B
 
 func (u Union__string__Map__string_RecursiveUnion) BamlTypeName() string {
 	return "Union__string__Map__string_RecursiveUnion"
+}
+
+func (u Union__string__Map__string_RecursiveUnion) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "Map__string_RecursiveUnion":
+		return json.Marshal(u.variant_Map__string_RecursiveUnion)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string__Map__string_RecursiveUnion) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__Map__string_RecursiveUnion) SetString(v string) {
@@ -2609,6 +3009,24 @@ func (u Union__string__Nested) BamlTypeName() string {
 	return "Union__string__Nested"
 }
 
+func (u Union__string__Nested) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "Nested":
+		return json.Marshal(u.variant_Nested)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string__Nested) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__string__Nested) SetString(v string) {
 	u.variant = "string"
 	u.variant_string = &v
@@ -2706,6 +3124,24 @@ func (u Union__string__bool) BamlTypeName() string {
 	return "Union__string__bool"
 }
 
+func (u Union__string__bool) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "bool":
+		return json.Marshal(u.variant_bool)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string__bool) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__string__bool) SetString(v string) {
 	u.variant = "string"
 	u.variant_string = &v
@@ -2801,6 +3237,24 @@ func (u Union__string__int) Encode(builder *flatbuffers.Builder) (cffi.CFFIValue
 
 func (u Union__string__int) BamlTypeName() string {
 	return "Union__string__int"
+}
+
+func (u Union__string__int) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "int":
+		return json.Marshal(u.variant_int)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string__int) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__int) SetString(v string) {
@@ -2908,6 +3362,27 @@ func (u Union__string__int__float) Encode(builder *flatbuffers.Builder) (cffi.CF
 
 func (u Union__string__int__float) BamlTypeName() string {
 	return "Union__string__int__float"
+}
+
+func (u Union__string__int__float) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string":
+		return json.Marshal(u.variant_string)
+
+	case "int":
+		return json.Marshal(u.variant_int)
+
+	case "float":
+		return json.Marshal(u.variant_float)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string__int__float) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string__int__float) SetString(v string) {
@@ -3039,6 +3514,24 @@ func (u Union__string_barisa__string_ox_burger) BamlTypeName() string {
 	return "Union__string_barisa__string_ox_burger"
 }
 
+func (u Union__string_barisa__string_ox_burger) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string_barisa":
+		return json.Marshal(u.variant_string_barisa)
+
+	case "string_ox_burger":
+		return json.Marshal(u.variant_string_ox_burger)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string_barisa__string_ox_burger) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__string_barisa__string_ox_burger) SetString_barisa(v string) {
 	u.variant = "string_barisa"
 	u.variant_string_barisa = &v
@@ -3136,6 +3629,24 @@ func (u Union__string_breakfast__string_dinner) BamlTypeName() string {
 	return "Union__string_breakfast__string_dinner"
 }
 
+func (u Union__string_breakfast__string_dinner) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string_breakfast":
+		return json.Marshal(u.variant_string_breakfast)
+
+	case "string_dinner":
+		return json.Marshal(u.variant_string_dinner)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string_breakfast__string_dinner) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
+}
+
 func (u *Union__string_breakfast__string_dinner) SetString_breakfast(v string) {
 	u.variant = "string_breakfast"
 	u.variant_string_breakfast = &v
@@ -3231,6 +3742,24 @@ func (u Union__string_curiosity__string_personal_finance) Encode(builder *flatbu
 
 func (u Union__string_curiosity__string_personal_finance) BamlTypeName() string {
 	return "Union__string_curiosity__string_personal_finance"
+}
+
+func (u Union__string_curiosity__string_personal_finance) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string_curiosity":
+		return json.Marshal(u.variant_string_curiosity)
+
+	case "string_personal_finance":
+		return json.Marshal(u.variant_string_personal_finance)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string_curiosity__string_personal_finance) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string_curiosity__string_personal_finance) SetString_curiosity(v string) {
@@ -3348,6 +3877,30 @@ func (u Union__string_one__string_two__string_three__string_four) Encode(builder
 
 func (u Union__string_one__string_two__string_three__string_four) BamlTypeName() string {
 	return "Union__string_one__string_two__string_three__string_four"
+}
+
+func (u Union__string_one__string_two__string_three__string_four) MarshalJSON() ([]byte, error) {
+	switch u.variant {
+
+	case "string_one":
+		return json.Marshal(u.variant_string_one)
+
+	case "string_two":
+		return json.Marshal(u.variant_string_two)
+
+	case "string_three":
+		return json.Marshal(u.variant_string_three)
+
+	case "string_four":
+		return json.Marshal(u.variant_string_four)
+
+	}
+
+	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *Union__string_one__string_two__string_three__string_four) UnmarshalJSON(data []byte) error {
+	return fmt.Errorf("not implemented")
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) SetString_one(v string) {

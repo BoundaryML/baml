@@ -2529,6 +2529,57 @@ func (c LiteralClassTwo) BamlTypeName() string {
 	return "LiteralClassTwo"
 }
 
+type MaintainFieldOrder struct {
+	A string `json:"a"`
+
+	B string `json:"b"`
+
+	C string `json:"c"`
+}
+
+func (c *MaintainFieldOrder) Decode(holder cffi.CFFIValueClass) {
+	if string(holder.Name()) != "MaintainFieldOrder" {
+		panic(fmt.Sprintf("expected MaintainFieldOrder, got %s", string(holder.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "a":
+				c.A = *baml.Decode(valueHolder).(*string)
+
+			case "b":
+				c.B = *baml.Decode(valueHolder).(*string)
+
+			case "c":
+				c.C = *baml.Decode(valueHolder).(*string)
+
+			}
+		}
+	}
+
+}
+
+func (c MaintainFieldOrder) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	fields := map[string]any{}
+
+	fields["a"] = c.A
+
+	fields["b"] = c.B
+
+	fields["c"] = c.C
+
+	return baml.EncodeClass(builder, "MaintainFieldOrder", fields, nil)
+}
+
+func (c MaintainFieldOrder) BamlTypeName() string {
+	return "MaintainFieldOrder"
+}
+
 type MalformedConstraints struct {
 	Foo Checked[int64] `json:"foo"`
 }

@@ -71,6 +71,7 @@ module Baml
     class LiteralClassHello < T::Struct; end
     class LiteralClassOne < T::Struct; end
     class LiteralClassTwo < T::Struct; end
+    class MaintainFieldOrder < T::Struct; end
     class MalformedConstraints < T::Struct; end
     class MalformedConstraints2 < T::Struct; end
     class Martian < T::Struct; end
@@ -855,6 +856,22 @@ module Baml
       def initialize(props)
         super(
           prop: props[:prop],
+        )
+
+        @props = props
+      end
+    end
+    class MaintainFieldOrder < T::Struct
+      include Baml::Sorbet::Struct
+      const :a, T.nilable(String)
+      const :b, T.nilable(String)
+      const :c, T.nilable(String)
+
+      def initialize(props)
+        super(
+          a: props[:a],
+          b: props[:b],
+          c: props[:c],
         )
 
         @props = props

@@ -379,6 +379,11 @@ class LiteralClassOne(BaseModel):
 class LiteralClassTwo(BaseModel):
     prop: Literal["two"]
 
+class MaintainFieldOrder(BaseModel):
+    a: str
+    b: str
+    c: str
+
 class MalformedConstraints(BaseModel):
     foo: Checked[int,Literal["foo_check"]]
 

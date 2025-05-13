@@ -126,6 +126,8 @@ var typeMap = map[string]reflect.Type{
 
 	"LiteralClassTwo": reflect.TypeOf(types.LiteralClassTwo{}),
 
+	"MaintainFieldOrder": reflect.TypeOf(types.MaintainFieldOrder{}),
+
 	"MalformedConstraints": reflect.TypeOf(types.MalformedConstraints{}),
 
 	"MalformedConstraints2": reflect.TypeOf(types.MalformedConstraints2{}),

@@ -1,9 +1,10 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 
-    flatbuffers "github.com/google/flatbuffers/go"
+	flatbuffers "github.com/google/flatbuffers/go"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
@@ -45,6 +46,21 @@ func (u {{ union.name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUn
 
 func (u {{ union.name }}) BamlTypeName() string {
     return "{{ union.name }}"
+}
+
+func (u {{ union.name }}) MarshalJSON() ([]byte, error) {
+    switch u.variant {
+    {% for variant in union.variants %}
+    case "{{ variant.0 }}":
+        return json.Marshal(u.variant_{{ variant.0 }})
+    {% endfor %}
+    }
+
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *{{ union.name }}) UnmarshalJSON(data []byte) error {
+    return fmt.Errorf("not implemented")
 }
 
 {% for variant in union.variants %}

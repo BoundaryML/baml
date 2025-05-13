@@ -493,6 +493,13 @@ export interface LiteralClassTwo {
   
 }
 
+export interface MaintainFieldOrder {
+  a: string
+  b: string
+  c: string
+  
+}
+
 export interface MalformedConstraints {
   foo: Checked<number,"foo_check">
   

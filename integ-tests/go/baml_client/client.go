@@ -11089,6 +11089,68 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 	return channel
 }
 
+func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder) (*types.MaintainFieldOrder, error) {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "UseMaintainFieldOrder", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func(result any) types.MaintainFieldOrder {
+		return *(result).(*types.MaintainFieldOrder)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder) <-chan types.MaintainFieldOrder {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan types.MaintainFieldOrder)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "UseMaintainFieldOrder", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(types.MaintainFieldOrder)
+			}
+		}
+	}()
+	return channel
+}
+
 func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2) (*int64, error) {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"a": a},

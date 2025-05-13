@@ -2460,6 +2460,19 @@ paths:
                 title: UseBlockConstraintResponse
                 type: integer
       operationId: UseBlockConstraint
+  /call/UseMaintainFieldOrder:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/UseMaintainFieldOrder'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: UseMaintainFieldOrderResponse
+                $ref: '#/components/schemas/MaintainFieldOrder'
+      operationId: UseMaintainFieldOrder
   /call/UseMalformedConstraints:
     post:
       requestBody:
@@ -5402,6 +5415,22 @@ components:
             required:
             - inp
             additionalProperties: false
+    UseMaintainFieldOrder:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: UseMaintainFieldOrderRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/MaintainFieldOrder'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     UseMalformedConstraints:
       required: true
       content:
@@ -6249,6 +6278,20 @@ components:
           type: string
       required:
       - prop
+      additionalProperties: false
+    MaintainFieldOrder:
+      type: object
+      properties:
+        a:
+          type: string
+        b:
+          type: string
+        c:
+          type: string
+      required:
+      - a
+      - b
+      - c
       additionalProperties: false
     MalformedConstraints:
       type: object

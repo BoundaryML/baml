@@ -418,6 +418,14 @@ type LiteralClassTwo struct {
 	Prop *string `json:"prop"`
 }
 
+type MaintainFieldOrder struct {
+	A *string `json:"a"`
+
+	B *string `json:"b"`
+
+	C *string `json:"c"`
+}
+
 type MalformedConstraints struct {
 	Foo types.Checked[*int64] `json:"foo"`
 }
