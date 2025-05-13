@@ -67,7 +67,9 @@ jobs:
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
-        env: ${{ matrix._.env || fromJSON('{}') }}
+        env:
+          # see https://github.com/PyO3/maturin/issues/2110
+          XWIN_VERSION: "16"
         with:
           target: ${{ matrix._.target }}
           command: build
