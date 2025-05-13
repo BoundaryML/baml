@@ -196,6 +196,7 @@ module Baml
     class LiteralClassHello < T::Struct; end
     class LiteralClassOne < T::Struct; end
     class LiteralClassTwo < T::Struct; end
+    class MaintainFieldOrder < T::Struct; end
     class MalformedConstraints < T::Struct; end
     class MalformedConstraints2 < T::Struct; end
     class Martian < T::Struct; end
@@ -243,7 +244,6 @@ module Baml
     class UniverseQuestion < T::Struct; end
     class UniverseQuestionInput < T::Struct; end
     class WithReasoning < T::Struct; end
-    class std::request < T::Struct; end
     class AnotherObject < T::Struct
       include Baml::Sorbet::Struct
       const :id, String
@@ -986,6 +986,22 @@ module Baml
         @props = props
       end
     end
+    class MaintainFieldOrder < T::Struct
+      include Baml::Sorbet::Struct
+      const :a, String
+      const :b, String
+      const :c, String
+
+      def initialize(props)
+        super(
+          a: props[:a],
+          b: props[:b],
+          c: props[:c],
+        )
+
+        @props = props
+      end
+    end
     class MalformedConstraints < T::Struct
       include Baml::Sorbet::Struct
       const :foo, Baml::Checked[Integer]
@@ -1684,16 +1700,6 @@ module Baml
         super(
           value: props[:value],
           reasoning: props[:reasoning],
-        )
-
-        @props = props
-      end
-    end
-    class std::request < T::Struct
-      include Baml::Sorbet::Struct
-
-      def initialize(props)
-        super(
         )
 
         @props = props

@@ -110,27 +110,6 @@ export function createLanguageServer(
 ): LanguageClient {
   return new LanguageClient('baml', 'Baml Language Server', serverOptions, clientOptions)
 }
-export const restartClient = async (
-  context: ExtensionContext,
-  client: LanguageClient,
-  serverOptions: ServerOptions,
-  clientOptions: LanguageClientOptions,
-): Promise<LanguageClient> => {
-  client?.diagnostics?.dispose()
-  console.log('Stopping client')
-  if (client) await client.stop()
-
-  client = createLanguageServer(serverOptions, clientOptions)
-  console.log('Starting client')
-  context.subscriptions.push(client.start())
-  console.log('Client started')
-  await client.onReady()
-  console.log('Restarted client ready')
-  // Re-register handlers and request diagnostics
-  registerClientEventHandlers(client, context)
-  requestDiagnostics()
-  return client
-}
 
 type BamlConfig = {
   path?: string

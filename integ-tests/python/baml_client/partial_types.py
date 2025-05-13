@@ -259,6 +259,11 @@ class LiteralClassOne(BaseModel):
 class LiteralClassTwo(BaseModel):
     prop: Optional[Literal["two"]] = None
 
+class MaintainFieldOrder(BaseModel):
+    a: Optional[str] = None
+    b: Optional[str] = None
+    c: Optional[str] = None
+
 class MalformedConstraints(BaseModel):
     foo: Checked[Optional[int],Literal["foo_check"]]
 
@@ -474,8 +479,6 @@ class UniverseQuestionInput(BaseModel):
 class WithReasoning(BaseModel):
     value: Optional[str] = None
     reasoning: Optional[str] = None
-
-class std::request(BaseModel):pass
 
 JsonArray: TypeAlias = List["JsonValue"]
 

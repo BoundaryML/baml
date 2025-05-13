@@ -29,11 +29,11 @@ body:
       required: true
   - type: input
     attributes:
-      label: BAML Version (Optional)
+      label: BAML Version
       description: Which version of BAML are you using?
   - type: dropdown
     attributes:
-      label: Language/Framework (Optional)
+      label: Language/Framework
       description: Which language or framework are you using?
       options:
         - Python
@@ -44,7 +44,7 @@ body:
         - Other
   - type: dropdown
     attributes:
-      label: LLM Provider (Optional)
+      label: LLM Provider
       description: Which LLM provider are you using?
       options:
         - OpenAI
@@ -55,11 +55,11 @@ body:
         - Other
   - type: input
     attributes:
-      label: LLM Model (Optional)
+      label: LLM Model
       description: Which specific model are you using? (e.g., gpt-4-turbo-preview, claude-3-opus-20240229)
   - type: dropdown
     attributes:
-      label: Operating System (Optional)
+      label: Operating System
       description: Which operating system are you using?
       options:
         - macOS
@@ -68,7 +68,7 @@ body:
         - Other
   - type: dropdown
     attributes:
-      label: Browser (Optional)
+      label: Browser
       description: Which browser are you using?
       options:
         - Chrome
@@ -78,7 +78,7 @@ body:
         - Other
   - type: dropdown
     attributes:
-      label: Code Editor (Optional)
+      label: Code Editor
       description: Which code editor are you using?
       options:
         - VS Code

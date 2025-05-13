@@ -38,13 +38,13 @@ generator openapi {
   on_generate "rm .gitignore"
 }
 
-generator lang_go {
-  output_type go
-  output_dir "../go"
-  version "0.87.2"
-  client_package_name "example.com/integ-tests"
-  on_generate "gofmt -w ."
-}
+// generator lang_go {
+//   output_type go
+//   output_dir "../go"
+//   version "0.87.2"
+//   client_package_name "example.com/integ-tests"
+//   on_generate "gofmt -w ."
+// }
 
 
 

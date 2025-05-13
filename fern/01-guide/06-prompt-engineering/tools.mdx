@@ -288,6 +288,36 @@ main
 ```
 </CodeGroup>
 
+## Disambiguating Between Similar Tools
+
+When building functions that can call multiple tools (represented as BAML classes), you might encounter situations where different tools accept arguments with the same name. For instance, consider `GetWeather` and `GetTimezone` classes, both taking a `city: string` argument. How does the system determine whether a user query like "What's the time in London?" corresponds to `GetTimezone` or potentially `GetWeather`?
+
+You can use string literals to solve this problem:
+
+```baml BAML
+class GetWeather {
+  tool_name "get_weather" @description("Use this tool to get the current weather forecast for a specific city.")
+  city string @description("The city for which to get the weather.")
+}
+
+class GetTimezone {
+  tool_name "get_timezone" @description("Use this tool to find the current timezone of a specific city.")
+  city string @description("The city for which to find the timezone.")
+}
+
+function ChooseTool(query: string) -> GetWeather | GetTimezone {
+  client "openai/gpt-4o"
+  prompt #"
+    Given the user query, determine the primary intent and select the appropriate tool to call.
+
+    {# special macro to add tool structures + descriptions here #}
+    {{ ctx.output_format }} 
+
+    {{ _.role('user') }}
+    {{ query }}
+  "#
+}
+```
 
 ## Dynamically Generate the tool signature
 It might be cumbersome to define schemas in baml and code, so you can define them from code as well. Read more about dynamic types [here](/guide/baml-advanced/dynamic-runtime-types)

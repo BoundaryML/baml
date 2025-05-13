@@ -8895,6 +8895,54 @@ export function useUseBlockConstraint(
   return useBamlAction(action, props as HookInput)
 }
 /**
+ * A specialized hook for the UseMaintainFieldOrder BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: MaintainFieldOrder
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** MaintainFieldOrder
+ * - **Streaming Partial:** partial_types.MaintainFieldOrder
+ * - **Streaming Final:** MaintainFieldOrder
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useUseMaintainFieldOrder({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useUseMaintainFieldOrder({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useUseMaintainFieldOrder(props: HookInput<'UseMaintainFieldOrder', { stream: false }>): HookOutput<'UseMaintainFieldOrder', { stream: false }>
+export function useUseMaintainFieldOrder(props?: HookInput<'UseMaintainFieldOrder', { stream?: true }>): HookOutput<'UseMaintainFieldOrder', { stream: true }>
+export function useUseMaintainFieldOrder(
+  props: HookInput<'UseMaintainFieldOrder', { stream?: boolean }> = {},
+): HookOutput<'UseMaintainFieldOrder', { stream: true }> | HookOutput<'UseMaintainFieldOrder', { stream: false }> {
+  let action: ServerAction = Actions.UseMaintainFieldOrder;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.UseMaintainFieldOrder;
+  }
+  return useBamlAction(action, props as HookInput)
+}
+/**
  * A specialized hook for the UseMalformedConstraints BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

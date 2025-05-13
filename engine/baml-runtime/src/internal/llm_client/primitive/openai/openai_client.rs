@@ -227,7 +227,8 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_media_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::Always,
+                resolve_image_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -249,7 +250,8 @@ macro_rules! make_openai_client {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: false,
-                resolve_media_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::Always,
+                resolve_image_urls: ResolveMediaUrls::Never,
                 allowed_metadata: $properties.allowed_metadata.clone(),
             },
             properties: $properties,
@@ -338,34 +340,67 @@ impl ToProviderMessage for OpenAIClient {
         mut content: serde_json::Map<String, serde_json::Value>,
         media: &baml_types::BamlMedia,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
-        let media_type = match media.media_type {
-            BamlMediaType::Image => "image",
-            BamlMediaType::Audio => "audio",
-        };
-        let media_type = format!("{}_url", media_type);
-        match &media.content {
-            BamlMediaContent::Url(media) => {
-                content.insert("type".into(), json!(media_type));
-                content.insert(
-                    media_type,
-                    json!({
-                        "url": media.url
-                    }),
-                );
+        match media.media_type {
+            BamlMediaType::Image => {
+                let type_value = "image_url";
+                let payload_key = "image_url";
+                content.insert("type".into(), json!(type_value));
+
+                match &media.content {
+                    BamlMediaContent::Url(url_content) => {
+                        content.insert(payload_key.into(), json!({ "url": url_content.url }));
+                    }
+                    BamlMediaContent::Base64(b64_media) => {
+                        content.insert(
+                            payload_key.into(),
+                            json!({
+                                "url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
+                            }),
+                        );
+                    }
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!("BAML internal error (openai): image file should have been resolved, not processed directly.");
+                    }
+                }
             }
-            BamlMediaContent::Base64(b64_media) => {
-                content.insert("type".into(), json!(media_type));
-                content.insert(
-                    media_type,
-                    json!({
-                        "url": format!("data:{};base64,{}", media.mime_type_as_ok()?, b64_media.base64)
-                    }),
-                );
-            }
-            BamlMediaContent::File(_) => {
-                anyhow::bail!(
-                    "BAML internal error (openai): file should have been resolved to base64"
-                )
+            BamlMediaType::Audio => {
+                let type_value = "input_audio";
+                let payload_key = "input_audio";
+                content.insert("type".into(), json!(type_value));
+
+                match &media.content {
+                    BamlMediaContent::Base64(b64_media) => {
+                        let mime_type_str = media.mime_type_as_ok()?;
+                        let format_str = match mime_type_str.as_str() {
+                            "audio/wav" | "wav" => "wav",
+                            "audio/mp3" | "mp3" => "mp3",
+                            // Add other supported formats here if needed in the future
+                            _ => anyhow::bail!(
+                                "Unsupported audio format for input_audio: '{}'. OpenAI currently supports 'wav' and 'mp3' for this structure.",
+                                mime_type_str
+                            ),
+                        };
+
+                        content.insert(
+                            payload_key.into(),
+                            json!({
+                                "data": b64_media.base64,
+                                "format": format_str
+                            }),
+                        );
+                    }
+                    BamlMediaContent::Url(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (openai): Audio content is a URL. Expected Base64 for '{}' type due to client's ResolveMediaUrls::Always setting. The URL should have been resolved to base64 before this stage.",
+                            type_value
+                        );
+                    }
+                    BamlMediaContent::File(_) => {
+                        anyhow::bail!(
+                            "BAML internal error (openai): audio file should have been resolved to base64, not processed directly."
+                        );
+                    }
+                }
             }
         }
         Ok(content)

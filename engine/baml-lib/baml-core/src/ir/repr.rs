@@ -31,7 +31,7 @@ use serde::Serialize;
 use crate::validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context;
 use crate::Configuration;
 
-use super::builtin::{builtin_classes, builtin_functions};
+use super::builtin::{builtin_classes, builtin_functions, is_builtin_identifier};
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -468,8 +468,11 @@ impl IntermediateRepr {
         self.enums.iter().map(|e| Walker { ir: self, item: e })
     }
 
-    pub fn walk_classes(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<Class>>> {
-        self.classes.iter().map(|e| Walker { ir: self, item: e })
+    pub fn walk_classes(&self) -> impl Iterator<Item = Walker<'_, &Node<Class>>> {
+        self.classes
+            .iter()
+            .filter(|c| !is_builtin_identifier(&c.elem.name))
+            .map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_type_aliases(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TypeAlias>>> {

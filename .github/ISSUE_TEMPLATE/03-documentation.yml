@@ -11,11 +11,11 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Current Documentation (Optional)
+      label: Current Documentation
       description: If applicable, what is the current documentation that needs improvement?
   - type: dropdown
     attributes:
-      label: Documentation Type (Optional)
+      label: Documentation Type
       description: What type of documentation is this?
       options:
         - Getting Started Guide

@@ -29,9 +29,9 @@ body:
       required: true
   - type: textarea
     attributes:
-      label: Alternative Solutions (Optional)
+      label: Alternative Solutions
       description: Have you considered any alternative solutions or workarounds?
   - type: textarea
     attributes:
-      label: Additional Context (Optional)
+      label: Additional Context
       description: Add any other context about the feature request here.

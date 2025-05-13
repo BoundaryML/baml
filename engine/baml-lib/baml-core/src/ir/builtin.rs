@@ -50,3 +50,7 @@ pub fn builtin_functions() -> Vec<Node<ExprFunction>> {
         ),
     }])
 }
+
+pub fn is_builtin_identifier(name: &str) -> bool {
+    name.starts_with("std::")
+}

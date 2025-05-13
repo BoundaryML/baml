@@ -18,7 +18,7 @@ import { z } from 'zod'
 import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
 import { WebviewPanelHost } from '../../panels/WebviewPanelHost'
 import TelemetryReporter from '../../telemetryReporter'
-import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession, restartClient } from '../../util'
+import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
 import { URI } from 'vscode-uri'
 import StatusBarPanel from '../../panels/StatusBarPanel'
@@ -359,36 +359,26 @@ export const registerClientEventHandlers = (client: LanguageClient, context: Ext
 
         const clientOptionsForRestart = getClientOptions()
 
-        await window.withProgress(
+        window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
             cancellable: false,
             title: `Restarting BAML Language Server (v${version})...`,
           },
+          // eslint-disable-next-line @typescript-eslint/require-await
           async () => {
             try {
               console.log('Calling restartClient utility...')
-              client = await restartClient(context, client, serverOptionsForRestart, clientOptionsForRestart)
-              clientReady = true
-              console.log('restartClient finished successfully.')
-              // Update the module-level variable after successful restart
+              // clientReady will be managed by activateClient's onReady handlers.
+              // activateClient also handles stopping the previous client.
+              activateClient(context, serverOptionsForRestart, clientOptionsForRestart)
+              console.log(`activateClient called for version ${version}.`)
               currentExecutingCliPath = targetCliPath
-              BAML_CONFIG_SINGLETON.cliVersion = version
+              BAML_CONFIG_SINGLETON.cliVersion = version // This might be better set after onReady, or via a message from the client
 
-              // window.withProgress(
-              //   {
-              //     location: vscode.ProgressLocation.Notification,
-              //     title: `BAML Language Server reloaded with version ${version}`,
-              //     cancellable: false,
-              //   },
-              //   async () => {
-              //     // Show progress for 4 seconds
-              //     await new Promise((resolve) => setTimeout(resolve, 4000))
-              //   },
-              // )
-              bamlOutputChannel?.appendLine(`BAML Language Server reloaded with version ${version}.`)
+              bamlOutputChannel?.appendLine(`BAML Language Server reload initiated for version ${version}.`)
             } catch (e) {
-              clientReady = false
+              clientReady = false // Ensure clientReady is false if restart fails
               console.error('Error restarting client:', e)
               // Ensure error message is a string
               const errorMessage = e instanceof Error ? e.message : String(e)
@@ -537,9 +527,9 @@ const plugin: BamlVSCodePlugin = {
               debug: { command: resolvedPath, args: ['lsp'], options: debugOptions },
             }
             const restartClientOptions = getClientOptions()
-            client = await restartClient(context, client, restartServerOptions, restartClientOptions)
-            clientReady = true
-            // Update the module-level variable after successful manual restart
+            // activateClient will handle stopping the old client, creating/starting the new one,
+            // and managing clientReady, event handlers, and diagnostics via its onReady handlers.
+            activateClient(context, restartServerOptions, restartClientOptions)
             currentExecutingCliPath = resolvedPath
             window.showInformationMessage(`BAML Language Server (v${currentVersion}) restarted manually.`)
             bamlOutputChannel.appendLine(`BAML Language Server (v${currentVersion}) restarted manually.`)

@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
+use indexmap::IndexMap;
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
@@ -51,8 +52,8 @@ impl From<Errors> for PyErr {
 
 enum MappedPyType {
     Enum(String, String),
-    Class(String, HashMap<String, PyObject>),
-    Map(HashMap<String, PyObject>),
+    Class(String, IndexMap<String, PyObject>),
+    Map(HashMap<String, PyObject>), // TODO: Does this need to maintain order?
     List(Vec<PyObject>),
     String(String),
     Int(i64),
@@ -246,11 +247,11 @@ pub fn parse_py_type(
                         }
                     })
                     .unwrap_or("<UnnamedBaseModel>".to_string());
-                let mut fields = HashMap::new();
-                // Get regular fields
+                let mut fields = IndexMap::new();
+                // Get regular fields. Maintain order, no HashMap.
                 if let Ok(model_fields) = t
                     .getattr("model_fields")?
-                    .extract::<HashMap<String, PyObject>>()
+                    .extract::<BTreeMap<String, PyObject>>()
                 {
                     for (key, _) in model_fields {
                         if let Ok(value) = any.getattr(py, key.as_str()) {
