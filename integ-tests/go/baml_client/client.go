@@ -4143,6 +4143,68 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue) <-
 	return channel
 }
 
+func LLMEcho(ctx context.Context, input string) (*string, error) {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "LLMEcho", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func(result any) string {
+		return (result).(string)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) LLMEcho(ctx context.Context, input string) <-chan string {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan string)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "LLMEcho", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(string)
+			}
+		}
+	}()
+	return channel
+}
+
 func LiteralUnionsTest(ctx context.Context, input string) (*types.Union__int_1__bool_true__string_string_output, error) {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},

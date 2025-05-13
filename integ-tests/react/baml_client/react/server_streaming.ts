@@ -1311,6 +1311,25 @@ export const JsonTypeAliasCycle = async (
 };
 
 /**
+ * Executes the streaming variant of the "LLMEcho" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const LLMEcho = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.LLMEcho(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "LiteralUnionsTest" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding

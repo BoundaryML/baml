@@ -3531,6 +3531,54 @@ export function useJsonTypeAliasCycle(
   return useBamlAction(action, props as HookInput)
 }
 /**
+ * A specialized hook for the LLMEcho BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useLLMEcho({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useLLMEcho({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useLLMEcho(props: HookInput<'LLMEcho', { stream: false }>): HookOutput<'LLMEcho', { stream: false }>
+export function useLLMEcho(props?: HookInput<'LLMEcho', { stream?: true }>): HookOutput<'LLMEcho', { stream: true }>
+export function useLLMEcho(
+  props: HookInput<'LLMEcho', { stream?: boolean }> = {},
+): HookOutput<'LLMEcho', { stream: true }> | HookOutput<'LLMEcho', { stream: false }> {
+  let action: ServerAction = Actions.LLMEcho;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.LLMEcho;
+  }
+  return useBamlAction(action, props as HookInput)
+}
+/**
  * A specialized hook for the LiteralUnionsTest BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

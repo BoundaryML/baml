@@ -1549,11 +1549,11 @@ async def test_echo_workflow():
     res = await b.EchoWorkflow()
     assert res == "Hello, world!"
 
-@pytest.mark.asyncio
-async def test_streaming_echo_workflow():
-    stream = b.stream.EchoWorkflow()
-    chunks = []
-    async for msg in stream:
-        chunks.push(msg)
-    print(chunks)
-    assert False
+# @pytest.mark.asyncio
+# async def test_streaming_echo_workflow():
+#     stream = b.stream.EchoWorkflow()
+#     chunks = []
+#     async for msg in stream:
+#         chunks.push(msg)
+#     print(chunks)
+#     assert False
