@@ -135,6 +135,7 @@ impl Server {
 
         // for some reason tracing logs are not available before this point
         tracing::info!("Starting server with {} worker threads", worker_threads);
+        tracing::info!("-------- Version: {}", env!("CARGO_PKG_VERSION"));
 
         let mut session = Session::new(
             &client_capabilities,

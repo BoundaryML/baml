@@ -172,7 +172,8 @@ where
     ) -> LLMResponse {
         match prompt {
             RenderedPrompt::Chat(chat) => match process_media_urls(
-                self.model_features().resolve_media_urls,
+                self.model_features().resolve_audio_urls,
+                self.model_features().resolve_image_urls,
                 true,
                 None,
                 ctx,
@@ -238,8 +239,15 @@ where
             RenderedPrompt::Chat(chat) => {
                 let chat = merge_messages(&chat);
                 // We never need to resolve media URLs here: webview rendering understands how to handle URLs and file refs
-                let chat =
-                    process_media_urls(ResolveMediaUrls::Never, true, None, ctx, &chat).await?;
+                let chat = process_media_urls(
+                    features.resolve_audio_urls,
+                    features.resolve_image_urls,
+                    true,
+                    None,
+                    ctx,
+                    &chat,
+                )
+                .await?;
                 RenderedPrompt::Chat(chat)
             }
         };
@@ -290,7 +298,8 @@ where
         render_settings: RenderCurlSettings,
     ) -> Result<String> {
         let chat_messages: Vec<RenderedChatMessage> = process_media_urls(
-            self.model_features().resolve_media_urls,
+            self.model_features().resolve_audio_urls,
+            self.model_features().resolve_image_urls,
             true,
             Some(render_settings),
             ctx,
@@ -377,7 +386,8 @@ where
         let prompt = {
             if let RenderedPrompt::Chat(ref chat) = prompt {
                 match process_media_urls(
-                    self.model_features().resolve_media_urls,
+                    self.model_features().resolve_audio_urls,
+                    self.model_features().resolve_image_urls,
                     true,
                     None,
                     ctx,
@@ -423,7 +433,8 @@ where
 /// request. Other formats will be converted into that, depending on what
 /// formats are allowed according to supported_media_formats.
 async fn process_media_urls(
-    resolve_media_urls: ResolveMediaUrls,
+    resolve_audio_urls: ResolveMediaUrls,
+    resolve_image_urls: ResolveMediaUrls,
     resolve_files: bool,
     render_settings: Option<RenderCurlSettings>,
     ctx: &RuntimeContext,
@@ -443,15 +454,13 @@ async fn process_media_urls(
                 let Some(part) = any_part.as_media() else {
                     return Ok::<ChatMessagePart, anyhow::Error>(any_part.clone());
                 };
-                let media = process_media(
-                    resolve_media_urls,
-                    resolve_files,
-                    render_settings,
-                    ctx,
-                    part,
-                )
-                .await
-                .map(ChatMessagePart::Media)?;
+                let resolve_mode = match part.media_type {
+                    BamlMediaType::Audio => resolve_audio_urls,
+                    BamlMediaType::Image => resolve_image_urls,
+                };
+                let media = process_media(resolve_mode, resolve_files, render_settings, ctx, part)
+                    .await
+                    .map(ChatMessagePart::Media)?;
 
                 if let Some(meta) = any_part.meta() {
                     Ok(media.with_meta(meta.clone()))
@@ -483,7 +492,7 @@ async fn process_media_urls(
 }
 
 async fn process_media(
-    resolve_media_urls: ResolveMediaUrls,
+    resolve_mode: ResolveMediaUrls,
     resolve_files: bool,
     render_settings: RenderCurlSettings,
     ctx: &RuntimeContext,
@@ -566,14 +575,14 @@ async fn process_media(
 
             // Currently:
             //  - Vertex is ResolveMediaUrls::EnsureMime and is the only one that supports URLs w/ mime-type
-            //  - OpenAI is ResolveMediaUrls::Never and allows passing in URLs with optionally specified mime-type
+            //  - OpenAI is ResolveMediaUrls::Never and allows passing in URLs with optionally specified mime-type (but it has different behavior for audio inputs)
 
             // NOTE(sam): if a provider accepts URLs but requires mime-type
             // (i.e. Vertex), we currently send it to them as b64. This
             // is how it was implemented originally, and while that could be
             // problematic in theory, I'm not going to change it until a
             // customer complains.
-            match (resolve_media_urls, part.mime_type.as_deref()) {
+            match (resolve_mode, part.mime_type.as_deref()) {
                 (ResolveMediaUrls::Always, _) => {}
                 (ResolveMediaUrls::EnsureMime, Some("")) | (ResolveMediaUrls::EnsureMime, None) => {
                 }

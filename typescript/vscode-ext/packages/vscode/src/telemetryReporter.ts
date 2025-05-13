@@ -74,7 +74,7 @@ export default class TelemetryReporter {
     const telemetrySettings = workspace.getConfiguration(TelemetryReporter.TELEMETRY_SECTION_ID)
     const isTelemetryEnabled = telemetrySettings.get<boolean>(TelemetryReporter.TELEMETRY_OLD_SETTING_ID)
     // Only available since https://code.visualstudio.com/updates/v1_61#_telemetry-settings
-    const telemetryLevel = telemetrySettings.get<string>(TelemetryReporter.TELEMETRY_SETTING_ID) as TelemetryLevel
+    const telemetryLevel = telemetrySettings.get<string>(TelemetryReporter.TELEMETRY_SETTING_ID)
 
     // `enableTelemetry` is either true or false (default = true). Deprecated since https://code.visualstudio.com/updates/v1_61#_telemetry-settings
     // It is replaced by `telemetryLevel`, only available since v1.61 (default = 'all')
@@ -83,10 +83,13 @@ export default class TelemetryReporter {
     // We check that
     // `enableTelemetry` is true and `telemetryLevel` falsy -> enabled
     // `enableTelemetry` is true and `telemetryLevel` set to 'all' -> enabled
+    // both settings undefined -> enabled (default behavior)
     // anything else falls back to disabled.
     const isTelemetryEnabledWithOldSetting = isTelemetryEnabled && !telemetryLevel
     const isTelemetryEnabledWithNewSetting = isTelemetryEnabled && telemetryLevel && telemetryLevel === 'all'
-    if (isTelemetryEnabledWithOldSetting || isTelemetryEnabledWithNewSetting) {
+    const areBothSettingsUndefined = isTelemetryEnabled === undefined && telemetryLevel === undefined
+
+    if (isTelemetryEnabledWithOldSetting || isTelemetryEnabledWithNewSetting || areBothSettingsUndefined) {
       this.userOptIn = true
       console.info('Telemetry is enabled for BAML extension')
     } else {

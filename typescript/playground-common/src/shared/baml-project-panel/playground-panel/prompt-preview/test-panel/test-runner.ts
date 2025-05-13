@@ -93,11 +93,25 @@ const useRunTests = (maxBatchSize = 5) => {
           //   console.error('Failed to set flashing regions in VSCode:', e)
           // }
 
+          vscode.postMessage({
+            command: 'telemetry',
+            meta: {
+              action: 'run_tests',
+              data: {
+                num_tests: tests.length,
+                parallel: false,
+              },
+            },
+          })
+
           try {
             const testCase = get(testCaseAtom(test))
             if (!rt || !ctx || !testCase || !wasm) {
-              setState(test, { status: 'error', message: 'Missing required dependencies.' })
-              console.error('Missing required dependencies')
+              setState(test, {
+                status: 'error',
+                message: 'Missing required dependencies. Try reloading the playground.',
+              })
+              console.error('Missing required dependencies. Try reloading the playground.')
               clearHighlights() // Clear highlights on error
               return
             }
@@ -285,6 +299,17 @@ const useParallelRunTests = (maxBatchSize = 5) => {
           } else {
             console.error("Invalid test found, so won't select this test case in the prompt preview", tests[0])
           }
+
+          vscode.postMessage({
+            command: 'telemetry',
+            meta: {
+              action: 'run_tests',
+              data: {
+                num_tests: tests.length,
+                parallel: true,
+              },
+            },
+          })
 
           try {
             // Prepare test cases for `run_tests`
