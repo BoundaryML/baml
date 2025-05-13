@@ -2,6 +2,9 @@ name: BAML Release - Build Python
 
 on:
   workflow_call: {}
+  push:
+    branches:
+      - baml-py-win
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
@@ -47,6 +50,9 @@ jobs:
             runs_on: macos-latest
 
           - target: x86_64-pc-windows-msvc
+            runs_on: windows-latest
+
+          - target: aarch64-pc-windows-msvc
             runs_on: windows-latest
 
     name: ${{ matrix._.target }}
