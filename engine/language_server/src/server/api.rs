@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use crate::baml_project::ProjectType;
 use crate::{server::schedule::Task, session::Session};
 use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
@@ -134,25 +135,34 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
                     let url = Url::parse(&params.project_id)
                         .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
-                    let project = session
-                        .get_or_create_project(&url.to_file_path().unwrap())
-                        .expect("Already checked for project's existence");
-                    project.lock().unwrap().update_runtime(Some(notifier))?;
+                    let project = session.get_or_create_project(&url.to_file_path().unwrap());
+                    match project {
+                        Ok(ProjectType::Valid(Some(project))) => {
+                            project.lock().unwrap().update_runtime(Some(notifier))?;
 
-                    // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
-                    let diagnostics = file_diagnostics(project.clone(), &url);
-                    tracing::info!("---- diagnostics Returned: ");
-                    let report = Ok(DocumentDiagnosticReportResult::Report(
-                        DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
-                            related_documents: None,
-                            full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                                result_id: None,
-                                items: diagnostics,
-                            },
-                        }),
-                    ));
-                    let res = responder.respond(id, report)?;
-                    Ok(res)
+                            // TODO: I think we need to send ALL diagnostics for the project. Not sure how this report is different vs sending a signle diagnostic param message
+                            let diagnostics = file_diagnostics(project.clone(), &url);
+                            tracing::info!("---- diagnostics Returned: ");
+                            let report = Ok(DocumentDiagnosticReportResult::Report(
+                                DocumentDiagnosticReport::Full(
+                                    RelatedFullDocumentDiagnosticReport {
+                                        related_documents: None,
+                                        full_document_diagnostic_report:
+                                            FullDocumentDiagnosticReport {
+                                                result_id: None,
+                                                items: diagnostics,
+                                            },
+                                    },
+                                ),
+                            ));
+                            let res = responder.respond(id, report)?;
+                            Ok(res)
+                        }
+                        _ => {
+                            tracing::error!("Error getting project for file: {:?}", url);
+                            Ok(())
+                        }
+                    }
                 })();
                 result.unwrap_or_else(|e| {
                     tracing::error!("Failed to send response: {e}");
@@ -282,16 +292,20 @@ fn background_request_task<'a, R: traits::BackgroundDocumentRequestHandler>(
             "session.projects.len(): {:?}",
             session.baml_src_projects.lock().unwrap().len()
         );
-        let _db = session.get_or_create_project(&path).clone();
-        if _db.is_none() {
-            tracing::error!("Could not find project for path");
-            return Box::new(|_, _| {});
-        }
-        let _db = _db.unwrap();
+        let _db = session.get_or_create_project(&path);
+        match _db {
+            Ok(ProjectType::Valid(Some(project))) => {
+                let _db = project;
 
-        Box::new(move |_notifier, _responder| {
-            let _ = R::run_with_snapshot(_snapshot, _db, _notifier, params);
-        })
+                Box::new(move |_notifier, _responder| {
+                    let _ = R::run_with_snapshot(_snapshot, _db, _notifier, params);
+                })
+            }
+            _ => {
+                tracing::error!("Could not find project for path: {:?}", path);
+                return Box::new(|_, _| {});
+            }
+        }
     }))
 }
 

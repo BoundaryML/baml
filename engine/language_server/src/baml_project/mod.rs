@@ -28,6 +28,7 @@ use semver::Version;
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 // use std::sync::Arc;
 use std::time::Instant;
 
@@ -907,6 +908,13 @@ pub struct Project {
     // on_success: Box<dyn Fn(WasmDiagnosticError, HashMap<String, String>)>,
     pub current_runtime: Option<BamlRuntime>,
     pub last_successful_runtime: Option<BamlRuntime>,
+}
+
+#[derive(Debug, Clone)]
+pub enum ProjectType {
+    Valid(Option<Arc<Mutex<Project>>>),
+    MissingBamlSrc,
+    Missing,
 }
 
 impl std::fmt::Debug for Project {

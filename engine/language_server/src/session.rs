@@ -14,7 +14,7 @@ use anyhow::anyhow;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
 
 use crate::baml_project::file_utils::find_top_level_parent;
-use crate::baml_project::{BamlProject, Project};
+use crate::baml_project::{BamlProject, Project, ProjectType};
 use crate::edit::{DocumentKey, DocumentVersion};
 // use crate::system::{url_to_any_system_path, AnySystemPath, LSPSystem};
 use crate::{PositionEncoding, TextDocument};
@@ -130,30 +130,35 @@ impl Session {
     pub fn get_or_create_project(
         &self,
         path: impl AsRef<Path> + std::fmt::Debug,
-    ) -> Option<Arc<Mutex<Project>>> {
+    ) -> Result<ProjectType, anyhow::Error> {
         // Try to find the baml_src directory
-        let baml_src = find_top_level_parent(path.as_ref())?;
+        let baml_src = find_top_level_parent(path.as_ref());
 
         // Lock once and perform all operations within this scope
         let mut projects = self.baml_src_projects.lock().unwrap();
 
-        // If project exists, return it
-        if let Some(project) = projects.get(&baml_src) {
-            return Some(project.clone());
+        match baml_src {
+            Some(baml_src) => {
+                // If project exists, return it
+                if let Some(project) = projects.get(&baml_src) {
+                    return Ok(ProjectType::Valid(Some(project.clone())));
+                }
+
+                // Create a new project if needed
+                tracing::info!("Creating new project for baml_src path: {:?}", baml_src);
+                let new_project = Arc::new(Mutex::new(Project::new(BamlProject {
+                    root_dir_name: baml_src.clone(),
+                    files: HashMap::new(),
+                    unsaved_files: HashMap::new(),
+                    cached_runtime: None,
+                })));
+
+                // Insert and return the new project
+                projects.insert(baml_src, new_project.clone());
+                Ok(ProjectType::Valid(Some(new_project)))
+            }
+            None => Ok(ProjectType::MissingBamlSrc),
         }
-
-        // Create a new project if needed
-        tracing::info!("Creating new project for baml_src path: {:?}", baml_src);
-        let new_project = Arc::new(Mutex::new(Project::new(BamlProject {
-            root_dir_name: baml_src.clone(),
-            files: HashMap::new(),
-            unsaved_files: HashMap::new(),
-            cached_runtime: None,
-        })));
-
-        // Insert and return the new project
-        projects.insert(baml_src, new_project.clone());
-        Some(new_project)
     }
 
     pub fn print_baml_projects(&self) {
@@ -248,20 +253,39 @@ impl Session {
     /// Creates a document snapshot with the URL referencing the document to snapshot.
     pub fn take_snapshot(&self, url: Url) -> Option<DocumentSnapshot> {
         let file_path = url.to_file_path().ok()?;
-        let project = self.get_or_create_project(&file_path)?;
+        let project_result = self.get_or_create_project(&file_path);
+        match project_result {
+            Ok(ProjectType::Valid(Some(project))) => {
+                let document_key = DocumentKey::from_url(
+                    &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
+                    &url,
+                )
+                .ok()?;
 
-        let document_key = DocumentKey::from_url(
-            &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
-            &url,
-        )
-        .ok()?;
-
-        Some(DocumentSnapshot {
-            resolved_client_capabilities: self.resolved_client_capabilities.clone(),
-            document_ref: self.index.lock().unwrap().make_document_ref(document_key)?,
-            position_encoding: self.position_encoding,
-            session: Arc::new((*self).clone()),
-        })
+                Some(DocumentSnapshot {
+                    resolved_client_capabilities: self.resolved_client_capabilities.clone(),
+                    document_ref: self.index.lock().unwrap().make_document_ref(document_key)?,
+                    position_encoding: self.position_encoding,
+                    session: Arc::new((*self).clone()),
+                })
+            }
+            Ok(ProjectType::MissingBamlSrc) => {
+                tracing::debug!("Missing baml_src directory for file: {:?}", url);
+                None
+            }
+            Ok(ProjectType::Valid(None)) => {
+                tracing::warn!("Project type valid but no project instance returned for file: {:?}. This might indicate an issue.", url);
+                None
+            }
+            Ok(ProjectType::Missing) => {
+                tracing::debug!("ProjectType::Missing for file: {:?}", url);
+                None
+            }
+            Err(e) => {
+                tracing::error!("Failed to get or create project for file {:?}: {}", url, e);
+                None
+            }
+        }
     }
 
     /// Registers a text document at the provided `url`.
@@ -399,7 +423,38 @@ impl DocumentSnapshot {
 
     pub(crate) fn project(&self) -> Option<Arc<Mutex<Project>>> {
         let file_path = self.document_ref.file_url().to_file_path().ok()?;
-        self.session.get_or_create_project(&file_path)
+        match self.session.get_or_create_project(&file_path) {
+            Ok(ProjectType::Valid(Some(project))) => Some(project.clone()),
+            Ok(ProjectType::Valid(None)) => {
+                tracing::warn!(
+                    "ProjectType::Valid(None) encountered in DocumentSnapshot::project for {:?}",
+                    self.document_ref.file_url()
+                );
+                None
+            }
+            Ok(ProjectType::MissingBamlSrc) => {
+                tracing::debug!(
+                    "ProjectType::MissingBamlSrc in DocumentSnapshot::project for {:?}",
+                    self.document_ref.file_url()
+                );
+                None
+            }
+            Ok(ProjectType::Missing) => {
+                tracing::debug!(
+                    "ProjectType::Missing in DocumentSnapshot::project for {:?}",
+                    self.document_ref.file_url()
+                );
+                None
+            }
+            Err(e) => {
+                tracing::error!(
+                    "Error in DocumentSnapshot::project for {:?}: {}",
+                    self.document_ref.file_url(),
+                    e
+                );
+                None
+            }
+        }
     }
 }
 
@@ -436,9 +491,8 @@ mod tests {
     fn test_get_or_create_project() {
         init_logging(LogLevel::Info, None);
 
-        let mut session = create_test_session();
+        let session = create_test_session();
 
-        // Using paths similar to the logs
         let path_str1 = "/Users/aaronvillalpando/Projects/baml-examples/ruby-starter/baml_src";
         let path_str2 = "/Users/aaronvillalpando/Projects/next-app/my-app/baml_src";
 
@@ -446,35 +500,111 @@ mod tests {
         let key2 = PathBuf::from(path_str2);
 
         // Create a project for key1
-        let project1 = session.get_or_create_project(&key1);
-        assert!(project1.is_some(), "Project should be created for key1");
+        let project1_result = session.get_or_create_project(&key1);
+        assert!(
+            project1_result.is_ok(),
+            "Project creation should succeed for key1: {:?}",
+            project1_result.err()
+        );
+        let project1 = project1_result.unwrap();
+        assert!(
+            matches!(project1, ProjectType::Valid(Some(_))),
+            "Expected Valid ProjectType for key1, got {:?}",
+            project1
+        );
 
         // Verify that get_or_create_project returns the same project when called again
-        let project1_again = session.get_or_create_project(&key1);
-        assert!(project1_again.is_some(), "Project should be found for key1");
+        let project1_again_result = session.get_or_create_project(&key1);
+        assert!(
+            project1_again_result.is_ok(),
+            "Finding project should succeed for key1: {:?}",
+            project1_again_result.err()
+        );
+        let project1_again = project1_again_result.unwrap();
+        assert!(
+            matches!(project1_again, ProjectType::Valid(Some(_))),
+            "Expected Valid ProjectType for key1 again, got {:?}",
+            project1_again
+        );
+
+        // Compare project references
+        // We need to extract the Arc<Mutex<Project>> from ProjectType::Valid(Some(arc))
+        let p1_arc = match project1 {
+            ProjectType::Valid(Some(ref arc)) => arc.clone(),
+            _ => panic!(
+                "project1 was not ProjectType::Valid(Some(_)): {:?}",
+                project1
+            ),
+        };
+        let p1_again_arc = match project1_again {
+            ProjectType::Valid(Some(ref arc)) => arc.clone(),
+            _ => panic!(
+                "project1_again was not ProjectType::Valid(Some(_)): {:?}",
+                project1_again
+            ),
+        };
+        assert!(
+            Arc::ptr_eq(&p1_arc, &p1_again_arc),
+            "Expected the same project instance for key1"
+        );
 
         // Create a project for key2
-        let project2 = session.get_or_create_project(&key2);
-        assert!(project2.is_some(), "Project should be created for key2");
+        let project2_result = session.get_or_create_project(&key2);
+        assert!(
+            project2_result.is_ok(),
+            "Project creation should succeed for key2: {:?}",
+            project2_result.err()
+        );
+        let project2 = project2_result.unwrap();
+        assert!(
+            matches!(project2, ProjectType::Valid(Some(_))),
+            "Expected Valid ProjectType for key2, got {:?}",
+            project2
+        );
 
         // Test with a file path inside key2
         let file_path_in_key2 = key2.join("chat.baml");
-        let found_project = session.get_or_create_project(&file_path_in_key2);
+        let found_project_result = session.get_or_create_project(&file_path_in_key2);
         assert!(
-            found_project.is_some(),
-            "Project should be found for file path within key2"
+            found_project_result.is_ok(),
+            "Finding project should succeed for file path within key2: {:?}",
+            found_project_result.err()
+        );
+        let found_project = found_project_result.unwrap();
+        assert!(
+            matches!(found_project, ProjectType::Valid(Some(_))),
+            "Expected Valid ProjectType for file path within key2, got {:?}",
+            found_project
         );
 
-        // Verify it's the same project
-        {
-            let unwrapped_project = found_project.unwrap();
-            let project_guard = unwrapped_project.lock().unwrap();
-            let found_root = project_guard.root_path();
-            assert_eq!(
-                found_root, key2,
-                "Expected root: {:?}, Found root: {:?}",
-                key2, found_root
-            );
-        }
+        // Verify it's the same project by comparing Arc pointers and then roots
+        let p2_arc = match project2 {
+            ProjectType::Valid(Some(ref arc)) => arc.clone(),
+            _ => panic!(
+                "project2 was not ProjectType::Valid(Some(_)): {:?}",
+                project2
+            ),
+        };
+        let found_p_arc = match found_project {
+            ProjectType::Valid(Some(ref arc)) => arc.clone(),
+            _ => panic!(
+                "found_project was not ProjectType::Valid(Some(_)): {:?}",
+                found_project
+            ),
+        };
+        assert!(
+            Arc::ptr_eq(&p2_arc, &found_p_arc),
+            "Expected the same project instance for key2 and its inner file"
+        );
+
+        let p2_guard = p2_arc.lock().unwrap();
+        let found_p_guard = found_p_arc.lock().unwrap();
+        let p2_root = p2_guard.root_path();
+        let found_root = found_p_guard.root_path();
+        assert_eq!(
+            found_root, p2_root,
+            "Expected root: {:?}, Found root: {:?}",
+            p2_root, found_root
+        );
     }
 }

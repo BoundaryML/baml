@@ -3,6 +3,7 @@ use lsp_types::notification::DidCloseTextDocument;
 use lsp_types::DidCloseTextDocumentParams;
 use std::path::PathBuf;
 
+use crate::baml_project::ProjectType;
 // use crate::server::api::diagnostics::clear_diagnostics;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
 // use crate::server::api::LSPResult;
@@ -33,9 +34,9 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
-        match session.get_or_create_project(&path) {
-            None => {}
-            Some(project) => {
+        let project = session.get_or_create_project(&path);
+        match project {
+            Ok(ProjectType::Valid(Some(project))) => {
                 let document_key = DocumentKey::from_url(
                     &PathBuf::from(project.lock().unwrap().root_path()),
                     &url,
@@ -52,7 +53,9 @@ impl SyncNotificationHandler for DidCloseTextDocumentHandler {
                     .baml_project
                     .remove_unsaved_file(&document_key);
             }
+            _ => {}
         }
+
         session.reload(Some(_notifier)).internal_error()?;
 
         Ok(())

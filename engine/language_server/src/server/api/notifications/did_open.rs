@@ -1,3 +1,4 @@
+use crate::baml_project::ProjectType;
 use crate::server::api::diagnostics::publish_session_lsp_diagnostics;
 use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
@@ -52,40 +53,42 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .internal_error_msg(&format!("Could not convert URL '{}' to file path", url))?;
 
         let project = session.get_or_create_project(&file_path);
-        if project.is_none() {
-            tracing::error!("Failed to get or create project for path: {:?}", file_path);
-            show_err_msg!("Failed to get or create project for path: {:?}", file_path);
-        } else {
-            let project = project.unwrap();
-            let version = project.lock().unwrap().get_common_generator_version();
-            if let Ok(version) = version {
-                notifier
-                    .0
-                    .send(lsp_server::Message::Notification(
-                        lsp_server::Notification::new(
-                            "baml_src_generator_version".to_string(),
-                            BamlSrcVersionPayload {
-                                version,
-                                root_path: project
-                                    .lock()
-                                    .unwrap()
-                                    .root_path()
-                                    .to_string_lossy()
-                                    .to_string(),
-                            },
-                        ),
-                    ))
-                    .internal_error()?;
+        match project {
+            Ok(ProjectType::Valid(Some(project))) => {
+                let project = project;
+                let version = project.lock().unwrap().get_common_generator_version();
+                if let Ok(version) = version {
+                    notifier
+                        .0
+                        .send(lsp_server::Message::Notification(
+                            lsp_server::Notification::new(
+                                "baml_src_generator_version".to_string(),
+                                BamlSrcVersionPayload {
+                                    version,
+                                    root_path: project
+                                        .lock()
+                                        .unwrap()
+                                        .root_path()
+                                        .to_string_lossy()
+                                        .to_string(),
+                                },
+                            ),
+                        ))
+                        .internal_error()?;
+                }
+                publish_session_lsp_diagnostics(&notifier, session, &url)?;
+            }
+            Ok(ProjectType::MissingBamlSrc) => {
+                tracing::error!("Failed to get or create project for path: {:?}", file_path);
+                show_err_msg!("File must be inside a baml_src directory: {:?}", file_path);
+            }
+            _ => {
+                tracing::error!("Failed to get or create project for path: {:?}", file_path);
+                show_err_msg!("Failed to get or create project for path: {:?}", file_path);
             }
         }
-        // session.open_text_document(
-        //     DocumentKey::from_path(&file_path, &file_path).internal_error()?,
-        //     TextDocument::new(params.text_document.text, params.text_document.version),
-        // );
 
         session.reload(Some(notifier.clone())).internal_error()?;
-
-        publish_session_lsp_diagnostics(&notifier, session, &url)?;
 
         Ok(())
     }

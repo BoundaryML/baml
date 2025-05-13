@@ -1,5 +1,5 @@
 use crate::baml_project::position_utils::get_word_at_position;
-use crate::baml_project::{trim_line, BamlRuntimeExt};
+use crate::baml_project::{trim_line, BamlRuntimeExt, ProjectType};
 use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
 use crate::server::api::ResultExt;
 use crate::server::client::Requester;
@@ -16,7 +16,6 @@ pub struct GotoDefinition;
 impl RequestHandler for GotoDefinition {
     type RequestType = req::GotoDefinition;
 }
-
 impl SyncRequestHandler for GotoDefinition {
     fn run(
         session: &mut Session,
@@ -32,62 +31,66 @@ impl SyncRequestHandler for GotoDefinition {
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Ensured that a project db exists");
-        project
-            .lock()
-            .unwrap()
-            .update_runtime(Some(notifier))
-            .internal_error()?;
+        let project = session.get_or_create_project(&path);
 
-        let document_key = DocumentKey::from_url(
-            &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
-            &params.text_document_position_params.text_document.uri,
-        )
-        .internal_error()?;
-        let guard = project.lock().unwrap();
-        let doc = guard
-            .baml_project
-            .files
-            .get(&document_key)
-            .ok_or(anyhow::anyhow!(
-                "File {} was not present in the project",
-                document_key
-            ))
-            .internal_error()?;
-        let word = get_word_at_position(
-            &doc.contents,
-            &params.text_document_position_params.position,
-        );
-        let cleaned_word = trim_line(&word);
-        if cleaned_word.is_empty() {
-            return Ok(None);
-        }
-        let rt = guard.runtime().internal_error()?;
-        let maybe_symbol = rt.search_for_symbol(&cleaned_word);
-        match maybe_symbol {
-            None => Ok(None),
-            Some(symbol_location) => {
-                let range = Range {
-                    start: Position {
-                        line: symbol_location.start_line as u32,
-                        character: symbol_location.start_character as u32,
-                    },
-                    end: Position {
-                        line: symbol_location.end_line as u32,
-                        character: symbol_location.end_character as u32,
-                    },
-                };
-                let target_uri = Url::from_file_path(&symbol_location.uri)
-                    .map_err(|_| anyhow::anyhow!("Failed to parse target URI"))
+        match project {
+            Ok(ProjectType::Valid(Some(project))) => {
+                project
+                    .lock()
+                    .unwrap()
+                    .update_runtime(Some(notifier))
                     .internal_error()?;
-                let goto_definition_response = GotoDefinitionResponse::Scalar(Location {
-                    uri: target_uri,
-                    range,
-                });
-                Ok(Some(goto_definition_response))
+
+                let document_key = DocumentKey::from_url(
+                    &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
+                    &params.text_document_position_params.text_document.uri,
+                )
+                .internal_error()?;
+                let guard = project.lock().unwrap();
+                let doc = guard
+                    .baml_project
+                    .files
+                    .get(&document_key)
+                    .ok_or(anyhow::anyhow!(
+                        "File {} was not present in the project",
+                        document_key
+                    ))
+                    .internal_error()?;
+                let word = get_word_at_position(
+                    &doc.contents,
+                    &params.text_document_position_params.position,
+                );
+                let cleaned_word = trim_line(&word);
+                if cleaned_word.is_empty() {
+                    return Ok(None);
+                }
+                let rt = guard.runtime().internal_error()?;
+                let maybe_symbol = rt.search_for_symbol(&cleaned_word);
+                match maybe_symbol {
+                    None => Ok(None),
+                    Some(symbol_location) => {
+                        let range = Range {
+                            start: Position {
+                                line: symbol_location.start_line as u32,
+                                character: symbol_location.start_character as u32,
+                            },
+                            end: Position {
+                                line: symbol_location.end_line as u32,
+                                character: symbol_location.end_character as u32,
+                            },
+                        };
+                        let target_uri = Url::from_file_path(&symbol_location.uri)
+                            .map_err(|_| anyhow::anyhow!("Failed to parse target URI"))
+                            .internal_error()?;
+                        let goto_definition_response = GotoDefinitionResponse::Scalar(Location {
+                            uri: target_uri,
+                            range,
+                        });
+                        Ok(Some(goto_definition_response))
+                    }
+                }
             }
+            _ => Ok(None),
         }
     }
 }

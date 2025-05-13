@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-use crate::baml_project::{self, Project};
+use crate::baml_project::{self, Project, ProjectType};
 use crate::baml_text_size::TextSize;
 use crate::server::api::ResultExt;
 use crate::server::client::Notifier;
@@ -87,22 +87,30 @@ pub fn publish_session_lsp_diagnostics(
 ) -> Result<()> {
     // let keys = session.index().documents.keys();
     let path = file_url.to_file_path().unwrap_or(PathBuf::new());
-    let project = session
-        .get_or_create_project(&path)
-        .expect("We just ensured the session is valid");
-
-    let diagnostics = project_diagnostics(project.clone());
-    for (uri, diagnostics) in diagnostics {
-        notifier
-            .notify::<lsp_types::notification::PublishDiagnostics>(PublishDiagnosticsParams {
-                uri: uri.clone(),
-                version: None,
-                diagnostics,
-            })
-            .map_err(|e| anyhow::anyhow!("did_change err: {}", e))
-            .internal_error()?;
+    let project = session.get_or_create_project(&path);
+    match project {
+        Ok(ProjectType::Valid(Some(project))) => {
+            let diagnostics = project_diagnostics(project.clone());
+            for (uri, diagnostics) in diagnostics {
+                notifier
+                    .notify::<lsp_types::notification::PublishDiagnostics>(
+                        PublishDiagnosticsParams {
+                            uri: uri.clone(),
+                            version: None,
+                            diagnostics,
+                        },
+                    )
+                    .map_err(|e| anyhow::anyhow!("did_change err: {}", e))
+                    .internal_error()?;
+            }
+            Ok(())
+        }
+        Err(error) => {
+            tracing::error!("Error getting project for file: {}", error);
+            Ok(())
+        }
+        _ => Ok(()),
     }
-    Ok(())
 }
 
 pub fn project_diagnostics(

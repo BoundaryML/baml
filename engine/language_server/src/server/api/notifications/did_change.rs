@@ -3,6 +3,7 @@ use std::time::Instant;
 use lsp_types::notification::DidChangeTextDocument;
 use lsp_types::{DidChangeTextDocumentParams, PublishDiagnosticsParams};
 
+use crate::baml_project::ProjectType;
 use crate::server::api::diagnostics::publish_diagnostics;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
 use crate::server::api::ResultExt;
@@ -34,30 +35,44 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
 
         // Get or create the project using the unified method
         let project = session.get_or_create_project(&path);
-        if project.is_none() {
-            tracing::error!("Failed to get or create project for path: {:?}", path);
-            show_err_msg!("Failed to get or create project for path: {:?}", path);
+        match project {
+            Ok(ProjectType::Valid(Some(project))) => {
+                let document_key =
+                    DocumentKey::from_url(&project.lock().unwrap().root_path(), &url)
+                        .internal_error()?;
+
+                session
+                    .update_text_document(
+                        &document_key,
+                        params.content_changes,
+                        params.text_document.version,
+                        Some(notifier.clone()),
+                    )
+                    .internal_error()?;
+
+                tracing::info!("publishing diagnostics");
+
+                publish_diagnostics(&notifier, project, Some(params.text_document.version))?;
+
+                let elapsed = start_time_total.elapsed();
+                tracing::info!("didchange total took {:?}ms", elapsed.as_millis());
+                Ok(())
+            }
+            Ok(ProjectType::MissingBamlSrc) => {
+                // ignore
+
+                Ok(())
+            }
+            Ok(ProjectType::Missing) => {
+                tracing::error!("Failed to get or create project for path: {:?}", path);
+                show_err_msg!("Failed to get or create project for path: {:?}", path);
+                Ok(())
+            }
+            _ => {
+                tracing::error!("Failed to get or create project for path: {:?}", path);
+                show_err_msg!("Failed to get or create project for path: {:?}", path);
+                Ok(())
+            }
         }
-
-        let project = project.unwrap();
-        let document_key =
-            DocumentKey::from_url(&project.lock().unwrap().root_path(), &url).internal_error()?;
-
-        session
-            .update_text_document(
-                &document_key,
-                params.content_changes,
-                params.text_document.version,
-                Some(notifier.clone()),
-            )
-            .internal_error()?;
-
-        tracing::info!("publishing diagnostics");
-
-        publish_diagnostics(&notifier, project, Some(params.text_document.version))?;
-
-        let elapsed = start_time_total.elapsed();
-        tracing::info!("didchange total took {:?}ms", elapsed.as_millis());
-        Ok(())
     }
 }

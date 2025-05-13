@@ -1,3 +1,4 @@
+use crate::baml_project::ProjectType;
 use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
 use crate::server::api::ResultExt;
 use crate::server::client::{Notifier, Requester};
@@ -37,40 +38,53 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         }
 
         tracing::info!("About to run generator. URL path: {:?}", path);
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Ensured that a project db exists");
+        let project = session.get_or_create_project(&path);
 
-        let version = project.lock().unwrap().get_common_generator_version();
-        if let Ok(version) = version {
-            let _ = notifier.0.send(lsp_server::Message::Notification(
-                lsp_server::Notification::new(
-                    "baml_src_generator_version".to_string(),
-                    BamlSrcVersionPayload {
-                        version,
-                        root_path: project
-                            .lock()
-                            .unwrap()
-                            .root_path()
-                            .to_string_lossy()
-                            .to_string(),
+        match project {
+            Ok(ProjectType::Valid(Some(project))) => {
+                let version = project.lock().unwrap().get_common_generator_version();
+                if let Ok(version) = version {
+                    let _ = notifier.0.send(lsp_server::Message::Notification(
+                        lsp_server::Notification::new(
+                            "baml_src_generator_version".to_string(),
+                            BamlSrcVersionPayload {
+                                version,
+                                root_path: project
+                                    .lock()
+                                    .unwrap()
+                                    .root_path()
+                                    .to_string_lossy()
+                                    .to_string(),
+                            },
+                        ),
+                    ));
+                }
+
+                project.lock().unwrap().run_generators_without_debounce(
+                    |message| {
+                        tracing::info!("About to notify client that generator has run.");
+                        notifier
+                            .notify_baml_info(&format!("{}", message))
+                            .unwrap_or(())
                     },
-                ),
-            ));
+                    |e| {
+                        tracing::error!("Error generating: {e}");
+                        notifier.notify_baml_error(&format!("{e}")).unwrap_or(())
+                    },
+                );
+            }
+            Ok(ProjectType::MissingBamlSrc) => {
+                tracing::error!("Failed to get or create project for path: {:?}", path);
+                show_err_msg!(
+                    "This baml file needs to be in a baml_src directory: {:?}",
+                    path.display()
+                );
+            }
+            _ => {
+                tracing::error!("Failed to get or create project for path: {:?}", path);
+                show_err_msg!("Failed to get or create project for path: {:?}", path);
+            }
         }
-
-        project.lock().unwrap().run_generators_without_debounce(
-            |message| {
-                tracing::info!("About to notify client that generator has run.");
-                notifier
-                    .notify_baml_info(&format!("{}", message))
-                    .unwrap_or(())
-            },
-            |e| {
-                tracing::error!("Error generating: {e}");
-                notifier.notify_baml_error(&format!("{e}")).unwrap_or(())
-            },
-        );
 
         Ok(())
     }

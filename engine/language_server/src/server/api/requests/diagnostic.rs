@@ -7,7 +7,7 @@ use lsp_types::{
     FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport, Url,
 };
 
-use crate::baml_project::Project;
+use crate::baml_project::{Project, ProjectType};
 use crate::server::api::diagnostics::{file_diagnostics, project_diagnostics};
 use crate::server::api::traits::{
     BackgroundDocumentRequestHandler, RequestHandler, SyncRequestHandler,
@@ -52,22 +52,32 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Project should exist");
+        let project = session.get_or_create_project(&path);
+        match project {
+            Ok(ProjectType::Valid(Some(project))) => {
+                let diagnostics = file_diagnostics(project, &url);
+                // diagnostics
 
-        let diagnostics = file_diagnostics(project, &url);
-        // diagnostics
-
-        Ok(DocumentDiagnosticReportResult::Report(
-            DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
-                related_documents: None,
-                full_document_diagnostic_report: FullDocumentDiagnosticReport {
-                    result_id: None,
-                    items: diagnostics,
-                },
-            }),
-        ))
+                Ok(DocumentDiagnosticReportResult::Report(
+                    DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
+                        related_documents: None,
+                        full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                            result_id: None,
+                            items: diagnostics,
+                        },
+                    }),
+                ))
+            }
+            _ => Ok(DocumentDiagnosticReportResult::Report(
+                DocumentDiagnosticReport::Full(RelatedFullDocumentDiagnosticReport {
+                    related_documents: None,
+                    full_document_diagnostic_report: FullDocumentDiagnosticReport {
+                        result_id: None,
+                        items: vec![],
+                    },
+                }),
+            )),
+        }
     }
 }
 

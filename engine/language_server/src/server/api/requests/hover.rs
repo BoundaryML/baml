@@ -1,3 +1,4 @@
+use crate::baml_project::ProjectType;
 use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
 use crate::server::api::ResultExt;
 use crate::server::client::Requester;
@@ -22,48 +23,51 @@ impl SyncRequestHandler for Hover {
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
-        let project = session
-            .get_or_create_project(&path)
-            .expect("Ensured that a project db exists");
+        let project = session.get_or_create_project(&path);
 
-        let document_key =
-            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
+        match project {
+            Ok(ProjectType::Valid(Some(project))) => {
+                let document_key = DocumentKey::from_url(project.lock().unwrap().root_path(), &url)
+                    .internal_error()?;
 
-        let text_document_item = match project
-            .lock()
-            .unwrap()
-            .baml_project
-            .files
-            .get(&document_key)
-        {
-            None => {
-                tracing::warn!("*** HOVER: Failed to find doc {:?}", url);
-                Err(anyhow::anyhow!(
-                    "File {} was not present in the project",
-                    url
-                ))
+                let text_document_item = match project
+                    .lock()
+                    .unwrap()
+                    .baml_project
+                    .files
+                    .get(&document_key)
+                {
+                    None => {
+                        tracing::warn!("*** HOVER: Failed to find doc {:?}", url);
+                        Err(anyhow::anyhow!(
+                            "File {} was not present in the project",
+                            url
+                        ))
+                    }
+                    Some(text_document) => Ok(TextDocumentItem {
+                        uri: url.clone(),
+                        language_id: "BAML".to_string(),
+                        text: text_document.contents.clone(),
+                        version: 1,
+                    }),
+                }
+                .internal_error()?;
+                let position = params.text_document_position_params.position;
+                // Just swallow the error here, we dont want hover failures to show error notifs for a user.
+                let hover = match project.lock().unwrap().handle_hover_request(
+                    &text_document_item,
+                    &position,
+                    notifier,
+                ) {
+                    Ok(hover) => hover,
+                    Err(e) => {
+                        tracing::error!("Error handling hover request: {}", e);
+                        None
+                    }
+                };
+                Ok(hover)
             }
-            Some(text_document) => Ok(TextDocumentItem {
-                uri: url.clone(),
-                language_id: "BAML".to_string(),
-                text: text_document.contents.clone(),
-                version: 1,
-            }),
+            _ => Ok(None),
         }
-        .internal_error()?;
-        let position = params.text_document_position_params.position;
-        // Just swallow the error here, we dont want hover failures to show error notifs for a user.
-        let hover = match project.lock().unwrap().handle_hover_request(
-            &text_document_item,
-            &position,
-            notifier,
-        ) {
-            Ok(hover) => hover,
-            Err(e) => {
-                tracing::error!("Error handling hover request: {}", e);
-                None
-            }
-        };
-        Ok(hover)
     }
 }
