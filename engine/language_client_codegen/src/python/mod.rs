@@ -8,7 +8,10 @@ use generate_types::{to_python_literal, type_name_for_checks};
 use indexmap::IndexMap;
 use internal_baml_core::{
     configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
-    ir::{repr::IntermediateRepr, FieldType, IRHelper, IRHelperExtended},
+    ir::{
+        repr::{IntermediateRepr, Walker},
+        ExprFnAsFunctionWalker, FieldType, IRHelper, IRHelperExtended
+    },
 };
 
 use self::python_language_features::{PythonLanguageFeatures, ToPython};
@@ -64,6 +67,7 @@ impl From<PythonClient> for PythonSyncHttpRequest {
     }
 }
 
+#[derive(Debug)]
 struct PythonFunction {
     name: String,
     partial_return_type: String,
@@ -231,35 +235,29 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
     type Error = anyhow::Error;
 
     fn try_from((ir, _): (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        let expr_fns = ExprFnAsFunctionWalker::new(ir);
         let functions = ir
             .walk_functions()
+            .chain(expr_fns.walk_functions())
             .map(|f| {
-                let configs = f.walk_impls();
-
-                let funcs = configs
-                    .map(|c| {
-                        let (_function, _impl_) = c.item;
-                        let partial_type = f.elem().output().to_partial_type_ref(ir, true);
-                        Ok(PythonFunction {
-                            name: f.name().to_string(),
-                            partial_return_type: partial_type,
-                            return_type: f.elem().output().to_type_ref(ir),
-                            args: f
-                                .inputs()
-                                .iter()
-                                .map(|(name, r#type)| {
-                                    (name.to_string(), r#type.to_type_ref(ir), None)
-                                })
-                                .collect(),
+                let partial_type = f.elem().output().to_partial_type_ref(ir, true);
+                Ok(PythonFunction {
+                    name: f.name().to_string(),
+                    partial_return_type: partial_type,
+                    return_type: f.elem().output().to_type_ref(ir),
+                    args: f
+                        .inputs()
+                        .iter()
+                        .map(|(name, r#type)| {
+                            (name.to_string(), r#type.to_type_ref(ir), None)
                         })
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(funcs)
+                        .collect(),
+                })
             })
-            .collect::<Result<Vec<Vec<PythonFunction>>>>()?
+            .collect::<Result<Vec<PythonFunction>>>()?
             .into_iter()
-            .flatten()
             .collect();
+        // eprintln!("functions: {:?}", functions);
         Ok(PythonClient { funcs: functions })
     }
 }

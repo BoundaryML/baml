@@ -1351,6 +1351,26 @@ export class AsyncHttpRequest {
     }
   }
   
+  async LLMEcho(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "LLMEcho",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   async LiteralUnionsTest(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -4964,6 +4984,26 @@ export class AsyncHttpStreamRequest {
     try {
       return await this.runtime.buildRequest(
         "JsonTypeAliasCycle",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async LLMEcho(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      return await this.runtime.buildRequest(
+        "LLMEcho",
         {
           "input": input
         },

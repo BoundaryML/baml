@@ -90,6 +90,7 @@ export type StreamingServerTypes = {
   InOutLiteralStringUnionMapKey: (Record<"one" | "two" | "three" | "four", (string | null)> ),
   InOutSingleLiteralStringMapKey: (Record<"key", (string | null)> ),
   JsonTypeAliasCycle: JsonValue,
+  LLMEcho: string,
   LiteralUnionsTest: (1 | true | "string output"),
   MakeBlockConstraint: Checked<partial_types.BlockConstraint,"cross_field">,
   MakeClassWithBlockDone: types.ClassWithBlockDone,

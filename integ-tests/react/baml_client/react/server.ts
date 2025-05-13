@@ -1245,6 +1245,24 @@ export const JsonTypeAliasCycle = async (
 };
 
 /**
+ * Executes the "LLMEcho" BAML action.
+ *
+ * This server action calls the underlying BAML function "LLMEcho"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const LLMEcho = async (
+  input: string,
+): Promise<string> => {
+  return b.LLMEcho(
+    input,
+  );
+};
+
+/**
  * Executes the "LiteralUnionsTest" BAML action.
  *
  * This server action calls the underlying BAML function "LiteralUnionsTest"

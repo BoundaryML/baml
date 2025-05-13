@@ -919,6 +919,19 @@ paths:
                 title: JsonTypeAliasCycleResponse
                 AnyValue: {}
       operationId: JsonTypeAliasCycle
+  /call/LLMEcho:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/LLMEcho'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: LLMEchoResponse
+                type: string
+      operationId: LLMEcho
   /call/LiteralUnionsTest:
     post:
       requestBody:
@@ -3596,6 +3609,22 @@ components:
             properties:
               input:
                 AnyValue: {}
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    LLMEcho:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: LLMEchoRequest
+            type: object
+            properties:
+              input:
+                type: string
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
