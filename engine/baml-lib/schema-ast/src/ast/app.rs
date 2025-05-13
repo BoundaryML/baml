@@ -2,7 +2,7 @@ use super::{Expression, FieldType, Identifier, Span};
 
 /// Function application.
 #[derive(Debug, Clone)]
-pub struct FnApp {
+pub struct App {
     /// The name of the function.
     pub name: Identifier,
     /// Generic types.
@@ -13,7 +13,7 @@ pub struct FnApp {
     pub span: Span,
 }
 
-impl FnApp {
+impl App {
     pub fn span(&self) -> &Span {
         &self.span
     }

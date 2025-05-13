@@ -9,7 +9,7 @@ pub mod expr;
 mod expression;
 mod field;
 
-mod fn_app;
+mod app;
 mod identifier;
 mod indentation_type;
 mod newline_type;
@@ -22,6 +22,7 @@ mod type_expression_block;
 mod value_expression_block;
 pub(crate) use self::comment::Comment;
 
+pub use app::App;
 pub use argument::{Argument, ArgumentId, ArgumentsList};
 pub use assignment::Assignment;
 pub use attribute::{Attribute, AttributeContainer, AttributeId};
@@ -31,7 +32,6 @@ pub use expression::{
     ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, RawString, Stmt,
 };
 pub use field::{Field, FieldArity, FieldType};
-pub use fn_app::FnApp;
 pub use identifier::{Identifier, RefIdentifier};
 pub use indentation_type::IndentationType;
 pub use internal_baml_diagnostics::Span;

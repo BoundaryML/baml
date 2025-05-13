@@ -6,7 +6,7 @@ use super::{
 use crate::{
     assert_correct_parser,
     ast::{
-        self, expr::ExprFn, ArgumentsList, Expression, ExpressionBlock, FnApp, Stmt,
+        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, Stmt,
         TopLevelAssignment, *,
     },
     parser::{
@@ -179,7 +179,7 @@ pub fn parse_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Ex
 
     let args = parse_fn_args(tokens.next()?, diagnostics);
 
-    Some(Expression::FnApp(FnApp {
+    Some(Expression::App(App {
         name: fn_name,
         type_args: vec![],
         args,
@@ -209,7 +209,7 @@ pub fn parse_generic_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> O
     // Parse arguments.
     let args = parse_fn_args(tokens.next()?, diagnostics);
 
-    Some(Expression::FnApp(FnApp {
+    Some(Expression::App(App {
         name: fn_name,
         type_args: vec![type_arg],
         args,

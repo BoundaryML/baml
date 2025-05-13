@@ -99,15 +99,15 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
         }
         Expression::Lambda(_args, _body, _span) => {}
-        Expression::FnApp(fn_app) => {
+        Expression::App(app) => {
             // Validate the function name.
-            if !scope.contains(fn_app.name.name()) {
+            if !scope.contains(app.name.name()) {
                 ctx.push_error(DatamodelError::new_anyhow_error(
-                    anyhow::anyhow!("Unknown function {}", &fn_app.name.to_string()),
-                    fn_app.span().clone(),
+                    anyhow::anyhow!("Unknown function {}", &app.name.to_string()),
+                    app.span().clone(),
                 ));
             }
-            for arg in &fn_app.args {
+            for arg in &app.args {
                 validate_expression(ctx, arg, scope);
             }
         }

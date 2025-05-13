@@ -345,18 +345,19 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     (span.clone(), None),
                 ))
             }
-            ast::Expression::FnApp(fn_app) => {
-                let func = Expr::FreeVar(fn_app.name.to_string(), (fn_app.span().clone(), None));
-                let args = fn_app
+            ast::Expression::App(app) => {
+                let func = Expr::FreeVar(app.name.to_string(), (app.span().clone(), None));
+                let args = app
                     .args
                     .iter()
                     .map(|arg| arg.repr(db))
                     .collect::<Result<_>>()?;
-                Ok(Expr::App(
-                    Arc::new(func),
-                    Arc::new(Expr::ArgsTuple(args, (fn_app.span().clone(), None))), // TODO: We don't really have a span for the ArgsTuple, so we're using the one for the whole FnApp.
-                    (fn_app.span().clone(), None),
-                ))
+                Ok(Expr::App {
+                    func: Arc::new(func),
+                    args: Arc::new(Expr::ArgsTuple(args, (app.span().clone(), None))), // TODO: We don't really have a span for the ArgsTuple, so we're using the one for the whole FnApp.
+                    type_args: vec![],
+                    meta: (app.span().clone(), None),
+                })
             }
             ast::Expression::ClassConstructor(
                 ast::ClassConstructor {
@@ -1604,15 +1605,25 @@ pub fn annotate_variable(
             );
             Expr::Lambda(*arity, Arc::new(new_body), meta.clone())
         }
-        Expr::App(f, args, meta) => {
+        Expr::App {
+            func,
+            args,
+            type_args,
+            meta,
+        } => {
             let new_f = annotate_variable(
                 target.clone(),
                 r#type.clone(),
-                Arc::unwrap_or_clone(f.clone()),
+                Arc::unwrap_or_clone(func.clone()),
             );
             let new_args =
                 annotate_variable(target.clone(), r#type, Arc::unwrap_or_clone(args.clone()));
-            Expr::App(Arc::new(new_f), Arc::new(new_args), meta.clone())
+            Expr::App {
+                func: Arc::new(new_f),
+                args: Arc::new(new_args),
+                type_args: type_args.clone(),
+                meta: meta.clone(),
+            }
         }
         Expr::Builtin(builtin, meta) => match builtin {
             Builtin::FetchValue => {

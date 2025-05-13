@@ -26,7 +26,12 @@ pub enum Expr<T> {
     // The DeBruijn index of a bound variable.
     BoundVar(VarIndex, T),
     Lambda(usize, Arc<Expr<T>>, T), // number of parameters, body, metadata
-    App(Arc<Expr<T>>, Arc<Expr<T>>, T),
+    App {
+        func: Arc<Expr<T>>,
+        type_args: Vec<FieldType>,
+        args: Arc<Expr<T>>,
+        meta: T,
+    },
     Let(Name, Arc<Expr<T>>, Arc<Expr<T>>, T), // let name = expr in body
     ArgsTuple(Vec<Expr<T>>, T),
     Builtin(Builtin, T),
@@ -79,7 +84,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
-            Expr::App(_, _, meta) => meta,
+            Expr::App { meta, .. } => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::Builtin(_, meta) => meta,
@@ -96,7 +101,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
-            Expr::App(_, _, meta) => meta,
+            Expr::App { meta, .. } => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Builtin(_, meta) => meta,
@@ -113,7 +118,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
-            Expr::App(_, _, meta) => meta,
+            Expr::App { meta, .. } => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::Builtin(_, meta) => meta,
@@ -130,7 +135,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(ind, _) => ind.dump_str(),
             Expr::FreeVar(name, _) => name.clone(),
             Expr::Lambda(_, body, _) => format!("\\. -> {}", body.dump_str()),
-            Expr::App(func, args, _) => {
+            Expr::App { func, args, .. } => {
                 let args_str = match args.as_ref() {
                     Expr::ArgsTuple(args, _) => args
                         .iter()
@@ -215,10 +220,15 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             }
             (Expr::Lambda(_, _, _), _) => false,
 
-            (Expr::App(f1, x1, _), Expr::App(f2, x2, _)) => {
-                f1.temporary_same_state(f2) && x1.temporary_same_state(x2)
-            }
-            (Expr::App(_, _, _), _) => false,
+            (
+                Expr::App {
+                    func: f1, args: x1, ..
+                },
+                Expr::App {
+                    func: f2, args: x2, ..
+                },
+            ) => f1.temporary_same_state(f2) && x1.temporary_same_state(x2),
+            (Expr::App { .. }, _) => false,
 
             (Expr::Let(n1, e1, b1, _), Expr::Let(n2, e2, b2, _)) => {
                 n1 == n2 && e1.temporary_same_state(e2) && b1.temporary_same_state(b2)
@@ -358,7 +368,7 @@ impl Expr<ExprMetadata> {
             Expr::FreeVar(name, _) => HashSet::from([name.clone()]),
             Expr::BoundVar(_, _) => HashSet::new(),
             Expr::Lambda(_, body, _) => body.free_vars(),
-            Expr::App(func, args, _) => {
+            Expr::App { func, args, .. } => {
                 let mut free_vars = func.free_vars();
                 free_vars.extend(args.free_vars());
                 free_vars
@@ -436,11 +446,17 @@ impl<T: Clone> Expr<T> {
                 Arc::new(body.open(&target.deeper(), new_name)),
                 m.clone(),
             ),
-            Expr::App(f, x, m) => Expr::App(
-                Arc::new(f.open(target, new_name)),
-                Arc::new(x.open(target, new_name)),
-                m.clone(),
-            ),
+            Expr::App {
+                func,
+                type_args,
+                args,
+                meta,
+            } => Expr::App {
+                func: Arc::new(func.open(target, new_name)),
+                type_args: type_args.clone(),
+                args: Arc::new(args.open(target, new_name)),
+                meta: meta.clone(),
+            },
             Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
             Expr::Let(n, e, body, m) => Expr::Let(
                 n.clone(),
@@ -501,11 +517,17 @@ impl<T: Clone> Expr<T> {
                 Arc::new(body.close(&new_index.deeper(), target)),
                 m.clone(),
             ),
-            Expr::App(f, x, m) => Expr::App(
-                Arc::new(f.close(new_index, target)),
-                Arc::new(x.close(new_index, target)),
-                m.clone(),
-            ),
+            Expr::App {
+                func,
+                args,
+                type_args,
+                meta,
+            } => Expr::App {
+                func: Arc::new(func.close(new_index, target)),
+                args: Arc::new(args.close(new_index, target)),
+                type_args: type_args.clone(),
+                meta: meta.clone(),
+            },
             Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
             Expr::Let(n, e, body, m) => Expr::Let(
                 n.clone(),

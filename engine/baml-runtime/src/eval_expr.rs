@@ -53,10 +53,20 @@ fn subst<'a>(
         },
         Expr::FreeVar(name, _) => Ok(expr.clone()),
         Expr::Atom(_) => Ok(expr.clone()),
-        Expr::App(f, x, meta) => {
-            let f2 = subst(f, var_name, val, env)?;
-            let x2 = subst(x, var_name, val, env)?;
-            Ok(Expr::App(Arc::new(f2), Arc::new(x2), meta.clone()))
+        Expr::App {
+            func,
+            args,
+            type_args,
+            meta,
+        } => {
+            let f2 = subst(func, var_name, val, env)?;
+            let x2 = subst(args, var_name, val, env)?;
+            Ok(Expr::App {
+                func: Arc::new(f2),
+                args: Arc::new(x2),
+                type_args: type_args.clone(),
+                meta: meta.clone(),
+            })
         }
         Expr::Lambda(params, body, meta) => Ok(Expr::Lambda(
             params.clone(),
@@ -153,7 +163,12 @@ async fn beta_reduce<'a>(
             // Finally evaluate the body with the substitution
             Box::pin(beta_reduce(env, &substituted_body, eval_final_llm_fn)).await
         }
-        Expr::App(f, x, meta) => match (f.as_ref(), x.as_ref()) {
+        Expr::App {
+            func,
+            args,
+            type_args,
+            meta,
+        } => match (func.as_ref(), args.as_ref()) {
             (Expr::Lambda(arity, body, _), Expr::ArgsTuple(args, _)) => {
                 let pairs: Vec<(VarIndex, Expr<ExprMetadata>)> = args
                     .iter()
@@ -252,11 +267,16 @@ async fn beta_reduce<'a>(
                     .context
                     .get(name)
                     .context(format!("Variable not found: {:?}", name))?;
-                let new_app = Expr::App(Arc::new(var_lookup.clone()), x.clone(), meta.clone());
+                let new_app = Expr::App {
+                    func: Arc::new(var_lookup.clone()),
+                    args: args.clone(),
+                    type_args: type_args.clone(),
+                    meta: meta.clone(),
+                };
                 let res = Box::pin(beta_reduce(env, &new_app, eval_final_llm_fn)).await?;
                 Ok(res)
             }
-            _ => Err(anyhow::anyhow!("Not a function: {:?}", f)),
+            _ => Err(anyhow::anyhow!("Not a function: {:?}", func)),
         },
         Expr::FreeVar(name, _) => {
             if let Some(cached) = env.evaluated_cache.lock().unwrap().get(name) {
@@ -310,7 +330,12 @@ pub async fn eval_to_value_or_llm_call<'a>(
             current_expr.dump_str()
         );
         match current_expr {
-            Expr::App(ref f, ref args, ref meta) => match (f.as_ref(), args.as_ref()) {
+            Expr::App {
+                ref func,
+                ref args,
+                ref type_args,
+                ref meta,
+            } => match (func.as_ref(), args.as_ref()) {
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
                     let mut evaluated_args: Vec<(String, BamlValue)> = Vec::new();
                     for (arg_name, arg) in arg_names.into_iter().zip(args) {

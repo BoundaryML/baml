@@ -148,7 +148,12 @@ pub fn typecheck_in_context(
         }
         // (\[x,y] -> x + y) (1,2)
         // ([Int,Int] -> Int) ([Int,Int]
-        Expr::App(f, xs, (span, maybe_app_type)) => {
+        Expr::App {
+            func: f,
+            args: xs,
+            meta: (span, maybe_app_type),
+            type_args,
+        } => {
             // First check that the param types are compatible with the arguments.
             match (&f.meta().1, xs.as_ref()) {
                 (Some(FieldType::Arrow(arrow)), Expr::ArgsTuple(args, _)) => {
@@ -321,7 +326,12 @@ pub fn infer_types_in_context(
             let new_meta = (expr.meta().0.clone(), new_body.meta().1.clone());
             Arc::new(Expr::Let(var_name.clone(), new_expr, new_body, new_meta))
         }
-        Expr::App(f, args, (span, maybe_app_type)) => {
+        Expr::App {
+            func: f,
+            args,
+            meta: (span, maybe_app_type),
+            type_args,
+        } => {
             // Infer the type of an App from the return type of the function, if
             // it is a function with a known return type.
             let new_f = infer_types_in_context(typing_context, f.clone());
@@ -332,7 +342,12 @@ pub fn infer_types_in_context(
             }
             .or(maybe_app_type.clone());
             let new_meta = (span.clone(), new_app_type);
-            Arc::new(Expr::App(new_f, new_args, new_meta))
+            Arc::new(Expr::App {
+                func: new_f,
+                args: new_args,
+                type_args: type_args.clone(),
+                meta: new_meta,
+            })
         }
         Expr::Builtin(builtin, _) => match builtin {
             Builtin::FetchValue => {

@@ -652,11 +652,12 @@ impl BamlRuntime {
                     let params_expr: Expr<ExprMetadata> =
                         Expr::ArgsTuple(param_baml_values, (fake_syntax_span.clone(), None));
                     let result_type = expr_fn.output.clone();
-                    let fn_call_expr = Expr::App(
-                        Arc::new(fn_expr),
-                        Arc::new(params_expr),
-                        (fake_syntax_span.clone(), Some(result_type.clone())),
-                    );
+                    let fn_call_expr = Expr::App {
+                        func: Arc::new(fn_expr),
+                        args: Arc::new(params_expr),
+                        type_args: vec![],
+                        meta: (fake_syntax_span.clone(), Some(result_type.clone())),
+                    };
                     let res = eval_expr::eval_to_value(&env, &fn_call_expr)
                         .await
                         .map(|v| {
@@ -1196,11 +1197,12 @@ async fn expr_eval_result(
             let params_expr: Expr<ExprMetadata> =
                 Expr::ArgsTuple(param_baml_values, (fake_syntax_span.clone(), None));
             let result_type = expr_fn.elem().output.clone();
-            let fn_call_expr = Expr::App(
-                Arc::new(expr_fn.elem().expr.clone()),
-                Arc::new(params_expr),
-                (fake_syntax_span.clone(), Some(result_type.clone())),
-            );
+            let fn_call_expr = Expr::App {
+                func: Arc::new(expr_fn.elem().expr.clone()),
+                args: Arc::new(params_expr),
+                type_args: vec![],
+                meta: (fake_syntax_span.clone(), Some(result_type.clone())),
+            };
             let res = eval_expr::eval_to_value_or_llm_call(&env, &fn_call_expr).await?;
             Ok(res)
         }
