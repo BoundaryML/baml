@@ -20,7 +20,7 @@ pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 pub struct RuntimeContextManager {
     baml_src_reader: Arc<BamlSrcReader>,
     context: Arc<Mutex<Vec<BamlContext>>>,
-    env_vars: HashMap<String, String>,
+    env_vars: Arc<Mutex<HashMap<String, String>>>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
 }
 
@@ -38,7 +38,7 @@ impl RuntimeContextManager {
         Self {
             baml_src_reader: self.baml_src_reader.clone(),
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
-            env_vars: self.env_vars.clone(),
+            env_vars: Arc::new(Mutex::new(self.env_vars.lock().unwrap().clone())),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
         }
     }
@@ -59,7 +59,7 @@ impl RuntimeContextManager {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
             context: Default::default(),
-            env_vars,
+            env_vars: Arc::new(Mutex::new(env_vars)),
             global_tags: Default::default(),
         }
     }
@@ -151,7 +151,7 @@ impl RuntimeContextManager {
 
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),
-            self.env_vars.clone(),
+            self.env_vars.lock().unwrap().clone(),
             tags,
             Default::default(),
             cls,
@@ -179,7 +179,7 @@ impl RuntimeContextManager {
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
-            self.env_vars.clone(),
+            self.env_vars.lock().unwrap().clone(),
             ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
             Default::default(),
             Default::default(),
@@ -194,5 +194,13 @@ impl RuntimeContextManager {
     pub fn context_depth(&self) -> usize {
         let ctx = self.context.lock().unwrap();
         ctx.len()
+    }
+
+    /// Updates environment variables with the provided key-value pairs.
+    /// Returns a Result containing any errors that occurred during the update.
+    pub fn update_env_vars(&self, updates: HashMap<String, String>) -> Result<()> {
+        let mut env_vars = self.env_vars.lock().unwrap();
+        env_vars.extend(updates);
+        Ok(())
     }
 }

@@ -25,7 +25,8 @@ from .types import Checked, Check
 from .type_builder import TypeBuilder
 from .parser import LlmResponseParser, LlmStreamParser
 from .async_request import AsyncHttpRequest, AsyncHttpStreamRequest
-from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
+from .inlinedbaml import get_baml_files
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, load_env_vars
 
 OutputType = TypeVar('OutputType')
 
@@ -105,6 +106,10 @@ class BamlAsyncClient:
         recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Recipe:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -132,6 +137,10 @@ class BamlAsyncClient:
         data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedListAliasNode:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -159,6 +168,10 @@ class BamlAsyncClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int, Literal["gt_ten"]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -186,6 +199,10 @@ class BamlAsyncClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -213,6 +230,10 @@ class BamlAsyncClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -240,6 +261,10 @@ class BamlAsyncClient:
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -267,6 +292,10 @@ class BamlAsyncClient:
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -294,6 +323,10 @@ class BamlAsyncClient:
         input: List[types.AliasedEnum],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -321,6 +354,10 @@ class BamlAsyncClient:
         optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> types.OptionalListAndMap:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -348,6 +385,10 @@ class BamlAsyncClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -375,6 +416,10 @@ class BamlAsyncClient:
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -402,6 +447,10 @@ class BamlAsyncClient:
         input: List[int],
         baml_options: BamlCallOptions = {},
     ) -> types.LinkedList:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -429,6 +478,10 @@ class BamlAsyncClient:
         input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> types.Tree:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -456,6 +509,10 @@ class BamlAsyncClient:
         cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassToRecAlias:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -483,6 +540,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[types.DynEnumTwo, str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -510,6 +571,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -537,6 +602,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -564,6 +633,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Category:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -591,6 +664,10 @@ class BamlAsyncClient:
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -618,6 +695,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -645,6 +726,10 @@ class BamlAsyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -672,6 +757,10 @@ class BamlAsyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -699,6 +788,10 @@ class BamlAsyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -726,6 +819,10 @@ class BamlAsyncClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -753,6 +850,10 @@ class BamlAsyncClient:
         img: baml_py.Image,client_sector: str,client_name: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -780,6 +881,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> Union[types.OriginalA, types.OriginalB]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -807,6 +912,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DummyOutput:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -834,6 +943,10 @@ class BamlAsyncClient:
         input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicClassTwo:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -861,6 +974,10 @@ class BamlAsyncClient:
         input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> types.DynInputOutput:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -888,6 +1005,10 @@ class BamlAsyncClient:
         input: List[types.DynInputOutput],
         baml_options: BamlCallOptions = {},
     ) -> List[types.DynInputOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -915,6 +1036,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -942,6 +1067,10 @@ class BamlAsyncClient:
         document: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ContactInfo:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -969,6 +1098,10 @@ class BamlAsyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicSchema:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -996,6 +1129,10 @@ class BamlAsyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> List[Union[types.Hobby, str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1023,6 +1160,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1050,6 +1191,10 @@ class BamlAsyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.Person]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1077,6 +1222,10 @@ class BamlAsyncClient:
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> types.ReceiptInfo:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1104,6 +1253,10 @@ class BamlAsyncClient:
         resume: str,img: Optional[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1131,6 +1284,10 @@ class BamlAsyncClient:
         resume: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Resume:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1158,6 +1315,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[types.ClassOptionalOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1185,6 +1346,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[types.ClassOptionalOutput2]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1212,6 +1377,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.EnumOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1239,6 +1408,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.EnumOutput:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1266,6 +1439,10 @@ class BamlAsyncClient:
         input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> types.LiteralClassHello:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1293,6 +1470,10 @@ class BamlAsyncClient:
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> Union[types.LiteralClassOne, types.LiteralClassTwo]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1320,6 +1501,10 @@ class BamlAsyncClient:
         myString: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1347,6 +1532,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> bool:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1374,6 +1563,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestOutputClass:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1401,6 +1594,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[types.TestOutputClass]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1428,6 +1625,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassNested:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1455,6 +1656,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassWithEnum:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1482,6 +1687,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> int:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1509,6 +1718,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal[False]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1536,6 +1749,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal[5]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1563,6 +1780,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Literal["example output"]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1590,6 +1811,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1617,6 +1842,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestEnum:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1644,6 +1873,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestClassAlias:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1671,6 +1904,10 @@ class BamlAsyncClient:
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1698,6 +1935,10 @@ class BamlAsyncClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> types.RaysData:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1725,6 +1966,10 @@ class BamlAsyncClient:
         email: types.Email,
         baml_options: BamlCallOptions = {},
     ) -> types.OrderInfo:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1752,6 +1997,10 @@ class BamlAsyncClient:
         query: str,
         baml_options: BamlCallOptions = {},
     ) -> types.SearchParams:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1779,6 +2028,10 @@ class BamlAsyncClient:
         i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[types.MapKey, str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1806,6 +2059,10 @@ class BamlAsyncClient:
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1833,6 +2090,10 @@ class BamlAsyncClient:
         m: Dict[Literal["key"], str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[Literal["key"], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1860,6 +2121,10 @@ class BamlAsyncClient:
         input: types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonValue:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1887,6 +2152,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Union[Literal[1], Literal[True], Literal["string output"]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1914,6 +2183,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> Checked[types.BlockConstraint, Literal["cross_field"]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1941,6 +2214,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithBlockDone:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1968,6 +2245,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.ClassWithoutDone:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -1995,6 +2276,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.NestedBlockConstraint:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2022,6 +2307,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> types.SemanticContainer:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2049,6 +2338,10 @@ class BamlAsyncClient:
         m: Dict[str, List[str]],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, List[str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2076,6 +2369,10 @@ class BamlAsyncClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MergeAttrs:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2103,6 +2400,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.DynamicOutput:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2130,6 +2431,10 @@ class BamlAsyncClient:
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
     ) -> Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2157,6 +2462,10 @@ class BamlAsyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.ClassForNullLiteral:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2184,6 +2493,10 @@ class BamlAsyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2211,6 +2524,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> List[Optional[types.OptionalTest_ReturnType]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2238,6 +2555,10 @@ class BamlAsyncClient:
         name: str,
         baml_options: BamlCallOptions = {},
     ) -> types.FooAny:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2265,6 +2586,10 @@ class BamlAsyncClient:
         inp: str,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int, Literal["too_big"]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2292,6 +2617,10 @@ class BamlAsyncClient:
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
     ) -> Union[int, str, bool, float]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2319,6 +2648,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2346,6 +2679,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2373,6 +2710,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2400,6 +2741,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2427,6 +2772,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2454,6 +2803,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2481,6 +2834,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2508,6 +2865,10 @@ class BamlAsyncClient:
         input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> types.RecAliasOne:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2535,6 +2896,10 @@ class BamlAsyncClient:
         cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> types.NodeWithAliasIndirection:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2562,6 +2927,10 @@ class BamlAsyncClient:
         input: types.RecursiveUnion,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveUnion:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2589,6 +2958,10 @@ class BamlAsyncClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> Checked[int, Literal["gt_ten"]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2616,6 +2989,10 @@ class BamlAsyncClient:
         inp: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2643,6 +3020,10 @@ class BamlAsyncClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> types.JsonTemplate:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2670,6 +3051,10 @@ class BamlAsyncClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> types.MalformedConstraints:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2697,6 +3082,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Schema:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2724,6 +3113,10 @@ class BamlAsyncClient:
         input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveListAlias:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2751,6 +3144,10 @@ class BamlAsyncClient:
         input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveMapAlias:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2778,6 +3175,10 @@ class BamlAsyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> types.BigNumbers:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2805,6 +3206,10 @@ class BamlAsyncClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitle:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2832,6 +3237,10 @@ class BamlAsyncClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> types.TwoStoriesOneTitleCheck:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2859,6 +3268,10 @@ class BamlAsyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> int:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2886,6 +3299,10 @@ class BamlAsyncClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> List[Union[int, str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2913,6 +3330,10 @@ class BamlAsyncClient:
         digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
     ) -> types.CompoundBigNumbers:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2940,6 +3361,10 @@ class BamlAsyncClient:
         document_txt: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Document1559:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2967,6 +3392,10 @@ class BamlAsyncClient:
         input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> types.RecursiveAliasDependency:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -2994,6 +3423,10 @@ class BamlAsyncClient:
         story: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3021,6 +3454,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3048,6 +3485,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3075,6 +3516,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3102,6 +3547,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3129,6 +3578,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3156,6 +3609,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3183,6 +3640,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3210,6 +3671,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3237,6 +3702,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3264,6 +3733,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3291,6 +3764,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3318,6 +3795,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3345,6 +3826,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3372,6 +3857,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3399,6 +3888,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3426,6 +3919,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3453,6 +3950,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3480,6 +3981,10 @@ class BamlAsyncClient:
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3507,6 +4012,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3534,6 +4043,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3561,6 +4074,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3588,6 +4105,10 @@ class BamlAsyncClient:
         myBool: bool,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3615,6 +4136,10 @@ class BamlAsyncClient:
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3642,6 +4167,10 @@ class BamlAsyncClient:
         myArg: List[types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3669,6 +4198,10 @@ class BamlAsyncClient:
         myFloat: float,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3696,6 +4229,10 @@ class BamlAsyncClient:
         myInt: int,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3723,6 +4260,10 @@ class BamlAsyncClient:
         myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, types.StringToClassEntry]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3750,6 +4291,10 @@ class BamlAsyncClient:
         myMap: Dict[str, Dict[str, str]],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, Dict[str, str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3777,6 +4322,10 @@ class BamlAsyncClient:
         myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
     ) -> Dict[str, str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3804,6 +4353,10 @@ class BamlAsyncClient:
         myString: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3831,6 +4384,10 @@ class BamlAsyncClient:
         myStringArray: List[str],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3858,6 +4415,10 @@ class BamlAsyncClient:
         myArg: List[str],
         baml_options: BamlCallOptions = {},
     ) -> List[str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3885,6 +4446,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3912,6 +4477,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3939,6 +4508,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3966,6 +4539,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -3993,6 +4570,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4020,6 +4601,10 @@ class BamlAsyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4047,6 +4632,10 @@ class BamlAsyncClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4074,6 +4663,10 @@ class BamlAsyncClient:
         imgs: List[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4101,6 +4694,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.TestMemoryOutput:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4128,6 +4725,10 @@ class BamlAsyncClient:
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4155,6 +4756,10 @@ class BamlAsyncClient:
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4182,6 +4787,10 @@ class BamlAsyncClient:
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4209,6 +4818,10 @@ class BamlAsyncClient:
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4236,6 +4849,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> Optional[str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4263,6 +4880,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.Haiku:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4290,6 +4911,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4317,6 +4942,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4344,6 +4973,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4371,6 +5004,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4398,6 +5035,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4425,6 +5066,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4452,6 +5097,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4479,6 +5128,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4506,6 +5159,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4533,6 +5190,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4560,6 +5221,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4587,6 +5252,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4614,6 +5283,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4641,6 +5314,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4668,6 +5345,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4695,6 +5376,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4722,6 +5407,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> types.CustomStory:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4749,6 +5438,10 @@ class BamlAsyncClient:
         question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> types.UniverseQuestion:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4776,6 +5469,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4803,6 +5500,10 @@ class BamlAsyncClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4830,6 +5531,10 @@ class BamlAsyncClient:
         
         baml_options: BamlCallOptions = {},
     ) -> str:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4857,6 +5562,10 @@ class BamlAsyncClient:
         input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> types.UnionTest_ReturnType:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4884,6 +5593,10 @@ class BamlAsyncClient:
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4911,6 +5624,10 @@ class BamlAsyncClient:
         input: types.MaintainFieldOrder,
         baml_options: BamlCallOptions = {},
     ) -> types.MaintainFieldOrder:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4938,6 +5655,10 @@ class BamlAsyncClient:
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> int:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -4965,6 +5686,10 @@ class BamlAsyncClient:
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> int:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
@@ -5004,6 +5729,10 @@ class BamlStreamClient:
         recipe: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Recipe, types.Recipe]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5037,6 +5766,10 @@ class BamlStreamClient:
         data: types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.LinkedListAliasNode, types.LinkedListAliasNode]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5070,6 +5803,10 @@ class BamlStreamClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5103,6 +5840,10 @@ class BamlStreamClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5136,6 +5877,10 @@ class BamlStreamClient:
         input: types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5169,6 +5914,10 @@ class BamlStreamClient:
         input: types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5202,6 +5951,10 @@ class BamlStreamClient:
         input: types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5235,6 +5988,10 @@ class BamlStreamClient:
         input: List[types.AliasedEnum],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5268,6 +6025,10 @@ class BamlStreamClient:
         optionals: types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.OptionalListAndMap, types.OptionalListAndMap]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5301,6 +6062,10 @@ class BamlStreamClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[int], int]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5334,6 +6099,10 @@ class BamlStreamClient:
         aud: baml_py.Audio,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5367,6 +6136,10 @@ class BamlStreamClient:
         input: List[int],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.LinkedList, types.LinkedList]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5400,6 +6173,10 @@ class BamlStreamClient:
         input: types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Tree, types.Tree]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5433,6 +6210,10 @@ class BamlStreamClient:
         cls: types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.ClassToRecAlias, types.ClassToRecAlias]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5466,6 +6247,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5499,6 +6284,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[types.Category], types.Category]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5532,6 +6321,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[types.Category], types.Category]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5565,6 +6358,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[types.Category], types.Category]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5598,6 +6395,10 @@ class BamlStreamClient:
         prefix: str,suffix: str,language: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5633,6 +6434,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5666,6 +6471,10 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5699,6 +6508,10 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5733,6 +6546,10 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5767,6 +6584,10 @@ class BamlStreamClient:
         classWithImage: types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5801,6 +6622,10 @@ class BamlStreamClient:
         img: baml_py.Image,client_sector: str,client_name: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5836,6 +6661,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5868,6 +6697,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.DummyOutput, types.DummyOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5901,6 +6734,10 @@ class BamlStreamClient:
         input: types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.DynamicClassTwo, types.DynamicClassTwo]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5934,6 +6771,10 @@ class BamlStreamClient:
         input: types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.DynInputOutput, types.DynInputOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -5967,6 +6808,10 @@ class BamlStreamClient:
         input: List[types.DynInputOutput],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6000,6 +6845,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6032,6 +6881,10 @@ class BamlStreamClient:
         document: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.ContactInfo, types.ContactInfo]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6065,6 +6918,10 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.DynamicSchema, types.DynamicSchema]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6098,6 +6955,10 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[Optional[Union[types.Hobby, str]]], List[Union[types.Hobby, str]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6131,6 +6992,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6164,6 +7029,10 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[partial_types.Person], List[types.Person]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6197,6 +7066,10 @@ class BamlStreamClient:
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.ReceiptInfo, types.ReceiptInfo]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6231,6 +7104,10 @@ class BamlStreamClient:
         resume: str,img: Optional[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6265,6 +7142,10 @@ class BamlStreamClient:
         resume: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Resume, types.Resume]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6298,6 +7179,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[partial_types.ClassOptionalOutput], Optional[types.ClassOptionalOutput]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6331,6 +7216,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[partial_types.ClassOptionalOutput2], Optional[types.ClassOptionalOutput2]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6364,6 +7253,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6397,6 +7290,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[types.EnumOutput], types.EnumOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6430,6 +7327,10 @@ class BamlStreamClient:
         input: types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.LiteralClassHello, types.LiteralClassHello]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6463,6 +7364,10 @@ class BamlStreamClient:
         input: Union[types.LiteralClassOne, types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6496,6 +7401,10 @@ class BamlStreamClient:
         myString: Optional[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6529,6 +7438,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[bool], bool]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6562,6 +7475,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.TestOutputClass, types.TestOutputClass]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6595,6 +7512,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6628,6 +7549,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.TestClassNested, types.TestClassNested]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6661,6 +7586,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.TestClassWithEnum, types.TestClassWithEnum]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6694,6 +7623,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[int], int]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6727,6 +7660,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Literal[False]], Literal[False]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6760,6 +7697,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Literal[5]], Literal[5]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6793,6 +7734,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Literal["example output"]], Literal["example output"]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6826,6 +7771,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6859,6 +7808,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[types.TestEnum], types.TestEnum]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6892,6 +7845,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.TestClassAlias, types.TestClassAlias]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6925,6 +7882,10 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6958,6 +7919,10 @@ class BamlStreamClient:
         text: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.RaysData, types.RaysData]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -6991,6 +7956,10 @@ class BamlStreamClient:
         email: types.Email,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.OrderInfo, types.OrderInfo]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7024,6 +7993,10 @@ class BamlStreamClient:
         query: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.SearchParams, types.SearchParams]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7057,6 +8030,10 @@ class BamlStreamClient:
         i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[types.MapKey, Optional[str]], Dict[types.MapKey, str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7091,6 +8068,10 @@ class BamlStreamClient:
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7125,6 +8106,10 @@ class BamlStreamClient:
         m: Dict[Literal["key"], str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[Literal["key"], Optional[str]], Dict[Literal["key"], str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7158,6 +8143,10 @@ class BamlStreamClient:
         input: types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.JsonValue, types.JsonValue]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7191,6 +8180,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7224,6 +8217,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[partial_types.BlockConstraint, Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7256,6 +8253,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.ClassWithBlockDone, types.ClassWithBlockDone]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7288,6 +8289,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.ClassWithoutDone, types.ClassWithoutDone]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7320,6 +8325,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.NestedBlockConstraint, types.NestedBlockConstraint]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7352,6 +8361,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.SemanticContainer, types.SemanticContainer]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7384,6 +8397,10 @@ class BamlStreamClient:
         m: Dict[str, List[str]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, List[Optional[str]]], Dict[str, List[str]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7417,6 +8434,10 @@ class BamlStreamClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.MergeAttrs, types.MergeAttrs]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7450,6 +8471,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.DynamicOutput, types.DynamicOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7483,6 +8508,10 @@ class BamlStreamClient:
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7516,6 +8545,10 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.ClassForNullLiteral, types.ClassForNullLiteral]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7549,6 +8582,10 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7582,6 +8619,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[Optional[partial_types.OptionalTest_ReturnType]], List[Optional[types.OptionalTest_ReturnType]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7615,6 +8656,10 @@ class BamlStreamClient:
         name: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.FooAny, types.FooAny]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7648,6 +8693,10 @@ class BamlStreamClient:
         inp: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[Optional[int], Literal["too_big"]], Checked[int, Literal["too_big"]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7681,6 +8730,10 @@ class BamlStreamClient:
         p: Union[int, str, bool, float],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], Union[int, str, bool, float]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7714,6 +8767,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7747,6 +8804,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7780,6 +8841,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7813,6 +8878,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7846,6 +8915,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7879,6 +8952,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7912,6 +8989,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7945,6 +9026,10 @@ class BamlStreamClient:
         input: types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.RecAliasOne, types.RecAliasOne]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -7978,6 +9063,10 @@ class BamlStreamClient:
         cls: types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8011,6 +9100,10 @@ class BamlStreamClient:
         input: types.RecursiveUnion,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.RecursiveUnion, types.RecursiveUnion]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8044,6 +9137,10 @@ class BamlStreamClient:
         money: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8077,6 +9174,10 @@ class BamlStreamClient:
         inp: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[int], int]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8110,6 +9211,10 @@ class BamlStreamClient:
         s: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.JsonTemplate, types.JsonTemplate]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8143,6 +9248,10 @@ class BamlStreamClient:
         a: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.MalformedConstraints, types.MalformedConstraints]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8176,6 +9285,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Schema, types.Schema]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8209,6 +9322,10 @@ class BamlStreamClient:
         input: types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.RecursiveListAlias, types.RecursiveListAlias]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8242,6 +9359,10 @@ class BamlStreamClient:
         input: types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[types.RecursiveMapAlias, types.RecursiveMapAlias]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8275,6 +9396,10 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.BigNumbers, types.BigNumbers]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8308,6 +9433,10 @@ class BamlStreamClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8342,6 +9471,10 @@ class BamlStreamClient:
         theme: str,length: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8376,6 +9509,10 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[int], int]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8409,6 +9546,10 @@ class BamlStreamClient:
         digits: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[Optional[Union[Optional[int], Optional[str]]]], List[Union[int, str]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8442,6 +9583,10 @@ class BamlStreamClient:
         digits: int,yapping: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.CompoundBigNumbers, types.CompoundBigNumbers]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8476,6 +9621,10 @@ class BamlStreamClient:
         document_txt: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Document1559, types.Document1559]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8509,6 +9658,10 @@ class BamlStreamClient:
         input: types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.RecursiveAliasDependency, types.RecursiveAliasDependency]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8542,6 +9695,10 @@ class BamlStreamClient:
         story: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8575,6 +9732,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8608,6 +9769,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8641,6 +9806,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8674,6 +9843,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8707,6 +9880,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8740,6 +9917,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8773,6 +9954,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8806,6 +9991,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8839,6 +10028,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8872,6 +10065,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8905,6 +10102,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8938,6 +10139,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -8971,6 +10176,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9004,6 +10213,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9037,6 +10250,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9070,6 +10287,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9103,6 +10324,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9136,6 +10361,10 @@ class BamlStreamClient:
         input: str,not_cached: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9170,6 +10399,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9202,6 +10435,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9235,6 +10472,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9268,6 +10509,10 @@ class BamlStreamClient:
         myBool: bool,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9301,6 +10546,10 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9334,6 +10583,10 @@ class BamlStreamClient:
         myArg: List[types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9367,6 +10620,10 @@ class BamlStreamClient:
         myFloat: float,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9400,6 +10657,10 @@ class BamlStreamClient:
         myInt: int,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9433,6 +10694,10 @@ class BamlStreamClient:
         myMap: Dict[str, types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9466,6 +10731,10 @@ class BamlStreamClient:
         myMap: Dict[str, Dict[str, str]],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9499,6 +10768,10 @@ class BamlStreamClient:
         myMap: Dict[str, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Dict[str, Optional[str]], Dict[str, str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9532,6 +10805,10 @@ class BamlStreamClient:
         myString: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9565,6 +10842,10 @@ class BamlStreamClient:
         myStringArray: List[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9598,6 +10879,10 @@ class BamlStreamClient:
         myArg: List[str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[List[Optional[str]], List[str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9631,6 +10916,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9664,6 +10953,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9696,6 +10989,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9729,6 +11026,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9762,6 +11063,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9795,6 +11100,10 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9828,6 +11137,10 @@ class BamlStreamClient:
         img: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9861,6 +11174,10 @@ class BamlStreamClient:
         imgs: List[baml_py.Image],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9894,6 +11211,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.TestMemoryOutput, types.TestMemoryOutput]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9927,6 +11248,10 @@ class BamlStreamClient:
         myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9961,6 +11286,10 @@ class BamlStreamClient:
         myBool: Literal[True],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -9994,6 +11323,10 @@ class BamlStreamClient:
         myInt: Literal[1],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10027,6 +11360,10 @@ class BamlStreamClient:
         myString: Literal["My String"],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10060,6 +11397,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], Optional[str]]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10093,6 +11434,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.Haiku, types.Haiku]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10126,6 +11471,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10159,6 +11508,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10192,6 +11545,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10225,6 +11582,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10258,6 +11619,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10291,6 +11656,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10324,6 +11693,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10357,6 +11730,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10390,6 +11767,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10423,6 +11804,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10456,6 +11841,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10489,6 +11878,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10522,6 +11915,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10554,6 +11951,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10586,6 +11987,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10619,6 +12024,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10651,6 +12060,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.CustomStory, types.CustomStory]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10684,6 +12097,10 @@ class BamlStreamClient:
         question: types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.UniverseQuestion, types.UniverseQuestion]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10717,6 +12134,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10750,6 +12171,10 @@ class BamlStreamClient:
         input: str,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10783,6 +12208,10 @@ class BamlStreamClient:
         
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[str], str]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10815,6 +12244,10 @@ class BamlStreamClient:
         input: Union[str, bool],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10848,6 +12281,10 @@ class BamlStreamClient:
         inp: types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[int], int]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10881,6 +12318,10 @@ class BamlStreamClient:
         input: types.MaintainFieldOrder,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[partial_types.MaintainFieldOrder, types.MaintainFieldOrder]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10914,6 +12355,10 @@ class BamlStreamClient:
         a: types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[int], int]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -10947,6 +12392,10 @@ class BamlStreamClient:
         inp: types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[Optional[int], int]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:

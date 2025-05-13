@@ -16,14 +16,14 @@ DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = BamlCtxManager(DO_NOT
 
 def reset_baml_env_vars(env_vars: Dict[str, str]):
   if DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.allow_reset():
-    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.reset(
-      "baml_src",
-      get_baml_files(),
-      env_vars
-    )
-    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.reset()
+    DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.update_env_vars(env_vars)
   else:
     raise BamlError("Cannot reset BAML environment variables while there are active BAML contexts.")
+
+# Add a function to load environment variables
+def load_env_vars() -> Dict[str, str]:
+    """Load environment variables from the current environment."""
+    return os.environ.copy()
 
 try:
     import dotenv

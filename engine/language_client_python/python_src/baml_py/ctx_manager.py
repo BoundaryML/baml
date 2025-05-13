@@ -62,6 +62,11 @@ class CtxManager:
     def reset(self) -> None:
         self.ctx.set({current_thread_id(): self.rt.create_context_manager()})
 
+    def update_env_vars(self, env_vars: typing.Dict[str, str]) -> None:
+        """Update environment variables in the context manager."""
+        mngr = self.__ctx()
+        mngr.update_env_vars(env_vars)
+
     def upsert_tags(self, **tags: str) -> None:
         mngr = self.__ctx()
         mngr.upsert_tags(tags)

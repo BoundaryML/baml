@@ -22,6 +22,24 @@ impl RuntimeContextManager {
     }
 
     #[pyo3()]
+    fn update_env_vars(&self, py: Python<'_>, env_vars: PyObject) -> PyResult<bool> {
+        let Some(env_vars) = parse_py_type(env_vars.into_bound(py).into_py_any(py)?, true)? else {
+            // No env vars to process
+            return Ok(true);
+        };
+        let Some(env_vars) = env_vars.as_map_owned() else {
+            return Err(BamlError::new_err("Failed to parse environment variables"));
+        };
+        let _ =      self.inner.update_env_vars(
+            env_vars
+                .into_iter()
+                .map(|(k, v)| (k, v.to_string()))
+                .collect()
+        );
+        Ok(true)
+    }
+
+    #[pyo3()]
     fn deep_clone(&self) -> Self {
         RuntimeContextManager {
             inner: self.inner.deep_clone(),

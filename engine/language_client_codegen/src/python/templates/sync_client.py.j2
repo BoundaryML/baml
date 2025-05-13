@@ -8,7 +8,8 @@ from pydantic import BaseModel, ValidationError, create_model
 from . import partial_types, types
 from .types import Checked, Check
 from .type_builder import TypeBuilder
-from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
+from .inlinedbaml import get_baml_files
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, load_env_vars
 from .sync_request import HttpRequest, HttpStreamRequest
 from .parser import LlmResponseParser, LlmStreamParser
 
@@ -90,6 +91,10 @@ class BamlSyncClient:
         {%- endfor %}
         baml_options: BamlCallOptions = {},
     ) -> {{fn.return_type}}:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -134,6 +139,10 @@ class BamlStreamClient:
         {%- endfor %}
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
+      # Load environment variables just before the function call
+      env_vars = load_env_vars()
+      self.__ctx_manager.update_env_vars(env_vars)
+      
       options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
