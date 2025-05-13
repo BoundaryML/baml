@@ -28,8 +28,12 @@ type {{ class.name }} struct {
 }
 
 func (c *{{ class.name }}) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "{{ class.name }}" {
-		panic(fmt.Sprintf("expected {{ class.name }}, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "{{ class.name }}" {
+		panic(fmt.Sprintf("expected {{ class.name }}, got %s", string(typeName.Name())))
 	}
 
 

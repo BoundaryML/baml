@@ -46,6 +46,10 @@ dependencies = ["build-go-cli"]
 script = "cd ../../integ-tests/go && go build"
 dependencies = ["integ-tests-generate"]
 
+[tasks.integ-tests-run]
+script = "cd ../../integ-tests/go && BAML_LIBRARY_PATH=../../engine/target/debug/libbaml_cffi.dylib ./integ-tests"
+dependencies = ["integ-tests-build"]
+
 #-----------------------------------------------------------------------------
 # Main tasks
 #-----------------------------------------------------------------------------

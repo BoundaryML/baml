@@ -21,11 +21,16 @@ func main() {
 	}
 	fmt.Println(*v2)
 
-	v2, err = b.AaaSamOutputFormat(ctx, "pineapple")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(*v2)
+	// v2, err = b.AaaSamOutputFormat(ctx, "pineapple")
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println(*v2)
+
+	// stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
+	// for chunk := range stream {
+	// 	fmt.Println(chunk)
+	// }
 
 	stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
 	for chunk := range stream {

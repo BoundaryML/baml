@@ -88,7 +88,14 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for GoClient {
                                 }
                                 name
                             },
-                            partial_return_type: f.elem().output().to_partial_type_ref(ir, true),
+                            partial_return_type: {
+                                let output = f.elem().output();
+                                if output.streaming_behavior().map(|s| s.done).unwrap_or(false) {
+                                    output.to_partial_type_ref_2(ir, true, true, "stream_types")
+                                } else {
+                                    output.to_partial_type_ref_2(ir, true, false, "stream_types")
+                                }
+                            },
                             return_type: f.elem().output().to_type_ref_2(ir, true),
                             args: f
                                 .inputs()

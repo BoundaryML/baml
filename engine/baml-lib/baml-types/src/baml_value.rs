@@ -367,6 +367,12 @@ impl<T: crate::HasFieldType> crate::HasFieldType for BamlValueWithMeta<T> {
     }
 }
 
+impl<T: crate::HasCompletion> crate::HasCompletion for BamlValueWithMeta<T> {
+    fn completion(&self) -> &crate::Completion {
+        self.meta().completion()
+    }
+}
+
 impl<T> BamlValueWithMeta<T> {
     pub fn r#type(&self) -> String {
         let plain_value: BamlValue = self.into();
@@ -927,6 +933,10 @@ pub struct Completion {
     pub state: CompletionState,
     pub display: bool,
     pub required_done: bool,
+}
+
+pub trait HasCompletion {
+    fn completion(&self) -> &Completion;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

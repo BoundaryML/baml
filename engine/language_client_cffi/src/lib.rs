@@ -87,7 +87,7 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-use baml_types::BamlValue;
+use baml_types::{BamlValue, BamlValueWithMeta};
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 
@@ -123,7 +123,7 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
         Ok(result) => match result.parsed() {
             Some(Ok(content)) => {
                 let mut builder = flatbuffers::FlatBufferBuilder::new();
-                let content = ctypes::serialize_baml_value_with_meta(&content.0, &mut builder);
+                let content = ctypes::serialize_baml_value_with_meta(&content.0, &mut builder, is_done);
                 let is_done_int = if is_done { 1 } else { 0 };
                 callback_fn(
                     id,
@@ -270,12 +270,12 @@ fn call_function_stream_from_c_inner(
         let (result, _) = stream
             .run(Some(|r| on_event(id, r)), &ctx, None, None)
             .await;
-        safe_trigger_callback(id, false, result);
+        safe_trigger_callback(id, true, result);
     });
 
     Ok(())
 }
 
 fn on_event(id: u32, result: FunctionResult) {
-    safe_trigger_callback(id, true, Ok(result));
+    safe_trigger_callback(id, false, Ok(result));
 }

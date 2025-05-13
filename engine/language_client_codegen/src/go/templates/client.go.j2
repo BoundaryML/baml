@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"{{ package_name }}/baml_client/types"
+	"{{ package_name }}/baml_client/stream_types"
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
@@ -17,7 +18,7 @@ func init() {
 		key, value, _ := strings.Cut(env_var, "=")
 		env_vars[key] = value
 	}
-	baml.SetTypeMap(typeMap)
+	baml.SetTypeMap(typeMap, streamTypeMap)
 	runtime, err := baml.CreateRuntime("./baml_src", getBamlFiles(), env_vars)
 	if err != nil {
 		panic(err)
@@ -57,7 +58,21 @@ func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
 {%- endif %}
 {%- endmacro %}
 
-{% for fn in funcs %}
+type StreamValue[T any, U any] struct {
+	IsFinal bool
+	as_final *T
+	as_stream *U
+}
+
+func (s *StreamValue[T, U]) Final() T {
+	return *s.as_final
+}
+
+func (s *StreamValue[T, U]) Stream() U {
+	return *s.as_stream
+}
+
+{%- for fn in funcs %}
 
 func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
         , {{name}} {{type}}
@@ -99,7 +114,7 @@ func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 
 func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		, {{name}} {{type}}
-		{%- endfor %}) <-chan {% call return_type_name(fn) %} {
+		{%- endfor %}) <-chan StreamValue[{% call return_type_name(fn) %}, {{ fn.partial_return_type }}] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
 	}
@@ -107,7 +122,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan {% call return_type_name(fn) %})
+	channel := make(chan StreamValue[{% call return_type_name(fn) %}, {{ fn.partial_return_type }}])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded)
 	if err != nil {
 		close(channel)
@@ -128,11 +143,24 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 					close(channel)
 					return
 				}
-				channel <- (*result.Data).({% call return_type_name(fn) %})
+				if result.HasData {
+					data := (*result.Data).({% call return_type_name(fn) %})
+					channel <- StreamValue[{% call return_type_name(fn) %}, {{ fn.partial_return_type }}]{
+						IsFinal: true,
+						as_final: &data,
+					}
+				} else {
+					data := (*result.StreamData).({{ fn.partial_return_type }})
+					channel <- StreamValue[{% call return_type_name(fn) %}, {{ fn.partial_return_type }}]{
+						IsFinal: false,
+						as_final: nil,
+						as_stream: &data,
+					}
+				}
 			}
 		}
 	}()
 	return channel
 }
 
-{% endfor %}
+{%- endfor %}

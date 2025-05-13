@@ -251,12 +251,12 @@ pub(crate) struct GoStreamTypes<'ir> {
 
 /// The Go class corresponding to Partial<TypeDefinedInBaml>
 struct PartialGoClass<'ir> {
-    name: &'ir str,
-    dynamic: bool,
+    name: Cow<'ir, str>,
     /// The docstring for the class, including comment delimiters.
     docstring: Option<String>,
     // the name, type and docstring of the field.
-    fields: Vec<(&'ir str, String, Option<String>)>,
+    fields: Vec<GoField<'ir>>,
+    dynamic: bool,
 }
 
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for GoEnums<'ir> {
@@ -432,38 +432,30 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for GoStrea
 
 impl<'ir> From<ClassWalker<'ir>> for PartialGoClass<'ir> {
     fn from(c: ClassWalker<'ir>) -> PartialGoClass<'ir> {
+        let cls_done = c.item.attributes.get("stream.done").is_some();
+
         PartialGoClass {
-            name: c.name(),
+            name: Cow::Borrowed(c.name()),
             dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
                 .static_fields
                 .iter()
-                .map(|f| {
-                    // Fields with @stream.done should take their type from
-                    let needed: bool = f.attributes.get("stream.not_null").is_some();
-                    let (_, metadata) = c.ir.distribute_metadata(&f.elem.r#type.elem);
-                    let done: bool = metadata.1.done;
-                    let field = match (done, needed) {
-                        // A normal partial field.
-                        (false, false) => {
-                            f.elem.r#type.elem.to_partial_type_ref_2(c.ir, false, false)
-                        }
-                        // A field with @stream.done and no @stream.not_null
-                        (true, false) => {
-                            optional(&f.elem.r#type.elem.to_type_ref_2(c.ir, true).name)
-                        }
-                        (false, true) => {
-                            f.elem.r#type.elem.to_partial_type_ref_2(c.ir, false, true)
-                        }
-                        (true, true) => f.elem.r#type.elem.to_type_ref_2(c.ir, true).name, // TODO: Fix.
-                    };
-                    (
-                        f.elem.name.as_str(),
-                        field,
-                        f.elem.docstring.as_ref().map(render_docstring),
-                    )
+                .map(|f| GoField {
+                    name: Cow::Borrowed(f.elem.name.as_str()),
+                    go_type: {
+                        let needed = f.attributes.get("stream.not_null").is_some();
+                        let wrapped = f.attributes.get("stream.with_state").is_some();
+                        let done = f.attributes.get("stream.done").is_some();
+                        let ret = f
+                            .elem
+                            .r#type
+                            .elem
+                            .to_partial_type_ref_go_type(c.ir, wrapped, needed, !(cls_done || done));
+                        ret
+                    },
+                    docstring: f.elem.docstring.as_ref().map(render_docstring),
                 })
                 .collect(),
             docstring: c.item.elem.docstring.as_ref().map(render_docstring),
@@ -510,13 +502,27 @@ pub fn to_go_literal(literal: &LiteralValue) -> String {
 
 pub trait ToTypeReferenceInTypeDefinition {
     fn to_type_ref_2(&self, ir: &IntermediateRepr, module_prefix: bool) -> GoType;
+    fn to_partial_type_ref_go_type(
+        &self,
+        ir: &IntermediateRepr,
+        wrapped: bool,
+        needed: bool,
+        module_prefix: bool,
+    ) -> GoType;
     fn to_type_ref_impl_2(&self, ir: &IntermediateRepr, module_prefix: bool) -> String;
-    fn to_partial_type_ref_2(&self, ir: &IntermediateRepr, wrapped: bool, needed: bool) -> String;
+    fn to_partial_type_ref_2(
+        &self,
+        ir: &IntermediateRepr,
+        wrapped: bool,
+        needed: bool,
+        default_module: &'static str,
+    ) -> String;
     fn to_partial_type_ref_impl_2(
         &self,
         ir: &IntermediateRepr,
         wrapped: bool,
         needed: bool,
+        default_module: &'static str,
     ) -> String;
 }
 
@@ -526,9 +532,9 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         GoType {
             name: simplified.to_type_ref_impl_2(ir, module_prefix),
             is_pointer: self.is_optional(),
+            is_map: matches!(simplified, FieldType::Map(_, _)),
             is_union: matches!(simplified, FieldType::Union(_)),
             is_slice: matches!(simplified, FieldType::List(_)),
-            is_map: matches!(simplified, FieldType::Map(_, _)),
             is_primitive: self.is_primitive(),
             is_class: matches!(simplified, FieldType::Class(_)),
             is_integer: matches!(simplified, FieldType::Primitive(TypeValue::Int)),
@@ -543,9 +549,42 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         }
     }
 
-    fn to_partial_type_ref_2(&self, ir: &IntermediateRepr, wrapped: bool, needed: bool) -> String {
+    fn to_partial_type_ref_go_type(
+        &self,
+        ir: &IntermediateRepr,
+        wrapped: bool,
+        needed: bool,
+        module_prefix: bool,
+    ) -> GoType {
+        let simplified = self.simplify();
+        // let wrapped = wrapped || simplified.streaming_behavior().map_or(false, |f| f.state);
+        // let needed = needed || simplified.streaming_behavior().map_or(false, |f| f.done);
+        GoType {
+            name: simplified.to_partial_type_ref_impl_2(ir, wrapped, needed, if module_prefix { "types" } else { "" }),
+            is_pointer: self.is_optional(),
+            is_map: matches!(simplified, FieldType::Map(_, _)),
+            is_union: matches!(simplified, FieldType::Union(_)),
+            is_slice: matches!(simplified, FieldType::List(_)),
+            is_primitive: self.is_primitive(),
+            is_class: matches!(simplified, FieldType::Class(_)),
+            is_integer: matches!(simplified, FieldType::Primitive(TypeValue::Int)),
+            is_enum: matches!(simplified, FieldType::Enum(_)),
+            underlying_type: match simplified {
+                FieldType::List(value) => Some(Box::new(value.to_type_ref_2(ir, module_prefix))),
+                _ => None,
+            },
+        }
+    }
+
+    fn to_partial_type_ref_2(
+        &self,
+        ir: &IntermediateRepr,
+        wrapped: bool,
+        needed: bool,
+        default_module: &'static str,
+    ) -> String {
         self.simplify()
-            .to_partial_type_ref_impl_2(ir, wrapped, needed)
+            .to_partial_type_ref_impl_2(ir, wrapped, needed, default_module)
     }
 
     // TODO: use_module_prefix boolean blindness. Replace with str?
@@ -598,6 +637,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         ir: &IntermediateRepr,
         wrapped: bool,
         needed: bool,
+        default_module: &'static str,
     ) -> String {
         let (base_type, metadata) = ir.distribute_metadata(self);
         let is_partial_type = !metadata.1.done;
@@ -605,7 +645,15 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             || matches!(self, FieldType::Union(_) | FieldType::RecursiveTypeAlias(_));
         let with_state = metadata.1.state;
         let constraints = metadata.0;
-        let module_prefix = if use_module_prefix { "types." } else { "" };
+        let module_prefix = if use_module_prefix {
+            "types."
+        } else {
+            if default_module.is_empty() {
+                ""
+            } else {
+                &format!("{}.", default_module)
+            }
+        };
         let base_rep = match base_type {
             FieldType::Class(name) => {
                 if wrapped || needed {
@@ -637,12 +685,15 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             } // TODO: Handle `needed` here.
 
             FieldType::List(inner) => {
-                format!("[]{}", inner.to_partial_type_ref_2(ir, true, false))
+                format!(
+                    "[]{}",
+                    inner.to_partial_type_ref_2(ir, true, false, default_module)
+                )
             }
             FieldType::Map(key, value) => format!(
                 "map[{}]{}",
-                key.to_type_ref_2(ir, use_module_prefix).name,
-                value.to_partial_type_ref_2(ir, false, false)
+                key.to_partial_type_ref_2(ir, false, false, default_module),
+                value.to_partial_type_ref_2(ir, false, false, default_module)
             ),
             FieldType::Primitive(r#type) => {
                 if needed || wrapped {
@@ -662,7 +713,10 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 todo!("Tuples are not supported in partial types.")
             }
             FieldType::Optional(inner) => {
-                format!("*{}", inner.to_partial_type_ref_2(ir, true, false))
+                format!(
+                    "*{}",
+                    inner.to_partial_type_ref_2(ir, true, false, default_module)
+                )
             }
             FieldType::WithMetadata { .. } => {
                 unreachable!("distribute_metadata makes this branch unreachable.")
@@ -723,7 +777,7 @@ mod tests {
             FieldType::Primitive(TypeValue::String),
         ))));
         let full = optional_list.to_type_ref_2(&ir, false);
-        let partial = optional_list.to_partial_type_ref_2(&ir, false, false);
+        let partial = optional_list.to_partial_type_ref_2(&ir, false, false, "");
         assert_eq!(full.name, "*[]string");
         assert_eq!(partial, "*[]string");
     }
@@ -735,7 +789,7 @@ mod tests {
             FieldType::Primitive(TypeValue::Int),
         ]);
         let full = union.to_type_ref_2(&ir, false);
-        let partial = union.to_partial_type_ref_2(&ir, false, false);
+        let partial = union.to_partial_type_ref_2(&ir, false, false, "");
         assert_eq!(full.name, "Union__string__int");
         assert_eq!(partial, "*types.Union__string__int");
     }
@@ -747,7 +801,7 @@ mod tests {
             FieldType::Primitive(TypeValue::Int),
         ]);
         let full = union.to_type_ref_2(&ir, false);
-        let partial = union.to_partial_type_ref_2(&ir, false, false);
+        let partial = union.to_partial_type_ref_2(&ir, false, false, "");
         assert_eq!(full.name, "*Union__string__int");
         assert_eq!(partial, "*types.Union__string__int");
     }

@@ -68,8 +68,13 @@ func (e *AliasedEnum) UnmarshalJSON(data []byte) error {
 }
 
 func (e *AliasedEnum) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "AliasedEnum" {
-		panic(fmt.Sprintf("expected AliasedEnum, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "AliasedEnum" {
+		panic(fmt.Sprintf("expected AliasedEnum, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = AliasedEnum(value)
@@ -138,8 +143,13 @@ func (e *Category) UnmarshalJSON(data []byte) error {
 }
 
 func (e *Category) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "Category" {
-		panic(fmt.Sprintf("expected Category, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Category" {
+		panic(fmt.Sprintf("expected Category, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = Category(value)
@@ -208,8 +218,13 @@ func (e *Category2) UnmarshalJSON(data []byte) error {
 }
 
 func (e *Category2) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "Category2" {
-		panic(fmt.Sprintf("expected Category2, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Category2" {
+		panic(fmt.Sprintf("expected Category2, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = Category2(value)
@@ -278,8 +293,13 @@ func (e *Category3) UnmarshalJSON(data []byte) error {
 }
 
 func (e *Category3) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "Category3" {
-		panic(fmt.Sprintf("expected Category3, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Category3" {
+		panic(fmt.Sprintf("expected Category3, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = Category3(value)
@@ -346,8 +366,13 @@ func (e *Color) UnmarshalJSON(data []byte) error {
 }
 
 func (e *Color) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "Color" {
-		panic(fmt.Sprintf("expected Color, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Color" {
+		panic(fmt.Sprintf("expected Color, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = Color(value)
@@ -410,8 +435,13 @@ func (e *DataType) UnmarshalJSON(data []byte) error {
 }
 
 func (e *DataType) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "DataType" {
-		panic(fmt.Sprintf("expected DataType, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DataType" {
+		panic(fmt.Sprintf("expected DataType, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = DataType(value)
@@ -467,8 +497,13 @@ func (e *DynEnumOne) UnmarshalJSON(data []byte) error {
 }
 
 func (e *DynEnumOne) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "DynEnumOne" {
-		panic(fmt.Sprintf("expected DynEnumOne, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynEnumOne" {
+		panic(fmt.Sprintf("expected DynEnumOne, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = DynEnumOne(value)
@@ -524,8 +559,13 @@ func (e *DynEnumTwo) UnmarshalJSON(data []byte) error {
 }
 
 func (e *DynEnumTwo) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "DynEnumTwo" {
-		panic(fmt.Sprintf("expected DynEnumTwo, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynEnumTwo" {
+		panic(fmt.Sprintf("expected DynEnumTwo, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = DynEnumTwo(value)
@@ -588,8 +628,13 @@ func (e *EnumInClass) UnmarshalJSON(data []byte) error {
 }
 
 func (e *EnumInClass) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "EnumInClass" {
-		panic(fmt.Sprintf("expected EnumInClass, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "EnumInClass" {
+		panic(fmt.Sprintf("expected EnumInClass, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = EnumInClass(value)
@@ -659,8 +704,13 @@ func (e *EnumOutput) UnmarshalJSON(data []byte) error {
 }
 
 func (e *EnumOutput) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "EnumOutput" {
-		panic(fmt.Sprintf("expected EnumOutput, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "EnumOutput" {
+		panic(fmt.Sprintf("expected EnumOutput, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = EnumOutput(value)
@@ -721,8 +771,13 @@ func (e *Hobby) UnmarshalJSON(data []byte) error {
 }
 
 func (e *Hobby) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "Hobby" {
-		panic(fmt.Sprintf("expected Hobby, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Hobby" {
+		panic(fmt.Sprintf("expected Hobby, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = Hobby(value)
@@ -787,8 +842,13 @@ func (e *MapKey) UnmarshalJSON(data []byte) error {
 }
 
 func (e *MapKey) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "MapKey" {
-		panic(fmt.Sprintf("expected MapKey, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MapKey" {
+		panic(fmt.Sprintf("expected MapKey, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = MapKey(value)
@@ -851,8 +911,13 @@ func (e *NamedArgsSingleEnum) UnmarshalJSON(data []byte) error {
 }
 
 func (e *NamedArgsSingleEnum) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "NamedArgsSingleEnum" {
-		panic(fmt.Sprintf("expected NamedArgsSingleEnum, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NamedArgsSingleEnum" {
+		panic(fmt.Sprintf("expected NamedArgsSingleEnum, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = NamedArgsSingleEnum(value)
@@ -915,8 +980,13 @@ func (e *NamedArgsSingleEnumList) UnmarshalJSON(data []byte) error {
 }
 
 func (e *NamedArgsSingleEnumList) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "NamedArgsSingleEnumList" {
-		panic(fmt.Sprintf("expected NamedArgsSingleEnumList, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NamedArgsSingleEnumList" {
+		panic(fmt.Sprintf("expected NamedArgsSingleEnumList, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = NamedArgsSingleEnumList(value)
@@ -981,8 +1051,13 @@ func (e *OptionalTest_CategoryType) UnmarshalJSON(data []byte) error {
 }
 
 func (e *OptionalTest_CategoryType) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "OptionalTest_CategoryType" {
-		panic(fmt.Sprintf("expected OptionalTest_CategoryType, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OptionalTest_CategoryType" {
+		panic(fmt.Sprintf("expected OptionalTest_CategoryType, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = OptionalTest_CategoryType(value)
@@ -1049,8 +1124,13 @@ func (e *OrderStatus) UnmarshalJSON(data []byte) error {
 }
 
 func (e *OrderStatus) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "OrderStatus" {
-		panic(fmt.Sprintf("expected OrderStatus, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OrderStatus" {
+		panic(fmt.Sprintf("expected OrderStatus, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = OrderStatus(value)
@@ -1115,8 +1195,13 @@ func (e *Tag) UnmarshalJSON(data []byte) error {
 }
 
 func (e *Tag) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "Tag" {
-		panic(fmt.Sprintf("expected Tag, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Tag" {
+		panic(fmt.Sprintf("expected Tag, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = Tag(value)
@@ -1189,8 +1274,13 @@ func (e *TestEnum) UnmarshalJSON(data []byte) error {
 }
 
 func (e *TestEnum) Decode(holder cffi.CFFIValueEnum) {
-	if string(holder.Name()) != "TestEnum" {
-		panic(fmt.Sprintf("expected TestEnum, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestEnum" {
+		panic(fmt.Sprintf("expected TestEnum, got %s", string(typeName.Name())))
 	}
 	value := string(holder.Value())
 	*e = TestEnum(value)

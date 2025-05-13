@@ -51,10 +51,12 @@ var (
 	dynamicCallbacks = make(map[uint32]CallbackData)
 	callbackMutex    sync.RWMutex
 	typeMap          TypeMap
+	streamTypeMap    TypeMap
 )
 
-func SetTypeMap(t TypeMap) {
+func SetTypeMap(t TypeMap, s TypeMap) {
 	typeMap = t
+	streamTypeMap = s
 }
 
 //export error_callback

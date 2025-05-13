@@ -1,6 +1,8 @@
 use anyhow::Result;
 use baml_runtime::client_registry::{ClientProperty, ClientProvider, ClientRegistry};
-use baml_types::{BamlMedia, BamlValue, BamlValueWithMeta, HasFieldType, ToUnionName};
+use baml_types::{
+    BamlMedia, BamlValue, BamlValueWithMeta, HasCompletion, HasFieldType, StreamingBehavior, ToUnionName
+};
 
 #[allow(non_snake_case)]
 #[path = "cffi/cffi_generated.rs"]
@@ -22,6 +24,22 @@ pub fn buffer_to_cffi_function_arguments(buffer: &[u8]) -> Result<BamlFunctionAr
         .value_as_cffifunction_arguments()
         .expect("Failed to convert CFFIValueHolder to CFFIFunctionArguments")
         .into())
+}
+
+fn create_cffi_type_name<'a, 'b>(
+    name: &'a str,
+    mut builder: &'a mut flatbuffers::FlatBufferBuilder<'b>,
+    allow_partials: bool,
+) -> flatbuffers::WIPOffset<CFFITypeName<'b>> {
+    let name_offset = builder.create_string(name);
+    let namespace_offset = builder.create_string(if allow_partials { "stream_types" } else { "types" });
+    CFFITypeName::create(
+        &mut builder,
+        &CFFITypeNameArgs {
+            namespace: Some(namespace_offset),
+            name: Some(name_offset),
+        },
+    )
 }
 
 impl From<cffi_generated::cffi::CFFIValueHolder<'_>> for BamlValue {
@@ -115,6 +133,8 @@ impl From<CFFIValueClass<'_>> for BamlValue {
             value
                 .name()
                 .expect("Failed to have CFFIValueClass name")
+                .name()
+                .expect("Failed to have CFFITypeName name")
                 .to_string(),
             value
                 .fields()
@@ -132,6 +152,8 @@ impl From<CFFIValueEnum<'_>> for BamlValue {
             value
                 .name()
                 .expect("Failed to have CFFIValueEnum name")
+                .name()
+                .expect("Failed to have CFFITypeName name")
                 .to_string(),
             value
                 .value()
@@ -293,11 +315,12 @@ impl From<CFFIValueStreamingState<'_>> for BamlValue {
 pub fn serialize_baml_value_with_meta<'a, 'b, T>(
     value: &'b BamlValueWithMeta<T>,
     mut builder: &'a mut flatbuffers::FlatBufferBuilder<'b>,
+    allow_partials: bool,
 ) -> &'a [u8]
 where
-    T: HasFieldType,
+    T: HasFieldType + HasCompletion,
 {
-    let value_holder = from_baml_value_with_meta(value, &mut builder);
+    let value_holder = from_baml_value_with_meta(value, &mut builder, allow_partials);
     // println!("value_holder: {:#?}", value_holder);
     builder.finish(value_holder, None);
     builder.finished_data()
@@ -306,10 +329,12 @@ where
 fn from_baml_value_with_meta<'a, 'b, T>(
     value: &'b BamlValueWithMeta<T>,
     mut builder: &'a mut flatbuffers::FlatBufferBuilder<'b>,
+    allow_partials: bool,
 ) -> flatbuffers::WIPOffset<CFFIValueHolder<'b>>
 where
-    T: HasFieldType,
+    T: HasFieldType + HasCompletion,
 {
+    let allow_partials = allow_partials && !value.completion().required_done;
     let (value_type, value_holder) = match value {
         BamlValueWithMeta::String(val, _) => {
             // Create a FlatBuffers string and get its offset.
@@ -347,7 +372,7 @@ where
         BamlValueWithMeta::List(val, _) => {
             let mut items = Vec::new();
             for v in val.iter() {
-                items.push(from_baml_value_with_meta(v, &mut builder));
+                items.push(from_baml_value_with_meta(v, &mut builder, allow_partials));
             }
 
             let values = builder.create_vector_from_iter(items.into_iter());
@@ -368,7 +393,7 @@ where
             let mut items = Vec::new();
             for (k, v) in val.iter() {
                 let key = builder.create_string(k);
-                let value = from_baml_value_with_meta(v, &mut builder);
+                let value = from_baml_value_with_meta(v, &mut builder, allow_partials);
 
                 items.push(CFFIMapEntry::create(
                     &mut builder,
@@ -393,11 +418,11 @@ where
 
             (CFFIValueUnion::CFFIValueMap, value_map.as_union_value())
         }
-        BamlValueWithMeta::Class(class_name, fields, _) => {
+        BamlValueWithMeta::Class(class_name, fields, meta) => {
             let mut items = Vec::new();
             for (k, v) in fields.iter() {
                 let key = builder.create_string(k);
-                let value = from_baml_value_with_meta(v, &mut builder);
+                let value = from_baml_value_with_meta(v, &mut builder, allow_partials);
                 items.push(CFFIMapEntry::create(
                     &mut builder,
                     &CFFIMapEntryArgs {
@@ -408,8 +433,8 @@ where
             }
 
             let entries = builder.create_vector_from_iter(items.into_iter());
+            let class_name = create_cffi_type_name(class_name, &mut builder, allow_partials);
 
-            let class_name = builder.create_string(class_name);
             let value_class = CFFIValueClass::create(
                 &mut builder,
                 &CFFIValueClassArgs {
@@ -422,8 +447,9 @@ where
             (CFFIValueUnion::CFFIValueClass, value_class.as_union_value())
         }
         BamlValueWithMeta::Enum(enum_name, enum_value, _) => {
-            let enum_name = builder.create_string(enum_name);
             let enum_value = builder.create_string(enum_value);
+            // enums can never be partial
+            let enum_name = create_cffi_type_name(enum_name, &mut builder, false);
             let value_enum = CFFIValueEnum::create(
                 &mut builder,
                 &CFFIValueEnumArgs {
@@ -542,13 +568,13 @@ where
         let variant_name = options[value_type_index].to_union_name();
         let options = builder.create_vector_from_iter(options_vec.into_iter());
 
-        let name_offset = builder.create_string(&target_type.to_union_name());
         let variant_name_offset = builder.create_string(&variant_name);
+        let union_name = create_cffi_type_name(&target_type.to_union_name(), &mut builder, allow_partials);
 
         let value_union_variant = CFFIValueUnionVariant::create(
             &mut builder,
             &CFFIValueUnionVariantArgs {
-                name: Some(name_offset),
+                name: Some(union_name),
                 variant_name: Some(variant_name_offset),
                 field_types: Some(options),
                 value_type_index: value_type_index as i32,

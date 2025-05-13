@@ -75,8 +75,13 @@ func (e *{{ enum.name }}) UnmarshalJSON(data []byte) error {
 }
 
 func (e *{{ enum.name }}) Decode(holder cffi.CFFIValueEnum) {
-    if string(holder.Name()) != "{{ enum.name }}" {
-        panic(fmt.Sprintf("expected {{ enum.name }}, got %s", string(holder.Name())))
+    typeName := holder.Name(nil)
+
+    if string(typeName.Namespace()) != "types" {
+        panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+    }
+    if string(typeName.Name()) != "{{ enum.name }}" {
+        panic(fmt.Sprintf("expected {{ enum.name }}, got %s", string(typeName.Name())))
     }
     value := string(holder.Value())
     *e = {{ enum.name }}(value)

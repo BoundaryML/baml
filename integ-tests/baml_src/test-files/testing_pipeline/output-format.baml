@@ -4,12 +4,12 @@ class Recipe {
 }
 
 class Quantity {
-  amount int | float
+  amount float @stream.not_null
   unit string?
 }
 
 function AaaSamOutputFormat(recipe: string) -> Recipe {
-  client GPT35
+  client "ollama/llama3.1:latest"
   prompt #"
     Return this value back to me: {{recipe}}
 

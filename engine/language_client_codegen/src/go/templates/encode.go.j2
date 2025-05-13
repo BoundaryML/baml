@@ -6,6 +6,7 @@ import (
 	"reflect"
 
   "{{ package_name }}/baml_client/types"
+  "{{ package_name }}/baml_client/stream_types"
 )
 
 type BamlEncoder interface {
@@ -21,6 +22,12 @@ var typeMap = map[string]reflect.Type{
   {% endfor %}
   {% for union in unions %}
   "{{ union.name }}": reflect.TypeOf(types.{{ union.name }}{}),
+  {% endfor %}
+}
+
+var streamTypeMap = map[string]reflect.Type{
+  {% for class in classes %}
+  "{{ class.name }}": reflect.TypeOf(stream_types.{{ class.name }}{}),
   {% endfor %}
 }
 

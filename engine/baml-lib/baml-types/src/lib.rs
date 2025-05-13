@@ -11,7 +11,7 @@ mod field_type;
 mod generator;
 mod value_expr;
 
-pub use baml_value::{BamlValue, BamlValueWithMeta, Completion, CompletionState};
+pub use baml_value::{BamlValue, BamlValueWithMeta, Completion, CompletionState, HasCompletion};
 pub use constraint::*;
 pub use field_type::{
     Arrow, FieldType, HasFieldType, LiteralValue, StreamingBehavior, ToUnionName, TypeValue,

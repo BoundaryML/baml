@@ -49,6 +49,12 @@ impl baml_types::HasFieldType for ResponseValueMeta {
     }
 }
 
+impl baml_types::HasCompletion for ResponseValueMeta {
+    fn completion(&self) -> &Completion {
+        &self.2
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum SerializeMode {
     Final,
