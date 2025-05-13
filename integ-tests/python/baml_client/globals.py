@@ -40,25 +40,4 @@ def load_env_vars() -> Dict[str, str]:
     """Load environment variables from the current environment."""
     return os.environ.copy()
 
-try:
-    import dotenv
-    from unittest.mock import patch
-
-    # Monkeypatch load_dotenv to call reset_baml_env_vars after execution
-    original_load_dotenv = dotenv.load_dotenv
-
-    def patched_load_dotenv(*args: Any, **kwargs: Any) -> Any:
-        result = original_load_dotenv(*args, **kwargs)
-        try:
-            reset_baml_env_vars(os.environ.copy())
-        except BamlError:
-            # swallow the error
-            pass
-        return result
-
-    patch('dotenv.load_dotenv', patched_load_dotenv).start()
-except ImportError:
-    # dotenv is not installed, so we do nothing
-    pass
-
 __all__ = []
