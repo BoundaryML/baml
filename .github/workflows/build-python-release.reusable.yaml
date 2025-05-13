@@ -58,6 +58,7 @@ jobs:
 
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.runs_on }}
+    # See also https://github.com/mcrumiller/polars/.github/workflows/release-python.yml#L282
     steps:
       - name: Setup build environment (ARM64 Windows)
         if: matrix._.target == 'aarch64-pc-windows-msvc'
@@ -106,14 +107,14 @@ jobs:
 
           Get-Content $Env:GITHUB_PATH | Out-Host
 
-      - name: Check build environment (ARM64 Windows)
-        if: matrix._.target == 'aarch64-pc-windows-msvc'
-        run: |
-          set -x
-          bash --version
-          rustup show
-          clang -v
-          cmake --version
+      # - name: Check build environment (ARM64 Windows)
+      #   if: matrix._.target == 'aarch64-pc-windows-msvc'
+      #   run: |
+      #     set -x
+      #     bash --version
+      #     rustup show
+      #     clang -v
+      #     cmake --version
 
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
