@@ -58,7 +58,6 @@ jobs:
 
           - target: aarch64-pc-windows-msvc
             runs_on: windows-11-arm
-            interpreter: 3.11 3.12 3.13
             architecture: arm64
 
     name: ${{ matrix._.target }}
@@ -91,11 +90,40 @@ jobs:
           cmake --version
 
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      # Setup Python for non-ARM64 Windows targets and other OS
+      - name: Setup Python (default)
+        if: matrix._.target != 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix._.target == 'aarch64-pc-windows-msvc' && '3.11' || '3.8' }}
+          python-version: "3.8"
           architecture: ${{ matrix._.architecture }}
-        id: python-setup
+
+      # Setup Python versions for ARM64 Windows
+      - name: Setup Python 3.11 (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
+        id: py311
+        with:
+          python-version: "3.11"
+          architecture: "arm64"
+          allow-prereleases: true
+      - name: Setup Python 3.12 (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
+        id: py312
+        with:
+          python-version: "3.12"
+          architecture: "arm64"
+          allow-prereleases: true
+      - name: Setup Python 3.13 (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
+        id: py313
+        with:
+          python-version: "3.13"
+          architecture: "arm64"
+          allow-prereleases: true
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -107,7 +135,7 @@ jobs:
           command: build
           # building in engine/ ensures that we pick up .cargo/config.toml
           working-directory: engine
-          args: --release --out language_client_python/dist --manifest-path language_client_python/Cargo.toml ${{ matrix._.target == 'aarch64-pc-windows-msvc' && format('--interpreter {0}', steps.python-setup.outputs.python-path) || '' }}
+          args: --release --out language_client_python/dist --manifest-path language_client_python/Cargo.toml ${{ (matrix._.target == 'aarch64-pc-windows-msvc' && format('--interpreter {0} {1} {2}', steps.py311.outputs.python-path, steps.py312.outputs.python-path, steps.py313.outputs.python-path)) || '' }}
           manylinux: ${{ matrix._.manylinux }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
@@ -121,6 +149,6 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix._.target }}-${{ matrix._.interpreter || 'all' }}
+          name: wheels-${{ matrix._.target }}
           path: engine/language_client_python/dist
           if-no-files-found: error
