@@ -228,6 +228,27 @@ export const AudioInput = async (
 };
 
 /**
+ * Executes the "AudioInputOpenai" BAML action.
+ *
+ * This server action calls the underlying BAML function "AudioInputOpenai"
+ * with the specified parameters.
+ *
+ * @param { Audio } aud - Input parameter.
+ * @param { string } prompt - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const AudioInputOpenai = async (
+  aud: Audio,
+  prompt: string,
+): Promise<string> => {
+  return b.AudioInputOpenai(
+    aud,
+    prompt,
+  );
+};
+
+/**
  * Executes the "BuildLinkedList" BAML action.
  *
  * This server action calls the underlying BAML function "BuildLinkedList"
