@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, Literal, cast
 from typing_extensions import NotRequired
 import pprint
+import os
 
 import baml_py
 from pydantic import BaseModel, ValidationError, create_model
@@ -111,6 +112,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
     {% endfor %}

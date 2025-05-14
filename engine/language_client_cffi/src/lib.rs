@@ -196,9 +196,10 @@ fn call_function_from_c_inner(
     // Spawn an async task to await the future and call the callback when done.
     // Ensure that a Tokio runtime is running in your application.
     let rt = RUNTIME.clone();
+    // TODO: Come back to this if the entire thing works
     rt.spawn(async move {
         let (result, _) = runtime
-            .call_function(func_name, &function_args.kwargs, &ctx, None, None, None)
+            .call_function(func_name, &function_args.kwargs, &ctx, None, None, None, HashMap::new())
             .await;
         safe_trigger_callback(id, true, result);
     });

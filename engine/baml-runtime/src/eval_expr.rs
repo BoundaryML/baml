@@ -217,9 +217,10 @@ async fn beta_reduce<'a>(
                     tx.unbounded_send(vec![app_span]).unwrap();
                 }
                 if eval_final_llm_fn {
+                    // TODO: Come back to this if the entire thing works
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
-                        .call_function(name.clone(), &args_map, &ctx, None, None, None)
+                        .call_function(name.clone(), &args_map, &ctx, None, None, None, HashMap::new())
                         .await
                         .0;
 

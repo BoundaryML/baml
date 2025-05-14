@@ -15,6 +15,7 @@
 # fmt: off
 from typing import Any, Dict, List, Optional, Union, TypedDict, Type, Literal
 from typing_extensions import NotRequired
+import os
 
 import baml_py
 
@@ -57,6 +58,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -80,6 +82,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -103,6 +106,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -126,6 +130,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -149,6 +154,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -172,6 +178,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -195,6 +202,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -218,6 +226,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -241,6 +250,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -264,6 +274,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -287,6 +298,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -310,6 +322,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -333,6 +346,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -356,6 +370,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -379,6 +394,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -402,6 +418,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -425,6 +442,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -448,6 +466,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -471,6 +490,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -494,6 +514,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -517,6 +538,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -540,6 +562,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -563,6 +586,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -586,6 +610,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -609,6 +634,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -632,6 +658,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -655,6 +682,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -678,6 +706,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -701,6 +730,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -724,6 +754,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -747,6 +778,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -770,6 +802,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -793,6 +826,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -816,6 +850,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -839,6 +874,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -862,6 +898,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -885,6 +922,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -908,6 +946,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -931,6 +970,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -954,6 +994,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -977,6 +1018,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1000,6 +1042,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1023,6 +1066,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1046,6 +1090,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1069,6 +1114,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1092,6 +1138,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1115,6 +1162,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1138,6 +1186,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1161,6 +1210,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1184,6 +1234,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1207,6 +1258,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1230,6 +1282,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1253,6 +1306,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1276,6 +1330,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1299,6 +1354,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1322,6 +1378,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1345,6 +1402,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1368,6 +1426,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1391,6 +1450,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1414,6 +1474,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1437,6 +1498,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1460,6 +1522,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1483,6 +1546,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1506,6 +1570,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1529,6 +1594,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1552,6 +1618,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1575,6 +1642,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1598,6 +1666,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1621,6 +1690,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1644,6 +1714,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1667,6 +1738,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1690,6 +1762,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1713,6 +1786,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1736,6 +1810,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1759,6 +1834,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1782,6 +1858,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1805,6 +1882,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1828,6 +1906,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1851,6 +1930,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1874,6 +1954,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1897,6 +1978,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1920,6 +2002,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1943,6 +2026,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1966,6 +2050,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1989,6 +2074,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2012,6 +2098,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2035,6 +2122,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2058,6 +2146,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2081,6 +2170,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2104,6 +2194,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2127,6 +2218,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2150,6 +2242,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2173,6 +2266,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2196,6 +2290,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2219,6 +2314,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2242,6 +2338,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2265,6 +2362,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2288,6 +2386,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2311,6 +2410,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2334,6 +2434,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2357,6 +2458,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2380,6 +2482,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2403,6 +2506,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2426,6 +2530,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2449,6 +2554,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2472,6 +2578,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2495,6 +2602,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2518,6 +2626,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2541,6 +2650,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2564,6 +2674,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2587,6 +2698,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2610,6 +2722,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2633,6 +2746,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2656,6 +2770,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2679,6 +2794,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2702,6 +2818,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2725,6 +2842,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2748,6 +2866,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2771,6 +2890,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2794,6 +2914,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2817,6 +2938,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2840,6 +2962,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2863,6 +2986,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2886,6 +3010,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2909,6 +3034,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2932,6 +3058,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2955,6 +3082,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2978,6 +3106,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3001,6 +3130,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3024,6 +3154,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3047,6 +3178,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3070,6 +3202,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3093,6 +3226,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3116,6 +3250,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3139,6 +3274,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3162,6 +3298,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3185,6 +3322,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3208,6 +3346,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3231,6 +3370,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3254,6 +3394,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3277,6 +3418,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3300,6 +3442,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3323,6 +3466,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3346,6 +3490,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3369,6 +3514,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3392,6 +3538,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3415,6 +3562,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3438,6 +3586,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3461,6 +3610,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3484,6 +3634,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3507,6 +3658,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3530,6 +3682,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3553,6 +3706,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3576,6 +3730,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3599,6 +3754,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3622,6 +3778,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3645,6 +3802,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3668,6 +3826,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3691,6 +3850,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3714,6 +3874,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3737,6 +3898,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3760,6 +3922,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3783,6 +3946,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3806,6 +3970,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3829,6 +3994,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3852,6 +4018,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3875,6 +4042,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3898,6 +4066,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3921,6 +4090,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3944,6 +4114,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3967,6 +4138,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3990,6 +4162,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4013,6 +4186,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4036,6 +4210,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4059,6 +4234,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4082,6 +4258,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4105,6 +4282,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4128,6 +4306,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4151,6 +4330,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4174,6 +4354,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4197,6 +4378,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4220,6 +4402,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4243,6 +4426,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4277,6 +4461,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4300,6 +4485,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4323,6 +4509,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4346,6 +4533,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4369,6 +4557,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4392,6 +4581,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4415,6 +4605,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4438,6 +4629,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4461,6 +4653,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4484,6 +4677,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4507,6 +4701,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4530,6 +4725,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4553,6 +4749,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4576,6 +4773,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4599,6 +4797,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4622,6 +4821,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4645,6 +4845,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4668,6 +4869,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4691,6 +4893,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4714,6 +4917,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4737,6 +4941,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4760,6 +4965,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4783,6 +4989,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4806,6 +5013,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4829,6 +5037,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4852,6 +5061,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4875,6 +5085,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4898,6 +5109,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4921,6 +5133,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4944,6 +5157,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4967,6 +5181,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4990,6 +5205,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5013,6 +5229,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5036,6 +5253,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5059,6 +5277,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5082,6 +5301,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5105,6 +5325,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5128,6 +5349,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5151,6 +5373,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5174,6 +5397,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5197,6 +5421,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5220,6 +5445,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5243,6 +5469,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5266,6 +5493,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5289,6 +5517,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5312,6 +5541,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5335,6 +5565,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5358,6 +5589,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5381,6 +5613,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5404,6 +5637,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5427,6 +5661,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5450,6 +5685,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5473,6 +5709,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5496,6 +5733,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5519,6 +5757,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5542,6 +5781,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5565,6 +5805,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5588,6 +5829,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5611,6 +5853,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5634,6 +5877,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5657,6 +5901,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5680,6 +5925,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5703,6 +5949,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5726,6 +5973,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5749,6 +5997,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5772,6 +6021,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5795,6 +6045,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5818,6 +6069,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5841,6 +6093,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5864,6 +6117,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5887,6 +6141,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5910,6 +6165,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5933,6 +6189,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5956,6 +6213,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5979,6 +6237,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6002,6 +6261,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6025,6 +6285,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6048,6 +6309,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6071,6 +6333,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6094,6 +6357,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6117,6 +6381,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6140,6 +6405,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6163,6 +6429,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6186,6 +6453,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6209,6 +6477,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6232,6 +6501,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6255,6 +6525,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6278,6 +6549,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6301,6 +6573,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6324,6 +6597,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6347,6 +6621,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6370,6 +6645,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6393,6 +6669,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6416,6 +6693,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6439,6 +6717,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6462,6 +6741,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6485,6 +6765,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6508,6 +6789,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6531,6 +6813,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6554,6 +6837,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6577,6 +6861,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6600,6 +6885,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6623,6 +6909,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6646,6 +6933,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6669,6 +6957,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6692,6 +6981,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6715,6 +7005,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6738,6 +7029,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6761,6 +7053,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6784,6 +7077,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6807,6 +7101,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6830,6 +7125,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6853,6 +7149,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6876,6 +7173,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6899,6 +7197,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6922,6 +7221,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6945,6 +7245,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6968,6 +7269,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6991,6 +7293,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7014,6 +7317,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7037,6 +7341,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7060,6 +7365,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7083,6 +7389,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7106,6 +7413,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7129,6 +7437,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7152,6 +7461,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7175,6 +7485,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7198,6 +7509,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7221,6 +7533,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7244,6 +7557,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7267,6 +7581,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7290,6 +7605,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7313,6 +7629,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7336,6 +7653,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7359,6 +7677,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7382,6 +7701,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7405,6 +7725,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7428,6 +7749,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7451,6 +7773,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7474,6 +7797,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7497,6 +7821,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7520,6 +7845,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7543,6 +7869,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7566,6 +7893,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7589,6 +7917,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7612,6 +7941,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7635,6 +7965,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7658,6 +7989,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7681,6 +8013,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7704,6 +8037,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7727,6 +8061,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7750,6 +8085,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7773,6 +8109,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7796,6 +8133,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7819,6 +8157,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7842,6 +8181,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7865,6 +8205,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7888,6 +8229,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7911,6 +8253,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7934,6 +8277,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7957,6 +8301,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7980,6 +8325,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8003,6 +8349,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8026,6 +8373,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8049,6 +8397,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8072,6 +8421,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8095,6 +8445,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8118,6 +8469,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8141,6 +8493,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8164,6 +8517,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8187,6 +8541,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8210,6 +8565,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8233,6 +8589,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8256,6 +8613,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8279,6 +8637,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8302,6 +8661,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8325,6 +8685,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8348,6 +8709,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8371,6 +8733,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8394,6 +8757,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8417,6 +8781,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8440,6 +8805,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8463,6 +8829,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     

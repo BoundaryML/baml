@@ -3,6 +3,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
 use crate::internal::llm_client::LLMResponse;
+use crate::runtime::CachedClient;
 use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
 use crate::type_builder::TypeBuilder;
 use crate::RuntimeContextManager;
@@ -45,6 +46,15 @@ use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
     // Gets a top-level client/strategy by name
+    // There are two types of clients:
+    // 1. Shorthand clients (e.g. `openai/gpt-4`)
+    // 2. Named clients (e.g. `my_custom_client`)
+    //
+    // For named clients, we first check if the client is cached in the RuntimeContext.
+    // If it is, we return the cached client.
+    // If it is not, we get the client from the IR and cache it.
+    //
+    // For shorthand clients, we parse the client spec and return a new LLMProvider.
     fn get_llm_provider(
         &'a self,
         client_spec: &ClientSpec,
@@ -76,16 +86,29 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 let clients = &self.clients;
 
-                if let Some(client) = clients.get(client_name) {
-                    Ok(client.clone())
-                } else {
+                // anonymous function to create a new client
+                let create_client = || -> Result<Arc<LLMProvider>> {
                     let walker = self
                         .ir()
                         .find_client(client_name)
                         .context(format!("Could not find client with name: {}", client_name))?;
-                    let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-                    clients.insert(client_name.into(), client.clone());
-                    Ok(client)
+                    let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
+                    clients.insert(client_name.into(), CachedClient::new(new_client.clone(), ctx.env_vars().clone()));
+                    Ok(new_client)
+                };
+
+                match clients.get(client_name) {
+                    Some(client) if !client.has_env_vars_changed(ctx.env_vars()) => {
+                        println!("Returning cached client {}", client_name);
+                        Ok(client.provider.clone())
+                    }
+                    _ => {
+                        // Either client doesn't exist or env vars have changed
+                        if let Some(client) = clients.get(client_name) {
+                            clients.remove(client_name);
+                        }
+                        create_client()
+                    }
                 }
             }
         }

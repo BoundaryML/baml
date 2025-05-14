@@ -16,6 +16,7 @@
 from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, Literal, cast
 from typing_extensions import NotRequired
 import pprint
+import os
 
 import baml_py
 from pydantic import BaseModel, ValidationError, create_model
@@ -122,6 +123,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Recipe, raw.cast_to(types, types, partial_types, False))
     
@@ -149,6 +151,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.LinkedListAliasNode, raw.cast_to(types, types, partial_types, False))
     
@@ -176,6 +179,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Checked[int, Literal["gt_ten"]], raw.cast_to(types, types, partial_types, False))
     
@@ -203,6 +207,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -230,6 +235,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -257,6 +263,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -284,6 +291,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -311,6 +319,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -338,6 +347,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.OptionalListAndMap, raw.cast_to(types, types, partial_types, False))
     
@@ -365,6 +375,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -392,6 +403,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -419,6 +431,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.LinkedList, raw.cast_to(types, types, partial_types, False))
     
@@ -446,6 +459,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Tree, raw.cast_to(types, types, partial_types, False))
     
@@ -473,6 +487,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.ClassToRecAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -500,6 +515,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Union[types.DynEnumTwo, str], raw.cast_to(types, types, partial_types, False))
     
@@ -527,6 +543,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -554,6 +571,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -581,6 +599,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -608,6 +627,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -635,6 +655,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], raw.cast_to(types, types, partial_types, False))
     
@@ -662,6 +683,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -689,6 +711,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -716,6 +739,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -743,6 +767,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -770,6 +795,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -797,6 +823,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Union[types.OriginalA, types.OriginalB], raw.cast_to(types, types, partial_types, False))
     
@@ -824,6 +851,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.DummyOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -851,6 +879,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.DynamicClassTwo, raw.cast_to(types, types, partial_types, False))
     
@@ -878,6 +907,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.DynInputOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -905,6 +935,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[types.DynInputOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -932,6 +963,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -959,6 +991,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.ContactInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -986,6 +1019,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.DynamicSchema, raw.cast_to(types, types, partial_types, False))
     
@@ -1013,6 +1047,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[Union[types.Hobby, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -1040,6 +1075,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -1067,6 +1103,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[types.Person], raw.cast_to(types, types, partial_types, False))
     
@@ -1094,6 +1131,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.ReceiptInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -1121,6 +1159,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
@@ -1148,6 +1187,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
@@ -1175,6 +1215,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Optional[types.ClassOptionalOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -1202,6 +1243,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Optional[types.ClassOptionalOutput2], raw.cast_to(types, types, partial_types, False))
     
@@ -1229,6 +1271,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[types.EnumOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -1256,6 +1299,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.EnumOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -1283,6 +1327,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.LiteralClassHello, raw.cast_to(types, types, partial_types, False))
     
@@ -1310,6 +1355,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Union[types.LiteralClassOne, types.LiteralClassTwo], raw.cast_to(types, types, partial_types, False))
     
@@ -1337,6 +1383,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1364,6 +1411,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(bool, raw.cast_to(types, types, partial_types, False))
     
@@ -1391,6 +1439,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TestOutputClass, raw.cast_to(types, types, partial_types, False))
     
@@ -1418,6 +1467,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[types.TestOutputClass], raw.cast_to(types, types, partial_types, False))
     
@@ -1445,6 +1495,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TestClassNested, raw.cast_to(types, types, partial_types, False))
     
@@ -1472,6 +1523,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TestClassWithEnum, raw.cast_to(types, types, partial_types, False))
     
@@ -1499,6 +1551,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -1526,6 +1579,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Literal[False], raw.cast_to(types, types, partial_types, False))
     
@@ -1553,6 +1607,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Literal[5], raw.cast_to(types, types, partial_types, False))
     
@@ -1580,6 +1635,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Literal["example output"], raw.cast_to(types, types, partial_types, False))
     
@@ -1607,6 +1663,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -1634,6 +1691,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TestEnum, raw.cast_to(types, types, partial_types, False))
     
@@ -1661,6 +1719,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TestClassAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -1688,6 +1747,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1715,6 +1775,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.RaysData, raw.cast_to(types, types, partial_types, False))
     
@@ -1742,6 +1803,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.OrderInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -1769,6 +1831,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.SearchParams, raw.cast_to(types, types, partial_types, False))
     
@@ -1796,6 +1859,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Dict[types.MapKey, str], raw.cast_to(types, types, partial_types, False))
     
@@ -1823,6 +1887,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str], raw.cast_to(types, types, partial_types, False))
     
@@ -1850,6 +1915,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Dict[Literal["key"], str], raw.cast_to(types, types, partial_types, False))
     
@@ -1877,6 +1943,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.JsonValue, raw.cast_to(types, types, partial_types, False))
     
@@ -1904,6 +1971,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1931,6 +1999,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Union[Literal[1], Literal[True], Literal["string output"]], raw.cast_to(types, types, partial_types, False))
     
@@ -1958,6 +2027,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Checked[types.BlockConstraint, Literal["cross_field"]], raw.cast_to(types, types, partial_types, False))
     
@@ -1985,6 +2055,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.ClassWithBlockDone, raw.cast_to(types, types, partial_types, False))
     
@@ -2012,6 +2083,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.ClassWithoutDone, raw.cast_to(types, types, partial_types, False))
     
@@ -2039,6 +2111,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.NestedBlockConstraint, raw.cast_to(types, types, partial_types, False))
     
@@ -2066,6 +2139,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.SemanticContainer, raw.cast_to(types, types, partial_types, False))
     
@@ -2093,6 +2167,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Dict[str, List[str]], raw.cast_to(types, types, partial_types, False))
     
@@ -2120,6 +2195,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.MergeAttrs, raw.cast_to(types, types, partial_types, False))
     
@@ -2147,6 +2223,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.DynamicOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -2174,6 +2251,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]], raw.cast_to(types, types, partial_types, False))
     
@@ -2201,6 +2279,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.ClassForNullLiteral, raw.cast_to(types, types, partial_types, False))
     
@@ -2228,6 +2307,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2255,6 +2335,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[Optional[types.OptionalTest_ReturnType]], raw.cast_to(types, types, partial_types, False))
     
@@ -2282,6 +2363,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.FooAny, raw.cast_to(types, types, partial_types, False))
     
@@ -2309,6 +2391,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Checked[int, Literal["too_big"]], raw.cast_to(types, types, partial_types, False))
     
@@ -2336,6 +2419,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Union[int, str, bool, float], raw.cast_to(types, types, partial_types, False))
     
@@ -2363,6 +2447,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2390,6 +2475,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2417,6 +2503,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2444,6 +2531,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2471,6 +2559,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2498,6 +2587,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2525,6 +2615,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2552,6 +2643,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.RecAliasOne, raw.cast_to(types, types, partial_types, False))
     
@@ -2579,6 +2671,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.NodeWithAliasIndirection, raw.cast_to(types, types, partial_types, False))
     
@@ -2606,6 +2699,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.RecursiveUnion, raw.cast_to(types, types, partial_types, False))
     
@@ -2633,6 +2727,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Checked[int, Literal["gt_ten"]], raw.cast_to(types, types, partial_types, False))
     
@@ -2660,6 +2755,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -2687,6 +2783,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.JsonTemplate, raw.cast_to(types, types, partial_types, False))
     
@@ -2714,6 +2811,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.MalformedConstraints, raw.cast_to(types, types, partial_types, False))
     
@@ -2741,6 +2839,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Schema, raw.cast_to(types, types, partial_types, False))
     
@@ -2768,6 +2867,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.RecursiveListAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -2795,6 +2895,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.RecursiveMapAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -2822,6 +2923,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.BigNumbers, raw.cast_to(types, types, partial_types, False))
     
@@ -2849,6 +2951,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TwoStoriesOneTitle, raw.cast_to(types, types, partial_types, False))
     
@@ -2876,6 +2979,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TwoStoriesOneTitleCheck, raw.cast_to(types, types, partial_types, False))
     
@@ -2903,6 +3007,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -2930,6 +3035,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[Union[int, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -2957,6 +3063,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.CompoundBigNumbers, raw.cast_to(types, types, partial_types, False))
     
@@ -2984,6 +3091,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Document1559, raw.cast_to(types, types, partial_types, False))
     
@@ -3011,6 +3119,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.RecursiveAliasDependency, raw.cast_to(types, types, partial_types, False))
     
@@ -3038,6 +3147,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3065,6 +3175,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3092,6 +3203,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3119,6 +3231,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3146,6 +3259,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3173,6 +3287,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3200,6 +3315,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3227,6 +3343,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3254,6 +3371,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3281,6 +3399,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3308,6 +3427,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3335,6 +3455,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3362,6 +3483,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3389,6 +3511,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3416,6 +3539,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3443,6 +3567,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3470,6 +3595,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3497,6 +3623,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3524,6 +3651,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3551,6 +3679,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3578,6 +3707,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3605,6 +3735,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3632,6 +3763,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3659,6 +3791,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3686,6 +3819,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3713,6 +3847,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3740,6 +3875,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3767,6 +3903,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Dict[str, types.StringToClassEntry], raw.cast_to(types, types, partial_types, False))
     
@@ -3794,6 +3931,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Dict[str, Dict[str, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -3821,6 +3959,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Dict[str, str], raw.cast_to(types, types, partial_types, False))
     
@@ -3848,6 +3987,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3875,6 +4015,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3902,6 +4043,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -3929,6 +4071,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3956,6 +4099,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3983,6 +4127,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4010,6 +4155,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4037,6 +4183,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4064,6 +4211,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4091,6 +4239,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4118,6 +4267,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4145,6 +4295,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.TestMemoryOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -4172,6 +4323,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4199,6 +4351,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4226,6 +4379,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4253,6 +4407,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4280,6 +4435,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(Optional[str], raw.cast_to(types, types, partial_types, False))
     
@@ -4307,6 +4463,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.Haiku, raw.cast_to(types, types, partial_types, False))
     
@@ -4334,6 +4491,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4361,6 +4519,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4388,6 +4547,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4415,6 +4575,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4442,6 +4603,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4469,6 +4631,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4496,6 +4659,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4523,6 +4687,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4550,6 +4715,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4577,6 +4743,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4604,6 +4771,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4631,6 +4799,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4658,6 +4827,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4685,6 +4855,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4712,6 +4883,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4739,6 +4911,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4766,6 +4939,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.CustomStory, raw.cast_to(types, types, partial_types, False))
     
@@ -4793,6 +4967,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.UniverseQuestion, raw.cast_to(types, types, partial_types, False))
     
@@ -4820,6 +4995,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4847,6 +5023,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4874,6 +5051,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4901,6 +5079,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.UnionTest_ReturnType, raw.cast_to(types, types, partial_types, False))
     
@@ -4928,6 +5107,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -4955,6 +5135,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(types.MaintainFieldOrder, raw.cast_to(types, types, partial_types, False))
     
@@ -4982,6 +5163,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -5009,6 +5191,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -5036,6 +5219,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
+        os.environ.copy(),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     

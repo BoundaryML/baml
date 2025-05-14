@@ -127,6 +127,7 @@ impl BamlRuntime {
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
 
+            //TODO: typescript impl after python impl
         let fut = async move {
             let result = baml_runtime
                 .call_function(
@@ -136,6 +137,7 @@ impl BamlRuntime {
                     tb.as_ref(),
                     cb.as_ref(),
                     Some(collector_list),
+                    HashMap::new(),
                 )
                 .await;
 

@@ -25,12 +25,31 @@ use std::sync::Arc;
 
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 
+// A cached client contains provider and other related stuff(env vars, etc)
+// This exists because we want to avoid creating a new provider for every request
+// Add more fields here which are cache-specific to avoid percolating them inside the provider
+#[derive(Clone)]
+pub struct CachedClient {
+    pub provider: Arc<LLMProvider>,
+    pub env_vars: HashMap<String, String>,
+} 
+
+impl CachedClient {
+    pub fn new(provider: Arc<LLMProvider>, env_vars: HashMap<String, String>) -> Self {
+        Self { provider, env_vars }
+    }
+
+    pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
+        self.env_vars.iter().any(|(k, v)| new_env_vars.get(k).map_or(false, |v2| v2 != v))
+    }
+}
+
 #[derive(Clone)]
 pub struct InternalBamlRuntime {
     pub ir: Arc<IntermediateRepr>,
     pub db: ParserDatabase,
     pub diagnostics: Diagnostics,
-    clients: DashMap<String, Arc<LLMProvider>>,
+    clients: DashMap<String, CachedClient>,
     retry_policies: DashMap<String, CallablePolicy>,
 }
 

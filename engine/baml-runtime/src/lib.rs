@@ -538,8 +538,9 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
-        let fut = self.call_function(function_name, params, ctx, tb, cb, collectors);
+        let fut = self.call_function(function_name, params, ctx, tb, cb, collectors,env_vars);
         self.async_runtime.block_on(fut)
     }
 
@@ -551,6 +552,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         let res = Box::pin(self.call_function_with_expr_events(
             function_name,
@@ -559,6 +561,7 @@ impl BamlRuntime {
             tb,
             cb,
             collectors,
+            env_vars,
             None,
         ))
         .await;
@@ -573,6 +576,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
@@ -587,7 +591,10 @@ impl BamlRuntime {
         }
 
         let fake_syntax_span = Span::fake();
-        let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id)) {
+        // TODO: I don't want to modify function signature of create_ctx to include env_vars since a lot of code depends on it not being there.
+        // Come back to this if the entire thing works
+        
+        let response = match ctx.create_ctx_with_env_vars(tb, cb, env_vars, span.clone().map(|s| s.span_id)) {
             Ok(rctx) => {
                 let is_expr_fn = self
                     .inner
@@ -755,9 +762,10 @@ impl BamlRuntime {
         context_manager: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
         stream: bool,
     ) -> Result<HTTPRequest> {
-        let ctx = context_manager.create_ctx(tb, cb, None)?;
+        let ctx = context_manager.create_ctx_with_env_vars(tb, cb,env_vars, None)?;
 
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
 
@@ -810,8 +818,9 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         stream: bool,
+        env_vars: HashMap<String, String>,
     ) -> Result<HTTPRequest> {
-        let fut = self.build_request(function_name, params, context_manager, tb, cb, stream);
+        let fut = self.build_request(function_name, params, context_manager, tb, cb,env_vars, stream);
         self.async_runtime.block_on(fut)
     }
 

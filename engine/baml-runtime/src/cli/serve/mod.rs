@@ -315,8 +315,9 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         let client_registry = b_options.and_then(|options| options.client_registry);
 
         let locked = self.b.read().await;
+        // TODO: Come back to this if the entire thing works
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None)
+            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None, std::env::vars().collect())
             .await;
 
         match result {
