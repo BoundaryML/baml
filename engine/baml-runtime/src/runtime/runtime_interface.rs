@@ -86,30 +86,27 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 let clients = &self.clients;
 
-                // anonymous function to create a new client
-                let create_client = || -> Result<Arc<LLMProvider>> {
-                    let walker = self
-                        .ir()
-                        .find_client(client_name)
-                        .context(format!("Could not find client with name: {}", client_name))?;
-                    let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-                    clients.insert(client_name.into(), CachedClient::new(new_client.clone(), ctx.env_vars().clone()));
-                    Ok(new_client)
-                };
-
-                match clients.get(client_name) {
-                    Some(client) if !client.has_env_vars_changed(ctx.env_vars()) => {
-                        println!("Returning cached client {}", client_name);
-                        Ok(client.provider.clone())
-                    }
-                    _ => {
-                        // Either client doesn't exist or env vars have changed
-                        if let Some(client) = clients.get(client_name) {
-                            clients.remove(client_name);
-                        }
-                        create_client()
+                // if a client exists, check if the env vars have changed
+                if clients.contains_key(client_name) {
+                    // make sure to clone the client to avoid holding a lock, otherwise dashmap will deadlock!
+                    let client = clients.get(client_name).map(|c| c.clone()).unwrap();
+                    // if the env vars haven't changed, return the cached client
+                    if !client.has_env_vars_changed(ctx.env_vars()) {
+                        return Ok(client.provider.clone());
+                    }else{
+                        // if the env vars have changed, remove the client from the cache, and create a new one.
+                        clients.remove(client_name);
                     }
                 }
+
+                // Either client doesn't exist or env vars have changed, anyway, create a new one.
+                let walker = self
+                .ir()
+                .find_client(client_name)
+                .context(format!("Could not find client with name: {}", client_name))?;
+                let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
+                clients.insert(client_name.into(), CachedClient::new(new_client.clone(), ctx.env_vars().clone()));
+                Ok(new_client)
             }
         }
     }
