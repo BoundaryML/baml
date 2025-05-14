@@ -177,6 +177,19 @@ paths:
                 title: AudioInputResponse
                 type: string
       operationId: AudioInput
+  /call/AudioInputOpenai:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AudioInputOpenai'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AudioInputOpenaiResponse
+                type: string
+      operationId: AudioInputOpenai
   /call/BuildLinkedList:
     post:
       requestBody:
@@ -2691,6 +2704,25 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - aud
+            additionalProperties: false
+    AudioInputOpenai:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AudioInputOpenaiRequest
+            type: object
+            properties:
+              aud:
+                $ref: '#/components/schemas/BamlAudio'
+              prompt:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - aud
+            - prompt
             additionalProperties: false
     BuildLinkedList:
       required: true

@@ -35,6 +35,7 @@ export type StreamingServerTypes = {
   AllowedOptionals: partial_types.OptionalListAndMap,
   AssertFn: number,
   AudioInput: string,
+  AudioInputOpenai: string,
   BuildLinkedList: partial_types.LinkedList,
   BuildTree: partial_types.Tree,
   ClassThatPointsToRecursiveClassThroughAlias: partial_types.ClassToRecAlias,

@@ -873,6 +873,56 @@ export function useAudioInput(
   return useBamlAction(action, props as HookInput)
 }
 /**
+ * A specialized hook for the AudioInputOpenai BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - aud: Audio
+ *
+ * - prompt: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useAudioInputOpenai({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useAudioInputOpenai({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useAudioInputOpenai(props: HookInput<'AudioInputOpenai', { stream: false }>): HookOutput<'AudioInputOpenai', { stream: false }>
+export function useAudioInputOpenai(props?: HookInput<'AudioInputOpenai', { stream?: true }>): HookOutput<'AudioInputOpenai', { stream: true }>
+export function useAudioInputOpenai(
+  props: HookInput<'AudioInputOpenai', { stream?: boolean }> = {},
+): HookOutput<'AudioInputOpenai', { stream: true }> | HookOutput<'AudioInputOpenai', { stream: false }> {
+  let action: ServerAction = Actions.AudioInputOpenai;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.AudioInputOpenai;
+  }
+  return useBamlAction(action, props as HookInput)
+}
+/**
  * A specialized hook for the BuildLinkedList BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**

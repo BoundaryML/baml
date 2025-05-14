@@ -80,12 +80,12 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let maybe_body = match rhs.as_rule() {
         Rule::expr_block => {
             let block_span = diagnostics.span(rhs.as_span());
-            eprintln!("parsing expr_block");
+            // eprintln!("parsing expr_block");
             let maybe_expr_block = parse_expr_block(rhs, diagnostics);
             maybe_expr_block.map(|expr_block| Expression::ExprBlock(expr_block, block_span))
         }
         Rule::expression => {
-            eprintln!("parsing expr");
+            // eprintln!("parsing expr");
             let maybe_expr = parse_expression(rhs, diagnostics);
             maybe_expr
         }

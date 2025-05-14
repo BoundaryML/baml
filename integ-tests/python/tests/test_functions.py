@@ -508,6 +508,28 @@ async def test_should_work_with_audio_url():
 
 
 @pytest.mark.asyncio
+async def test_should_work_with_audio_base64_gpt4o():
+
+    res = await b.AudioInputOpenai(
+        aud=baml_py.Audio.from_base64("audio/mp3", audio_b64),
+        prompt="does this sound like a roar? yes or no",
+    )
+    assert "yes" in res.lower()
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_audio_url_gpt4o():
+
+    res = await b.AudioInputOpenai(
+        aud=baml_py.Audio.from_url(
+            "https://github.com/sourcesounds/tf/raw/refs/heads/master/sound/vo/engineer_cloakedspyidentify09.mp3"
+        ),
+        prompt="transcribe this",
+    )
+    assert "spy" in res.lower()
+
+
+@pytest.mark.asyncio
 async def test_works_with_retries2():
     try:
         await b.TestRetryExponential()
@@ -1544,10 +1566,12 @@ async def test_thinking_streaming():
     assert len(res.content) > 0, "content should be non-empty"
     assert len(res.characters) > 0, "characters should be non-empty"
 
+
 @pytest.mark.asyncio
 async def test_echo_workflow():
     res = await b.EchoWorkflow()
     assert res == "Hello, world!"
+
 
 # @pytest.mark.asyncio
 # async def test_streaming_echo_workflow():
