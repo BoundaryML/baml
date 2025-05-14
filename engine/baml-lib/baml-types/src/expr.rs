@@ -448,13 +448,13 @@ impl<T: Clone> Expr<T> {
             ),
             Expr::App {
                 func,
-                type_args,
                 args,
                 meta,
+                type_args,
             } => Expr::App {
                 func: Arc::new(func.open(target, new_name)),
-                type_args: type_args.clone(),
                 args: Arc::new(args.open(target, new_name)),
+                type_args: type_args.clone(),
                 meta: meta.clone(),
             },
             Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
@@ -520,8 +520,8 @@ impl<T: Clone> Expr<T> {
             Expr::App {
                 func,
                 args,
-                type_args,
                 meta,
+                type_args,
             } => Expr::App {
                 func: Arc::new(func.close(new_index, target)),
                 args: Arc::new(args.close(new_index, target)),

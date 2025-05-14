@@ -31,7 +31,7 @@ use serde::Serialize;
 use crate::validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context;
 use crate::Configuration;
 
-use super::builtin::{builtin_classes, builtin_functions, is_builtin_identifier};
+use super::builtin::{builtin_classes, is_builtin_identifier};
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -354,8 +354,13 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     .collect::<Result<_>>()?;
                 Ok(Expr::App {
                     func: Arc::new(func),
-                    args: Arc::new(Expr::ArgsTuple(args, (app.span().clone(), None))), // TODO: We don't really have a span for the ArgsTuple, so we're using the one for the whole FnApp.
-                    type_args: vec![],
+                    // TODO: We don't really have a span for the ArgsTuple, so we're using the one for the whole FnApp.
+                    args: Arc::new(Expr::ArgsTuple(args, (app.span().clone(), None))),
+                    type_args: app
+                        .type_args
+                        .iter()
+                        .map(|t| t.repr(db))
+                        .collect::<Result<_>>()?,
                     meta: (app.span().clone(), None),
                 })
             }
@@ -1613,8 +1618,8 @@ pub fn annotate_variable(
         Expr::App {
             func,
             args,
-            type_args,
             meta,
+            type_args,
         } => {
             let new_f = annotate_variable(
                 target.clone(),
@@ -1626,8 +1631,8 @@ pub fn annotate_variable(
             Expr::App {
                 func: Arc::new(new_f),
                 args: Arc::new(new_args),
-                type_args: type_args.clone(),
                 meta: meta.clone(),
+                type_args: type_args.clone(),
             }
         }
         Expr::Builtin(builtin, meta) => match builtin {
@@ -2111,6 +2116,137 @@ fn streaming_behavior_from_attributes(attributes: &NodeAttributes) -> StreamingB
     }
 }
 
+// Specialize generics.
+fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<ExprMetadata>>) {
+    match expr {
+        Expr::FreeVar(name, _) => {}
+        Expr::BoundVar(name, _) => {}
+        Expr::Builtin(_, _) => {}
+        Expr::Atom(_) => {}
+        Expr::Let(name, expr, body, _) => {
+            specialize_generics(expr, ctx);
+            specialize_generics(body, ctx);
+        }
+        Expr::Lambda(_, body, _) => {
+            specialize_generics(body, ctx);
+        }
+        Expr::ArgsTuple(exprs, _) => {
+            for expr in exprs {
+                specialize_generics(expr, ctx);
+            }
+        }
+        Expr::LLMFunction(_, _, _) => {}
+        Expr::List(exprs, _) => {
+            for expr in exprs {
+                specialize_generics(expr, ctx);
+            }
+        }
+        Expr::Map(exprs, _) => {
+            for (_, expr) in exprs {
+                specialize_generics(expr, ctx);
+            }
+        }
+        Expr::ClassConstructor {
+            fields,
+            spread,
+            meta,
+            ..
+        } => {
+            for expr in fields.values() {
+                specialize_generics(expr, ctx);
+            }
+            if let Some(expr) = spread {
+                specialize_generics(expr, ctx);
+            }
+        }
+        Expr::App {
+            func,
+            type_args,
+            args,
+            meta,
+        } => {
+            if let Some(ty) = type_args.first() {
+                let mangled_name = format!("{}<{ty}>", func.fresh_name());
+
+                ctx.insert(
+                    mangled_name,
+                    Expr::Builtin(
+                        Builtin::FetchValue,
+                        (
+                            Span::fake(),
+                            Some(FieldType::Arrow(Box::new(Arrow {
+                                // param_types: vec![FieldType::class("std::request")],
+                                param_types: vec![FieldType::int()],
+                                return_type: ty.clone(),
+                            }))),
+                        ),
+                    ),
+                );
+            }
+            specialize_generics(args, ctx);
+        }
+    }
+}
+
+fn mangle_names(expr: &mut Expr<ExprMetadata>) -> Expr<ExprMetadata> {
+    match expr {
+        Expr::FreeVar(name, _) => {}
+        Expr::BoundVar(name, _) => {}
+        Expr::Builtin(_, _) => {}
+        Expr::Atom(_) => {}
+        Expr::Let(name, expr, body, _) => {
+            *expr = Arc::new(mangle_names(expr));
+            *body = Arc::new(mangle_names(body));
+        }
+        Expr::Lambda(_, body, _) => {
+            *body = Arc::new(mangle_names(body));
+        }
+        Expr::ArgsTuple(exprs, _) => {
+            for expr in exprs {
+                *expr = mangle_names(expr);
+            }
+        }
+        Expr::LLMFunction(_, _, _) => {}
+        Expr::List(exprs, _) => {
+            for expr in exprs {
+                *expr = mangle_names(expr);
+            }
+        }
+        Expr::Map(exprs, _) => {
+            for (_, expr) in exprs {
+                *expr = mangle_names(expr);
+            }
+        }
+        Expr::ClassConstructor {
+            fields,
+            spread,
+            meta,
+            ..
+        } => {
+            for expr in fields.values_mut() {
+                *expr = mangle_names(expr);
+            }
+            if let Some(expr) = spread {
+                *expr = Box::new(mangle_names(expr));
+            }
+        }
+        Expr::App {
+            func,
+            type_args,
+            args,
+            meta,
+        } => {
+            if let Some(ty) = type_args.first() {
+                let mangled_name = format!("{}<{ty}>", func.fresh_name());
+                *func = Arc::new(Expr::FreeVar(mangled_name, meta.clone()));
+            }
+            *args = Arc::new(mangle_names(args));
+        }
+    }
+
+    expr.clone()
+}
+
 /// Create a context from the expr_functions, top_level_assignments, and
 /// functions in the IR.
 /// This context is used in evaluating expressions.
@@ -2119,6 +2255,7 @@ pub fn initial_context(ir: &IntermediateRepr) -> HashMap<Name, Expr<ExprMetadata
 
     for expr_fn in ir.expr_fns.iter() {
         ctx.insert(expr_fn.elem.name.clone(), expr_fn.elem.expr.clone());
+        specialize_generics(&expr_fn.elem.expr, &mut ctx);
     }
     for top_level_assignment in ir.toplevel_assignments.iter() {
         ctx.insert(
@@ -2161,21 +2298,6 @@ pub fn initial_context(ir: &IntermediateRepr) -> HashMap<Name, Expr<ExprMetadata
             ),
         );
     }
-
-    // Builtin functions & types
-    ctx.insert(
-        "std::fetch_value".to_string(),
-        Expr::Builtin(
-            Builtin::FetchValue,
-            (
-                Span::fake(),
-                Some(FieldType::Arrow(Box::new(Arrow {
-                    param_types: vec![FieldType::class("std::request")],
-                    return_type: FieldType::Generic("T".to_string()),
-                }))),
-            ),
-        ),
-    );
 
     ctx
 }

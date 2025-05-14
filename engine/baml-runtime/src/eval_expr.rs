@@ -56,16 +56,16 @@ fn subst<'a>(
         Expr::App {
             func,
             args,
-            type_args,
             meta,
+            type_args,
         } => {
             let f2 = subst(func, var_name, val, env)?;
             let x2 = subst(args, var_name, val, env)?;
             Ok(Expr::App {
                 func: Arc::new(f2),
                 args: Arc::new(x2),
-                type_args: type_args.clone(),
                 meta: meta.clone(),
+                type_args: type_args.clone(),
             })
         }
         Expr::Lambda(params, body, meta) => Ok(Expr::Lambda(
@@ -166,8 +166,8 @@ async fn beta_reduce<'a>(
         Expr::App {
             func,
             args,
-            type_args,
             meta,
+            type_args,
         } => match (func.as_ref(), args.as_ref()) {
             (Expr::Lambda(arity, body, _), Expr::ArgsTuple(args, _)) => {
                 let pairs: Vec<(VarIndex, Expr<ExprMetadata>)> = args
@@ -263,6 +263,8 @@ async fn beta_reduce<'a>(
                 }
             }
             (Expr::FreeVar(name, _), _) => {
+                eprintln!("Context: {:?}", env.context);
+                // Go from free var to builtin
                 let var_lookup = env
                     .context
                     .get(name)
@@ -270,8 +272,8 @@ async fn beta_reduce<'a>(
                 let new_app = Expr::App {
                     func: Arc::new(var_lookup.clone()),
                     args: args.clone(),
-                    type_args: type_args.clone(),
                     meta: meta.clone(),
+                    type_args: type_args.clone(),
                 };
                 let res = Box::pin(beta_reduce(env, &new_app, eval_final_llm_fn)).await?;
                 Ok(res)
@@ -303,7 +305,7 @@ async fn beta_reduce<'a>(
             Builtin::FetchValue => {
                 // TODO: Actually fetch
                 // let res = env.runtime.fetch_value(meta.0).await;
-                todo!()
+                todo!("Fetching IS WORKING NO WAY CANT BELIEVE THISSSSS (@grok is this real?)")
             }
         },
         Expr::BoundVar(_, _) => Ok(expr.clone()),
@@ -333,8 +335,8 @@ pub async fn eval_to_value_or_llm_call<'a>(
             Expr::App {
                 ref func,
                 ref args,
-                ref type_args,
                 ref meta,
+                ref type_args,
             } => match (func.as_ref(), args.as_ref()) {
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
                     let mut evaluated_args: Vec<(String, BamlValue)> = Vec::new();
@@ -856,13 +858,15 @@ class Todo {
   userId int 
 }
 
-fn GetTodo(id: int) -> Todo {
-  std::fetch_value<Todo>(std::request {
-    method: Get,
-    base_url: "https://dummyjson.com/todos/1",
-    query_params: null,
-    body: null,
-  })
+//   std::fetch_value<Todo>(std::request {
+//     method: Get,
+//     base_url: "https://dummyjson.com/todos/1",
+//     query_params: null,
+//     body: null,
+//   })
+
+fn GetTodo() -> int {
+  std::fetch_value<int>(1)
 }
 
 test GetTodo() {

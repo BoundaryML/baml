@@ -613,7 +613,7 @@ impl BamlRuntime {
                         .expect("We checked earlier that this function is an expr_fn")
                         .elem;
                     let fn_expr = expr_fn.expr.clone();
-                    let context = initial_context(&self.inner.ir());
+                    let context = initial_context(self.inner.ir());
                     let env = EvalEnv {
                         context,
                         runtime: self,
@@ -654,8 +654,8 @@ impl BamlRuntime {
                     let result_type = expr_fn.output.clone();
                     let fn_call_expr = Expr::App {
                         func: Arc::new(fn_expr),
-                        args: Arc::new(params_expr),
                         type_args: vec![],
+                        args: Arc::new(params_expr),
                         meta: (fake_syntax_span.clone(), Some(result_type.clone())),
                     };
                     let res = eval_expr::eval_to_value(&env, &fn_call_expr)
@@ -1199,8 +1199,8 @@ async fn expr_eval_result(
             let result_type = expr_fn.elem().output.clone();
             let fn_call_expr = Expr::App {
                 func: Arc::new(expr_fn.elem().expr.clone()),
-                args: Arc::new(params_expr),
                 type_args: vec![],
+                args: Arc::new(params_expr),
                 meta: (fake_syntax_span.clone(), Some(result_type.clone())),
             };
             let res = eval_expr::eval_to_value_or_llm_call(&env, &fn_call_expr).await?;
