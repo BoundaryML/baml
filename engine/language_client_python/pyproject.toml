@@ -15,7 +15,8 @@ build-backend = "maturin"
 [tool.maturin]
 python-source = "python_src"
 # "extension-module" tells pyo3 we want to build an extension module (skips linking against libpython.so).
-features = ["pyo3/extension-module"]
+# The second feature is to fix windows aarch64 https://github.com/samuelcolvin/rtoml/pull/73/files
+features = ["pyo3/extension-module", "pyo3/generate-import-lib"]
 
 [project.scripts]
 baml-cli = "baml_py:invoke_runtime_cli"
