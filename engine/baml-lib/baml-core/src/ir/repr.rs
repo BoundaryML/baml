@@ -346,7 +346,15 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 ))
             }
             ast::Expression::App(app) => {
-                let func = Expr::FreeVar(app.name.to_string(), (app.span().clone(), None));
+                // Mangle
+                let name = if let Some(ty) = app.type_args.first() {
+                    format!("{}<{}>", app.name, ty)
+                } else {
+                    app.name.to_string()
+                };
+
+                let func = Expr::FreeVar(name, (app.span().clone(), None));
+
                 let args = app
                     .args
                     .iter()
@@ -2166,85 +2174,26 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
             meta,
         } => {
             if let Some(ty) = type_args.first() {
-                let mangled_name = format!("{}<{ty}>", func.fresh_name());
-
-                ctx.insert(
-                    mangled_name,
-                    Expr::Builtin(
-                        Builtin::FetchValue,
-                        (
-                            Span::fake(),
-                            Some(FieldType::Arrow(Box::new(Arrow {
-                                // param_types: vec![FieldType::class("std::request")],
-                                param_types: vec![FieldType::int()],
-                                return_type: ty.clone(),
-                            }))),
+                if let Expr::FreeVar(name, _) = func.as_ref() {
+                    ctx.insert(
+                        name.clone(),
+                        Expr::Builtin(
+                            Builtin::FetchValue,
+                            (
+                                Span::fake(),
+                                Some(FieldType::Arrow(Box::new(Arrow {
+                                    // param_types: vec![FieldType::class("std::request")],
+                                    param_types: vec![FieldType::int()],
+                                    return_type: ty.clone(),
+                                }))),
+                            ),
                         ),
-                    ),
-                );
+                    );
+                }
             }
             specialize_generics(args, ctx);
         }
     }
-}
-
-fn mangle_names(expr: &mut Expr<ExprMetadata>) -> Expr<ExprMetadata> {
-    match expr {
-        Expr::FreeVar(name, _) => {}
-        Expr::BoundVar(name, _) => {}
-        Expr::Builtin(_, _) => {}
-        Expr::Atom(_) => {}
-        Expr::Let(name, expr, body, _) => {
-            *expr = Arc::new(mangle_names(expr));
-            *body = Arc::new(mangle_names(body));
-        }
-        Expr::Lambda(_, body, _) => {
-            *body = Arc::new(mangle_names(body));
-        }
-        Expr::ArgsTuple(exprs, _) => {
-            for expr in exprs {
-                *expr = mangle_names(expr);
-            }
-        }
-        Expr::LLMFunction(_, _, _) => {}
-        Expr::List(exprs, _) => {
-            for expr in exprs {
-                *expr = mangle_names(expr);
-            }
-        }
-        Expr::Map(exprs, _) => {
-            for (_, expr) in exprs {
-                *expr = mangle_names(expr);
-            }
-        }
-        Expr::ClassConstructor {
-            fields,
-            spread,
-            meta,
-            ..
-        } => {
-            for expr in fields.values_mut() {
-                *expr = mangle_names(expr);
-            }
-            if let Some(expr) = spread {
-                *expr = Box::new(mangle_names(expr));
-            }
-        }
-        Expr::App {
-            func,
-            type_args,
-            args,
-            meta,
-        } => {
-            if let Some(ty) = type_args.first() {
-                let mangled_name = format!("{}<{ty}>", func.fresh_name());
-                *func = Arc::new(Expr::FreeVar(mangled_name, meta.clone()));
-            }
-            *args = Arc::new(mangle_names(args));
-        }
-    }
-
-    expr.clone()
 }
 
 /// Create a context from the expr_functions, top_level_assignments, and

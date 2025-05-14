@@ -278,6 +278,15 @@ async fn beta_reduce<'a>(
                 let res = Box::pin(beta_reduce(env, &new_app, eval_final_llm_fn)).await?;
                 Ok(res)
             }
+
+            (Expr::Builtin(builtin, meta), _) => match builtin {
+                Builtin::FetchValue => {
+                    // TODO: Actually fetch
+                    // let res = env.runtime.fetch_value(meta.0).await;
+                    todo!("Fetching IS WORKING NO WAY CANT BELIEVE THISSSSS (@grok is this real?)")
+                }
+            },
+
             _ => Err(anyhow::anyhow!("Not a function: {:?}", func)),
         },
         Expr::FreeVar(name, _) => {
@@ -301,13 +310,6 @@ async fn beta_reduce<'a>(
 
             Ok(evaluated)
         }
-        Expr::Builtin(builtin, meta) => match builtin {
-            Builtin::FetchValue => {
-                // TODO: Actually fetch
-                // let res = env.runtime.fetch_value(meta.0).await;
-                todo!("Fetching IS WORKING NO WAY CANT BELIEVE THISSSSS (@grok is this real?)")
-            }
-        },
         Expr::BoundVar(_, _) => Ok(expr.clone()),
         Expr::List(_, _) => Ok(expr.clone()),
         Expr::Map(_, _) => Ok(expr.clone()),
