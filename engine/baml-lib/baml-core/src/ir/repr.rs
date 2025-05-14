@@ -1500,7 +1500,7 @@ pub struct Function {
     pub default_config: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FunctionConfig {
     pub name: String,
     pub prompt_template: String,
@@ -1527,7 +1527,12 @@ impl ExprFunction {
             inputs: self.inputs.clone(),
             output: self.output.clone(),
             tests: self.tests.clone(),
-            configs: vec![],
+            configs: vec![FunctionConfig {
+                name: "default_config".to_string(),
+                prompt_template: "".to_string(),
+                prompt_span: Span::fake(),
+                client: ClientSpec::Named("nonsense".to_string()),
+            }],
             default_config: "default_config".to_string(),
         }
     }

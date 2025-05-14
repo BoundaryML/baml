@@ -239,6 +239,28 @@ export const AudioInput = async (
 };
 
 /**
+ * Executes the streaming variant of the "AudioInputOpenai" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { Audio } aud - Input parameter.
+ * @param { string } prompt - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const AudioInputOpenai = async (
+  aud: Audio,
+  prompt: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.AudioInputOpenai(
+    aud,
+    prompt,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
  * Executes the streaming variant of the "BuildLinkedList" BAML action.
  *
  * This action initiates a streaming response by calling the corresponding
@@ -1305,6 +1327,25 @@ export const JsonTypeAliasCycle = async (
   input: JsonValue,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.JsonTypeAliasCycle(
+    input,
+  );
+  return Promise.resolve(stream.toStreamable());
+};
+
+/**
+ * Executes the streaming variant of the "LLMEcho" BAML action.
+ *
+ * This action initiates a streaming response by calling the corresponding
+ * BAML stream function. The returned stream yields incremental updates.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
+ */
+export const LLMEcho = async (
+  input: string,
+): Promise<ReadableStream<Uint8Array>> => {
+  const stream = b.stream.LLMEcho(
     input,
   );
   return Promise.resolve(stream.toStreamable());

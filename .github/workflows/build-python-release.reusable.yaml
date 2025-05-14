@@ -2,11 +2,18 @@ name: BAML Release - Build Python
 
 on:
   workflow_call: {}
+  push:
+    branches:
+      - baml-py-win
 
 concurrency:
   # suffix is important to prevent a concurrency deadlock with the calling workflow
   group: ${{ github.workflow }}-${{ github.ref }}-build-python
   cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   build:
@@ -49,24 +56,86 @@ jobs:
           - target: x86_64-pc-windows-msvc
             runs_on: windows-latest
 
+          - target: aarch64-pc-windows-msvc
+            runs_on: windows-11-arm
+            architecture: arm64
+
     name: ${{ matrix._.target }}
     runs-on: ${{ matrix._.runs_on }}
+    # See also https://github.com/mcrumiller/polars/.github/workflows/release-python.yml#L282
     steps:
+      - name: Setup build environment (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        shell:
+          powershell
+          # Notes
+          # * We update `Expand-Archive` to avoid "" is not a supported archive file format when extracting
+          #   files that don't end in `.zip`
+        run: |
+          # rustup is not installed in aarch64
+          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
+              Invoke-WebRequest -Uri "https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe" -OutFile "rustup-init.exe"
+              .\rustup-init.exe --default-toolchain stable -y
+              Remove-Item "rustup-init.exe"
+              "$env:USERPROFILE/.cargo/bin" | Out-File -FilePath "$env:GITHUB_PATH" -Append
+          }
+
+      - name: Check build environment (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        run: |
+          set -x
+          bash --version
+          rustup show
+          clang -v
+          cmake --version
+
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+
+      # Setup Python for non-ARM64 Windows targets and other OS
+      - name: Setup Python (default)
+        if: matrix._.target != 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
         with:
           python-version: "3.8"
-          architecture: ${{ matrix._.runs_on == 'windows-latest' && 'x64' || null }}
+          architecture: ${{ matrix._.architecture }}
+
+      # Setup Python versions for ARM64 Windows
+      - name: Setup Python 3.11 (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
+        id: py311
+        with:
+          python-version: "3.11"
+          architecture: "arm64"
+          allow-prereleases: true
+      - name: Setup Python 3.12 (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
+        id: py312
+        with:
+          python-version: "3.12"
+          architecture: "arm64"
+          allow-prereleases: true
+      - name: Setup Python 3.13 (ARM64 Windows)
+        if: matrix._.target == 'aarch64-pc-windows-msvc'
+        uses: actions/setup-python@v5
+        id: py313
+        with:
+          python-version: "3.13"
+          architecture: "arm64"
+          allow-prereleases: true
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
-        env: ${{ matrix._.env || fromJSON('{}') }}
+        env:
+          # see https://github.com/PyO3/maturin/issues/2110
+          XWIN_VERSION: "16"
         with:
           target: ${{ matrix._.target }}
           command: build
           # building in engine/ ensures that we pick up .cargo/config.toml
           working-directory: engine
-          args: --release --out language_client_python/dist --manifest-path language_client_python/Cargo.toml
+          args: --release --out language_client_python/dist --manifest-path language_client_python/Cargo.toml ${{ (matrix._.target == 'aarch64-pc-windows-msvc' && format('--interpreter {0} {1} {2}', steps.py311.outputs.python-path, steps.py312.outputs.python-path, steps.py313.outputs.python-path)) || '' }}
           manylinux: ${{ matrix._.manylinux }}
           before-script-linux: |
             if command -v yum &> /dev/null; then
