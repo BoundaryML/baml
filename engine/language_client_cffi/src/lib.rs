@@ -249,7 +249,7 @@ fn call_function_stream_from_c_inner(
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     let mut stream =
-        match runtime.stream_function(func_name, &function_args.kwargs, &ctx, None, None, None) {
+        match runtime.stream_function(func_name, &function_args.kwargs, &ctx, None, None, None, HashMap::new()) {
             Ok(stream) => stream,
             Err(e) => {
                 return Err(anyhow::anyhow!("Failed to stream function: {}", e));
@@ -260,7 +260,7 @@ fn call_function_stream_from_c_inner(
 
     RUNTIME.spawn(async move {
         let (result, _) = stream
-            .run(Some(|r| on_event(id, r)), &ctx, None, None)
+            .run(Some(|r| on_event(id, r)), &ctx, None, None, HashMap::new())
             .await;
         safe_trigger_callback(id, false, result);
     });
