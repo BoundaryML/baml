@@ -5,6 +5,7 @@
 mod internal_tests {
     use std::any;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     use baml_runtime::BamlRuntime;
     use std::sync::Once;
@@ -628,7 +629,7 @@ test RecursiveAliasCycle {
 
         let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
-        let run_test_future = runtime.run_test(function_name, test_name, &ctx, Some(|r| {}), None);
+        let run_test_future = runtime.run_test(function_name, test_name, &ctx, Some(|r| {}), None, HashMap::new());
         let (res, span) = runtime.async_runtime.block_on(run_test_future);
 
         Ok(())
@@ -1032,5 +1033,51 @@ test RecursiveAliasCycle {
               }
             "##,
         })
+    }
+
+    #[test]
+    fn test_client_reload_on_env_var_change() -> anyhow::Result<()> {
+        let runtime = make_test_runtime(
+            r##"
+            client<llm> GPT4Turbo {
+                provider baml-openai-chat
+                options {
+                    model gpt-4-1106-preview
+                    api_key env.OPENAI_API_KEY
+                }
+            }
+
+            function Test(input: string) -> string {
+                client GPT4Turbo
+                prompt #"{{ input }}"#
+            }
+
+            test TestEnvVars {
+                functions [Test]
+                args {
+                    input "test"
+                }
+            }
+            "##,
+        )?;
+
+        let ctx = runtime.create_ctx_manager(BamlValue::String("test".to_string()), None);
+        
+        // First call with initial env var
+        let run_test_future = runtime.run_test("Test", "TestEnvVars", &ctx, Some(|r| {}), None, HashMap::new());
+        let (res1, _) = runtime.async_runtime.block_on(run_test_future);
+        // Get the first client instance
+        let client1 = runtime.llm_provider_from_function("Test", &ctx.create_ctx_with_default())?;
+
+        // Change non-required env var
+        let mut env_vars2 = HashMap::new();
+        env_vars2.insert("NON_REQUIRED_VAR".to_string(), "value".to_string());
+        let run_test_future = runtime.run_test("Test", "TestEnvVars", &ctx, Some(|r| {}), None, env_vars2.clone());
+        let (res2, _) = runtime.async_runtime.block_on(run_test_future);
+        let client2 = runtime.llm_provider_from_function("Test", &ctx.create_ctx(None, None, Some(uuid::Uuid::new_v4()), env_vars2.clone())?)?;
+        // Get the second client instance - should be the same as first
+        assert!(Arc::ptr_eq(&client1, &client2), "Client should NOT reload on non-required env var change");
+
+        Ok(())
     }
 }

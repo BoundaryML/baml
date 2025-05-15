@@ -199,7 +199,15 @@ fn call_function_from_c_inner(
     // TODO: Come back to this if the entire thing works
     rt.spawn(async move {
         let (result, _) = runtime
-            .call_function(func_name, &function_args.kwargs, &ctx, None, None, None, HashMap::new())
+            .call_function(
+                func_name,
+                &function_args.kwargs,
+                &ctx,
+                None,
+                None,
+                None,
+                HashMap::new(),
+            )
             .await;
         safe_trigger_callback(id, true, result);
     });
@@ -248,13 +256,20 @@ fn call_function_stream_from_c_inner(
     let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
-    let mut stream =
-        match runtime.stream_function(func_name, &function_args.kwargs, &ctx, None, None, None, HashMap::new()) {
-            Ok(stream) => stream,
-            Err(e) => {
-                return Err(anyhow::anyhow!("Failed to stream function: {}", e));
-            }
-        };
+    let mut stream = match runtime.stream_function(
+        func_name,
+        &function_args.kwargs,
+        &ctx,
+        None,
+        None,
+        None,
+        HashMap::new(),
+    ) {
+        Ok(stream) => stream,
+        Err(e) => {
+            return Err(anyhow::anyhow!("Failed to stream function: {}", e));
+        }
+    };
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 

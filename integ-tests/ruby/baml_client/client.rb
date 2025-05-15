@@ -128,6 +128,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -183,6 +184,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -238,6 +240,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -293,6 +296,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -348,6 +352,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -403,6 +408,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -458,6 +464,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -513,6 +520,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -568,6 +576,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -623,6 +632,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -678,6 +688,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -733,6 +744,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -788,6 +800,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -843,6 +856,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -898,6 +912,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -953,6 +968,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1008,6 +1024,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1063,6 +1080,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1118,6 +1136,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1173,6 +1192,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1228,6 +1248,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1283,6 +1304,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1338,6 +1360,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1393,6 +1416,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1448,6 +1472,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1503,6 +1528,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1558,6 +1584,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1613,6 +1640,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1668,6 +1696,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1723,6 +1752,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1778,6 +1808,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1833,6 +1864,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1888,6 +1920,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1943,6 +1976,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1998,6 +2032,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2053,6 +2088,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2108,6 +2144,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2163,6 +2200,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2218,6 +2256,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2273,6 +2312,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2328,6 +2368,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2383,6 +2424,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2438,6 +2480,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2493,6 +2536,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2548,6 +2592,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2603,6 +2648,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2658,6 +2704,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2713,6 +2760,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2768,6 +2816,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2823,6 +2872,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2878,6 +2928,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2933,6 +2984,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2988,6 +3040,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3043,6 +3096,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3098,6 +3152,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3153,6 +3208,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3208,6 +3264,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3263,6 +3320,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3318,6 +3376,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3373,6 +3432,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3428,6 +3488,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3483,6 +3544,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3538,6 +3600,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3593,6 +3656,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3648,6 +3712,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3703,6 +3768,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3758,6 +3824,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3813,6 +3880,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3868,6 +3936,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3923,6 +3992,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3978,6 +4048,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4033,6 +4104,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4088,6 +4160,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4143,6 +4216,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4198,6 +4272,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4253,6 +4328,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4308,6 +4384,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4363,6 +4440,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4418,6 +4496,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4473,6 +4552,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4528,6 +4608,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4583,6 +4664,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4638,6 +4720,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4693,6 +4776,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4748,6 +4832,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4803,6 +4888,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4858,6 +4944,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4913,6 +5000,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4968,6 +5056,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5023,6 +5112,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5078,6 +5168,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5133,6 +5224,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5188,6 +5280,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5243,6 +5336,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5298,6 +5392,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5353,6 +5448,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5408,6 +5504,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5463,6 +5560,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5518,6 +5616,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5573,6 +5672,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5628,6 +5728,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5683,6 +5784,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5738,6 +5840,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5793,6 +5896,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5848,6 +5952,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5903,6 +6008,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5958,6 +6064,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6013,6 +6120,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6068,6 +6176,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6123,6 +6232,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6178,6 +6288,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6233,6 +6344,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6288,6 +6400,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6343,6 +6456,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6398,6 +6512,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6453,6 +6568,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6508,6 +6624,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6563,6 +6680,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6618,6 +6736,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6673,6 +6792,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6728,6 +6848,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6783,6 +6904,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6838,6 +6960,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6893,6 +7016,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6948,6 +7072,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7003,6 +7128,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7058,6 +7184,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7113,6 +7240,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7168,6 +7296,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7223,6 +7352,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7278,6 +7408,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7333,6 +7464,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7388,6 +7520,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7443,6 +7576,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7498,6 +7632,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7553,6 +7688,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7608,6 +7744,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7663,6 +7800,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7718,6 +7856,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7773,6 +7912,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7828,6 +7968,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7883,6 +8024,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7938,6 +8080,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7993,6 +8136,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8048,6 +8192,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8103,6 +8248,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8158,6 +8304,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8213,6 +8360,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8268,6 +8416,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8323,6 +8472,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8378,6 +8528,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8433,6 +8584,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8488,6 +8640,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8543,6 +8696,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8598,6 +8752,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8653,6 +8808,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8708,6 +8864,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8763,6 +8920,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8818,6 +8976,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8873,6 +9032,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8928,6 +9088,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8983,6 +9144,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9038,6 +9200,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9093,6 +9256,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9148,6 +9312,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9203,6 +9368,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9258,6 +9424,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9313,6 +9480,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9368,6 +9536,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9423,6 +9592,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9478,6 +9648,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9533,6 +9704,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9588,6 +9760,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9643,6 +9816,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9698,6 +9872,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9753,6 +9928,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9808,6 +9984,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9863,6 +10040,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9918,6 +10096,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9973,6 +10152,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10028,6 +10208,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10083,6 +10264,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10143,6 +10325,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Recipe), Baml::Types::Recipe].new(
         ffi_stream: raw,
@@ -10188,6 +10371,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::LinkedListAliasNode), Baml::Types::LinkedListAliasNode].new(
         ffi_stream: raw,
@@ -10233,6 +10417,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
         ffi_stream: raw,
@@ -10278,6 +10463,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10323,6 +10509,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10368,6 +10555,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10413,6 +10601,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10458,6 +10647,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10503,6 +10693,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::OptionalListAndMap), Baml::Types::OptionalListAndMap].new(
         ffi_stream: raw,
@@ -10548,6 +10739,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -10593,6 +10785,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10638,6 +10831,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::LinkedList), Baml::Types::LinkedList].new(
         ffi_stream: raw,
@@ -10683,6 +10877,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Tree), Baml::Types::Tree].new(
         ffi_stream: raw,
@@ -10728,6 +10923,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassToRecAlias), Baml::Types::ClassToRecAlias].new(
         ffi_stream: raw,
@@ -10773,6 +10969,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Types::DynEnumTwo), T.any(Baml::Types::DynEnumTwo, String)].new(
         ffi_stream: raw,
@@ -10818,6 +11015,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
@@ -10863,6 +11061,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
@@ -10908,6 +11107,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
@@ -10953,6 +11153,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10998,6 +11199,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Baml::PartialTypes::BookOrder), T.nilable(Baml::PartialTypes::FlightConfirmation), T.nilable(Baml::PartialTypes::GroceryReceipt))), T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt)].new(
         ffi_stream: raw,
@@ -11043,6 +11245,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11088,6 +11291,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11133,6 +11337,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11178,6 +11383,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11223,6 +11429,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11268,6 +11475,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Baml::PartialTypes::OriginalA), T.nilable(Baml::PartialTypes::OriginalB))), T.any(Baml::Types::OriginalA, Baml::Types::OriginalB)].new(
         ffi_stream: raw,
@@ -11313,6 +11521,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DummyOutput), Baml::Types::DummyOutput].new(
         ffi_stream: raw,
@@ -11358,6 +11567,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynamicClassTwo), Baml::Types::DynamicClassTwo].new(
         ffi_stream: raw,
@@ -11403,6 +11613,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynInputOutput), Baml::Types::DynInputOutput].new(
         ffi_stream: raw,
@@ -11448,6 +11659,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::DynInputOutput)], T::Array[Baml::Types::DynInputOutput]].new(
         ffi_stream: raw,
@@ -11493,6 +11705,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11538,6 +11751,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ContactInfo), Baml::Types::ContactInfo].new(
         ffi_stream: raw,
@@ -11583,6 +11797,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynamicSchema), Baml::Types::DynamicSchema].new(
         ffi_stream: raw,
@@ -11628,6 +11843,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::Types::Hobby)], T::Array[T.any(Baml::Types::Hobby, String)]].new(
         ffi_stream: raw,
@@ -11673,6 +11889,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -11718,6 +11935,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::Person)], T::Array[Baml::Types::Person]].new(
         ffi_stream: raw,
@@ -11763,6 +11981,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ReceiptInfo), Baml::Types::ReceiptInfo].new(
         ffi_stream: raw,
@@ -11808,6 +12027,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Resume), Baml::Types::Resume].new(
         ffi_stream: raw,
@@ -11853,6 +12073,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Resume), Baml::Types::Resume].new(
         ffi_stream: raw,
@@ -11898,6 +12119,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassOptionalOutput), T.nilable(Baml::Types::ClassOptionalOutput)].new(
         ffi_stream: raw,
@@ -11943,6 +12165,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassOptionalOutput2), T.nilable(Baml::Types::ClassOptionalOutput2)].new(
         ffi_stream: raw,
@@ -11988,6 +12211,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::Types::EnumOutput)], T::Array[T.any(Baml::Types::EnumOutput, String)]].new(
         ffi_stream: raw,
@@ -12033,6 +12257,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Types::EnumOutput), T.any(Baml::Types::EnumOutput, String)].new(
         ffi_stream: raw,
@@ -12078,6 +12303,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::LiteralClassHello), Baml::Types::LiteralClassHello].new(
         ffi_stream: raw,
@@ -12123,6 +12349,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Baml::PartialTypes::LiteralClassOne), T.nilable(Baml::PartialTypes::LiteralClassTwo))), T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo)].new(
         ffi_stream: raw,
@@ -12168,6 +12395,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -12213,6 +12441,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
         ffi_stream: raw,
@@ -12258,6 +12487,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestOutputClass), Baml::Types::TestOutputClass].new(
         ffi_stream: raw,
@@ -12303,6 +12533,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::TestOutputClass)], T::Array[Baml::Types::TestOutputClass]].new(
         ffi_stream: raw,
@@ -12348,6 +12579,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestClassNested), Baml::Types::TestClassNested].new(
         ffi_stream: raw,
@@ -12393,6 +12625,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestClassWithEnum), Baml::Types::TestClassWithEnum].new(
         ffi_stream: raw,
@@ -12438,6 +12671,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -12483,6 +12717,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
         ffi_stream: raw,
@@ -12528,6 +12763,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -12573,6 +12809,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -12618,6 +12855,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -12663,6 +12901,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Types::TestEnum), T.any(Baml::Types::TestEnum, String)].new(
         ffi_stream: raw,
@@ -12708,6 +12947,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestClassAlias), Baml::Types::TestClassAlias].new(
         ffi_stream: raw,
@@ -12753,6 +12993,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -12798,6 +13039,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::RaysData), Baml::Types::RaysData].new(
         ffi_stream: raw,
@@ -12843,6 +13085,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::OrderInfo), Baml::Types::OrderInfo].new(
         ffi_stream: raw,
@@ -12888,6 +13131,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::SearchParams), Baml::Types::SearchParams].new(
         ffi_stream: raw,
@@ -12933,6 +13177,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -12978,6 +13223,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -13023,6 +13269,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -13068,6 +13315,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -13113,6 +13361,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -13158,6 +13407,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Integer), T.nilable(T::Boolean), T.nilable(String))), T.any(Integer, T::Boolean, String)].new(
         ffi_stream: raw,
@@ -13203,6 +13453,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::BlockConstraint), Baml::Checked[Baml::Types::BlockConstraint]].new(
         ffi_stream: raw,
@@ -13248,6 +13499,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassWithBlockDone), Baml::Types::ClassWithBlockDone].new(
         ffi_stream: raw,
@@ -13293,6 +13545,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassWithoutDone), Baml::Types::ClassWithoutDone].new(
         ffi_stream: raw,
@@ -13338,6 +13591,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::NestedBlockConstraint), Baml::Types::NestedBlockConstraint].new(
         ffi_stream: raw,
@@ -13383,6 +13637,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::SemanticContainer), Baml::Types::SemanticContainer].new(
         ffi_stream: raw,
@@ -13428,6 +13683,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Hash[String, T::Array[T.nilable(String)]], T::Hash[String, T::Array[String]]].new(
         ffi_stream: raw,
@@ -13473,6 +13729,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::MergeAttrs), Baml::Types::MergeAttrs].new(
         ffi_stream: raw,
@@ -13518,6 +13775,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynamicOutput), Baml::Types::DynamicOutput].new(
         ffi_stream: raw,
@@ -13563,6 +13821,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))), T::Array[T.nilable(String)], T::Hash[String, T::Array[T.nilable(String)]])), T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]])].new(
         ffi_stream: raw,
@@ -13608,6 +13867,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassForNullLiteral), Baml::Types::ClassForNullLiteral].new(
         ffi_stream: raw,
@@ -13653,6 +13913,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -13698,6 +13959,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::OptionalTest_ReturnType)], T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]].new(
         ffi_stream: raw,
@@ -13743,6 +14005,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::FooAny), Baml::Types::FooAny].new(
         ffi_stream: raw,
@@ -13788,6 +14051,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
         ffi_stream: raw,
@@ -13833,6 +14097,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))), T.any(Integer, String, T::Boolean, Float)].new(
         ffi_stream: raw,
@@ -13878,6 +14143,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -13923,6 +14189,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -13968,6 +14235,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14013,6 +14281,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14058,6 +14327,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14103,6 +14373,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14148,6 +14419,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14193,6 +14465,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14238,6 +14511,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::NodeWithAliasIndirection), Baml::Types::NodeWithAliasIndirection].new(
         ffi_stream: raw,
@@ -14283,6 +14557,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14328,6 +14603,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
         ffi_stream: raw,
@@ -14373,6 +14649,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -14418,6 +14695,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14463,6 +14741,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::MalformedConstraints), Baml::Types::MalformedConstraints].new(
         ffi_stream: raw,
@@ -14508,6 +14787,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Schema), Baml::Types::Schema].new(
         ffi_stream: raw,
@@ -14553,6 +14833,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14598,6 +14879,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14643,6 +14925,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::BigNumbers), Baml::Types::BigNumbers].new(
         ffi_stream: raw,
@@ -14688,6 +14971,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TwoStoriesOneTitle), Baml::Types::TwoStoriesOneTitle].new(
         ffi_stream: raw,
@@ -14733,6 +15017,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TwoStoriesOneTitleCheck), Baml::Types::TwoStoriesOneTitleCheck].new(
         ffi_stream: raw,
@@ -14778,6 +15063,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -14823,6 +15109,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(T.any(T.nilable(Integer), T.nilable(String)))], T::Array[T.any(Integer, String)]].new(
         ffi_stream: raw,
@@ -14868,6 +15155,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::CompoundBigNumbers), Baml::Types::CompoundBigNumbers].new(
         ffi_stream: raw,
@@ -14913,6 +15201,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Document1559), Baml::Types::Document1559].new(
         ffi_stream: raw,
@@ -14958,6 +15247,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::RecursiveAliasDependency), Baml::Types::RecursiveAliasDependency].new(
         ffi_stream: raw,
@@ -15003,6 +15293,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15048,6 +15339,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15093,6 +15385,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15138,6 +15431,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15183,6 +15477,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15228,6 +15523,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15273,6 +15569,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15318,6 +15615,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15363,6 +15661,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15408,6 +15707,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15453,6 +15753,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15498,6 +15799,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15543,6 +15845,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15588,6 +15891,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15633,6 +15937,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15678,6 +15983,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15723,6 +16029,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15768,6 +16075,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15813,6 +16121,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15858,6 +16167,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15903,6 +16213,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15948,6 +16259,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15993,6 +16305,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16038,6 +16351,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16083,6 +16397,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16128,6 +16443,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16173,6 +16489,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16218,6 +16535,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Hash[String, T.nilable(Baml::PartialTypes::StringToClassEntry)], T::Hash[String, Baml::Types::StringToClassEntry]].new(
         ffi_stream: raw,
@@ -16263,6 +16581,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Hash[String, T::Hash[String, T.nilable(String)]], T::Hash[String, T::Hash[String, String]]].new(
         ffi_stream: raw,
@@ -16308,6 +16627,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -16353,6 +16673,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16398,6 +16719,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16443,6 +16765,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -16488,6 +16811,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16533,6 +16857,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16578,6 +16903,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16623,6 +16949,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16668,6 +16995,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16713,6 +17041,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16758,6 +17087,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16803,6 +17133,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16848,6 +17179,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestMemoryOutput), Baml::Types::TestMemoryOutput].new(
         ffi_stream: raw,
@@ -16893,6 +17225,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16938,6 +17271,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16983,6 +17317,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17028,6 +17363,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17073,6 +17409,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), T.nilable(String)].new(
         ffi_stream: raw,
@@ -17118,6 +17455,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Haiku), Baml::Types::Haiku].new(
         ffi_stream: raw,
@@ -17163,6 +17501,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17208,6 +17547,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17253,6 +17593,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17298,6 +17639,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17343,6 +17685,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17388,6 +17731,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17433,6 +17777,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17478,6 +17823,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17523,6 +17869,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17568,6 +17915,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17613,6 +17961,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17658,6 +18007,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17703,6 +18053,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17748,6 +18099,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17793,6 +18145,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17838,6 +18191,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17883,6 +18237,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::CustomStory), Baml::Types::CustomStory].new(
         ffi_stream: raw,
@@ -17928,6 +18283,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::UniverseQuestion), Baml::Types::UniverseQuestion].new(
         ffi_stream: raw,
@@ -17973,6 +18329,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18018,6 +18375,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18063,6 +18421,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18108,6 +18467,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::UnionTest_ReturnType), Baml::Types::UnionTest_ReturnType].new(
         ffi_stream: raw,
@@ -18153,6 +18513,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -18198,6 +18559,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::MaintainFieldOrder), Baml::Types::MaintainFieldOrder].new(
         ffi_stream: raw,
@@ -18243,6 +18605,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -18288,6 +18651,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
+        Hash.new
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,

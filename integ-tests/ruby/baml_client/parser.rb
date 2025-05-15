@@ -50,6 +50,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -73,6 +74,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -96,6 +98,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -119,6 +122,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -142,6 +146,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -165,6 +170,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -188,6 +194,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -211,6 +218,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -234,6 +242,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -257,6 +266,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -280,6 +290,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -303,6 +314,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -326,6 +338,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -349,6 +362,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -372,6 +386,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -395,6 +410,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -418,6 +434,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -441,6 +458,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -464,6 +482,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -487,6 +506,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -510,6 +530,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -533,6 +554,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -556,6 +578,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -579,6 +602,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -602,6 +626,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -625,6 +650,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -648,6 +674,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -671,6 +698,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -694,6 +722,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -717,6 +746,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -740,6 +770,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -763,6 +794,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -786,6 +818,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -809,6 +842,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -832,6 +866,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -855,6 +890,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -878,6 +914,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -901,6 +938,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -924,6 +962,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -947,6 +986,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -970,6 +1010,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -993,6 +1034,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1016,6 +1058,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1039,6 +1082,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1062,6 +1106,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1085,6 +1130,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1108,6 +1154,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1131,6 +1178,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1154,6 +1202,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1177,6 +1226,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1200,6 +1250,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1223,6 +1274,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1246,6 +1298,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1269,6 +1322,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1292,6 +1346,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1315,6 +1370,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1338,6 +1394,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1361,6 +1418,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1384,6 +1442,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1407,6 +1466,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1430,6 +1490,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1453,6 +1514,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1476,6 +1538,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1499,6 +1562,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1522,6 +1586,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1545,6 +1610,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1568,6 +1634,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1591,6 +1658,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1614,6 +1682,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1637,6 +1706,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1660,6 +1730,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1683,6 +1754,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1706,6 +1778,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1729,6 +1802,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1752,6 +1826,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1775,6 +1850,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1798,6 +1874,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1821,6 +1898,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1844,6 +1922,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1867,6 +1946,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1890,6 +1970,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1913,6 +1994,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1936,6 +2018,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1959,6 +2042,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -1982,6 +2066,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2005,6 +2090,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2028,6 +2114,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2051,6 +2138,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2074,6 +2162,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2097,6 +2186,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2120,6 +2210,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2143,6 +2234,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2166,6 +2258,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2189,6 +2282,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2212,6 +2306,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2235,6 +2330,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2258,6 +2354,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2281,6 +2378,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2304,6 +2402,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2327,6 +2426,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2350,6 +2450,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2373,6 +2474,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2396,6 +2498,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2419,6 +2522,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2442,6 +2546,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2465,6 +2570,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2488,6 +2594,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2511,6 +2618,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2534,6 +2642,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2557,6 +2666,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2580,6 +2690,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2603,6 +2714,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2626,6 +2738,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2649,6 +2762,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2672,6 +2786,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2695,6 +2810,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2718,6 +2834,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2741,6 +2858,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2764,6 +2882,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2787,6 +2906,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2810,6 +2930,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2833,6 +2954,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2856,6 +2978,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2879,6 +3002,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2902,6 +3026,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2925,6 +3050,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2948,6 +3074,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2971,6 +3098,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -2994,6 +3122,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3017,6 +3146,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3040,6 +3170,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3063,6 +3194,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3086,6 +3218,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3109,6 +3242,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3132,6 +3266,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3155,6 +3290,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3178,6 +3314,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3201,6 +3338,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3224,6 +3362,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3247,6 +3386,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3270,6 +3410,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3293,6 +3434,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3316,6 +3458,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3339,6 +3482,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3362,6 +3506,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3385,6 +3530,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3408,6 +3554,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3431,6 +3578,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3454,6 +3602,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3477,6 +3626,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3500,6 +3650,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3523,6 +3674,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3546,6 +3698,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3569,6 +3722,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3592,6 +3746,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3615,6 +3770,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3638,6 +3794,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3661,6 +3818,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3684,6 +3842,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3707,6 +3866,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3730,6 +3890,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3753,6 +3914,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3776,6 +3938,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3799,6 +3962,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3822,6 +3986,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3845,6 +4010,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3868,6 +4034,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3891,6 +4058,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3914,6 +4082,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3937,6 +4106,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3960,6 +4130,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -3983,6 +4154,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4006,6 +4178,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4029,6 +4202,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4052,6 +4226,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4075,6 +4250,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4098,6 +4274,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4121,6 +4298,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4144,6 +4322,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4167,6 +4346,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4190,6 +4370,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4213,6 +4394,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4248,6 +4430,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4271,6 +4454,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4294,6 +4478,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4317,6 +4502,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4340,6 +4526,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4363,6 +4550,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4386,6 +4574,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4409,6 +4598,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4432,6 +4622,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4455,6 +4646,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4478,6 +4670,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4501,6 +4694,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4524,6 +4718,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4547,6 +4742,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4570,6 +4766,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4593,6 +4790,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4616,6 +4814,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4639,6 +4838,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4662,6 +4862,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4685,6 +4886,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4708,6 +4910,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4731,6 +4934,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4754,6 +4958,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4777,6 +4982,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4800,6 +5006,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4823,6 +5030,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4846,6 +5054,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4869,6 +5078,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4892,6 +5102,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4915,6 +5126,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4938,6 +5150,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4961,6 +5174,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -4984,6 +5198,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5007,6 +5222,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5030,6 +5246,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5053,6 +5270,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5076,6 +5294,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5099,6 +5318,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5122,6 +5342,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5145,6 +5366,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5168,6 +5390,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5191,6 +5414,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5214,6 +5438,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5237,6 +5462,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5260,6 +5486,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5283,6 +5510,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5306,6 +5534,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5329,6 +5558,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5352,6 +5582,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5375,6 +5606,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5398,6 +5630,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5421,6 +5654,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5444,6 +5678,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5467,6 +5702,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5490,6 +5726,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5513,6 +5750,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5536,6 +5774,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5559,6 +5798,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5582,6 +5822,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5605,6 +5846,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5628,6 +5870,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5651,6 +5894,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5674,6 +5918,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5697,6 +5942,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5720,6 +5966,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5743,6 +5990,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5766,6 +6014,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5789,6 +6038,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5812,6 +6062,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5835,6 +6086,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5858,6 +6110,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5881,6 +6134,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5904,6 +6158,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5927,6 +6182,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5950,6 +6206,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5973,6 +6230,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -5996,6 +6254,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6019,6 +6278,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6042,6 +6302,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6065,6 +6326,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6088,6 +6350,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6111,6 +6374,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6134,6 +6398,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6157,6 +6422,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6180,6 +6446,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6203,6 +6470,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6226,6 +6494,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6249,6 +6518,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6272,6 +6542,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6295,6 +6566,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6318,6 +6590,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6341,6 +6614,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6364,6 +6638,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6387,6 +6662,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6410,6 +6686,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6433,6 +6710,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6456,6 +6734,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6479,6 +6758,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6502,6 +6782,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6525,6 +6806,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6548,6 +6830,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6571,6 +6854,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6594,6 +6878,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6617,6 +6902,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6640,6 +6926,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6663,6 +6950,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6686,6 +6974,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6709,6 +6998,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6732,6 +7022,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6755,6 +7046,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6778,6 +7070,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6801,6 +7094,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6824,6 +7118,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6847,6 +7142,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6870,6 +7166,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6893,6 +7190,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6916,6 +7214,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6939,6 +7238,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6962,6 +7262,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -6985,6 +7286,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7008,6 +7310,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7031,6 +7334,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7054,6 +7358,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7077,6 +7382,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7100,6 +7406,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7123,6 +7430,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7146,6 +7454,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7169,6 +7478,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7192,6 +7502,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7215,6 +7526,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7238,6 +7550,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7261,6 +7574,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7284,6 +7598,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7307,6 +7622,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7330,6 +7646,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7353,6 +7670,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7376,6 +7694,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7399,6 +7718,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7422,6 +7742,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7445,6 +7766,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7468,6 +7790,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7491,6 +7814,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7514,6 +7838,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7537,6 +7862,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7560,6 +7886,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7583,6 +7910,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7606,6 +7934,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7629,6 +7958,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7652,6 +7982,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7675,6 +8006,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7698,6 +8030,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7721,6 +8054,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7744,6 +8078,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7767,6 +8102,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7790,6 +8126,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7813,6 +8150,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7836,6 +8174,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7859,6 +8198,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7882,6 +8222,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7905,6 +8246,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7928,6 +8270,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7951,6 +8294,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7974,6 +8318,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -7997,6 +8342,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8020,6 +8366,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8043,6 +8390,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8066,6 +8414,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8089,6 +8438,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8112,6 +8462,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8135,6 +8486,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8158,6 +8510,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8181,6 +8534,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8204,6 +8558,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8227,6 +8582,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8250,6 +8606,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8273,6 +8630,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8296,6 +8654,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8319,6 +8678,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8342,6 +8702,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8365,6 +8726,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8388,6 +8750,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 
@@ -8411,6 +8774,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
+        Hash.new
       )
     end
 

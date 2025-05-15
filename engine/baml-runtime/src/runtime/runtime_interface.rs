@@ -104,8 +104,16 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 .ir()
                 .find_client(client_name)
                 .context(format!("Could not find client with name: {}", client_name))?;
+                // Get required env vars from the client walker
                 let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-                clients.insert(client_name.into(), CachedClient::new(new_client.clone(), ctx.env_vars().clone()));
+                // Only store the required env vars
+                let filtered_env_vars = ctx.env_vars()
+                    .iter()
+                    .filter(|(k, _)| walker.required_env_vars().contains(*k))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                println!("filtered_env_vars: {:#?}", filtered_env_vars);
+                clients.insert(client_name.into(), CachedClient::new(new_client.clone(), filtered_env_vars));
                 Ok(new_client)
             }
         }
